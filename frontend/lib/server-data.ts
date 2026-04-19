@@ -11,7 +11,7 @@ type BackendTestCatalogItem = {
   id: string;
   title: string;
   test_type: TestType;
-  format: "full" | "part";
+  format: string;
   access_type: AccessType;
   status: "draft" | "published" | "archived";
   source?: string | null;
@@ -106,6 +106,7 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
   if (query.source) {
     search.set("source", query.source);
   }
+  search.set("status", "published");
 
   try {
     const items = await requestApi<BackendTestCatalogItem[]>(`/tests${search.size ? `?${search.toString()}` : ""}`);

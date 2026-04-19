@@ -1,223 +1,190 @@
+from __future__ import annotations
+
 import asyncio
-import random
-import string
 import logging
-import json
-import os
-from datetime import datetime
-from aiogram import Bot, Dispatcher, types, F
+
+from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 from app.core.config import get_settings
+from app.services.code_store import get_code_store
 
-# Logging setup
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
 logger = logging.getLogger(__name__)
 
-# Temporary File-based store for active codes (since Redis is not available)
-# Shared file for active codes - pointing to backend root
-CODES_FILE = os.path.join(os.getcwd(), "active_codes.json")
+_CODE_TTL = 180  # seconds — must match code_store._CODE_TTL
+_TICK = 30       # update interval for the countdown message
 
-def load_codes():
-    if os.path.exists(CODES_FILE):
-        try:
-            with open(CODES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
 
-def save_codes(codes):
-    try:
-        with open(CODES_FILE, "w", encoding="utf-8") as f:
-            json.dump(codes, f, ensure_ascii=False, indent=2)
-            print(f"DEBUG: Saved code to {CODES_FILE}")
-    except Exception as e:
-        print(f"DEBUG: Error saving codes: {e}")
+def _phone_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Raqamni yuborish / Share number", request_contact=True)]],
+        resize_keyboard=True,
+        persistent=True,
+    )
 
-def generate_code():
-    return "".join(random.choices(string.digits, k=6))
 
-# Keyboard for the bot
-def get_main_keyboard(has_contact=False):
-    if not has_contact:
-        kb = [
-            [KeyboardButton(text="📱 Telefon raqamni yuborish / Share phone number", request_contact=True)]
-        ]
-    else:
-        kb = [
-            [KeyboardButton(text="Login")]
-        ]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True, persistent=True)
+def _login_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="🔑 Kirish / Login")]],
+        resize_keyboard=True,
+        persistent=True,
+    )
+
 
 async def run_bot() -> None:
     settings = get_settings()
     if not settings.telegram_bot_token or settings.telegram_bot_token == "change-me":
-        logger.error("Telegram Bot Token is missing or invalid in .env file!")
+        logger.error("TELEGRAM_BOT_TOKEN is not configured — bot will not start.")
         return
 
     bot = Bot(token=settings.telegram_bot_token)
     dp = Dispatcher()
-
-    # In-memory store for users who shared contact (for session duration)
-    users_with_contact = {}
+    store = get_code_store()
 
     @dp.message(Command("start"))
-    async def cmd_start(message: types.Message):
-        welcome_text = (
-            "👋 <b>Assalomu alaykum! PrimeScore botiga xush kelibsiz.</b>\n\n"
-            "🇺🇿 Tizimga kirish uchun telefon raqamingizni yuboring. Sizga tasdiqlash kodi beriladi.\n"
-            "🇬🇧 Please share your phone number to sign in. You will receive a verification code."
+    async def cmd_start(message: types.Message) -> None:
+        await message.answer(
+            "👋 <b>PrimeScore botiga xush kelibsiz.</b>\n\n"
+            "🇺🇿 Tizimga kirish uchun telefon raqamingizni yuboring.\n"
+            "🇬🇧 Share your phone number to sign in.",
+            parse_mode="HTML",
+            reply_markup=_phone_keyboard(),
         )
-        await message.answer(welcome_text, parse_mode="HTML", reply_markup=get_main_keyboard(False))
 
     @dp.message(F.contact)
-    async def handle_contact(message: types.Message):
+    async def handle_contact(message: types.Message) -> None:
         if message.contact.user_id != message.from_user.id:
             await message.answer(
-                "❌ Xatolik: Iltimos, faqat o'zingizning shaxsiy telefon raqamingizni yuboring.\n\n"
-                "❌ Error: Please share your own personal phone number."
+                "❌ Faqat o'z raqamingizni yuboring. / Share only your own number.",
+                reply_markup=_phone_keyboard(),
             )
             return
 
         phone = message.contact.phone_number
         if not phone.startswith("+"):
             phone = "+" + phone
-            
-        users_with_contact[message.from_user.id] = {
-            "telegram_id": message.from_user.id,
-            "phone": phone,
-            "name": message.from_user.first_name or message.from_user.username or "User"
-        }
 
+        await store.save_contact(
+            telegram_id=message.from_user.id,
+            phone=phone,
+            name=message.from_user.first_name or message.from_user.username or "User",
+        )
         await message.answer(
-            "✅ <b>Raqamingiz qabul qilindi. / Your number has been received.</b>\n\n"
-            "🇺🇿 Kodni olish uchun quyidagi <b>Login</b> tugmasini bosing.\n"
-            "🇬🇧 Click the <b>Login</b> button below to get your code.",
+            "✅ <b>Raqamingiz qabul qilindi. / Number received.</b>\n\n"
+            "🔑 Kodni olish uchun quyidagi tugmani bosing. / Tap the button to get your code.",
             parse_mode="HTML",
-            reply_markup=get_main_keyboard(True)
+            reply_markup=_login_keyboard(),
         )
 
-    @dp.message(F.text == "Login")
-    async def handle_login_request(message: types.Message):
-        user_info = users_with_contact.get(message.from_user.id)
-        
-        if not user_info:
+    @dp.message(F.text == "🔑 Kirish / Login")
+    async def handle_login(message: types.Message) -> None:
+        contact = await store.get_contact(message.from_user.id)
+        if not contact:
             await message.answer(
-                "⚠️ Avval raqamingizni yuboring:\n⚠️ Please share your number first:",
-                reply_markup=get_main_keyboard(False)
+                "⚠️ Avval raqamingizni yuboring. / Please share your number first.",
+                reply_markup=_phone_keyboard(),
             )
             return
 
-        code = generate_code()
-        
-        # Save to shared file
-        codes = load_codes()
-        codes[code] = {
-            "telegram_id": user_info["telegram_id"],
-            "phone": user_info["phone"],
-            "name": user_info["name"],
-            "timestamp": datetime.now().timestamp()
-        }
-        save_codes(codes)
-        
-        # Send initial message
-        msg = await message.answer(
+        code = await store.create_code(
+            telegram_id=contact["telegram_id"],
+            phone=contact["phone"],
+            name=contact["name"],
+        )
+
+        sent = await message.answer(
             f"✅ <b>Tasdiqlash kodi / Verification code:</b>\n\n"
             f"<code>{code}</code>\n\n"
-            f"🇺🇿 <b>Kod 3 minutda eskiradi.</b>\n"
-            f"🇬🇧 <b>The code is valid for 3 minutes.</b>",
-            parse_mode="HTML"
+            f"🇺🇿 Kod <b>3 daqiqa</b> amal qiladi.\n"
+            f"🇬🇧 Code is valid for <b>3 minutes</b>.",
+            parse_mode="HTML",
         )
-        
-        # Expire code after 180 seconds and update message text live
-        async def expire_code(c, sent_message: types.Message):
-            try:
-                # Update every 10 seconds
-                for remaining in range(170, -1, -10):
-                    await asyncio.sleep(10)
-                    
-                    # If remaining is 0 or less, break and expire
-                    if remaining <= 0:
-                        break
-                        
-                    current_codes = load_codes()
-                    user_data = current_codes.get(c)
-                    
-                    # If code is gone from file, it might have been cleaned up or replaced
-                    if not user_data:
-                        return 
 
-                    # If marked as used by the API
-                    if user_data.get("used"):
-                        try:
-                            await sent_message.edit_text(
-                                f"🎉 <b>Muvaffaqiyatli kirildi! / Successfully logged in!</b>",
-                                parse_mode="HTML"
-                            )
-                        except Exception:
-                            pass
-                        
-                        # Clean up from file now that bot has notified
-                        current_codes.pop(c, None)
-                        save_codes(current_codes)
-                        return
-                        
-                    try:
-                        if remaining >= 60:
-                            mins, secs = divmod(remaining, 60)
-                            time_str_uz = f"{mins}:{secs:02d} daqiqada"
-                            time_str_en = f"{mins}:{secs:02d} minutes"
-                        else:
-                            time_str_uz = f"{remaining} soniyada"
-                            time_str_en = f"{remaining} seconds"
-
-                        await sent_message.edit_text(
-                            f"✅ <b>Tasdiqlash kodi / Verification code:</b>\n\n"
-                            f"<code>{c}</code>\n\n"
-                            f"🇺🇿 <b>Kod {time_str_uz} eskiradi.</b>\n"
-                            f"🇬🇧 <b>The code is valid for {time_str_en}.</b>",
-                            parse_mode="HTML"
-                        )
-                    except Exception as e:
-                        # Silently handle "message is not modified" or other TG errors
-                        logger.debug(f"Countdown update skipped: {e}")
-
-                # Final expiration logic
-                final_codes = load_codes()
-                if c in final_codes:
-                    del final_codes[c]
-                    save_codes(final_codes)
-                
-                # Show expiration notice instead of deleting
-                try:
-                    await sent_message.edit_text(
-                        f"❌ <b>Kod muddati tugadi / Code expired.</b>\n\n"
-                        f"Yangi kod olish uchun <b>🔑 Login</b> tugmasini qaytadan bosing.",
-                        parse_mode="HTML"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to show expiration notice: {e}")
-                    
-            except Exception as e:
-                logger.error(f"Error in expire_code task: {e}")
-
-        asyncio.create_task(expire_code(code, msg))
+        asyncio.create_task(_countdown(store, code, sent))
 
     @dp.message()
-    async def echo_all(message: types.Message):
-        has_contact = message.from_user.id in users_with_contact
-        await message.answer(
-            "Tizimga kirish uchun quyidagi tugmani bosing:",
-            reply_markup=get_main_keyboard(has_contact)
-        )
+    async def fallback(message: types.Message) -> None:
+        contact = await store.get_contact(message.from_user.id)
+        if contact:
+            await message.answer(
+                "🔑 Kodni olish uchun tugmani bosing:",
+                reply_markup=_login_keyboard(),
+            )
+        else:
+            await message.answer(
+                "📱 Raqamingizni yuboring:",
+                reply_markup=_phone_keyboard(),
+            )
 
-    logger.info("Bot is successfully starting...")
+    logger.info("Bot starting (long-polling)...")
     await dp.start_polling(bot)
+
+
+async def _countdown(store, code: str, sent: types.Message) -> None:
+    """Keep the code message updated with remaining time; handle success/expiry."""
+    try:
+        for elapsed in range(_TICK, _CODE_TTL + 1, _TICK):
+            await asyncio.sleep(_TICK)
+
+            data = await store.get_code(code)
+            if data is None:
+                # TTL expired in Redis — already cleaned up
+                break
+
+            if data.get("used"):
+                try:
+                    await sent.edit_text(
+                        "🎉 <b>Muvaffaqiyatli kirildi! / Successfully logged in!</b>",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+                await store.delete_code(code)
+                return
+
+            remaining = _CODE_TTL - elapsed
+            if remaining <= 0:
+                break
+
+            if remaining >= 60:
+                m, s = divmod(remaining, 60)
+                label_uz, label_en = f"{m}:{s:02d} daqiqada", f"{m}:{s:02d} minutes"
+            else:
+                label_uz, label_en = f"{remaining} soniyada", f"{remaining} seconds"
+
+            try:
+                await sent.edit_text(
+                    f"✅ <b>Tasdiqlash kodi / Verification code:</b>\n\n"
+                    f"<code>{code}</code>\n\n"
+                    f"🇺🇿 Kod <b>{label_uz}</b> eskiradi.\n"
+                    f"🇬🇧 Code expires in <b>{label_en}</b>.",
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                logger.debug("Countdown edit skipped: %s", exc)
+
+        # Code timed out
+        try:
+            await sent.edit_text(
+                "❌ <b>Kod muddati tugadi. / Code expired.</b>\n\n"
+                "Yangi kod olish uchun <b>🔑 Kirish / Login</b> tugmasini bosing.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    except Exception:
+        logger.exception("Countdown task failed for code %s", code)
+
 
 def main() -> None:
     asyncio.run(run_bot())
+
 
 if __name__ == "__main__":
     main()

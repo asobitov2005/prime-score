@@ -84,7 +84,6 @@ class TestType(StrEnum):
 
 class TestFormat(StrEnum):
     FULL = "full"
-    PART = "part"
     PASSAGE_1 = "passage_1"
     PASSAGE_2 = "passage_2"
     PASSAGE_3 = "passage_3"

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 interface SiteShellProps {
   children: ReactNode;
@@ -43,13 +43,17 @@ export function SiteShell({ children }: SiteShellProps) {
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [currentPath, setCurrentPath] = useState("");
+  const currentPath = usePathname();
   const router = useRouter();
+
+  // Admin sahifalarida SiteShell ni ko'rsatmaslik
+  if (currentPath.startsWith("/admin")) {
+    return <>{children}</>;
+  }
 
   // Fix hydration
   useEffect(() => {
     setMounted(true);
-    setCurrentPath(window.location.pathname);
   }, []);
 
   // Handle scroll to top visibility

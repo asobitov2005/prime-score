@@ -37,6 +37,7 @@ next-env.d.ts
 # Logs
 *.log
 *_log.txt
+bot_log.txt
 logs/
 
 # IDE
@@ -57,3 +58,12 @@ docker-compose.override.yml
 /extract_*.py
 /recovered_*.tsx
 /decoded_sourcemap.json
+/clean_project.py
+
+# Runtime data — never commit
+backend/active_codes.json
+backend/next
+backend/primescore-frontend@0.1.0
+backend/force_db_init.py
+backend/seed_admin_manual.py
+backend/seed_realistic_tests.py

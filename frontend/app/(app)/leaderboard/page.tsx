@@ -23,11 +23,10 @@ export default function LeaderboardPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in duration-500">
       
-      {/* Header Card */}
+      {/* Header Card — scrolls away */}
       <Card className="overflow-hidden bg-background border border-border/50 relative rounded-2xl shadow-sm">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-        
-        <CardHeader className="space-y-1 relative z-10 p-5 lg:px-6 border-b border-border/40 bg-muted/5">
+        <CardHeader className="space-y-1 relative z-10 p-5 lg:px-6 bg-muted/5">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
               <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Leaderboard</CardTitle>
@@ -40,34 +39,34 @@ export default function LeaderboardPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-4 lg:px-6 relative z-10 bg-background/50">
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <div className="bg-muted/40 p-1.5 rounded-[1.25rem] flex items-center overflow-x-auto no-scrollbar border border-border/50 shadow-inner w-full md:w-max">
-              {[
-                { id: "combined", label: "Overall" },
-                { id: "reading", label: "Reading" },
-                { id: "listening", label: "Listening" }
-              ].map(tab => (
-                <button 
-                  key={tab.id} 
-                  onClick={() => setTypeFilter(tab.id as TypeFilter)} 
-                  className={cn(
-                    "flex-1 sm:flex-none px-5 py-2.5 text-[14px] font-black rounded-xl transition-all whitespace-nowrap", 
-                    typeFilter === tab.id 
-                      ? "bg-primary text-primary-foreground shadow-[0_4px_14px_-2px_rgba(var(--primary),0.4)] scale-[1.02]" 
-                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardContent>
       </Card>
 
+      {/* Sticky Filter — sticks at navbar level */}
+      <div className="sticky top-20 md:top-28 lg:top-32 z-40 bg-background/95 backdrop-blur-md pb-4">
+        <div className="bg-muted/40 p-1.5 rounded-[1.25rem] flex items-center overflow-x-auto no-scrollbar border border-border/50 shadow-inner w-full md:w-max">
+          {[
+            { id: "combined", label: "Overall" },
+            { id: "reading", label: "Reading" },
+            { id: "listening", label: "Listening" }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setTypeFilter(tab.id as TypeFilter)}
+              className={cn(
+                "flex-1 sm:flex-none px-5 py-2.5 text-[14px] font-black rounded-xl transition-all whitespace-nowrap",
+                typeFilter === tab.id
+                  ? "bg-primary text-primary-foreground shadow-[0_4px_14px_-2px_rgba(var(--primary),0.4)] scale-[1.02]"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Main Table Card */}
-      <div className="mt-4">
+      <div>
         <Card className="border-border/50 shadow-lg shadow-black/5 bg-card/50 backdrop-blur-xl rounded-3xl overflow-hidden">
           
           {/* Table Header */}

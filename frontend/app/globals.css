@@ -104,6 +104,29 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #64748b;
   }
+
+  /* Left-side scrollbar for test grid */
+  .custom-scrollbar-left {
+    direction: rtl;
+  }
+  .custom-scrollbar-left > * {
+    direction: ltr;
+  }
+  .custom-scrollbar-left::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar-left::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar-left::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 10px;
+  }
+  .custom-scrollbar-left::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
 }
 
 @layer utilities {

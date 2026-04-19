@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { Search, SlidersHorizontal, ArrowRight, BookOpen, Headphones, Layout, Layers, Clock, FileText, User, CheckCircle2, X } from "lucide-react";
+import { SlidersHorizontal, BookOpen, Headphones, Layers, Users, CheckCircle2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { StartTestModal } from "@/components/start-test-modal";
 import { FilterSelect } from "./filter-select";
 import { getCatalogTests } from "@/lib/server-data";
@@ -40,12 +39,17 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
   ]);
 
   const tests = rawTests.filter(test => {
+    if (test.status !== "published") return false;
     if (!searchQuery) return true;
     return test.title.toLowerCase().includes(searchQuery) || test.sourceDetail.toLowerCase().includes(searchQuery);
   });
   const completedTestIds = new Set(
     userAttempts.filter(a => a.status === "completed").map(a => a.testId)
   );
+  const attemptCountByTestId = userAttempts.reduce<Record<string, number>>((acc, a) => {
+    acc[a.testId] = (acc[a.testId] ?? 0) + 1;
+    return acc;
+  }, {});
 
   const hasActiveFilters = activeFormat !== "all" || activeSource !== "";
 
@@ -72,7 +76,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-6xl mx-auto animate-in fade-in duration-500 overflow-hidden">
+    <div className="flex flex-col max-w-6xl mx-auto animate-in fade-in duration-500">
       
       {/* Header Card */}
       <div className="shrink-0 mb-6 mt-2">
@@ -96,7 +100,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       </div>
 
       {/* Filters Container */}
-      <div className="shrink-0 bg-background/95 backdrop-blur-md pb-4 space-y-4">
+      <div className="sticky top-20 md:top-28 lg:top-32 z-40 bg-background/95 backdrop-blur-md pb-4 space-y-4">
         {/* Primary Filter (Reading / Listening) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">
@@ -183,7 +187,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       </div>
 
       {/* Test Grid area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar pr-3 pb-8 -mr-3">
+      <div className="pb-8">
         {tests.length === 0 ? (
         <div className="text-center py-20 bg-card/20 rounded-[3rem] border border-dashed border-border/60">
           <div className="mx-auto w-20 h-20 rounded-[2rem] bg-muted/30 flex items-center justify-center mb-6">
@@ -196,10 +200,9 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {tests.map((test, index) => {
+          {tests.map((test) => {
             const isFull = !test.format || test.format === "full";
-            const isCompleted = index === 0 || completedTestIds.has(test.id);
-            const takenCount = Math.floor(Math.random() * 2000) + 500;
+            const isCompleted = completedTestIds.has(test.id);
 
             return (
               <Card key={test.id} className="group relative rounded-2xl border-border/50 bg-card/50 hover:bg-card hover:border-border transition-all duration-300 flex flex-col shadow-sm">
@@ -236,7 +239,8 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 pt-1">
                        <span>{test.source.replace("_", " ")}</span>
                        <span className="flex items-center gap-1">
-                         <User className="h-3 w-3 opacity-60" /> {takenCount.toLocaleString()} takes
+                         <Users className="h-3 w-3 opacity-60" />
+                         {Math.max(100, attemptCountByTestId[test.id] ?? 0)} attempted
                        </span>
                      </div>
                    </div>

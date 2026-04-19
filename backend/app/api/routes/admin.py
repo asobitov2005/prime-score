@@ -1,14 +1,25 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import List
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_admin, get_current_super_admin
 from app.core.security import create_access_token, create_refresh_token, decode_token
-from app.core.enums import TestStatus
+from app.core.enums import AccessType, TestStatus
 from app.db.session import get_db_session
+from app.models.attempt import Attempt
+from app.models.enums import AttemptStatus as ModelAttemptStatus
+from app.models.enums import AttemptStatus as ModelAttemptStatusEnum
+from app.models.enums import AccessType as ModelAccessType
+from app.models.enums import TestStatus as ModelTestStatus
+from app.models.test import Test
+from app.models.user import User
 from app.schemas.admin import (
     AdminAuditLogRead,
     AdminContentCreateRequest,
@@ -34,6 +45,33 @@ from app.services.test_content_repo import (
     publish_test_in_db,
     save_test_draft_to_db,
 )
+
+
+class BulkStatusRequest(BaseModel):
+    ids: List[UUID]
+    access_type: str  # "public" | "premium"
+
+
+class BulkPublishRequest(BaseModel):
+    ids: List[UUID]
+    status: str  # "published" | "draft"
+
+
+class AdminUserDetailRead(BaseModel):
+    id: UUID
+    telegram_id: int
+    first_name: str
+    last_name: str | None = None
+    username: str | None = None
+    phone: str | None = None
+    is_premium: bool = False
+    premium_until: str | None = None
+    show_on_leaderboard: bool = True
+    last_active_at: str | None = None
+    created_at: str | None = None
+    attempts_total: int = 0
+    attempts_completed: int = 0
+    average_band: float | None = None
 
 router = APIRouter()
 
@@ -96,19 +134,67 @@ async def read_current_admin(current_admin: AdminPrincipal = Depends(get_current
 
 
 @router.get("/dashboard", response_model=AdminDashboardRead)
-async def dashboard(current_admin: AdminPrincipal = Depends(get_current_admin)) -> AdminDashboardRead:
+async def dashboard(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminDashboardRead:
     _ = current_admin
-    return AdminDashboardRead(
-        users_total=0,
-        premium_users=0,
-        tests_total=0,
-        tests_published=0,
-        tests_draft=0,
-        tests_archived=0,
-        attempts_total=0,
-        attempts_completed=0,
-        payments_pending=0,
-    )
+    try:
+        users_total = await session.scalar(select(func.count()).select_from(User)) or 0
+        premium_users = await session.scalar(
+            select(func.count()).select_from(User).where(User.is_premium == True)
+        ) or 0
+        tests_total = await session.scalar(select(func.count()).select_from(Test)) or 0
+        tests_published = await session.scalar(
+            select(func.count()).select_from(Test).where(Test.status == ModelTestStatus.PUBLISHED)
+        ) or 0
+        tests_draft = await session.scalar(
+            select(func.count()).select_from(Test).where(Test.status == ModelTestStatus.DRAFT)
+        ) or 0
+        tests_archived = await session.scalar(
+            select(func.count()).select_from(Test).where(Test.status == ModelTestStatus.ARCHIVED)
+        ) or 0
+        attempts_total = await session.scalar(select(func.count()).select_from(Attempt)) or 0
+        attempts_completed = await session.scalar(
+            select(func.count()).select_from(Attempt).where(
+                Attempt.status.in_([ModelAttemptStatus.COMPLETED, ModelAttemptStatusEnum.AUTO_SUBMITTED])
+            )
+        ) or 0
+        avg_band_row = await session.scalar(
+            select(func.avg(Attempt.band_score)).where(
+                Attempt.status.in_([ModelAttemptStatus.COMPLETED, ModelAttemptStatusEnum.AUTO_SUBMITTED]),
+                Attempt.band_score.isnot(None),
+            )
+        )
+        return AdminDashboardRead(
+            users_total=int(users_total),
+            premium_users=int(premium_users),
+            tests_total=int(tests_total),
+            tests_published=int(tests_published),
+            tests_draft=int(tests_draft),
+            tests_archived=int(tests_archived),
+            attempts_total=int(attempts_total),
+            attempts_completed=int(attempts_completed),
+            payments_pending=0,
+            average_band=float(avg_band_row) if avg_band_row is not None else None,
+        )
+    except Exception:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        return AdminDashboardRead(
+            users_total=0,
+            premium_users=0,
+            tests_total=0,
+            tests_published=0,
+            tests_draft=0,
+            tests_archived=0,
+            attempts_total=0,
+            attempts_completed=0,
+            payments_pending=0,
+            average_band=None,
+        )
 
 
 @router.get("/tests", response_model=list[AdminTestRead])
@@ -134,6 +220,56 @@ async def create_test(
 ) -> AdminTestRead:
     _ = current_admin
     return AdminTestRead(id=uuid4(), **payload.model_dump())
+
+
+@router.patch("/tests/bulk-status", response_model=MessageResponse)
+async def bulk_update_test_status(
+    payload: BulkStatusRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    _ = current_admin
+    if payload.access_type not in ("public", "premium"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="access_type must be 'public' or 'premium'.")
+    try:
+        model_access = ModelAccessType(payload.access_type)
+        for test_id in payload.ids:
+            test = await session.get(Test, test_id)
+            if test is not None:
+                test.access_type = model_access
+        await session.commit()
+        return MessageResponse(message=f"Updated {len(payload.ids)} tests to {payload.access_type}.")
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Bulk update failed.") from exc
+
+
+@router.patch("/tests/bulk-publish", response_model=MessageResponse)
+async def bulk_publish_tests(
+    payload: BulkPublishRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    _ = current_admin
+    if payload.status not in ("published", "draft"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status must be 'published' or 'draft'.")
+    try:
+        model_status = ModelTestStatus(payload.status)
+        for test_id in payload.ids:
+            test = await session.get(Test, test_id)
+            if test is not None:
+                test.status = model_status
+        await session.commit()
+        return MessageResponse(message=f"{len(payload.ids)} ta test {payload.status} qilindi.")
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Bulk publish failed.") from exc
 
 
 @router.post("/tests/draft", response_model=AdminTestRead, status_code=201)
@@ -336,22 +472,108 @@ async def create_image_upload_url(
     )
 
 
-@router.get("/users", response_model=list[AdminUserRead])
-async def list_users(current_admin: AdminPrincipal = Depends(get_current_admin)) -> list[AdminUserRead]:
+@router.get("/users", response_model=list[AdminUserDetailRead])
+async def list_users(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AdminUserDetailRead]:
     _ = current_admin
-    return []
+    try:
+        users = list((await session.scalars(select(User).order_by(User.created_at.desc()))).all())
+        result = []
+        for user in users:
+            attempts_total = await session.scalar(
+                select(func.count()).select_from(Attempt).where(Attempt.user_id == user.id)
+            ) or 0
+            attempts_completed = await session.scalar(
+                select(func.count()).select_from(Attempt).where(
+                    Attempt.user_id == user.id,
+                    Attempt.status.in_([ModelAttemptStatus.COMPLETED, ModelAttemptStatusEnum.AUTO_SUBMITTED]),
+                )
+            ) or 0
+            avg_band_row = await session.scalar(
+                select(func.avg(Attempt.band_score)).where(
+                    Attempt.user_id == user.id,
+                    Attempt.status.in_([ModelAttemptStatus.COMPLETED, ModelAttemptStatusEnum.AUTO_SUBMITTED]),
+                    Attempt.band_score.isnot(None),
+                )
+            )
+            result.append(AdminUserDetailRead(
+                id=user.id,
+                telegram_id=user.telegram_id,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                username=user.username,
+                phone=user.phone,
+                is_premium=user.is_premium,
+                premium_until=user.premium_until.isoformat() if user.premium_until else None,
+                show_on_leaderboard=user.show_on_leaderboard,
+                last_active_at=user.last_active_at.isoformat() if user.last_active_at else None,
+                created_at=user.created_at.isoformat() if user.created_at else None,
+                attempts_total=int(attempts_total),
+                attempts_completed=int(attempts_completed),
+                average_band=float(avg_band_row) if avg_band_row is not None else None,
+            ))
+        return result
+    except Exception:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        return []
 
 
-@router.get("/users/{user_id}", response_model=AdminUserRead)
-async def get_user(user_id: UUID, current_admin: AdminPrincipal = Depends(get_current_admin)) -> AdminUserRead:
+@router.get("/users/{user_id}", response_model=AdminUserDetailRead)
+async def get_user(
+    user_id: UUID,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminUserDetailRead:
     _ = current_admin
-    return AdminUserRead(
-        id=user_id,
-        telegram_id=0,
-        first_name="Unknown",
-        last_name=None,
-        username=None,
-    )
+    try:
+        user = await session.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        attempts_total = await session.scalar(
+            select(func.count()).select_from(Attempt).where(Attempt.user_id == user_id)
+        ) or 0
+        attempts_completed = await session.scalar(
+            select(func.count()).select_from(Attempt).where(
+                Attempt.user_id == user_id,
+                Attempt.status == ModelAttemptStatus.COMPLETED,
+            )
+        ) or 0
+        avg_band_row = await session.scalar(
+            select(func.avg(Attempt.band_score)).where(
+                Attempt.user_id == user_id,
+                Attempt.status == ModelAttemptStatus.COMPLETED,
+                Attempt.band_score.isnot(None),
+            )
+        )
+        return AdminUserDetailRead(
+            id=user.id,
+            telegram_id=user.telegram_id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            username=user.username,
+            phone=user.phone,
+            is_premium=user.is_premium,
+            premium_until=user.premium_until.isoformat() if user.premium_until else None,
+            show_on_leaderboard=user.show_on_leaderboard,
+            last_active_at=user.last_active_at.isoformat() if user.last_active_at else None,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+            attempts_total=int(attempts_total),
+            attempts_completed=int(attempts_completed),
+            average_band=float(avg_band_row) if avg_band_row is not None else None,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load user.")
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserRead)

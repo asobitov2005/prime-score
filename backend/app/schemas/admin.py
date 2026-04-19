@@ -21,6 +21,7 @@ class AdminDashboardRead(BaseModel):
     attempts_completed: int = 0
     payments_pending: int = 0
     revenue_total: Decimal = Decimal("0")
+    average_band: float | None = None
 
 
 class AdminTestUpsertRequest(BaseModel):
@@ -37,6 +38,7 @@ class AdminTestUpsertRequest(BaseModel):
 
 class AdminTestRead(AdminTestUpsertRequest):
     id: UUID
+    format: str | None = None
     status: TestStatus = TestStatus.draft
     version: int = 1
     created_at: datetime | None = None
