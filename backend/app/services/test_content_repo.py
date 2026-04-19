@@ -354,16 +354,22 @@ async def list_tests_from_db(
     *,
     test_type: TestType | None = None,
     access_type: AccessType | None = None,
-    status: TestStatus | None = None,
+    status_filter: TestStatus | None = None,
+    test_format: str | None = None,
+    source: str | None = None,
 ) -> list[dict[str, object]]:
-    
+
     query = _tests_query()
     if test_type is not None:
         query = query.where(Test.type == _model_test_type(test_type))
     if access_type is not None:
         query = query.where(Test.access_type == _model_access_type(access_type))
-    if status is not None:
-        query = query.where(Test.status == _model_test_status(status))
+    if status_filter is not None:
+        query = query.where(Test.status == _model_test_status(status_filter))
+    if test_format is not None and test_format != "all":
+        query = query.where(Test.format == ModelTestFormat(test_format))
+    if source is not None and source != "":
+        query = query.where(Test.source == ModelTestSource(source))
     result = await session.scalars(query)
     tests = result.unique().all()
     return [_serialize_catalog_item(test) for test in tests]

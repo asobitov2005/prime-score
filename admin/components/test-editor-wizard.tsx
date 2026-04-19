@@ -60,50 +60,53 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
   const completionRatio = ((activeStepIndex + 1) / stepOrder.length) * 100;
 
   // Auto-Save Effect (Debounced)
+  const [lastSavedDraftStr, setLastSavedDraftStr] = useState<string>("");
+
   useEffect(() => {
-    // Skip auto-save on initial load if we don't have changes or if it's already saving
     if (saveState === "saving" || publishState === "publishing") return;
 
+    const currentDraftStr = JSON.stringify(draft);
+    if (currentDraftStr === lastSavedDraftStr) return; // No changes to save
+
     const handler = setTimeout(() => {
-      // Don't auto-save an empty draft title or an initial unsaved create view immediately
       if (draft.metadata.title.trim().length > 0) {
-        void saveDraft(true); // pass true for "silent" auto-save
+        void saveDraft(true, currentDraftStr);
       }
     }, 2000);
 
     return () => {
       clearTimeout(handler);
     };
-  }, [draft]); // Trigger whenever draft changes
+  }, [draft, lastSavedDraftStr, saveState, publishState]);
 
   useEffect(() => {
     setDraft(draftSeed);
+    setLastSavedDraftStr(JSON.stringify(draftSeed));
   }, [draftSeed]);
 
-  async function saveDraft(isAutoSave = false) {
+  async function saveDraft(isAutoSave = false, draftStr?: string) {
     try {
       setSaveState("saving");
+      const currentDraftToSave = draft;
+      const strToTrack = draftStr || JSON.stringify(currentDraftToSave);
+      
       const saved = resolvedTestId
-        ? await adminApi.updateDraft(resolvedTestId, draft)
-        : await adminApi.createDraft(draft);
+        ? await adminApi.updateDraft(resolvedTestId, currentDraftToSave)
+        : await adminApi.createDraft(currentDraftToSave);
+        
       setResolvedTestId(saved.id);
-      setDraft((current) => ({
-        ...current,
-        metadata: {
-          ...current.metadata,
-          version: saved.version,
-          status: saved.status
-        }
-      }));
+      
+      // Update our tracking string to match what we just saved, 
+      // preventing the effect from immediately firing again
+      setLastSavedDraftStr(strToTrack);
+      
       setSaveState("saved");
       if (!testId && !isAutoSave) {
         router.replace(`/tests/${saved.id}/edit`);
       } else if (!testId && isAutoSave) {
-        // Change URL without full navigation for auto-saves
         window.history.replaceState(null, "", `/tests/${saved.id}/edit`);
       }
       
-      // Reset saved state indicator to idle after 3 seconds for clean UI
       setTimeout(() => {
         setSaveState(current => current === "saved" ? "idle" : current);
       }, 3000);

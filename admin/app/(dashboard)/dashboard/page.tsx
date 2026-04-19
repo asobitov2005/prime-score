@@ -58,46 +58,46 @@ export default async function DashboardPage() {
       {/* Hero Stats: The Big 4 */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="bg-card/50 hover:bg-card transition-colors border-border/50 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-5"><CreditCard size={64} /></div>
-          <CardHeader className="p-6 pb-2">
-            <CardDescription className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">MRR (Revenue)</CardDescription>
-            <CardTitle className="text-4xl font-black tracking-tighter text-foreground">{metrics.mrr}</CardTitle>
+          <div className="absolute top-0 right-0 p-3 opacity-5"><CreditCard size={48} /></div>
+          <CardHeader className="p-4 pb-1">
+            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">MRR (Revenue)</CardDescription>
+            <CardTitle className="text-2xl font-bold text-foreground">{metrics.mrr}</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 pt-0">
-            <p className="text-xs font-bold text-emerald-500 flex items-center gap-1"><TrendingUp size={12}/> +12.5% vs last month</p>
+          <CardContent className="p-4 pt-0">
+            <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1"><TrendingUp size={10}/> +12.5% vs last month</p>
           </CardContent>
         </Card>
         
         <Card className="bg-card/50 hover:bg-card transition-colors border-border/50 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-5"><Users size={64} /></div>
-          <CardHeader className="p-6 pb-2">
-            <CardDescription className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Active Users (DAU)</CardDescription>
-            <CardTitle className="text-4xl font-black tracking-tighter text-foreground">{metrics.users.active.dau.toLocaleString()}</CardTitle>
+          <div className="absolute top-0 right-0 p-3 opacity-5"><Users size={48} /></div>
+          <CardHeader className="p-4 pb-1">
+            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Active Users (DAU)</CardDescription>
+            <CardTitle className="text-2xl font-bold text-foreground">{metrics.users.active.dau.toLocaleString()}</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 pt-0">
-            <p className="text-xs font-bold text-emerald-500 flex items-center gap-1"><TrendingUp size={12}/> +5.2% vs yesterday</p>
+          <CardContent className="p-4 pt-0">
+            <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1"><TrendingUp size={10}/> +5.2% vs yesterday</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card/50 hover:bg-card transition-colors border-border/50 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-5"><Activity size={64} /></div>
-          <CardHeader className="p-6 pb-2">
-            <CardDescription className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Tests Taken (Daily)</CardDescription>
-            <CardTitle className="text-4xl font-black tracking-tighter text-foreground">{metrics.engagement.testsTaken.daily.toLocaleString()}</CardTitle>
+          <div className="absolute top-0 right-0 p-3 opacity-5"><Activity size={48} /></div>
+          <CardHeader className="p-4 pb-1">
+            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tests Taken (Daily)</CardDescription>
+            <CardTitle className="text-2xl font-bold text-foreground">{metrics.engagement.testsTaken.daily.toLocaleString()}</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 pt-0">
-            <p className="text-xs font-bold text-emerald-500 flex items-center gap-1"><TrendingUp size={12}/> +8.4% vs yesterday</p>
+          <CardContent className="p-4 pt-0">
+            <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1"><TrendingUp size={10}/> +8.4% vs yesterday</p>
           </CardContent>
         </Card>
 
         <Card className="bg-primary/5 hover:bg-primary/10 transition-colors border-primary/20 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-5 text-primary"><Zap size={64} /></div>
-          <CardHeader className="p-6 pb-2">
-            <CardDescription className="text-[11px] font-black uppercase tracking-widest text-primary">Free → Paid Conversion</CardDescription>
-            <CardTitle className="text-4xl font-black tracking-tighter text-foreground">{metrics.conversionRate}</CardTitle>
+          <div className="absolute top-0 right-0 p-3 opacity-5 text-primary"><Zap size={48} /></div>
+          <CardHeader className="p-4 pb-1">
+            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-primary">Free → Paid Conversion</CardDescription>
+            <CardTitle className="text-2xl font-bold text-foreground">{metrics.conversionRate}</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 pt-0">
-            <p className="text-xs font-bold text-primary/80">Avg. {metrics.dailyPurchases} daily purchases</p>
+          <CardContent className="p-4 pt-0">
+            <p className="text-[11px] font-medium text-primary/80">Avg. {metrics.dailyPurchases} daily purchases</p>
           </CardContent>
         </Card>
       </div>

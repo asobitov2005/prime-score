@@ -165,17 +165,32 @@ class AdminDraftReviewRead(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class AdminDraftQuestionGroupRead(BaseModel):
+    id: UUID
+    section_id: UUID
+    title: str
+    instructions: str
+    type_id: str
+    question_start: int
+    question_end: int
+    shared_options: list[str] = Field(default_factory=list)
+    questions: list[AdminDraftQuestionRead] = Field(default_factory=list)
+
+
 class AdminTestDraftRead(BaseModel):
     metadata: AdminDraftMetadataRead
     content: AdminDraftContentRead
-    questions: list[AdminDraftQuestionRead] = Field(default_factory=list)
+    question_groups: list[AdminDraftQuestionGroupRead] = Field(default_factory=list, alias="question_groups")
     review: AdminDraftReviewRead
     decisions: AdminDraftDecisionsRead
+    
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class AdminDraftMetadataWrite(BaseModel):
     title: str
     type: Literal["reading", "listening"]
+    format: str = "full"
     source: Literal["cambridge", "real_exam", "custom"]
     source_detail: str = ""
     access_type: Literal["public", "premium"]
@@ -194,16 +209,26 @@ class AdminDraftContentSectionWrite(BaseModel):
 
 class AdminDraftQuestionWrite(BaseModel):
     id: UUID | None = None
-    section_id: UUID
     label: str
-    type_id: str
     prompt: str
     accepted_answers: list[str] = Field(default_factory=list)
     explanation: str = ""
     variants: list[str] = Field(default_factory=list)
 
 
+class AdminDraftQuestionGroupWrite(BaseModel):
+    id: UUID | None = None
+    section_id: UUID
+    title: str
+    instructions: str
+    type_id: str
+    question_start: int
+    question_end: int
+    shared_options: list[str] = Field(default_factory=list)
+    questions: list[AdminDraftQuestionWrite] = Field(default_factory=list)
+
+
 class AdminTestDraftUpsertRequest(BaseModel):
     metadata: AdminDraftMetadataWrite
     content: list[AdminDraftContentSectionWrite] = Field(default_factory=list)
-    questions: list[AdminDraftQuestionWrite] = Field(default_factory=list)
+    question_groups: list[AdminDraftQuestionGroupWrite] = Field(default_factory=list)

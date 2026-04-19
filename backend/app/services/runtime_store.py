@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
 
-import fcntl
+try:
+    import fcntl
+except ModuleNotFoundError:
+    fcntl = None
 try:
     from redis import Redis
 except ModuleNotFoundError:
@@ -239,7 +242,8 @@ class FileRuntimeStore:
     def _with_document(self, mutator):
         self.path.touch(exist_ok=True)
         with self.path.open("r+", encoding="utf-8") as handle:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            if fcntl:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             raw = handle.read().strip()
             document = json.loads(raw) if raw else {"attempts": {}}
             result, changed = mutator(document)
@@ -248,7 +252,8 @@ class FileRuntimeStore:
                 handle.truncate()
                 json.dump(document, handle, separators=(",", ":"))
                 handle.flush()
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            if fcntl:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
             return result
 
     def save_attempt(self, attempt: AttemptRuntime) -> None:

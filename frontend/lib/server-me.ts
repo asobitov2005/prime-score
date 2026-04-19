@@ -4,7 +4,7 @@ import type { AttemptRow, DashboardStat, TestType } from "@/lib/types";
 const baseUrl = (
   process.env.API_INTERNAL_BASE_URL
   ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://localhost:8000/api"
+  ?? "http://127.0.0.1:8000/api"
 ).replace(/\/$/, "");
 
 const debugHeaders: Record<string, string> = {

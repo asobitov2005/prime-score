@@ -3,37 +3,47 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BookOpenText, Gauge, History, Medal, Menu, ShieldAlert, Sparkles, X, Home } from "lucide-react";
+import { BookOpenText, Gauge, History, Medal, Menu, ShieldAlert, X, Home, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui-store";
+import { useAuthStore } from "@/store/auth-store";
+import { useRouter } from "next/navigation";
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/tests", label: "Tests", icon: BookOpenText },
   { href: "/history", label: "History", icon: History },
   { href: "/leaderboard", label: "Leaderboard", icon: Medal },
-  { href: "/subscription", label: "Subscription", icon: ShieldAlert }
+  { href: "/subscription", label: "Subscription", icon: ShieldAlert },
+  { href: "/settings", label: "Settings", icon: Settings2 }
 ] as const;
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { sidebar, toggleSidebar } = useUIStore();
+  const { isAuthenticated } = useAuthStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Close mobile menu when navigating
+  useEffect(() => {
+    // If user is not authenticated and tries to access protected app routes (except /tests which might be open partially but app-shell wraps it)
+    // Actually, the user requested: if not logged in, only /tests is open. If they go to others, prompt to login.
+    if (!isAuthenticated && pathname !== "/tests" && !pathname.startsWith("/tests/")) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, pathname, router]);
+
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
 
-  // Lock body scroll when mobile menu is open
   useEffect(() => {
     if (isMobileOpen) {
       document.body.style.overflow = 'hidden';
@@ -42,11 +52,16 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, [isMobileOpen]);
 
+  // If not authenticated and trying to view a protected page, show nothing while redirecting
+  if (!isAuthenticated && pathname !== "/tests" && !pathname.startsWith("/tests/")) {
+    return null;
+  }
+
   const SidebarContent = () => (
     <>
-      <Card className="p-4 border-border/50 shadow-sm bg-card/60 backdrop-blur-md rounded-2xl animate-in fade-in slide-in-from-left-4 duration-500">
-        <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-4 pl-2">Main Menu</p>
-        <nav className="space-y-1.5">
+      <Card className="p-3 border-border/50 shadow-sm bg-card/60 backdrop-blur-md rounded-xl">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3 pl-2">Main Menu</p>
+        <nav className="space-y-1">
           {navItems.map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const Icon = item.icon;
@@ -56,28 +71,30 @@ export function AppShell({ children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3.5 rounded-xl px-4 py-3 text-[15px] font-semibold transition-all duration-200",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200",
                   active 
-                    ? "bg-primary text-background shadow-md md:translate-x-1" 
-                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground md:hover:translate-x-1 active:scale-95"
+                    ? "bg-primary text-background shadow-sm" 
+                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-95"
                 )}
-              >                <Icon className={cn("h-5 w-5", active ? "opacity-100" : "opacity-70")} />
+              >
+                <Icon className={cn("h-4 w-4", active ? "opacity-100" : "opacity-70")} />
                 {item.label}
               </Link>
-            );          })}
+            );
+          })}
         </nav>
       </Card>
 
-      <Card className="p-5 border-border/50 shadow-sm bg-card/60 backdrop-blur-md rounded-2xl animate-in fade-in slide-in-from-left-8 duration-700">
-        <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-4">Account Status</p>
-        <div className="space-y-4 text-sm">
+      <Card className="p-4 border-border/50 shadow-sm bg-card/60 backdrop-blur-md rounded-xl">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Account Status</p>
+        <div className="space-y-3 text-xs">
           <div className="flex items-center justify-between group">
             <span className="font-semibold text-muted-foreground transition-colors group-hover:text-foreground">Sessions</span>
-            <Badge tone="outline" className="font-bold">2 / 2</Badge>
+            <Badge variant="outline" className="font-bold text-[10px] py-0 px-2 h-5">2 / 2</Badge>
           </div>
           <div className="flex items-center justify-between group">
             <span className="font-semibold text-muted-foreground transition-colors group-hover:text-foreground">Premium</span>
-            <Badge tone="paused" className="font-bold uppercase">Paused</Badge>
+            <Badge variant="secondary" className="font-bold uppercase text-[9px] py-0 px-2 h-5 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20">Paused</Badge>
           </div>
         </div>
       </Card>
@@ -85,30 +102,18 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col selection:bg-primary/20 selection:text-primary">
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-sm transition-all">
-        <div className="w-full flex items-center justify-between gap-4 px-4 py-3 md:px-8 xl:px-12 h-28 md:h-36">
-          <Link href="/dashboard" className="flex items-center gap-2 group focus-visible:outline-none rounded-xl">
-            <div className="h-20 md:h-28 transition-transform duration-300 group-hover:scale-105">
-              <img src="/logo.svg" alt="PrimeScore" className="h-full w-auto object-contain" />
-            </div>
-          </Link>
+    <div className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 md:py-8 flex flex-col lg:flex-row gap-6 md:gap-8 items-start relative">
+      {/* Mobile Sidebar Toggle Button - Floating because header is global */}
+      <Button 
+        variant="outline" 
+        size="icon" 
+        onClick={() => setIsMobileOpen(true)} 
+        className="lg:hidden fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-primary text-background shadow-xl border-none hover:bg-primary/90 active:scale-95"
+        aria-label="Open Menu"
+      >
+        <Menu className="h-6 w-6" />
+      </Button>
 
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => setIsMobileOpen(true)} 
-              className="lg:hidden h-10 w-10 md:h-12 md:w-12 rounded-xl bg-muted/30 border-border/50 hover:bg-muted/80 active:scale-95 transition-transform"
-              aria-label="Open Menu"
-            >
-              <Menu className="h-5 w-5 md:h-6 md:w-6 text-foreground" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile Drawer Overlay */}
       {isMobileOpen && (
         <div 
           className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm lg:hidden animate-in fade-in duration-200"
@@ -116,40 +121,33 @@ export function AppShell({ children }: AppShellProps) {
         />
       )}
 
-      {/* Mobile Drawer Panel */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-[85%] sm:w-80 bg-background border-r border-border/50 shadow-2xl p-6 flex flex-col gap-6 lg:hidden transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "fixed inset-y-0 left-0 z-50 w-72 bg-background border-r border-border/50 shadow-2xl p-5 flex flex-col gap-5 lg:hidden transition-transform duration-300 ease-out",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex items-center justify-between pb-2 border-b border-border/30">
-          <p className="font-black text-lg tracking-tight text-foreground">Menu</p>
-          <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(false)} className="rounded-full hover:bg-muted/50 -mr-2">
-            <X className="h-5 w-5" />
+          <p className="font-bold text-base text-foreground">Menu</p>
+          <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(false)} className="h-8 w-8 rounded-full hover:bg-muted/50 -mr-2">
+            <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto space-y-6 pb-10 no-scrollbar">
+        <div className="flex-1 overflow-y-auto space-y-4 pb-6 no-scrollbar">
            <SidebarContent />
         </div>
       </div>
 
-      <div className="flex-1 w-full flex flex-col lg:flex-row px-4 py-6 md:px-8 xl:px-12 gap-6 lg:gap-8 max-w-[1920px] mx-auto">
-        {/* Desktop Sidebar */}
-        <aside className={cn(
-          "hidden lg:block lg:w-64 xl:w-[300px] flex-shrink-0 space-y-6 transition-all duration-300", 
-          sidebar === "collapsed" ? "lg:hidden" : "lg:block"
-        )}>
-          <div className="sticky top-[100px] space-y-6">
-            <SidebarContent />
-          </div>
-        </aside>
+      <aside className={cn(
+        "hidden lg:block w-64 shrink-0 transition-all duration-300 sticky top-32", 
+        sidebar === "collapsed" ? "lg:hidden" : "lg:block"
+      )}>
+        <div className="space-y-4">
+          <SidebarContent />
+        </div>
+      </aside>
 
-        {/* Main Content Area */}
-        <main className="flex-1 min-w-0 pb-20 w-full animate-in fade-in zoom-in-[0.98] duration-500 ease-out">
-          <div className="w-full mx-auto">
-            {children}
-          </div>
-        </main>
-      </div>
+      <main className="flex-1 min-w-0 w-full animate-in fade-in duration-500 ease-out">
+        {children}
+      </main>
     </div>
   );
 }

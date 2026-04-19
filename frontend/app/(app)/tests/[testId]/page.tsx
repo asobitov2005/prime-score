@@ -1,13 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { Clock3, FileText, FolderOpen, ShieldCheck, Sparkles } from "lucide-react";
+import { Clock3, FileText, FolderOpen, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StartTestModal } from "@/components/start-test-modal";
 import { buildAttemptWorkspaceMeta, getTestById } from "@/lib/mock-data";
 import { getCatalogTestDetail } from "@/lib/server-data";
+import { cn } from "@/lib/utils";
 
 interface TestDetailPageProps {
   params: {
@@ -23,109 +24,96 @@ export default async function TestDetailPage({ params }: TestDetailPageProps) {
     notFound();
   }
 
-  const attemptShellSource = getTestById(testId) ?? getTestById(test.slug);
-  const listeningMeta = test.type === "listening" && attemptShellSource
-    ? buildAttemptWorkspaceMeta(attemptShellSource, "full", "exam")
-    : null;
+  const formatDisplay = (testFormat: string) => {
+    if (!testFormat || testFormat === "full") return "Full Test";
+    if (testFormat === "part") return "Part Level";
+    const parts = testFormat.split("_");
+    if (parts.length === 2) {
+       return parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + " " + parts[1];
+    }
+    return testFormat;
+  };
 
   return (
-    <div className="space-y-6">
-      <Card className="overflow-hidden bg-secondary border-none text-foreground relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent pointer-events-none" />
-        <CardHeader className="space-y-4 relative z-10 p-8">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="outline" className="border-border bg-muted text-slate-200">
-              Test detail
-            </Badge>
-            <Badge tone={test.accessType === "premium" ? "warning" : "success"}>{test.accessType}</Badge>
-            <Badge tone="outline">{test.type}</Badge>
-            <Badge tone="outline">{test.status}</Badge>
-          </div>
+    <div className="space-y-6 pb-10 max-w-5xl mx-auto animate-in fade-in duration-500">
+      
+      <div>
+        <Button asChild variant="ghost" size="sm" className="mb-4 text-muted-foreground hover:text-foreground">
+          <Link href="/tests">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to tests
+          </Link>
+        </Button>
+      </div>
+
+      <Card className="overflow-hidden bg-background border border-border/50 relative rounded-2xl shadow-sm">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+        
+        <CardHeader className="space-y-4 relative z-10 p-6 md:p-8">
           <div className="space-y-3">
-            <CardTitle className="text-4xl tracking-tight text-foreground">{test.title}</CardTitle>
-            <CardDescription className="max-w-3xl text-muted-foreground text-base">{test.description}</CardDescription>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className={cn(
+                "px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm border border-transparent",
+                test.type === "reading" ? "bg-blue-500/10 text-blue-600 border-blue-500/10" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/10"
+              )}>
+                {test.type}
+              </span>
+              <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md bg-muted text-foreground border border-border/40">
+                {formatDisplay(test.format)}
+              </span>
+              {test.accessType === "premium" && (
+                <span className="bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md border border-amber-200 flex items-center gap-1">
+                  Premium
+                </span>
+              )}
+            </div>
+            
+            <CardTitle className="text-2xl md:text-3xl font-black tracking-tight text-foreground">{test.title}</CardTitle>
+            <CardDescription className="max-w-2xl text-muted-foreground text-sm font-medium leading-relaxed">{test.description}</CardDescription>
           </div>
-          <div className="flex flex-wrap gap-3 pt-2">
+          
+          <div className="pt-4">
             <StartTestModal test={test} />
-            <Button asChild variant="outline" className="border-border bg-muted text-foreground hover:bg-muted">
-              <Link href={`/tests/${test.id}/start`}>Dedicated start page</Link>
-            </Button>
-            <Button asChild variant="outline" className="border-border bg-muted text-foreground hover:bg-muted">
-              <Link href="/tests">Back to catalog</Link>
-            </Button>
           </div>
         </CardHeader>
       </Card>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <Metric icon={<Clock3 className="h-5 w-5" />} label="Estimated time" value={`${test.estimatedMinutes} min`} />
-        <Metric icon={<FileText className="h-5 w-5" />} label="Questions" value={`${test.questionCount}`} />
-        <Metric icon={<FolderOpen className="h-5 w-5" />} label="Source" value={test.source} />
-        <Metric icon={<ShieldCheck className="h-5 w-5" />} label="Access" value={test.accessType} />
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        <Metric icon={<Clock3 className="h-4 w-4" />} label="Duration" value={`${test.estimatedMinutes} min`} />
+        <Metric icon={<FileText className="h-4 w-4" />} label="Questions" value={`${test.questionCount}`} />
+        <Metric icon={<FolderOpen className="h-4 w-4" />} label="Source" value={test.source} />
+        <Metric icon={<FileText className="h-4 w-4" />} label="Format" value={formatDisplay(test.format)} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Section breakdown</CardTitle>
-            <CardDescription>Reading uses 3 passages. Listening uses 4 parts.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {test.sections.map((section) => (
-              <div key={section.id} className="flex flex-col gap-3 rounded-lg border border-border/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-medium">{section.title}</p>
-                  <p className="text-sm text-muted-foreground">{section.teaser}</p>
-                </div>
-                <Badge tone="outline">{section.questionCount} questions</Badge>
+      <Card className="border-border/40 shadow-sm">
+        <CardHeader className="p-5 border-b border-border/10 bg-muted/5">
+          <CardTitle className="text-base font-bold">Test structure</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 p-5">
+          {test.sections.map((section, index) => (
+            <div key={section.id} className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-bold text-sm">Part {index + 1}: {section.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{section.teaser}</p>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+              <Badge variant="outline" className="bg-background text-[10px] font-bold px-2.5">{section.questionCount} questions</Badge>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Versioning and snapshot-ready</CardTitle>
-            <CardDescription>
-              Editing this published test later will create a new version, while attempts continue to use the frozen test snapshot.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg bg-accent/40 p-5">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary/10 p-3 text-primary">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-medium">Start modal foundation</p>
-                  <p className="text-sm text-muted-foreground">Scope and mode selection is already wired.</p>
-                </div>
-              </div>
-            </div>
-            {listeningMeta ? (
-              <div className="rounded-lg border border-dashed border-border/80 p-5 text-sm text-muted-foreground">
-                Full Listening exam timing is resolved as audio duration plus two minutes.
-                Current scaffold target: {Math.floor(listeningMeta.timeLimitSeconds / 60)} minutes.
-              </div>
-            ) : null}
-            <div className="rounded-lg border border-dashed border-border/80 p-5 text-sm text-muted-foreground">
-              The backend will later hydrate the full snapshot, answers, explanations, and attempt metadata here.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
 
 function Metric({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <Card>
-      <CardHeader className="space-y-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</div>
+    <Card className="border-border/40 shadow-sm bg-background/50">
+      <CardHeader className="space-y-2 p-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-sm">{icon}</div>
         <div>
-          <CardDescription>{label}</CardDescription>
-          <CardTitle className="text-2xl">{value}</CardTitle>
+          <CardDescription className="text-[10px] uppercase font-bold tracking-wider mb-0.5">{label}</CardDescription>
+          <CardTitle className="text-lg font-bold tracking-tight">{value}</CardTitle>
         </div>
       </CardHeader>
     </Card>

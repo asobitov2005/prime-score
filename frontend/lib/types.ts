@@ -153,6 +153,9 @@ export interface LeaderboardEntry {
   type: TestType | "combined";
   band: string;
   attempts: number;
+  readingAttempts: number;
+  listeningAttempts: number;
+  totalTime: string;
   qualified: boolean;
   isCurrentUser?: boolean;
 }

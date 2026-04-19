@@ -1,15 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Layers3, Play, TimerReset } from "lucide-react";
-import { Dialog } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { Play, TimerReset, X, ArrowRight, Zap, ShieldAlert, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
-import type { TestCatalogItem, TestScope, AttemptMode } from "@/lib/types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { TestCatalogItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface StartTestModalProps {
@@ -19,180 +16,149 @@ interface StartTestModalProps {
 export function StartTestModal({ test }: StartTestModalProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [scope, setScope] = useState<TestScope>("full");
-  const [mode, setMode] = useState<AttemptMode>("practice");
-  const [sectionId, setSectionId] = useState(test.sections[0]?.id ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const selectedSection = useMemo(() => test.sections.find((section) => section.id === sectionId) ?? test.sections[0], [sectionId, test.sections]);
-  const isSectionMode = scope === "section";
-  const isFullTest = test.format === "full";
-  const canUseExam = scope === "full" && isFullTest;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [open]);
+
+  async function startTest(mode: "exam" | "practice") {
+    const destination = test.type === "reading" ? "reading" : "listening";
+    const payload = {
+      testId: test.id,
+      scope: "full",
+      mode: mode,
+    };
+
+    try {
+      setIsSubmitting(true);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error("Failed to start.");
+      const result = (await response.json()) as { attempt_id: string };
+      setOpen(false);
+      router.push(`/attempts/${result.attempt_id}/${destination}`);
+    } catch (err) {
+       console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const ModalContent = () => (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-border/50 bg-background/80 backdrop-blur-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-300">
+        
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-primary/40 via-primary to-primary/40 opacity-80" />
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+
+        <button 
+          onClick={() => setOpen(false)}
+          className="absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-sm"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <div className="p-6 md:p-8 space-y-6 pt-8 md:pt-10">
+          <div className="flex justify-between items-start pr-8">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className={cn(
+                  "px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md shadow-sm",
+                  test.type === "reading" ? "bg-blue-500/10 text-blue-500" : "bg-emerald-500/10 text-emerald-500"
+                )}>
+                  {test.type}
+                </span>
+                <span className="bg-muted/50 text-muted-foreground px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md border border-border/50">
+                  Full Test
+                </span>
+              </div>
+              <h2 className="text-2xl font-black tracking-tight text-foreground leading-tight">{test.title}</h2>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card className="group relative border-border/60 bg-card/40 transition-all rounded-2xl overflow-hidden flex flex-col shadow-sm">
+              <div className="absolute top-0 left-0 w-full h-1 bg-primary/20" />
+              <CardHeader className="pt-6 pb-3 items-center text-center">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-500 shadow-sm">
+                  <TimerReset className="h-6 w-6" />
+                </div>
+                <CardTitle className="text-lg font-black tracking-tight text-foreground">Practice Mode</CardTitle>
+              </CardHeader>
+              <CardContent className="pb-6 px-5 flex-1 flex flex-col justify-between">
+                <ul className="space-y-2.5 text-xs font-medium text-muted-foreground/90 mb-5 text-left">
+                    <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Flexible practice</li>
+                    <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Timer available</li>
+                    <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Pause allowed</li>
+                    <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Review with less pressure</li>
+                    <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Best for learning and improvement</li>
+                </ul>
+                <Button disabled={isSubmitting} onClick={() => startTest("practice")} className="w-full h-10 rounded-lg font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
+                    {isSubmitting ? "Starting..." : "Start Practice"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="group relative border-border/60 bg-card/40 transition-all rounded-2xl overflow-hidden flex flex-col shadow-sm">
+              <div className="absolute top-0 right-0 px-3 py-1 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-bl-xl shadow-sm z-10 font-mono">Strict</div>
+              <div className="absolute top-0 left-0 w-full h-1 bg-red-500/20" />
+              <CardHeader className="pt-6 pb-3 items-center text-center">
+                <div className="w-12 h-12 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-500 shadow-sm">
+                  <Play className="h-6 w-6 fill-current" />
+                </div>
+                <CardTitle className="text-lg font-black tracking-tight text-foreground">Strict Exam Mode</CardTitle>
+              </CardHeader>
+              <CardContent className="pb-6 px-5 flex-1 flex flex-col justify-between">
+                <ul className="space-y-2.5 text-xs font-medium text-muted-foreground/90 mb-5 text-left">
+                    <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Real exam conditions</li>
+                    <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Full timer</li>
+                    <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> No pause</li>
+                    <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Tab switching may end test</li>
+                    <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Best for realistic simulation</li>
+                </ul>
+                <Button variant="destructive" disabled={isSubmitting} onClick={() => startTest("exam")} className="w-full h-10 rounded-lg font-bold text-sm shadow-md shadow-red-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
+                    {isSubmitting ? "Starting..." : "Start Exam"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="pt-2 text-center">
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-50">
+              Redirection to workspace activated
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} size="lg" className="rounded-xl h-12 px-8 font-black shadow-lg shadow-primary/20 hover:shadow-xl transition-all">
-        <Play className="h-5 w-5 mr-2 fill-current" />
-        Start Test
+      <Button onClick={() => setOpen(true)} size="sm" className="w-full h-9 text-xs font-bold rounded-lg shadow-sm group/btn transition-all active:scale-95">
+        Start Practice
+        <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
       </Button>
 
-      <Dialog
-        open={open}
-        onOpenChange={setOpen}
-        title={`Configure ${test.type} session`}
-        description="Select your preferred mode before starting."
-      >
-        <div className="grid gap-6">
-          <div className="space-y-3">
-            <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Session Scope</label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <ToggleCard
-                active={scope === "full"}
-                title="Full test"
-                description={`Complete 40-question ${test.type} test.`}
-                onClick={() => { setScope("full"); if (!isFullTest) setMode("practice"); }}
-                icon={<Layers3 className="h-5 w-5" />}
-              />
-              <ToggleCard
-                active={scope === "section"}
-                title="Practice passage"
-                description="Focus on a specific part or passage."
-                onClick={() => { setScope("section"); setMode("practice"); }}
-                icon={<TimerReset className="h-5 w-5" />}
-              />
-            </div>
-          </div>
-
-          {isSectionMode ? (
-            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-              <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Select Passage</label>
-              <Select value={sectionId} onChange={(event) => setSectionId(event.target.value)} className="h-12 rounded-xl border-border bg-muted/30">
-                {test.sections.map((section) => (
-                  <option key={section.id} value={section.id}>
-                    {section.title || `Passage ${section.number}`}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          ) : (
-            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-              <label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Select Mode</label>
-              <div className="grid gap-3 md:grid-cols-2">
-                <ToggleCard
-                  active={mode === "practice"}
-                  title="Practice mode"
-                  description="Flexible timer, pause enabled."
-                  onClick={() => setMode("practice")}
-                  icon={<TimerReset className="h-5 w-5" />}
-                />
-                <ToggleCard
-                  active={mode === "exam"}
-                  title="Exam mode"
-                  description="Strict timing, no pause."
-                  disabled={!canUseExam}
-                  onClick={() => setMode("exam")}
-                  icon={<Play className="h-5 w-5" />}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Strict Exam Mode Warning */}
-          {mode === "exam" && scope === "full" && (
-            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 p-5 rounded-2xl animate-in zoom-in-95 duration-300">
-              <div className="flex gap-4">
-                <div className="shrink-0 p-2 bg-red-100 dark:bg-red-900/50 rounded-xl text-red-600 dark:text-red-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                </div>
-                <div className="space-y-2">
-                  <p className="font-bold text-red-700 dark:text-red-400 text-sm">Strict Exam Policy</p>
-                  <ul className="text-xs text-red-600/80 dark:text-red-400/80 space-y-1.5 list-disc pl-4 font-medium leading-relaxed">
-                    <li>The system will enter <strong>Full Screen</strong> mode automatically.</li>
-                    <li>You have exactly <strong>60 minutes</strong> (Reading) to finish.</li>
-                    <li>If you leave full-screen or switch tabs, the test will <strong>Auto-submit</strong> immediately.</li>
-                    <li>No pauses are allowed once the timer starts.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end pt-2">
-            <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl h-11 px-6 font-bold">
-              Cancel
-            </Button>
-            <Button
-              disabled={isSubmitting}
-              onClick={async () => {
-                const targetMode = scope === "section" ? "practice" : mode;
-                const destination = test.type === "reading" ? "reading" : "listening";
-                const payload = {
-                  testId: test.id,
-                  scope,
-                  mode: targetMode,
-                  sectionId: scope === "section" ? sectionId : undefined
-                };
-
-                try {
-                  setIsSubmitting(true);
-                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"}/attempts/start`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                  });
-
-                  if (!response.ok) throw new Error("Failed to start.");
-                  const result = (await response.json()) as { attempt_id: string };
-                  setOpen(false);
-                  router.push(`/attempts/${result.attempt_id}/${destination}`);
-                } catch (err) {
-                   console.error(err);
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              className="rounded-xl h-11 px-8 font-black shadow-md hover:shadow-lg transition-all"
-            >
-              {isSubmitting ? "Preparing..." : "Begin Practice"}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
+      {mounted && open && createPortal(<ModalContent />, document.body)}
     </>
-  );
-}
-
-function ToggleCard({
-  active,
-  title,
-  description,
-  onClick,
-  icon,
-  disabled
-}: {
-  active: boolean;
-  title: string;
-  description: string;
-  onClick: () => void;
-  icon: ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex w-full items-start gap-3 rounded-lg border p-4 text-left transition",
-        active ? "border-primary bg-primary/10" : "border-border/70 bg-background hover:bg-accent/40",
-        disabled && "cursor-not-allowed opacity-60"
-      )}
-    >
-      <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary">{icon}</div>
-      <div className="space-y-1">
-        <p className="font-medium">{title}</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-    </button>
   );
 }

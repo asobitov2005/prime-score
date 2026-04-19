@@ -23,6 +23,8 @@ async def list_tests(
     test_type: TestType | None = Query(default=None, alias="type"),
     access_type: AccessType | None = Query(default=None),
     status_filter: TestStatus | None = Query(default=None, alias="status"),
+    test_format: str | None = Query(default=None, alias="format"),
+    source: str | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[TestCatalogItemRead]:
     try:
@@ -30,14 +32,22 @@ async def list_tests(
             session,
             test_type=test_type,
             access_type=access_type,
-            status=status_filter,
+            status_filter=status_filter,
+            test_format=test_format,
+            source=source,
         )
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.error(f"Error in list_tests_from_db: {e}")
         try:
             await session.rollback()
         except Exception:
             pass
         raw_items = get_test_catalog(test_type=test_type, access_type=access_type, status=status_filter)
+        if test_format and test_format != "all":
+            raw_items = [item for item in raw_items if item.get("format") == test_format]
+        if source and source != "":
+            raw_items = [item for item in raw_items if item.get("source") == source]
 
     items = [TestCatalogItemRead(**item) for item in raw_items]
     return items

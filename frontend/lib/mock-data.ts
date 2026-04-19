@@ -526,6 +526,88 @@ export const mockTests: TestCatalogItem[] = [
       { id: "p2", number: 2, title: "Passage 2", questionCount: 13, teaser: "Technology adoption essay." },
       { id: "p3", number: 3, title: "Passage 3", questionCount: 14, teaser: "Policy comparison and inference." }
     ]
+  },
+  {
+    id: "listening-cam17-t1",
+    slug: "cambridge-17-listening-test-1",
+    title: "Cambridge 17 Listening Test 1",
+    type: "listening",
+    accessType: "public",
+    status: "published",
+    source: "Cambridge Official",
+    sourceDetail: "Cambridge 17, Test 1",
+    questionCount: 40,
+    estimatedMinutes: 30,
+    isPremiumLocked: false,
+    description:
+      "Authentic Cambridge Official listening practice to gauge your real exam readiness.",
+    tags: ["4 parts", "Practice", "Cambridge Official"],
+    sections: [
+      { id: "s1", number: 1, title: "Part 1", questionCount: 10, teaser: "Everyday conversation." },
+      { id: "s2", number: 2, title: "Part 2", questionCount: 10, teaser: "Informational monologue." },
+      { id: "s3", number: 3, title: "Part 3", questionCount: 10, teaser: "Academic discussion." },
+      { id: "s4", number: 4, title: "Part 4", questionCount: 10, teaser: "University lecture." }
+    ]
+  },
+  {
+    id: "reading-cam17-t2",
+    slug: "cambridge-17-reading-test-2",
+    title: "Cambridge 17 Reading Test 2",
+    type: "reading",
+    accessType: "public",
+    status: "published",
+    source: "Cambridge Official",
+    questionCount: 40,
+    estimatedMinutes: 60,
+    isPremiumLocked: false,
+    description: "Another official Cambridge reading set.",
+    tags: ["Official", "Reading"],
+    sections: [{ id: "p1", number: 1, title: "Passage 1", questionCount: 13, teaser: "..." }]
+  },
+  {
+    id: "listening-cam16-t1",
+    slug: "cambridge-16-listening-test-1",
+    title: "Cambridge 16 Listening Test 1",
+    type: "listening",
+    accessType: "premium",
+    status: "published",
+    source: "Cambridge Official",
+    questionCount: 40,
+    estimatedMinutes: 30,
+    isPremiumLocked: true,
+    description: "Premium official Cambridge listening set.",
+    tags: ["Official", "Listening"],
+    sections: [{ id: "s1", number: 1, title: "Part 1", questionCount: 10, teaser: "..." }]
+  },
+  {
+    id: "reading-cam16-t1",
+    slug: "cambridge-16-reading-test-1",
+    title: "Cambridge 16 Reading Test 1",
+    type: "reading",
+    accessType: "premium",
+    status: "published",
+    source: "Cambridge Official",
+    questionCount: 40,
+    estimatedMinutes: 60,
+    isPremiumLocked: true,
+    description: "Premium official Cambridge reading set.",
+    tags: ["Official", "Reading"],
+    sections: [{ id: "p1", number: 1, title: "Passage 1", questionCount: 13, teaser: "..." }]
+  },
+  {
+    id: "listening-cam15-t1",
+    slug: "cambridge-15-listening-test-1",
+    title: "Cambridge 15 Listening Test 1",
+    type: "listening",
+    accessType: "public",
+    status: "published",
+    source: "Cambridge Official",
+    questionCount: 40,
+    estimatedMinutes: 30,
+    isPremiumLocked: false,
+    description: "Public official Cambridge listening set.",
+    tags: ["Official", "Listening"],
+    sections: [{ id: "s1", number: 1, title: "Part 1", questionCount: 10, teaser: "..." }]
   }
 ];
 
@@ -579,10 +661,17 @@ export const mockAttempts: AttemptRow[] = [
 ];
 
 export const mockLeaderboard: LeaderboardEntry[] = [
-  { rank: 1, name: "Ali T.", type: "reading", band: "8.5", attempts: 45, qualified: true },
-  { rank: 2, name: "Maria K.", type: "listening", band: "8.0", attempts: 38, qualified: true },
-  { rank: 3, name: "John D.", type: "combined", band: "8.0", attempts: 52, qualified: true },
-  { rank: 42, name: "You", type: "reading", band: "6.5", attempts: 23, qualified: true, isCurrentUser: true }
+  { rank: 1, name: "Ali T.", type: "reading", band: "8.5", attempts: 45, readingAttempts: 30, listeningAttempts: 15, totalTime: "28h 15m", qualified: true },
+  { rank: 2, name: "Maria K.", type: "listening", band: "8.0", attempts: 38, readingAttempts: 18, listeningAttempts: 20, totalTime: "24h 00m", qualified: true },
+  { rank: 3, name: "John D.", type: "combined", band: "8.0", attempts: 52, readingAttempts: 26, listeningAttempts: 26, totalTime: "32h 45m", qualified: true },
+  { rank: 4, name: "Sarah L.", type: "reading", band: "7.5", attempts: 31, readingAttempts: 21, listeningAttempts: 10, totalTime: "19h 30m", qualified: true },
+  { rank: 5, name: "Michael R.", type: "listening", band: "7.5", attempts: 28, readingAttempts: 10, listeningAttempts: 18, totalTime: "17h 20m", qualified: true },
+  { rank: 6, name: "Elena V.", type: "combined", band: "7.5", attempts: 40, readingAttempts: 20, listeningAttempts: 20, totalTime: "25h 10m", qualified: true },
+  { rank: 7, name: "Ahmad M.", type: "reading", band: "7.0", attempts: 19, readingAttempts: 15, listeningAttempts: 4, totalTime: "12h 05m", qualified: true },
+  { rank: 8, name: "Jessica W.", type: "listening", band: "7.0", attempts: 22, readingAttempts: 8, listeningAttempts: 14, totalTime: "14h 40m", qualified: true },
+  { rank: 9, name: "David Chen", type: "combined", band: "7.0", attempts: 35, readingAttempts: 17, listeningAttempts: 18, totalTime: "22h 15m", qualified: true },
+  { rank: 10, name: "Fatima S.", type: "reading", band: "7.0", attempts: 27, readingAttempts: 20, listeningAttempts: 7, totalTime: "16h 50m", qualified: true },
+  { rank: 42, name: "You", type: "reading", band: "6.5", attempts: 23, readingAttempts: 15, listeningAttempts: 8, totalTime: "14h 32m", qualified: true, isCurrentUser: true }
 ];
 
 export const mockPlans: SubscriptionPlan[] = [
@@ -713,3 +802,20 @@ export function buildAttemptWorkspaceMeta(
     currentSectionQuestionCount: selectedSection.questionCount
   };
 }
+
+export interface ReviewItem {
+  id: string;
+  name: string;
+  band: string;
+  text: string;
+  date: string;
+}
+
+export const mockReviews: ReviewItem[] = [
+  { id: "r1", name: "Azizbek Y.", band: "7.5", text: "PrimeScore helped me get used to the computer-delivered format. The interface is exactly like the real exam!", date: "2 days ago" },
+  { id: "r2", name: "Malika T.", band: "8.0", text: "The detailed analytics showed me that I was losing points on True/False/Not Given questions. Focused practice fixed it.", date: "1 week ago" },
+  { id: "r3", name: "Sardor M.", band: "7.0", text: "Audio player for listening tests is perfectly matched with the real IELTS test. Highly recommended.", date: "2 weeks ago" },
+  { id: "r4", name: "Dilnoza R.", band: "8.5", text: "I loved the highlight feature in the answer review. It made understanding my mistakes so much easier.", date: "1 month ago" },
+  { id: "r5", name: "Javohir O.", band: "7.0", text: "Very smooth interface and accurate scoring. Helped me overcome my time-management issues in Reading.", date: "1 month ago" },
+  { id: "r6", name: "Shahnoza A.", band: "7.5", text: "The best platform for CDI IELTS preparation in Uzbekistan. The Premium mock tests are very challenging.", date: "2 months ago" }
+];

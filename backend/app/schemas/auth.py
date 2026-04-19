@@ -40,6 +40,7 @@ class AuthSessionRead(BaseModel):
     id: UUID
     user_id: UUID
     device_info: dict[str, str] = {}
+    ip_address: str | None = None
     is_active: bool = True
     expires_at: datetime
     last_used_at: datetime | None = None

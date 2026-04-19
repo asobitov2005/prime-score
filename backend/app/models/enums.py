@@ -85,3 +85,10 @@ class TestType(StrEnum):
 class TestFormat(StrEnum):
     FULL = "full"
     PART = "part"
+    PASSAGE_1 = "passage_1"
+    PASSAGE_2 = "passage_2"
+    PASSAGE_3 = "passage_3"
+    PART_1 = "part_1"
+    PART_2 = "part_2"
+    PART_3 = "part_3"
+    PART_4 = "part_4"

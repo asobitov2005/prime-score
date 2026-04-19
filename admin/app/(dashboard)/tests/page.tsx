@@ -137,7 +137,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                         Edit
                       </Link>
                       <a 
-                        href={`http://localhost:3100/tests/${row.id}`} 
+                        href={`http://127.0.0.1:3000/tests/${row.id}`} 
                         target="_blank" 
                         rel="noreferrer" 
                         className={buttonClassName({ variant: "ghost", size: "sm" })}

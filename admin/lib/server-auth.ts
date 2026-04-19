@@ -5,7 +5,7 @@ import { ADMIN_ACCESS_COOKIE } from "@/lib/auth";
 const adminApiBaseUrl = (
   process.env.ADMIN_API_INTERNAL_BASE_URL
   ?? process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL
-  ?? "http://localhost:8000/api/admin"
+  ?? "http://127.0.0.1:8000/api/admin"
 ).replace(/\/$/, "");
 
 type BackendAdminIdentity = {

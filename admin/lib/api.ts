@@ -1,7 +1,7 @@
 import type { AdminTestDraftState, AdminTestSummary } from "@/lib/types";
 import { getClientAdminAccessToken } from "@/lib/auth";
 
-const baseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ?? "http://localhost:8000/api/admin").replace(/\/$/, "");
+const baseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ?? "http://127.0.0.1:8000/api/admin").replace(/\/$/, "");
 
 function buildRequestHeaders(): Record<string, string> {
   const token = getClientAdminAccessToken();
@@ -91,20 +91,30 @@ const questionTypeAliases: Record<string, string> = {
 };
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers: {
-      ...buildRequestHeaders(),
-      ...(init?.headers ?? {})
+  const url = `${baseUrl}${path}`;
+  console.log(`[Admin API] Requesting: ${url}`, init?.method || "GET");
+  
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      ...init,
+      headers: {
+        ...buildRequestHeaders(),
+        ...(init?.headers ?? {})
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      console.error(`[Admin API] Error ${response.status}: ${errorText}`);
+      throw new Error(`Admin API request failed: ${response.status} ${response.statusText}`);
     }
-  });
 
-  if (!response.ok) {
-    throw new Error(`Admin API request failed: ${response.status} ${response.statusText}`);
+    return (await response.json()) as T;
+  } catch (error) {
+    console.error(`[Admin API] Fetch exception:`, error);
+    throw error;
   }
-
-  return (await response.json()) as T;
 }
 
 function isUuidLike(value: string): boolean {

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { AdminAuthResponse, setAdminSessionCookies } from "@/lib/auth";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 
-const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ?? "http://localhost:8000/api/admin").replace(/\/$/, "");
+const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ?? "http://127.0.0.1:8000/api/admin").replace(/\/$/, "");
 
 export function LoginFlow() {
   const router = useRouter();
@@ -31,7 +31,7 @@ export function LoginFlow() {
       });
 
       if (!response.ok) {
-        setMessage("Invalid credentials.");
+        setMessage("Noto'g'ri login yoki parol kiritildi.");
         return;
       }
 
@@ -40,68 +40,85 @@ export function LoginFlow() {
       router.replace("/dashboard");
       router.refresh();
     } catch {
-      setMessage("Sign-in failed.");
+      setMessage("Serverga ulanishda xatolik yuz berdi.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="grid w-full gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="space-y-6">
-        <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
-          <ShieldCheck className="h-4 w-4 text-primary" />
-          Admin authentication
-        </div>
-        <div>
-          <h1 className="text-4xl font-semibold tracking-tight text-foreground">PrimeScore Admin</h1>
-          <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">Sign in with your admin credentials.</p>
+    <div className="flex min-h-screen w-full items-center justify-center p-4 lg:p-8">
+      <div className="w-full max-w-md space-y-8">
+        
+        <div className="flex flex-col items-center space-y-4 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            PrimeScore himoyalangan tizim
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            Boshqaruv Paneli
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Tizimga kirish uchun admin ma'lumotlarini kiriting
+          </p>
         </div>
 
-        <div className="h-px w-full max-w-md bg-border" />
+        <Card className="border border-border shadow-xl shadow-black/5">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-xl">Avtorizatsiya</CardTitle>
+            <CardDescription>
+              Login sifatida admin yoki email ishlating
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="login">Login yoki email</Label>
+                <Input
+                  id="login"
+                  value={login}
+                  onChange={(event) => setLogin(event.target.value)}
+                  placeholder="admin"
+                  autoComplete="username"
+                  className="bg-background"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="password">Parol</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="bg-background"
+                />
+              </div>
+
+              {message && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                  {message}
+                </div>
+              )}
+
+              <Button 
+                type="submit" 
+                disabled={isSubmitting || !login.trim() || !password.trim()} 
+                className="mt-4 w-full group"
+              >
+                {isSubmitting ? "Kuzatilmoqda..." : "Tizimga kirish"}
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+        
+        <p className="text-center text-xs text-muted-foreground">
+          PrimeScore &copy; {new Date().getFullYear()} Barcha huquqlar himoyalangan.
+        </p>
       </div>
-
-      <Card className="self-center border border-border/80 shadow-xl shadow-black/10">
-        <CardHeader>
-          <Badge tone="info" className="mb-3 w-fit">
-            Secure login
-          </Badge>
-          <CardTitle>Enter admin credentials</CardTitle>
-          <CardDescription>Use your username or email and password.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <div>
-              <Label htmlFor="login">Username or email</Label>
-              <Input
-                id="login"
-                value={login}
-                onChange={(event) => setLogin(event.target.value)}
-                placeholder="admin or admin@primescore.local"
-                autoComplete="username"
-              />
-            </div>
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-              />
-            </div>
-
-            <Button type="submit" disabled={isSubmitting || !login.trim() || !password.trim()} className="inline-flex w-full items-center justify-center gap-2">
-              {isSubmitting ? "Signing in..." : "Sign in"}
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-
-            {message ? <p className="text-sm leading-6 text-muted-foreground">{message}</p> : null}
-          </form>
-        </CardContent>
-      </Card>
     </div>
   );
 }

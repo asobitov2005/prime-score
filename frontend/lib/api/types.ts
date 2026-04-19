@@ -55,3 +55,17 @@ export interface SubscribeBody {
 export interface RedeemBody {
   code: string;
 }
+
+export interface AuthSessionRead {
+  id: string;
+  user_id: string;
+  device_info: Record<string, string>;
+  ip_address?: string;
+  is_active: boolean;
+  expires_at: string;
+  last_used_at?: string;
+}
+
+export interface AuthSessionListResponse {
+  items: AuthSessionRead[];
+}

@@ -4,7 +4,7 @@ import type { AccessType, TestCatalogItem, TestType } from "@/lib/types";
 const baseUrl = (
   process.env.API_INTERNAL_BASE_URL
   ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://localhost:8000/api"
+  ?? "http://127.0.0.1:8000/api"
 ).replace(/\/$/, "");
 
 type BackendTestCatalogItem = {
@@ -92,7 +92,7 @@ function mapTestDetail(item: BackendTestDetail): TestCatalogItem {
   };
 }
 
-export async function getCatalogTests(query: { type?: string; access?: string; format?: string } = {}): Promise<TestCatalogItem[]> {
+export async function getCatalogTests(query: { type?: string; access?: string; format?: string; source?: string } = {}): Promise<TestCatalogItem[]> {
   const search = new URLSearchParams();
   if (query.type === "reading" || query.type === "listening") {
     search.set("type", query.type);
@@ -100,17 +100,28 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
   if (query.access === "public" || query.access === "premium") {
     search.set("access_type", query.access);
   }
-  if (query.format === "full" || query.format === "part") {
+  if (query.format) {
     search.set("format", query.format);
+  }
+  if (query.source) {
+    search.set("source", query.source);
   }
 
   try {
     const items = await requestApi<BackendTestCatalogItem[]>(`/tests${search.size ? `?${search.toString()}` : ""}`);
     return items.map(mapCatalogItem);
   } catch {
-    const byType = query.type ? getTestsByType(query.type) : getTestsByType();
-    let results = query.access ? byType.filter((test) => test.accessType === query.access) : byType;
-    // Note: mock data doesn't have format, but we'll add it to types
+    let results = query.type ? getTestsByType(query.type) : getTestsByType();
+    if (query.access) {
+      results = results.filter((test) => test.accessType === query.access);
+    }
+    if (query.source) {
+      const s = query.source.toLowerCase();
+      results = results.filter((test) => 
+        test.source.toLowerCase().includes(s) || 
+        test.sourceDetail.toLowerCase().includes(s)
+      );
+    }
     return results;
   }
 }

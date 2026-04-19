@@ -60,7 +60,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
       console.warn(`Auto-submitting due to: ${reason}`);
       setIsSubmitting(true);
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" });
+        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" });
         if (document.fullscreenElement) await document.exitFullscreen();
         router.push(`/attempts/${attemptId}/result?reason=${reason}`);
       } catch (err) {
@@ -110,7 +110,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" })
+      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" })
         .then(() => {
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
@@ -349,7 +349,7 @@ export function ListeningAttemptWorkspace({
       if (isSubmitting) return;
       setIsSubmitting(true);
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" });
+        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" });
         if (document.fullscreenElement) await document.exitFullscreen();
         router.push(`/attempts/${attemptId}/result?reason=${reason}`);
       } catch (err) {
@@ -385,7 +385,7 @@ export function ListeningAttemptWorkspace({
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" })
+      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" })
         .then(() => {
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);

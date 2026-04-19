@@ -1,4 +1,3 @@
-import { SiteShell } from "@/components/layout/site-shell";
 import type { ReactNode } from "react";
 
 interface MarketingLayoutProps {
@@ -6,5 +5,5 @@ interface MarketingLayoutProps {
 }
 
 export default function MarketingLayout({ children }: MarketingLayoutProps) {
-  return <SiteShell>{children}</SiteShell>;
+  return <>{children}</>;
 }

@@ -1,172 +1,465 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, BookOpenText, Headphones, ShieldCheck, Zap } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState, useRef } from "react";
+import { ArrowRight, BookOpenText, Headphones, ShieldCheck, Zap, Play, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockTests } from "@/lib/mock-data";
+import { mockTests, mockReviews } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
-const skills = ["Reading", "Listening", "Writing", "Speaking"];
-
-const benefits = [
-  "Reading and Listening only",
-  "Practice and exam modes",
-  "Telegram-only authentication"
-];
+const skills = ["Reading.", "Listening.", "Writing.", "Speaking."];
 
 export default function LandingPage() {
   const [skillIndex, setSkillIndex] = useState(0);
+  const [isReviewsVisible, setIsReviewsVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState("All");
+  const reviewsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setSkillIndex((current) => (current + 1) % skills.length);
-    }, 2500);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setIsReviewsVisible(true);
+          observer.disconnect(); // Only animate once
+        }
+      },
+      { threshold: 0.1 } // Trigger when 10% of the section is visible
+    );
+
+    if (reviewsRef.current) {
+      observer.observe(reviewsRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Logic to filter featured tests based on the selected tab
+  const getDisplayedTests = () => {
+    let filtered = mockTests;
+    
+    if (activeTab !== "All") {
+      filtered = mockTests.filter(t => t.type.toLowerCase() === activeTab.toLowerCase());
+      // Show exactly 4 if available, otherwise all available for specific category
+      return filtered.slice(0, 4);
+    }
+
+    // "All" Tab Logic: Exactly 2 Reading and 2 Listening tests
+    const readingTests = mockTests.filter(t => t.type === "reading").slice(0, 2);
+    const listeningTests = mockTests.filter(t => t.type === "listening").slice(0, 2);
+    
+    // Combine and alternate them or just append
+    return [...readingTests, ...listeningTests].slice(0, 4);
+  };
+
+  const displayedTests = getDisplayedTests();
+
   return (
-    <div className="relative mx-auto max-w-[1600px] px-4 py-16 sm:px-8 lg:px-12 lg:py-24 overflow-hidden min-h-[calc(100vh-80px)] flex items-center">
-      {/* Subtle Background Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none animate-in fade-in duration-1000" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none animate-in fade-in duration-1000 delay-500" />
-
-      <section className="relative z-10 w-full grid gap-16 lg:gap-24 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+    <div className="relative mx-auto max-w-[1600px] overflow-hidden">
+      <div className="w-full px-8 pt-12 pb-0 sm:px-12 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-[0.9] md:scale-[0.85] xl:scale-[0.9] transition-transform">
         
-        {/* Left Column: Text & CTAs */}
-        <div className="space-y-8 md:space-y-10">
-          <div className="space-y-4">
-            <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
-              <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-md backdrop-blur-sm">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span>
-                <span className="text-sm md:text-base font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
-                  Free CDI IELTS Tests
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          
-          <h1 className="max-w-2xl text-5xl font-black tracking-tighter text-foreground sm:text-6xl md:text-[5rem] lg:text-[5.5rem] leading-[1.1] animate-in fade-in slide-in-from-bottom-10 duration-700 ease-out delay-150 fill-mode-both">
-            Master your <br className="hidden md:block"/>
-            <span className="relative inline-flex flex-col h-[1.15em] overflow-hidden align-bottom">
-               {skills.map((skill, index) => (
-                 <span
-                   key={skill}
-                   className={cn(
-                     "absolute left-0 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60",
-                     index === skillIndex 
-                       ? "translate-y-0 opacity-100" 
-                       : index < skillIndex 
-                         ? "-translate-y-[120%] opacity-0" 
-                         : "translate-y-[120%] opacity-0"
-                   )}
-                 >
-                   {skill}
-                 </span>
-               ))}
-               <span className="invisible pointer-events-none">Listening.</span>
-            </span>
-          </h1>
+        {/* Subtle Background Glows */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none animate-in fade-in duration-1000" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none animate-in fade-in duration-1000 delay-500" />
 
+        <section className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
           
-          <p className="max-w-2xl text-lg md:text-xl font-medium leading-relaxed text-muted-foreground animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out delay-300 fill-mode-both">
-            <span className="font-bold text-foreground">
-              <span className="text-foreground">Prime</span>
-              <span className="text-primary">Score</span>
-            </span> is designed for self-study IELTS candidates. Experience strict exam conditions, comprehensive scoring, and actionable insights.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row flex-wrap gap-4 pt-4 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out delay-500 fill-mode-both">
-            <Button asChild size="lg" className="group h-14 px-8 text-base font-bold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 hover:-translate-y-1 rounded-xl">
-              <Link href="/tests" className="inline-flex items-center gap-2">
-                Explore tests
-                <ArrowRight className="h-5 w-5 ml-1 group-hover:translate-x-1 transition-transform duration-300" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="h-14 px-8 text-base font-bold border-2 border-primary/20 bg-background/50 backdrop-blur-sm hover:bg-primary/5 transition-all duration-300 hover:-translate-y-1 rounded-xl shadow-sm">
-              <Link href="/login" className="inline-flex items-center gap-2">
-                Login with Telegram
-              </Link>
-            </Button>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 pt-8 border-t border-border/40 animate-in fade-in duration-700 ease-out delay-700 fill-mode-both">
-            <div className="flex items-center gap-2.5 group">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,165,0,0.5)]" />
-              <span className="text-sm font-bold tracking-wide text-foreground/80 group-hover:text-foreground transition-colors">Real Exam Experience</span>
-            </div>
-            <div className="flex items-center gap-2.5 group">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,165,0,0.5)]" />
-              <span className="text-sm font-bold tracking-wide text-foreground/80 group-hover:text-foreground transition-colors">Accurate AI Scoring</span>
-            </div>
-            <div className="flex items-center gap-2.5 group">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,165,0,0.5)]" />
-              <span className="text-sm font-bold tracking-wide text-foreground/80 group-hover:text-foreground transition-colors">Comprehensive Insights</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Feature Card */}
-        <div className="relative animate-in fade-in slide-in-from-right-12 duration-1000 ease-out delay-300 fill-mode-both">
-          {/* Decorative rotating background blob behind the card */}
-          <div className="absolute -inset-1 bg-gradient-to-tr from-primary/30 via-primary/10 to-transparent rounded-[2rem] blur-2xl -z-10 animate-pulse duration-3000" />
-          
-          <Card className="relative overflow-hidden border border-border/40 shadow-2xl bg-card/70 backdrop-blur-xl rounded-3xl group transition-all duration-500 hover:border-primary/20 hover:shadow-primary/10">
-            {/* Subtle inner top highlight */}
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-            
-            <CardHeader className="space-y-3 bg-muted/20 border-b border-border/40 p-8 transition-colors group-hover:bg-muted/30">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-2xl font-bold tracking-tight text-foreground">Platform features</CardTitle>
-              </div>
-              <CardDescription className="text-base font-medium text-muted-foreground">
-                Everything you need to prepare effectively in one clean dashboard.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-8 p-8">
-              <div className="grid gap-6 sm:grid-cols-2">
-                <MiniFeature icon={<BookOpenText className="h-6 w-6" />} label="Tests catalog" value="Extensive library of authentic tests" />
-                <MiniFeature icon={<Headphones className="h-6 w-6" />} label="Listening" value="Integrated audio player with seek" />
-                <MiniFeature icon={<ShieldCheck className="h-6 w-6" />} label="Secure" value="Seamless Telegram login" />
-                <MiniFeature icon={<Zap className="h-6 w-6" />} label="Analytics" value="Track performance and progress" />
-              </div>
-              <div className="rounded-2xl bg-secondary/40 p-6 border border-border/40 backdrop-blur-sm transition-colors group-hover:bg-secondary/60">
-                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-4">Featured tests</p>
-                <div className="space-y-3">
-                  {mockTests.slice(0, 2).map((test) => (
-                    <Link key={test.id} href={`/tests/${test.id}`} className="group/link flex items-center justify-between rounded-xl border border-border/50 bg-background/80 p-4 transition-all duration-300 hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5">
-                      <div>
-                        <p className="font-bold text-foreground group-hover/link:text-primary transition-colors">{test.title}</p>
-                        <p className="text-sm font-medium text-muted-foreground mt-0.5">{test.sourceDetail}</p>
-                      </div>
-                      <Badge tone={test.accessType === "premium" ? "warning" : "success"} className="uppercase tracking-widest font-black text-[10px] px-2.5 py-1">{test.accessType}</Badge>
-                    </Link>
-                  ))}
+          {/* Left Column: Text & CTAs */}
+          <div className="space-y-8 md:space-y-10">
+            <div className="space-y-4">
+              <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
+                <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-md backdrop-blur-sm">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
+                    Free IELTS Mock Tests
+                  </span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-    </div>
-  );
-}
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 ease-out fill-mode-both flex flex-col">
+                <span>Master your</span>
+                <span className="relative h-[1.15em] overflow-hidden inline-block w-full">
+                  {skills.map((skill, index) => (
+                    <span
+                      key={skill}
+                      className={cn(
+                        "absolute top-0 left-0 bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent transition-all duration-700 ease-in-out pb-2",
+                        index === skillIndex 
+                          ? "translate-y-0 opacity-100" 
+                          : index < skillIndex 
+                            ? "-translate-y-full opacity-0" 
+                            : "translate-y-full opacity-0"
+                      )}
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </span>
+              </h1>
+              
+              <p className="text-base sm:text-lg font-medium text-muted-foreground/90 max-w-xl leading-relaxed animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300 ease-out fill-mode-both">
+                Experience the most authentic computer-delivered IELTS simulation. 
+                Track your band score, review detailed analytics, and study with focus.
+              </p>
 
-function MiniFeature({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-4 group/feature">
-      <div className="rounded-xl bg-primary/10 p-3 text-primary shadow-sm ring-1 ring-primary/10 transition-all duration-300 group-hover/feature:scale-110 group-hover/feature:bg-primary/15 group-hover/feature:ring-primary/30">
-        {icon}
-      </div>
-      <div className="space-y-1">
-        <p className="text-base font-bold text-foreground leading-none">{label}</p>
-        <p className="text-sm font-medium text-muted-foreground leading-snug">{value}</p>
+              {/* Trust Indicators Row */}
+              <div className="flex flex-wrap items-center gap-8 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-400 ease-out fill-mode-both">
+                {/* Active Users */}
+                <div className="flex items-center gap-3">
+                  <div className="flex -space-x-3">
+                    {[
+                      { initial: "A", bg: "bg-blue-500" },
+                      { initial: "M", bg: "bg-emerald-500" },
+                      { initial: "S", bg: "bg-amber-500" }
+                    ].map((user, i) => (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background text-[10px] font-black text-white shadow-sm",
+                          user.bg
+                        )}
+                      >
+                        {user.initial}
+                      </div>
+                    ))}
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background bg-primary text-[9px] font-black text-primary-foreground">
+                      +2k
+                    </div>
+                  </div>
+                  <div className="flex flex-col -space-y-0.5">
+                    <span className="text-[13px] font-black text-foreground">2,481+ online</span>
+                    <p className="text-[10px] font-bold text-muted-foreground/70 tracking-tight">Active students</p>
+                  </div>
+                </div>
+
+                {/* Total Tests Indicator */}
+                <div className="flex items-center gap-3 pl-0 md:pl-4 border-l-0 md:border-l border-border/40">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-inner">
+                    <BookOpenText className="h-5 w-5" />
+                  </div>
+                  <div className="flex flex-col -space-y-0.5">
+                    <span className="text-[13px] font-black text-foreground">120+ Full Tests</span>
+                    <p className="text-[10px] font-bold text-muted-foreground/70 tracking-tight">Authentic practice</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500 ease-out fill-mode-both">
+              <Button asChild size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-bold shadow-xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background">
+                <Link href="/login">
+                  Get Started for Free
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-bold border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-2xl transition-all hover:scale-105">
+                <Link href="#features">
+                  View Features
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Right Column: Visual/Tests Preview */}
+          <div className="relative w-full max-w-lg mx-auto mt-0 lg:-mt-6 xl:ml-auto animate-in fade-in slide-in-from-right-10 duration-1000 delay-300 ease-out fill-mode-both">
+            
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-tr from-primary/10 via-primary/5 to-transparent rounded-full blur-[80px] -z-10" />
+
+            {/* Main Visual Card */}
+            <div className="relative rounded-3xl border border-white/10 bg-background/60 backdrop-blur-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.4)] transition-all duration-700 overflow-hidden flex flex-col">
+              {/* Flush top gradient line properly clipped by the rounded container */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary/40 via-primary to-primary/40 opacity-80" />
+              
+              <div className="p-6 md:p-8 space-y-5 relative z-10 pt-8">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="font-bold text-lg md:text-xl tracking-tight text-[#0a1b3f] dark:text-foreground">Featured Tests</h3>
+                  <Link href="/tests" className="flex items-center gap-1 text-[13px] font-bold text-[#d94b04] hover:text-[#d94b04]/80 transition-colors">
+                    View all <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+
+                <div className="bg-[#f5f2eb] dark:bg-muted/20 p-1.5 rounded-[1.25rem] flex items-center justify-between overflow-x-auto no-scrollbar border border-border/5 shadow-inner">
+                  {["All", "Reading", "Listening"].map(tab => (
+                    <button 
+                      key={tab} 
+                      onClick={() => setActiveTab(tab)} 
+                      className={cn(
+                        "flex-1 px-4 py-2.5 text-[13px] md:text-[14px] font-black rounded-xl transition-all duration-300 whitespace-nowrap", 
+                        activeTab === tab 
+                          ? "bg-white dark:bg-[#0a1b3f] text-[#0a1b3f] dark:text-primary shadow-[0_4px_12px_-2px_rgba(0,0,0,0.12)] border border-white dark:border-primary/20 scale-[1.02]" 
+                          : "text-[#7b8390] dark:text-muted-foreground/50 hover:text-[#0a1b3f] dark:hover:text-foreground"
+                      )}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-3">
+                  {displayedTests.length > 0 ? displayedTests.map((test, i) => {
+                    const isReading = test.type === "reading";
+                    const isListening = test.type === "listening";
+                    
+                    const cardBg = isReading ? "bg-orange-50/50 dark:bg-orange-950/10" : isListening ? "bg-blue-50/50 dark:bg-blue-950/10" : "bg-purple-50/50 dark:bg-purple-950/10";
+                    const cardBorder = isReading ? "border-orange-100 dark:border-orange-900/30" : isListening ? "border-blue-100 dark:border-blue-900/30" : "border-purple-100 dark:border-purple-900/30";
+                    const iconBgColor = isReading ? "bg-orange-100 dark:bg-orange-900/40" : isListening ? "bg-blue-100 dark:bg-blue-900/40" : "bg-purple-100 dark:bg-purple-900/40";
+                    const iconColor = isReading ? "text-[#e86c27] dark:text-orange-400" : isListening ? "text-[#2e7ddb] dark:text-blue-400" : "text-[#7c5cdb] dark:text-purple-400";
+                    
+                    const badgeBg = test.isPremiumLocked ? "bg-orange-100 dark:bg-orange-900/40" : "bg-emerald-100 dark:bg-emerald-900/40";
+                    const badgeText = test.isPremiumLocked ? "text-[#c25010] dark:text-orange-400" : "text-[#059669] dark:text-emerald-400";
+                    const badgeLabel = test.isPremiumLocked ? "Pro" : "Free";
+
+                    return (
+                      <div 
+                        key={test.id} 
+                        className={cn(
+                          "group flex items-center justify-between gap-4 p-3 md:p-4 rounded-2xl border transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer",
+                          cardBg, cardBorder
+                        )}
+                        onClick={() => window.location.href = '/tests'}
+                      >
+                        <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                          <div className={cn(
+                            "flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300",
+                            iconBgColor, iconColor
+                          )}>
+                            {isReading ? (
+                              <BookOpenText className="h-5 w-5 md:h-6 md:w-6" />
+                            ) : isListening ? (
+                              <Headphones className="h-5 w-5 md:h-6 md:w-6" />
+                            ) : (
+                              <span className="font-serif font-bold text-base md:text-lg">W</span>
+                            )}
+                          </div>
+                          <div className="space-y-1 min-w-0">
+                            <p className="font-bold text-[14px] md:text-[15px] text-foreground leading-tight truncate">{test.title}</p>
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] md:text-[12px] font-medium text-muted-foreground/80">
+                              <span className="uppercase tracking-wider font-bold">{test.source.replace("Official", "").trim()}</span>
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
+                              <span>{test.questionCount} questions</span>
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground/30"></span>
+                              <span>{test.estimatedMinutes} min</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0 pl-1">
+                          <span className={cn("hidden sm:flex px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider shadow-sm", badgeBg, badgeText)}>
+                            {badgeLabel}
+                          </span>
+                          <div className="flex h-10 w-10 items-center justify-center text-[#0a1b3f] dark:text-foreground/80 transition-all duration-300 group-hover:scale-125 group-hover:text-[#d94b04] dark:group-hover:text-primary">
+                            <svg 
+                              width="28" 
+                              height="28" 
+                              viewBox="0 0 24 24" 
+                              fill="currentColor" 
+                              className="drop-shadow-sm"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path 
+                                d="M18.4452 11.0253C19.1837 11.4554 19.1837 12.5446 18.4452 12.9747L7.66492 19.2598C6.9264 19.6899 6 19.1504 6 18.2851L6 5.71493C6 4.8496 6.9264 4.31012 7.66492 4.74021L18.4452 11.0253Z" 
+                                strokeLinejoin="round" 
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <div className="p-6 text-center text-sm font-bold text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border/50">
+                      No tests found for {activeTab}.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Features 1x4 Grid */}
+        <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+          <div className="text-center space-y-4 mb-16">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1]">
+              Everything you need to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Succeed.</span>
+            </h2>
+            <p className="text-muted-foreground font-medium text-lg max-w-2xl mx-auto">
+              We provide the tools, you provide the dedication.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-1000 delay-700 fill-mode-both">
+            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
+              <div className="bg-primary/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
+                <ShieldCheck className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground mb-2">Real exam conditions</h3>
+                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
+                  Experience IELTS-style timing and interface for accurate practice.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
+              <div className="bg-blue-500/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
+                <BookOpenText className="h-6 w-6 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground mb-2">Reading & Listening</h3>
+                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
+                  Practice both sections with authentic question types.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
+              <div className="bg-amber-500/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
+                <Zap className="h-6 w-6 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground mb-2">Instant band score</h3>
+                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
+                  Get your estimated band score immediately after completion.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
+              <div className="bg-emerald-500/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
+                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground mb-2">Detailed answer review</h3>
+                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
+                  See correct answers with highlighted text to understand your mistakes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Reviews Section - Infinite Marquee */}
+        <section id="reviews" ref={reviewsRef} className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 pb-20">
+          <div className="text-center space-y-4 mb-16">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1]">
+              Trusted by <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Students.</span>
+            </h2>
+            <p className="text-muted-foreground font-medium text-lg max-w-2xl mx-auto">
+              See how PrimeScore is helping students achieve their target band scores.
+            </p>
+          </div>
+          
+          <div className={cn(
+            "relative h-[600px] overflow-hidden",
+            isReviewsVisible ? "opacity-100" : "opacity-0 transition-opacity duration-1000"
+          )}
+          style={{ maskImage: 'linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)', WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)' }}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full px-2">
+              
+              {/* Column 1 (Scrolls Down) */}
+              <div className="flex flex-col gap-6 animate-marquee-down hover:[animation-play-state:paused]">
+                {[...mockReviews, ...mockReviews].map((review, i) => (
+                  <div key={`col1-${i}`} className="p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/30 transition-all flex flex-col justify-between gap-6 shadow-sm">
+                    <div className="space-y-4">
+                      <svg className="h-6 w-6 text-primary/20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"></path></svg>
+                      <p className="text-sm font-medium text-muted-foreground leading-relaxed italic">"{review.text}"</p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-2 border-t border-border/40">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-inner ring-2 ring-background">
+                        {review.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{review.name}</p>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">Band {review.band}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Column 2 (Scrolls Up - Middle) */}
+              <div className="hidden md:flex flex-col gap-6 animate-marquee-up hover:[animation-play-state:paused]">
+                {[...mockReviews].reverse().concat([...mockReviews].reverse()).map((review, i) => (
+                  <div key={`col2-${i}`} className="p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/30 transition-all flex flex-col justify-between gap-6 shadow-sm">
+                    <div className="space-y-4">
+                      <svg className="h-6 w-6 text-primary/20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"></path></svg>
+                      <p className="text-sm font-medium text-muted-foreground leading-relaxed italic">"{review.text}"</p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-2 border-t border-border/40">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-inner ring-2 ring-background">
+                        {review.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{review.name}</p>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">Band {review.band}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Column 3 (Scrolls Down) */}
+              <div className="hidden md:flex flex-col gap-6 animate-marquee-down hover:[animation-play-state:paused]">
+                {[...mockReviews.slice(3), ...mockReviews.slice(0, 3), ...mockReviews.slice(3), ...mockReviews.slice(0, 3)].map((review, i) => (
+                  <div key={`col3-${i}`} className="p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/30 transition-all flex flex-col justify-between gap-6 shadow-sm">
+                    <div className="space-y-4">
+                      <svg className="h-6 w-6 text-primary/20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"></path></svg>
+                      <p className="text-sm font-medium text-muted-foreground leading-relaxed italic">"{review.text}"</p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-2 border-t border-border/40">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-inner ring-2 ring-background">
+                        {review.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{review.name}</p>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">Band {review.band}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 flex justify-center relative z-20">
+            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-bold border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-all shadow-xl bg-background/80 backdrop-blur-md">
+              <Link href="/reviews">
+                View all reviews <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </section>
+
+        {/* Final CTA Section */}
+        <section className="relative z-10 w-full mt-4 lg:mt-6 pt-6 pb-0 border-t border-border/30 text-center flex flex-col items-center">
+          <div className="max-w-3xl mx-auto space-y-6">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
+              Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
+            </h2>
+            <p className="text-lg md:text-xl font-medium text-muted-foreground/90 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-150">
+              Experience strict test conditions, instant scoring, and focused practice.
+            </p>
+            
+            <div className="pt-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
+              <Button asChild size="lg" className="h-14 px-10 text-base font-bold shadow-2xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background">
+                <Link href="/login">
+                  Get Started for Free
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
