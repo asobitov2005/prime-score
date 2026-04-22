@@ -37,5 +37,4 @@ class AuditLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     changes: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
 
-    admin: Mapped["Admin"] = relationship(back_populates="audit_logs")
 

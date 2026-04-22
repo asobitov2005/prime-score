@@ -543,12 +543,28 @@ async def save_test_draft_to_db(
 
 
 async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[str, object] | None:
-    
+    from app.core.enums import NotificationType
+    from app.services.notification_sender import notify_all_users
+
     test = await session.get(Test, test_id)
     if test is None:
         return None
     test.status = ModelTestStatus.PUBLISHED
     test.version += 1
+
+    test_type = test.type.value if hasattr(test.type, "value") else str(test.type)
+    test_title = test.title
+    body = f'"{test_title}" ({test_type}) test has been published. Try it now!'
+
+    await notify_all_users(
+        session,
+        type=NotificationType.new_test,
+        title="New test available!",
+        body=body,
+        telegram_text=f"📝 <b>New test available!</b>\n\n{body}",
+        inline_keyboard=[[{"text": "🚀 Try Now", "url": f"https://primescore.uz/tests/{test_id}"}]],
+    )
+
     await session.commit()
     refreshed = await _load_full_test_for_write(session, test_id)
     return _serialize_admin_test(refreshed) if refreshed is not None else None

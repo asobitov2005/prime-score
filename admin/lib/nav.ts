@@ -1,15 +1,17 @@
 import type { AdminRole } from "@/lib/types";
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Users, 
-  CreditCard, 
-  Ticket, 
-  BarChart3, 
-  ScrollText, 
+import {
+  LayoutDashboard,
+  FileText,
+  Users,
+  CreditCard,
+  Ticket,
+  BarChart3,
+  ScrollText,
   CreditCard as PlansIcon,
   Globe,
-  Headphones
+  Headphones,
+  MessageSquareText,
+  Settings
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -64,6 +66,12 @@ export const adminNavGroups: AdminNavGroup[] = [
         icon: Users
       },
       {
+        label: "Reviews",
+        href: "/reviews",
+        description: "Moderate public testimonials and user feedback",
+        icon: MessageSquareText
+      },
+      {
         label: "Plans",
         href: "/plans",
         description: "Premium plan configuration",
@@ -100,6 +108,18 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/audit-log",
         description: "Admin actions and traceability",
         icon: ScrollText
+      }
+    ]
+  },
+  {
+    label: "System",
+    description: "Platform configuration",
+    items: [
+      {
+        label: "Settings",
+        href: "/settings",
+        description: "Platform and notification settings",
+        icon: Settings
       }
     ]
   }

@@ -108,3 +108,7 @@ class NotificationType(StrEnum):
     new_test = "new_test"
     gift_received = "gift_received"
 
+
+class ReviewSource(StrEnum):
+    admin = "admin"
+    user = "user"

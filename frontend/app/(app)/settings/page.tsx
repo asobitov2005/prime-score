@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2 } from "lucide-react";
+import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2, Crown, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,6 +94,28 @@ export default function SettingsPage() {
         </CardHeader>
         
         <CardContent className="p-4 lg:p-6 space-y-6">
+          {isPremium && (
+            <Card className="relative overflow-hidden rounded-2xl border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/80 to-transparent" />
+              <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
+              <CardContent className="relative z-10 p-5 lg:p-6">
+                <div className="space-y-3">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-primary">
+                    <Crown className="h-3.5 w-3.5" />
+                    Premium Active
+                    <Sparkles className="h-3 w-3 opacity-80" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold tracking-tight text-foreground">Your premium access is live.</p>
+                    <p className="mt-1 max-w-2xl text-sm font-medium text-muted-foreground">
+                      You already have the strongest PrimeScore access level with premium tests, explanation-led review, and a cleaner exam-prep workflow.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Profile Info */}
           <div className="grid gap-6 md:grid-cols-2">
             <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
@@ -251,7 +273,7 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground max-w-sm">
-                  {isPremium ? "You have full access to all mock tests, features, and detailed analytics." : "Upgrade to Premium to unlock all full IELTS mock tests and advanced analytics."}
+                  {isPremium ? "You have full access to premium tests, exclusive explanations, and the full PrimeScore prep flow." : "Upgrade to Premium to unlock all full IELTS mock tests and advanced analytics."}
                 </p>
               </div>
               {!isPremium && (

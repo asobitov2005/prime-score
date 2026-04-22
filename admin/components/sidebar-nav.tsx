@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { adminNavGroups } from "@/lib/nav";
 import { Badge, cn } from "@/components/ui";
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   return (
     <aside className="hidden w-64 flex-col border-r border-border bg-card/70 lg:sticky lg:top-0 lg:flex lg:h-screen">
@@ -29,10 +30,19 @@ export function SidebarNav() {
               </p>
               <div className="space-y-1.5">
                 {group.items.map((item) => {
-                  // Ensure strict match for the external link or dashboard roots
-                  const active = item.href.startsWith("http") 
-                    ? false 
-                    : (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
+                  const hrefPath = item.href.split("?")[0];
+                  const hrefParams = new URLSearchParams(item.href.split("?")[1] ?? "");
+                  const hasQuery = item.href.includes("?");
+                  let active = false;
+                  if (item.href.startsWith("http")) {
+                    active = false;
+                  } else if (hrefPath === "/") {
+                    active = pathname === "/";
+                  } else if (hasQuery) {
+                    active = pathname === hrefPath && Array.from(hrefParams.entries()).every(([k, v]) => searchParams.get(k) === v);
+                  } else {
+                    active = pathname === hrefPath || pathname.startsWith(hrefPath + "/");
+                  }
                     
                   const Icon = item.icon;
 

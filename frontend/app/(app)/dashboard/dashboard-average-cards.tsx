@@ -1,0 +1,49 @@
+"use client";
+
+import { BookOpenText, Headphones } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { getAverageBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
+import type { DashboardAnalytics } from "@/lib/types";
+
+interface DashboardAverageCardsProps {
+  initialAnalytics: DashboardAnalytics;
+}
+
+function formatBand(value: number | null): string {
+  return value === null ? "N/A" : value.toFixed(1);
+}
+
+export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCardsProps) {
+  const analyticsQuery = useDashboardAnalytics(initialAnalytics);
+  const analytics = analyticsQuery.data;
+  const averageReading = getAverageBand(analytics, "reading");
+  const averageListening = getAverageBand(analytics, "listening");
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-4">
+      <Card className="border-border/40 shadow-sm flex flex-col justify-center rounded-2xl bg-card/40 hover:bg-card/80 transition-colors">
+        <CardContent className="p-4 md:p-5 flex items-center gap-4">
+          <div className="h-11 w-11 md:h-12 md:w-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 shrink-0">
+            <BookOpenText className="h-5 w-5 md:h-6 md:w-6" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Avg Reading</p>
+            <p className="text-[1.75rem] md:text-3xl font-black text-foreground tracking-tighter mt-0.5">{formatBand(averageReading)}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/40 shadow-sm flex flex-col justify-center rounded-2xl bg-card/40 hover:bg-card/80 transition-colors">
+        <CardContent className="p-4 md:p-5 flex items-center gap-4">
+          <div className="h-11 w-11 md:h-12 md:w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 shrink-0">
+            <Headphones className="h-5 w-5 md:h-6 md:w-6" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Avg Listening</p>
+            <p className="text-[1.75rem] md:text-3xl font-black text-foreground tracking-tighter mt-0.5">{formatBand(averageListening)}</p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -1,5 +1,7 @@
 import type {
   AuthRequestCodeBody,
+  DashboardAnalyticsResponse,
+  AuthSessionStatusResponse,
   AuthVerifyCodeBody,
   LeaderboardQuery,
   RedeemBody,
@@ -9,7 +11,7 @@ import type {
   TestListQuery
 } from "@/lib/api/types";
 import { getAttemptsByType, getLeaderboardByType, getPlans, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
-import type { AccessType, AttemptRow, LeaderboardEntry, SubscriptionPlan, TestCatalogItem } from "@/lib/types";
+import type { AccessType, AttemptRow, LeaderboardEntry, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
 
 export class ApiError extends Error {
   status: number;
@@ -59,6 +61,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
         { id: "2", device_info: { type: "Mobile", browser: "Safari" }, ip_address: "192.168.1.1", last_used_at: new Date(Date.now() - 86400000).toISOString(), is_active: true }
       ]
     })),
+    getSessionStatus: (sessionId: string) => request<AuthSessionStatusResponse>(`/auth/sessions/${sessionId}/status`, { method: "GET" }),
     revokeSession: (sessionId: string) => request<{ ok: true }>(`/auth/sessions/${sessionId}`, { method: "DELETE" }),
     listTests: (query: TestListQuery = {}) => request<{ data: TestCatalogItem[] }>("/tests", { method: "GET" }).catch(() => ({
       data: filterTests(query)
@@ -84,6 +87,14 @@ export function createApiClient(config: ApiClientConfig = {}) {
     getAttemptResult: (attemptId: string) => request<unknown>(`/attempts/${attemptId}/result`),
     getAttemptReview: (attemptId: string) => request<unknown>(`/attempts/${attemptId}/review`),
     getDashboardStats: () => request<unknown>("/me/stats"),
+    getDashboardAnalytics: (headers?: HeadersInit, testType?: TestType) => {
+      const search = new URLSearchParams();
+      if (testType) {
+        search.set("test_type", testType);
+      }
+      const suffix = search.toString() ? `?${search.toString()}` : "";
+      return request<DashboardAnalyticsResponse>(`/me/analytics${suffix}`, { method: "GET", headers });
+    },
     getActivity: () => request<unknown>("/me/activity"),
     getAttempts: () => request<{ data: AttemptRow[] }>("/me/attempts").catch(() => ({ data: getAttemptsByType() })),
     getFavorites: () => request<{ data: TestCatalogItem[] }>("/me/favorites").catch(() => ({ data: getTestsByType() })),

@@ -1,19 +1,19 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, CheckCircle2, Clock, Sparkles, Trophy, CalendarDays } from "lucide-react";
+import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { getDashboardStats, getUserAttempts } from "@/lib/server-me";
+import { Card, CardContent } from "@/components/ui/card";
+import { DashboardCharts } from "@/components/charts/dashboard-charts";
+import { getDashboardAnalytics, getUserAttempts } from "@/lib/server-me";
 import { mockTests } from "@/lib/mock-data";
+import { DashboardAverageCards } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
+import { PremiumDashboardSpotlight } from "./premium-dashboard-spotlight";
 import { cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const [stats, attempts] = await Promise.all([getDashboardStats(), getUserAttempts()]);
+  const [attempts, analytics] = await Promise.all([getUserAttempts(), getDashboardAnalytics()]);
   
-  // Mock performance data
-  const avgReading = "6.5";
-  const avgListening = "7.0";
   const featuredTests = mockTests.slice(0, 3);
   
   // --- 1. CONTINUE TEST OR FALLBACK LOGIC ---
@@ -35,137 +35,146 @@ export default async function DashboardPage() {
   const lastBand = lastAttempt && lastAttempt.band ? parseFloat(lastAttempt.band) : 0;
   
   // Mock weak type logic
-  const weakType = lastAttempt?.type === "reading" ? "True/False/Not Given" : "Map Labeling";
-  const hasWeakType = true; // In real app, derived from detailed analytics
+  const weakType = analytics.errorDistribution[0]?.label ?? (lastAttempt?.type === "reading" ? "True / False / Not Given" : "Map / Diagram");
+  const hasWeakType = analytics.errorDistribution.length > 0;
 
   let recTitle = "";
   let recDesc = "";
   let recBtnText = "";
   let recHref = "/tests";
-  let RecIcon = BrainCircuit;
-  let recColor = "amber";
 
   if (!hasTests) {
     recTitle = "Start your first test";
     recDesc = "Take your first IELTS mock test to establish your baseline score and identify your weak areas.";
     recBtnText = "Explore Tests";
-    RecIcon = Sparkles;
-    recColor = "blue";
   } else if (daysSinceLast > 3) {
     recTitle = "Get back on track";
     recDesc = `You haven't practiced in ${daysSinceLast} days. Consistency is key to improving your score.`;
     recBtnText = "Take a quick test";
-    RecIcon = CalendarDays;
-    recColor = "emerald";
   } else if (lastBand > 0 && lastBand < 6.0) {
     recTitle = `Practice more ${lastAttempt?.type} section`;
     recDesc = `Your last ${lastAttempt?.type} score was ${lastBand}. Try another test specifically for this section to improve.`;
     recBtnText = `Practice ${lastAttempt?.type}`;
     recHref = `/tests?type=${lastAttempt?.type}`;
-    RecIcon = Target;
-    recColor = "orange";
   } else if (hasWeakType && lastBand >= 6.0 && lastBand < 7.5) {
     recTitle = `Improve ${weakType} questions`;
     recDesc = `Analytics show you lose points on ${weakType}. Focus your next practice on passage structure and techniques for this type.`;
     recBtnText = "Practice targeted skills";
     recHref = `/tests?type=${lastAttempt?.type}`;
-    RecIcon = BrainCircuit;
-    recColor = "amber";
   } else {
     recTitle = "Try a full mock test";
     recDesc = "You are scoring consistently well! Challenge yourself with a full mock test under strict exam conditions.";
     recBtnText = "Start Full Mock";
-    RecIcon = Trophy;
-    recColor = "purple";
   }
-
-  // Helper for dynamic colors
-  const colorClasses = {
-    blue: "from-blue-500/10 via-blue-500/5 border-blue-500/20 text-blue-600 bg-blue-500 hover:bg-blue-600",
-    emerald: "from-emerald-500/10 via-emerald-500/5 border-emerald-500/20 text-emerald-600 bg-emerald-500 hover:bg-emerald-600",
-    orange: "from-orange-500/10 via-orange-500/5 border-orange-500/20 text-orange-600 bg-orange-500 hover:bg-orange-600",
-    amber: "from-amber-500/10 via-amber-500/5 border-amber-500/20 text-amber-600 bg-amber-500 hover:bg-amber-600",
-    purple: "from-purple-500/10 via-purple-500/5 border-purple-500/20 text-purple-600 bg-purple-500 hover:bg-purple-600",
-  }[recColor];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
       
       {/* 1. Welcome + Quick Action & Continue Test */}
       <div className="space-y-6">
-        <WelcomeHeader />
-        
-        <div className="grid lg:grid-cols-[2fr_1fr] gap-6">
-          {/* Main Hero Card (Continue or New Challenge) */}
-          {inProgressTest ? (
-            <Card className="relative overflow-hidden bg-primary text-primary-foreground border-none shadow-lg shadow-primary/20 hover:shadow-xl transition-all">
-              <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                <Clock className="w-48 h-48 -rotate-12" />
-              </div>
-              <CardContent className="p-6 md:p-8 flex flex-col justify-between h-full relative z-10">
-                <div>
-                  <Badge variant="outline" className="bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 mb-4 font-bold tracking-wider uppercase text-[10px]">
-                    In Progress
-                  </Badge>
-                  <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-2">{inProgressTest.title}</h2>
-                  <p className="text-primary-foreground/80 font-medium mb-6 text-sm">
-                    You paused this test recently. Let's finish what you started.
-                  </p>
-                  
-                  <div className="space-y-2 max-w-sm mb-8">
-                     <div className="flex justify-between text-xs font-bold text-primary-foreground/90">
-                       <span>{inProgressTest.progress}% Completed</span>
-                       <span>{inProgressTest.time} left</span>
-                     </div>
-                     <div className="h-2 w-full bg-primary-foreground/20 rounded-full overflow-hidden">
-                       <div className="h-full bg-primary-foreground rounded-full" style={{ width: `${inProgressTest.progress}%` }} />
-                     </div>
+        <div className="lg:sticky lg:top-32 lg:z-20">
+          <WelcomeHeader />
+        </div>
+
+        <div className="grid lg:grid-cols-[2fr_1fr] gap-6 items-start">
+          <div className="space-y-4">
+            <div>
+              {inProgressTest ? (
+                <Card className="relative overflow-hidden bg-primary text-primary-foreground border-none shadow-lg shadow-primary/20 hover:shadow-xl transition-all">
+                  <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
+                    <Clock className="w-40 h-40 -rotate-12" />
                   </div>
-                </div>
-                
-                <div>
-                  <Button className="bg-background text-primary hover:bg-background/90 font-black px-8 h-12 rounded-xl shadow-sm transition-transform active:scale-95" asChild>
-                     <Link href="/tests">
-                       <Play className="mr-2 h-5 w-5 fill-current" /> Continue Test
-                     </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="relative overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-all group">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-80" />
-              <div className="absolute top-0 right-0 p-8 opacity-5 dark:opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
-                <Target className="w-48 h-48 -rotate-12 text-blue-900 dark:text-white" />
+                  <CardContent className="p-5 md:p-6 flex flex-col justify-between relative z-10">
+                    <div>
+                      <Badge variant="outline" className="bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 mb-3 font-bold tracking-wider uppercase text-[10px]">
+                        In Progress
+                      </Badge>
+                      <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-2">{inProgressTest.title}</h2>
+                      <p className="text-primary-foreground/80 font-medium mb-5 text-sm">
+                        You paused this test recently. Let's finish what you started.
+                      </p>
+                      
+                      <div className="space-y-2 max-w-sm mb-6">
+                         <div className="flex justify-between text-xs font-bold text-primary-foreground/90">
+                           <span>{inProgressTest.progress}% Completed</span>
+                           <span>{inProgressTest.time} left</span>
+                         </div>
+                         <div className="h-2 w-full bg-primary-foreground/20 rounded-full overflow-hidden">
+                           <div className="h-full bg-primary-foreground rounded-full" style={{ width: `${inProgressTest.progress}%` }} />
+                         </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Button className="bg-background text-primary hover:bg-background/90 font-black px-8 h-11 rounded-xl shadow-sm transition-transform active:scale-95" asChild>
+                         <Link href="/tests">
+                           <Play className="mr-2 h-5 w-5 fill-current" /> Continue Test
+                         </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="relative overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-all group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-80" />
+                  <div className="absolute top-0 right-0 p-6 opacity-5 dark:opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
+                    <Target className="w-40 h-40 -rotate-12 text-blue-900 dark:text-white" />
+                  </div>
+                  <CardContent className="p-5 md:p-6 flex flex-col justify-between relative z-10">
+                    <div>
+                      <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-3 font-bold tracking-wider uppercase text-[10px] backdrop-blur-sm">
+                        Recommended For You
+                      </Badge>
+                      <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-2 text-blue-950 dark:text-white">Ready for your next challenge?</h2>
+                      <p className="text-blue-800/80 dark:text-white/70 font-medium mb-6 text-sm max-w-md">
+                        Take the latest Cambridge Official test to measure your true band score under real exam conditions.
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-black px-8 h-11 rounded-xl shadow-lg shadow-primary/20 transition-transform active:scale-95" asChild>
+                         <Link href="/tests">
+                           <Play className="mr-2 h-5 w-5 fill-current" /> Start Cambridge 18
+                         </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            <DashboardAverageCards initialAnalytics={analytics} />
+
+            <Card className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20 shadow-sm relative overflow-hidden rounded-2xl group">
+              <div className="absolute right-0 bottom-0 p-4 opacity-10 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500 pointer-events-none">
+                <BrainCircuit className="w-24 h-24 text-amber-600" />
               </div>
-              <CardContent className="p-6 md:p-8 flex flex-col justify-between h-full relative z-10">
-                <div>
-                  <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-4 font-bold tracking-wider uppercase text-[10px] backdrop-blur-sm">
-                    Recommended For You
-                  </Badge>
-                  <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-2 text-blue-950 dark:text-white">Ready for your next challenge?</h2>
-                  <p className="text-blue-800/80 dark:text-white/70 font-medium mb-8 text-sm max-w-md">
-                    Take the latest Cambridge Official test to measure your true band score under real exam conditions.
-                  </p>
+              <CardContent className="p-5 relative z-10 flex flex-col justify-center h-full">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="bg-amber-500/20 p-1.5 rounded-md">
+                    <BrainCircuit className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                  </div>
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500">Recommended Next Step</h3>
                 </div>
-                
-                <div>
-                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-black px-8 h-12 rounded-xl shadow-lg shadow-primary/20 transition-transform active:scale-95" asChild>
-                     <Link href="/tests">
-                       <Play className="mr-2 h-5 w-5 fill-current" /> Start Cambridge 18
-                     </Link>
-                  </Button>
-                </div>
+                <p className="font-bold text-foreground text-base leading-tight mb-1.5">{recTitle}</p>
+                <p className="text-xs font-medium text-muted-foreground mb-3 leading-5">
+                  {recDesc}
+                </p>
+                <Button asChild size="sm" className="w-fit bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md transition-transform active:scale-95">
+                  <Link href={recHref}>{recBtnText} <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></Link>
+                </Button>
               </CardContent>
             </Card>
-          )}
+          </div>
 
           {/* Quick Start Cards */}
           <div className="flex flex-col gap-4">
-            <Card className="flex-1 bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors shadow-sm flex items-center p-5 cursor-pointer group rounded-2xl" asChild>
+            <PremiumDashboardSpotlight />
+
+            <Card className="bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl" asChild>
               <Link href="/tests?type=reading">
-                <div className="bg-blue-500/10 p-3.5 rounded-xl mr-4 group-hover:scale-110 transition-transform">
-                  <BookOpenText className="h-6 w-6 text-blue-600 dark:text-blue-500" />
+                <div className="bg-blue-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
+                  <BookOpenText className="h-5 w-5 text-blue-600 dark:text-blue-500" />
                 </div>
                 <div>
                   <h3 className="font-bold text-blue-950 dark:text-blue-100 text-sm">Start Reading Test</h3>
@@ -175,10 +184,10 @@ export default async function DashboardPage() {
               </Link>
             </Card>
             
-            <Card className="flex-1 bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 transition-colors shadow-sm flex items-center p-5 cursor-pointer group rounded-2xl" asChild>
+            <Card className="bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl" asChild>
               <Link href="/tests?type=listening">
-                <div className="bg-emerald-500/10 p-3.5 rounded-xl mr-4 group-hover:scale-110 transition-transform">
-                  <Headphones className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
+                <div className="bg-emerald-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
+                  <Headphones className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
                 </div>
                 <div>
                   <h3 className="font-bold text-emerald-950 dark:text-emerald-100 text-sm">Start Listening Test</h3>
@@ -191,54 +200,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* 2 & 3. Performance Snapshot & Recommended Action */}
-      <section className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-border/40 shadow-sm flex flex-col justify-center rounded-2xl bg-card/40 hover:bg-card/80 transition-colors">
-          <CardContent className="p-5 flex items-center gap-4">
-             <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 shrink-0">
-               <BookOpenText className="h-6 w-6" />
-             </div>
-             <div>
-               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Avg Reading</p>
-               <p className="text-3xl font-black text-foreground tracking-tighter mt-0.5">{avgReading}</p>
-             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/40 shadow-sm flex flex-col justify-center rounded-2xl bg-card/40 hover:bg-card/80 transition-colors">
-          <CardContent className="p-5 flex items-center gap-4">
-             <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 shrink-0">
-               <Headphones className="h-6 w-6" />
-             </div>
-             <div>
-               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Avg Listening</p>
-               <p className="text-3xl font-black text-foreground tracking-tighter mt-0.5">{avgListening}</p>
-             </div>
-          </CardContent>
-        </Card>
-
-        {/* Dynamic Recommended Action (Takes 2 cols on large) */}
-        <Card className="md:col-span-2 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20 shadow-sm relative overflow-hidden rounded-2xl group">
-          <div className="absolute right-0 bottom-0 p-4 opacity-10 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500 pointer-events-none">
-            <BrainCircuit className="w-24 h-24 text-amber-600" />
-          </div>
-          <CardContent className="p-6 relative z-10 flex flex-col justify-center h-full">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="bg-amber-500/20 p-1.5 rounded-md">
-                <BrainCircuit className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-              </div>
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500">Recommended Next Step</h3>
-            </div>
-            <p className="font-bold text-foreground text-lg leading-tight mb-2">{recTitle}</p>
-            <p className="text-xs font-medium text-muted-foreground mb-4 max-w-sm">
-              {recDesc}
-            </p>
-            <Button asChild size="sm" className="w-fit bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md transition-transform active:scale-95">
-              <Link href={recHref}>{recBtnText} <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
+      <DashboardCharts analytics={analytics} />
 
       {/* 4 & 5. Recent Activity & Featured Tests */}
       <section className="grid lg:grid-cols-[1.5fr_1fr] gap-8">

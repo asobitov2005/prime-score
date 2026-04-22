@@ -35,6 +35,11 @@ class PaymentStatus(StrEnum):
     FAILED = "failed"
 
 
+class ReviewSource(StrEnum):
+    ADMIN = "admin"
+    USER = "user"
+
+
 class QuestionType(StrEnum):
     READING_MC_SINGLE = "reading_mc_single"
     READING_MC_MULTIPLE = "reading_mc_multiple"

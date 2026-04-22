@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SlidersHorizontal, BookOpen, Headphones, Layers, Users, CheckCircle2, X } from "lucide-react";
+import { SlidersHorizontal, BookOpen, Headphones, Layers, Eye, CheckCircle2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -200,15 +200,56 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {activeType === "reading" ? (
+            <Card className="group relative overflow-hidden rounded-2xl border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/40" />
+              <CardHeader className="p-5 pb-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20 flex items-center gap-1">
+                    <Eye className="h-2.5 w-2.5" />
+                    <span className="text-[9px] font-semibold uppercase tracking-wider">Exam Preview</span>
+                  </div>
+                  <Badge variant="secondary" className="font-semibold uppercase text-[9px] tracking-widest px-2.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none">
+                    Mock Reading
+                  </Badge>
+                </div>
+                <CardTitle className="text-[15px] font-semibold leading-tight text-foreground">
+                  Split-Screen Reading Exam
+                </CardTitle>
+                <CardDescription className="pt-1 text-xs font-medium text-muted-foreground">
+                  Try the new real-exam atmosphere with a 13-question reading preview and split passage/question layout.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="p-5 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button asChild className="h-9 rounded-xl text-xs font-bold">
+                    <Link href="/exam-preview/reading?mode=exam">Start Exam</Link>
+                  </Button>
+                  <Button asChild variant="outline" className="h-9 rounded-xl text-xs font-bold">
+                    <Link href="/exam-preview/reading?mode=practice">Practice Mode</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {tests.map((test) => {
             const isFull = !test.format || test.format === "full";
             const isCompleted = completedTestIds.has(test.id);
+            const isExamPreviewTest = test.id === "reading-cam18-t1";
 
             return (
               <Card key={test.id} className="group relative rounded-2xl border-border/50 bg-card/50 hover:bg-card hover:border-border transition-all duration-300 flex flex-col shadow-sm">
                 <CardHeader className="p-5 pb-2 flex-1">
                    <div className="flex items-center justify-between mb-4">
                      <div className="flex gap-2">
+                        {isExamPreviewTest && (
+                          <div className="bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20 flex items-center gap-1">
+                            <Eye className="h-2.5 w-2.5" />
+                            <span className="text-[9px] font-semibold uppercase tracking-wider">Exam Preview</span>
+                          </div>
+                        )}
                         {test.accessType === "premium" && (
                           <div className="bg-amber-500/10 text-amber-600 dark:text-amber-500 px-2 py-0.5 rounded-md border border-amber-500/20 flex items-center gap-1">
                             <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
@@ -236,11 +277,16 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                      <CardTitle className="text-[15px] font-semibold leading-tight text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2">
                        {test.title}
                      </CardTitle>
+                     {isExamPreviewTest ? (
+                       <p className="text-xs font-medium text-primary/85">
+                         Opens the new split-screen exam layout preview.
+                       </p>
+                     ) : null}
                      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 pt-1">
                        <span>{test.source.replace("_", " ")}</span>
                        <span className="flex items-center gap-1">
-                         <Users className="h-3 w-3 opacity-60" />
-                         {Math.max(100, attemptCountByTestId[test.id] ?? 0)} attempted
+                         <Eye className="h-3 w-3 opacity-60" />
+                         {Math.max(100 + (test.id.charCodeAt(0) * 7 + test.id.charCodeAt(1) * 3) % 101, attemptCountByTestId[test.id] ?? 0)} Views
                        </span>
                      </div>
                    </div>

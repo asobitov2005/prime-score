@@ -133,6 +133,77 @@ export interface DashboardStat {
   detail: string;
 }
 
+export interface DashboardQuestionTypeAnalysisItem {
+  label: string;
+  workedCount: number;
+  correctCount: number;
+  accuracy: number;
+  errorCount: number;
+}
+
+export interface DashboardQuestionTypeComparisonItem {
+  label: string;
+  previousAccuracy: number | null;
+  currentAccuracy: number | null;
+  delta: number | null;
+  accuracies: Array<number | null>;
+}
+
+export interface DashboardQuestionTypeComparisonTest {
+  testTitle: string;
+  testDate: string;
+}
+
+export interface DashboardQuestionTypeComparison {
+  previousTestTitle: string | null;
+  previousTestDate: string | null;
+  currentTestTitle: string | null;
+  currentTestDate: string | null;
+  tests: DashboardQuestionTypeComparisonTest[];
+  items: DashboardQuestionTypeComparisonItem[];
+}
+
+export interface DashboardErrorDistributionItem {
+  label: string;
+  errorCount: number;
+  share: number;
+}
+
+export interface DashboardBandProgressPoint {
+  label: string;
+  occurredAt: string;
+  reading: number | null;
+  listening: number | null;
+}
+
+export interface DashboardPerformanceStudyTime {
+  totalTimeSec: number;
+  readingTimeSec: number;
+  listeningTimeSec: number;
+}
+
+export interface DashboardPerformanceTestCountBucket {
+  fullCount: number;
+  section1Count: number;
+  section2Count: number;
+  section3Count: number;
+  section4Count: number;
+}
+
+export interface DashboardPerformanceSummary {
+  studyTime: DashboardPerformanceStudyTime;
+  reading: DashboardPerformanceTestCountBucket;
+  listening: DashboardPerformanceTestCountBucket;
+}
+
+export interface DashboardAnalytics {
+  performanceSummary: DashboardPerformanceSummary;
+  questionTypeAnalysis: DashboardQuestionTypeAnalysisItem[];
+  comparison: DashboardQuestionTypeComparison;
+  errorDistribution: DashboardErrorDistributionItem[];
+  progressSeries: DashboardBandProgressPoint[];
+}
+
 export interface AttemptRow {
   id: string;
   testId: string;
@@ -141,6 +212,7 @@ export interface AttemptRow {
   source: string;
   mode: AttemptMode;
   date: string;
+  lastSavedAt: string;
   score: string;
   band: string | null;
   timeSpent: string;

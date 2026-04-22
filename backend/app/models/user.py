@@ -24,6 +24,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="user")
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
 
 
 class Session(UUIDMixin, TimestampMixin, Base):

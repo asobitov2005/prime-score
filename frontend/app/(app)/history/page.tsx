@@ -8,6 +8,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getUserAttempts } from "@/lib/server-me";
 import { cn } from "@/lib/utils";
 
+function sourceBadgeClass(source: string): string {
+  if (source === "Cambridge Official") {
+    return "border-blue-500/30 bg-blue-500/10 text-blue-600";
+  }
+  if (source === "Real Exam Material") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-600";
+  }
+  return "border-violet-500/30 bg-violet-500/10 text-violet-600";
+}
+
 export default async function HistoryPage() {
   const attempts = await getUserAttempts();
   return (
@@ -33,7 +43,7 @@ export default async function HistoryPage() {
           
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
-            <Input placeholder="Search by test title or date..." className="pl-10 h-10 text-sm border-border/60 bg-muted/20 text-foreground rounded-lg transition-all focus:bg-background" />
+            <Input placeholder="Search by test title or last saved time..." className="pl-10 h-10 text-sm border-border/60 bg-muted/20 text-foreground rounded-lg transition-all focus:bg-background" />
           </div>
 
           <Button variant="outline" size="sm" className="h-10 px-4 text-xs font-bold rounded-lg border-border/60 bg-muted/20 hover:bg-muted/40">
@@ -53,7 +63,7 @@ export default async function HistoryPage() {
                 <TableHead className="h-10 text-xs font-bold">Test</TableHead>
                 <TableHead className="h-10 text-xs font-bold">Source</TableHead>
                 <TableHead className="h-10 text-xs font-bold">Mode</TableHead>
-                <TableHead className="h-10 text-xs font-bold">Date</TableHead>
+                <TableHead className="h-10 text-xs font-bold">Last saved</TableHead>
                 <TableHead className="h-10 text-xs font-bold">Score</TableHead>
                 <TableHead className="h-10 text-xs font-bold">Band</TableHead>
                 <TableHead className="h-10 text-xs font-bold">Time</TableHead>
@@ -64,7 +74,11 @@ export default async function HistoryPage() {
               {attempts.map((attempt) => (
                 <TableRow key={attempt.id} className="hover:bg-muted/30">
                   <TableCell className="font-semibold text-sm py-3">{attempt.testTitle}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground py-3">{attempt.source}</TableCell>
+                  <TableCell className="py-3">
+                    <Badge variant="outline" className={cn("font-bold text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm border", sourceBadgeClass(attempt.source))}>
+                      {attempt.source}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="py-3">
                     <Badge variant="outline" className={cn(
                       "font-bold text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm border",
@@ -73,14 +87,28 @@ export default async function HistoryPage() {
                       {attempt.mode}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-xs py-3">{attempt.date}</TableCell>
+                  <TableCell className="text-xs py-3 whitespace-nowrap">{attempt.lastSavedAt}</TableCell>
                   <TableCell className="font-bold text-sm py-3">{attempt.score}</TableCell>
                   <TableCell className="font-bold text-primary text-sm py-3">{attempt.band ?? "-"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground py-3">{attempt.timeSpent}</TableCell>
                   <TableCell className="text-right py-3 pr-4">
-                    <Button asChild variant="ghost" size="sm" className="h-8 text-xs font-medium hover:bg-primary/10 hover:text-primary">
-                      <Link href={`/attempts/${attempt.id}/result`}>Review</Link>
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-xl border-border/60 bg-background px-3 text-[11px] font-bold text-foreground shadow-sm hover:bg-muted/40"
+                      >
+                        <Link href={`/tests/${attempt.testId}`}>Retake</Link>
+                      </Button>
+                      <Button
+                        asChild
+                        size="sm"
+                        className="h-8 rounded-xl bg-primary px-3 text-[11px] font-bold text-primary-foreground shadow-sm hover:bg-primary/90"
+                      >
+                        <Link href={`/attempts/${attempt.id}/result`}>Review</Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

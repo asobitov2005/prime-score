@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useState, useEffect, type ReactNode } from "react";
-import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, ArrowUp } from "lucide-react";
+import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, ArrowUp, Bell } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
+import { createApiClient } from "@/lib/api/client";
 import { useRouter, usePathname } from "next/navigation";
 
 interface SiteShellProps {
@@ -38,18 +39,42 @@ const highlights = [
 
 export function SiteShell({ children }: SiteShellProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const { isAuthenticated, name, phoneNumber, clearSession } = useAuthStore();
+  const { isAuthenticated, name, phoneNumber, userId, sessionId, clearSession, syncSession } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<{ id: string; type: string; title: string; body: string; is_read: boolean; created_at: string }[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
   const currentPath = usePathname();
   const router = useRouter();
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // Admin sahifalarida SiteShell ni ko'rsatmaslik
-  if (currentPath.startsWith("/admin")) {
+  // Admin and exam preview routes do not use the regular site chrome.
+  if (currentPath.startsWith("/admin") || currentPath.startsWith("/exam-preview/")) {
     return <>{children}</>;
   }
+
+  const debugHeaders: Record<string, string> = {
+    "X-Debug-User-Id": userId ?? "",
+    "X-Debug-First-Name": name || "User",
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/me/notifications`, { headers: debugHeaders });
+      if (res.ok) setNotifications(await res.json());
+    } catch {}
+  };
+
+  const markAllRead = async () => {
+    try {
+      await fetch(`${API_BASE}/me/notifications/read-all`, { method: "PATCH", headers: debugHeaders });
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch {}
+  };
 
   // Fix hydration
   useEffect(() => {
@@ -96,7 +121,49 @@ export function SiteShell({ children }: SiteShellProps) {
   };
 
   useEffect(() => {
-    const handleClick = () => setIsMenuOpen(false);
+    if (isAuthenticated && userId) {
+      setNotifications([]);
+      fetchNotifications();
+    } else {
+      setNotifications([]);
+    }
+  }, [isAuthenticated, userId]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !sessionId) {
+      return;
+    }
+
+    let cancelled = false;
+    const api = createApiClient();
+
+    void api.getSessionStatus(sessionId)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        syncSession({
+          userId: response.user.id,
+          sessionId: response.session_id,
+          name: response.user.first_name,
+          phoneNumber: response.user.username ?? null,
+          isPremium: Boolean(response.user.is_premium),
+          premiumUntil: response.user.premium_until ?? null,
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, sessionId, syncSession]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      setIsMenuOpen(false);
+      const target = e.target as HTMLElement;
+      if (!target.closest(".notif-panel")) setNotifOpen(false);
+    };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
@@ -173,6 +240,7 @@ export function SiteShell({ children }: SiteShellProps) {
             </div>
 
             <NavLink href="/#features" label="Features" />
+            <NavLink href="/pricing" label="Pricing" />
             <NavLink href="/#reviews" label="Reviews" />
             <NavLink href="/#about" label="About" />
           </nav>
@@ -191,8 +259,56 @@ export function SiteShell({ children }: SiteShellProps) {
             {!mounted ? (
               <div className="h-11 w-24 bg-muted animate-pulse rounded-xl" />
             ) : isAuthenticated ? (
+              <>
+              {/* Notification Bell */}
+              <div className="relative notif-panel" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => { setNotifOpen(!notifOpen); if (!notifOpen) fetchNotifications(); }}
+                  className="relative h-10 w-10 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all active:scale-95 flex items-center justify-center"
+                  title="Notifications"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center">{unreadCount}</span>
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div className="absolute top-full right-0 mt-3 w-80 max-h-96 rounded-2xl border border-border bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200 z-[60] overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+                      <p className="text-sm font-bold text-foreground">Notifications</p>
+                      {unreadCount > 0 && (
+                        <button onClick={markAllRead} className="text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors">
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    <div className="overflow-y-auto max-h-72">
+                      {notifications.length === 0 ? (
+                        <div className="px-4 py-8 text-center text-sm text-muted-foreground">No notifications yet</div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div key={n.id} className={cn("px-4 py-3 border-b border-border/30 transition-colors", !n.is_read && "bg-primary/5")}>
+                            <div className="flex items-start gap-3">
+                              <div className={cn("mt-1 h-2 w-2 rounded-full shrink-0", n.is_read ? "bg-transparent" : "bg-primary")} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-foreground">{n.title}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
+                                <p className="text-[10px] text-muted-foreground/60 mt-1">
+                                  {(() => { const d = new Date(n.created_at); return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; })()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="relative" onClick={(e) => e.stopPropagation()}>
-                <button 
+                <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
                   className="flex items-center gap-2.5 p-1.5 pl-3 rounded-2xl border border-border bg-muted/40 hover:bg-muted transition-all active:scale-95 group outline-none"
                 >
@@ -232,6 +348,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   </div>
                 )}
               </div>
+              </>
             ) : (
               <Button asChild size="lg" className="rounded-xl h-11 px-8 text-sm font-black shadow-lg shadow-primary/20 hover:shadow-xl transition-all hover:-translate-y-0.5 bg-primary text-background border-none">
                 <Link href="/login">Login</Link>

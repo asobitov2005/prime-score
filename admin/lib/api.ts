@@ -1,7 +1,8 @@
 import type { AdminTestDraftState, AdminTestSummary } from "@/lib/types";
 import { getClientAdminAccessToken } from "@/lib/auth";
+import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 
-const baseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ?? "http://127.0.0.1:8000/api/admin").replace(/\/$/, "");
+const baseUrl = ADMIN_PUBLIC_API_BASE_URL;
 
 function buildRequestHeaders(): Record<string, string> {
   const token = getClientAdminAccessToken();
@@ -260,5 +261,17 @@ export const adminApi = {
       method: "POST"
     });
     return mapAdminTest(response);
+  },
+  async bulkPublish(ids: string[], status: "published" | "draft" | "archived"): Promise<{ message: string }> {
+    return requestJson(`/tests/bulk-publish`, {
+      method: "PATCH",
+      body: JSON.stringify({ ids, status })
+    });
+  },
+  async bulkAccess(ids: string[], accessType: "public" | "premium"): Promise<{ message: string }> {
+    return requestJson(`/tests/bulk-status`, {
+      method: "PATCH",
+      body: JSON.stringify({ ids, access_type: accessType })
+    });
   }
 };

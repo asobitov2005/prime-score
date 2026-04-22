@@ -632,12 +632,13 @@ export const mockAttempts: AttemptRow[] = [
     testId: "reading-cam18-t1",
     testTitle: "Cambridge 18 Reading Test 1",
     type: "reading",
-    source: "Cambridge 18, Test 1",
+    source: "Cambridge Official",
     mode: "practice",
     date: "2026-04-14",
+    lastSavedAt: "14 Apr 2026, 18:42",
     score: "34/40",
     band: "7.5",
-    timeSpent: "58m 12s",
+    timeSpent: "58:12",
     status: "completed"
   },
   {
@@ -645,12 +646,13 @@ export const mockAttempts: AttemptRow[] = [
     testId: "listening-cam18-t2",
     testTitle: "Cambridge 18 Listening Test 2",
     type: "listening",
-    source: "Cambridge 18, Test 2",
+    source: "Cambridge Official",
     mode: "exam",
     date: "2026-04-13",
+    lastSavedAt: "13 Apr 2026, 09:18",
     score: "31/40",
     band: "7.0",
-    timeSpent: "31m 48s",
+    timeSpent: "31:48",
     status: "completed"
   },
   {
@@ -658,12 +660,13 @@ export const mockAttempts: AttemptRow[] = [
     testId: "reading-custom-politics",
     testTitle: "Reading: Green Energy Policy",
     type: "reading",
-    source: "Custom editorial set",
+    source: "Custom Practice",
     mode: "practice",
     date: "2026-04-12",
+    lastSavedAt: "12 Apr 2026, 21:07",
     score: "28/40",
     band: "6.5",
-    timeSpent: "46m 10s",
+    timeSpent: "46:10",
     status: "submitted"
   }
 ];

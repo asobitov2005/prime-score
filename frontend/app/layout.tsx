@@ -2,12 +2,10 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Providers } from "@/app/providers";
 import { SiteShell } from "@/components/layout/site-shell";
+import { buildDefaultMetadata } from "@/lib/seo";
 import "@/app/globals.css";
 
-export const metadata: Metadata = {
-  title: "PrimeScore",
-  description: "Prime IELTS Academic Reading and Listening practice platform."
-};
+export const metadata: Metadata = buildDefaultMetadata();
 
 interface RootLayoutProps {
   children: ReactNode;

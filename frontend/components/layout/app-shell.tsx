@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BookOpenText, Gauge, History, Medal, Menu, ShieldAlert, X, Home, Settings2 } from "lucide-react";
+import { BookOpenText, Gauge, History, Medal, Menu, ShieldAlert, X, Settings2, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,8 +29,21 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { sidebar, toggleSidebar } = useUIStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isPremium, premiumUntil } = useAuthStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const premiumBadgeLabel = (() => {
+    if (!isPremium) {
+      return "Paused";
+    }
+    if (!premiumUntil) {
+      return "Active";
+    }
+
+    const diffMs = new Date(premiumUntil).getTime() - Date.now();
+    const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    return `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`;
+  })();
 
   useEffect(() => {
     // If user is not authenticated and tries to access protected app routes (except /tests which might be open partially but app-shell wraps it)
@@ -85,6 +98,17 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
       </Card>
 
+      {isPremium && (
+        <Card className="relative overflow-hidden p-4 border-primary/20 shadow-sm bg-gradient-to-br from-primary/10 via-card/95 to-card rounded-xl">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
+          <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-primary/10 blur-2xl" />
+          <div className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-primary">
+            <Sparkles className="h-3 w-3" />
+            Premium Active
+          </div>
+        </Card>
+      )}
+
       <Card className="p-4 border-border/50 shadow-sm bg-card/60 backdrop-blur-md rounded-xl">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Account Status</p>
         <div className="space-y-3 text-xs">
@@ -94,7 +118,17 @@ export function AppShell({ children }: AppShellProps) {
           </div>
           <div className="flex items-center justify-between group">
             <span className="font-semibold text-muted-foreground transition-colors group-hover:text-foreground">Premium</span>
-            <Badge variant="secondary" className="font-bold uppercase text-[9px] py-0 px-2 h-5 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20">Paused</Badge>
+            <Badge
+              variant="secondary"
+              className={cn(
+                "font-bold text-[9px] py-0 px-2 h-5",
+                isPremium
+                  ? "text-primary bg-primary/10 hover:bg-primary/20"
+                  : "text-amber-600 bg-amber-500/10 hover:bg-amber-500/20"
+              )}
+            >
+              {premiumBadgeLabel}
+            </Badge>
           </div>
         </div>
       </Card>

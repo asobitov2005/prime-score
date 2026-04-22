@@ -17,6 +17,7 @@ from app.schemas.auth import (
     AuthRequestCodeRequest,
     AuthRequestCodeResponse,
     AuthSessionListResponse,
+    AuthSessionStatusResponse,
     AuthVerifyCodeRequest,
     TokenPairResponse,
 )
@@ -94,6 +95,8 @@ async def verify_code(
         last_name=db_user.last_name or "",
         username=db_user.phone,
         telegram_id=db_user.telegram_id,
+        is_premium=db_user.is_premium,
+        premium_until=db_user.premium_until,
     )
 
     return AuthLoginResponse(
@@ -173,6 +176,34 @@ async def list_sessions(
         .order_by(UserSession.last_used_at.desc())
     )
     return AuthSessionListResponse(items=result.scalars().all())
+
+
+@router.get("/sessions/{session_id}/status", response_model=AuthSessionStatusResponse)
+async def get_session_status(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+) -> AuthSessionStatusResponse:
+    result = await db.execute(
+        select(UserSession, User)
+        .join(User, User.id == UserSession.user_id)
+        .where(UserSession.id == session_id, UserSession.is_active == True)
+    )
+    row = result.first()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    session, user = row
+    principal = DebugPrincipal(
+        id=user.id,
+        first_name=user.first_name,
+        last_name=user.last_name or "",
+        username=user.phone,
+        telegram_id=user.telegram_id,
+        is_premium=user.is_premium,
+        premium_until=user.premium_until,
+    )
+    return AuthSessionStatusResponse(session_id=session.id, user=principal)
 
 
 @router.delete("/sessions/{session_id}", response_model=MessageResponse)

@@ -5,9 +5,8 @@ import { useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AdminAuthResponse, setAdminSessionCookies } from "@/lib/auth";
+import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@/components/ui";
-
-const adminApiBaseUrl = (process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL ?? "http://127.0.0.1:8000/api/admin").replace(/\/$/, "");
 
 export function LoginFlow() {
   const router = useRouter();
@@ -22,7 +21,7 @@ export function LoginFlow() {
     setMessage("");
 
     try {
-      const response = await fetch(`${adminApiBaseUrl}/auth/login`, {
+      const response = await fetch(`${ADMIN_PUBLIC_API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

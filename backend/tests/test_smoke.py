@@ -40,6 +40,11 @@ async def test_health_and_catalog(app):
         assert health.status_code == 200
         assert health.json()["status"] == "ok"
 
+        plans = await client.get("/api/plans")
+        assert plans.status_code == 200
+        assert len(plans.json()) >= 1
+        assert plans.json()[0]["duration_days"] in {30, 90, 180, 365}
+
         tests = await client.get("/api/tests")
         assert tests.status_code == 200
         assert len(tests.json()) >= 2
@@ -67,6 +72,46 @@ async def test_me_and_admin_routes(app):
         assert draft.status_code == 200
         assert draft.json()["metadata"]["type"] == "reading"
         assert draft.json()["decisions"]["question_bank"]["state"] == "not_supported"
+
+
+@pytest.mark.asyncio
+async def test_review_submission_and_admin_visibility_flow(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        admin_headers = await login_admin_headers(client)
+
+        public_reviews = await client.get("/api/reviews")
+        assert public_reviews.status_code == 200
+        assert len(public_reviews.json()) >= 1
+
+        submitted = await client.post(
+            "/api/reviews",
+            headers=USER_HEADERS,
+            json={
+                "band": "7.5",
+                "text": "PrimeScore review moderation flow works well for user-submitted feedback.",
+            },
+        )
+        assert submitted.status_code == 201
+        review_id = submitted.json()["id"]
+        assert submitted.json()["is_visible"] is False
+
+        admin_reviews = await client.get("/api/admin/reviews", headers=admin_headers)
+        assert admin_reviews.status_code == 200
+        created_review = next(item for item in admin_reviews.json() if item["id"] == review_id)
+        assert created_review["source"] == "user"
+        assert created_review["user_id"] == USER_HEADERS["X-Debug-User-Id"]
+
+        published = await client.patch(
+            f"/api/admin/reviews/{review_id}/visibility",
+            headers=admin_headers,
+            json={"is_visible": True},
+        )
+        assert published.status_code == 200
+        assert published.json()["is_visible"] is True
+
+        refreshed_public = await client.get("/api/reviews")
+        assert refreshed_public.status_code == 200
+        assert any(item["id"] == review_id for item in refreshed_public.json())
 
 
 @pytest.mark.asyncio

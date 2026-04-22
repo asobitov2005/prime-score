@@ -63,6 +63,11 @@ class AuthLoginResponse(TokenPairResponse):
     user: DebugPrincipal
 
 
+class AuthSessionStatusResponse(BaseModel):
+    session_id: UUID
+    user: DebugPrincipal
+
+
 class AdminAuthLoginRequest(BaseModel):
     login: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=1, max_length=255)

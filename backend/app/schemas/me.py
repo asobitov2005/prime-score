@@ -4,9 +4,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.enums import AccessType, TestMode, TestStatus, TestType
+from app.core.enums import AccessType, TestMode, TestSource, TestStatus, TestType
 from app.schemas.common import DebugPrincipal
 
 
@@ -48,9 +48,12 @@ class MeAttemptSummaryRead(BaseModel):
     mode: TestMode
     status: TestStatus
     access_type: AccessType
+    source: TestSource | None = None
     raw_score: int | None = None
     band_score: Decimal | None = None
+    time_spent_sec: int = 0
     started_at: datetime
+    updated_at: datetime | None = None
 
 
 class FavoriteTestRead(BaseModel):
@@ -61,3 +64,72 @@ class FavoriteTestRead(BaseModel):
     status: TestStatus
 
 
+class MeQuestionTypeAnalysisItemRead(BaseModel):
+    label: str
+    worked_count: int = 0
+    correct_count: int = 0
+    accuracy: float = 0.0
+    error_count: int = 0
+
+
+class MeQuestionTypeComparisonItemRead(BaseModel):
+    label: str
+    previous_accuracy: float | None = None
+    current_accuracy: float | None = None
+    delta: float | None = None
+    accuracies: list[float | None] = Field(default_factory=list)
+
+
+class MeQuestionTypeComparisonTestRead(BaseModel):
+    test_title: str
+    test_date: datetime
+
+
+class MeQuestionTypeComparisonRead(BaseModel):
+    previous_test_title: str | None = None
+    previous_test_date: datetime | None = None
+    current_test_title: str | None = None
+    current_test_date: datetime | None = None
+    tests: list[MeQuestionTypeComparisonTestRead] = Field(default_factory=list)
+    items: list[MeQuestionTypeComparisonItemRead] = Field(default_factory=list)
+
+
+class MeErrorDistributionItemRead(BaseModel):
+    label: str
+    error_count: int = 0
+    share: float = 0.0
+
+
+class MeBandProgressPointRead(BaseModel):
+    label: str
+    occurred_at: datetime
+    reading: float | None = None
+    listening: float | None = None
+
+
+class MePerformanceStudyTimeRead(BaseModel):
+    total_time_sec: int = 0
+    reading_time_sec: int = 0
+    listening_time_sec: int = 0
+
+
+class MePerformanceTestCountBucketRead(BaseModel):
+    full_count: int = 0
+    section_1_count: int = 0
+    section_2_count: int = 0
+    section_3_count: int = 0
+    section_4_count: int = 0
+
+
+class MePerformanceSummaryRead(BaseModel):
+    study_time: MePerformanceStudyTimeRead = Field(default_factory=MePerformanceStudyTimeRead)
+    reading: MePerformanceTestCountBucketRead = Field(default_factory=MePerformanceTestCountBucketRead)
+    listening: MePerformanceTestCountBucketRead = Field(default_factory=MePerformanceTestCountBucketRead)
+
+
+class MeDashboardAnalyticsRead(BaseModel):
+    performance_summary: MePerformanceSummaryRead = Field(default_factory=MePerformanceSummaryRead)
+    question_type_analysis: list[MeQuestionTypeAnalysisItemRead] = Field(default_factory=list)
+    comparison: MeQuestionTypeComparisonRead = Field(default_factory=MeQuestionTypeComparisonRead)
+    error_distribution: list[MeErrorDistributionItemRead] = Field(default_factory=list)
+    progress_series: list[MeBandProgressPointRead] = Field(default_factory=list)

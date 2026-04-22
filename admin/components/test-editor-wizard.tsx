@@ -63,10 +63,11 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
   const [lastSavedDraftStr, setLastSavedDraftStr] = useState<string>("");
 
   useEffect(() => {
-    if (saveState === "saving" || publishState === "publishing") return;
+    if (saveState === "saving" || publishState === "publishing" || publishState === "published") return;
+    if (draft.metadata.status === "published") return;
 
     const currentDraftStr = JSON.stringify(draft);
-    if (currentDraftStr === lastSavedDraftStr) return; // No changes to save
+    if (currentDraftStr === lastSavedDraftStr) return;
 
     const handler = setTimeout(() => {
       if (draft.metadata.title.trim().length > 0) {

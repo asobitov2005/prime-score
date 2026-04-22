@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,6 +27,7 @@ class DebugPrincipal(BaseModel):
     username: str | None = None
     role: UserRole = UserRole.user
     is_premium: bool = False
+    premium_until: datetime | None = None
     show_on_leaderboard: bool = True
     telegram_id: int | None = None
 
@@ -49,4 +51,3 @@ class AdminPrincipal(BaseModel):
 
 class CreatedResponse(BaseModel):
     id: UUID
-

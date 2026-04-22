@@ -20,6 +20,11 @@ from app.models.enums import AccessType as ModelAccessType
 from app.models.enums import TestStatus as ModelTestStatus
 from app.models.test import Test
 from app.models.user import User
+from app.models.ops import Notification
+from app.models.review import Review
+from app.core.enums import NotificationType
+from app.core.enums import ReviewSource
+from app.models.enums import ReviewSource as ModelReviewSource
 from app.schemas.admin import (
     AdminAuditLogRead,
     AdminContentCreateRequest,
@@ -37,6 +42,11 @@ from app.schemas.admin import (
 )
 from app.schemas.auth import AdminAuthLoginRequest, AdminAuthRefreshRequest, AdminAuthResponse
 from app.schemas.common import AdminPrincipal, MessageResponse
+from app.schemas.review import (
+    AdminReviewCreateRequest,
+    AdminReviewRead,
+    AdminReviewVisibilityRequest,
+)
 from app.services.admin_auth import authenticate_admin, build_admin_principal, get_admin_by_id
 from app.services.test_content_repo import (
     build_admin_draft_state_from_db,
@@ -74,6 +84,13 @@ class AdminUserDetailRead(BaseModel):
     average_band: float | None = None
 
 router = APIRouter()
+
+
+def _resolve_user_display_name(user: User | None) -> str | None:
+    if user is None:
+        return None
+    parts = [part.strip() for part in [user.first_name, user.last_name] if part and part.strip()]
+    return " ".join(parts) if parts else None
 
 
 def _build_admin_token_claims(admin: AdminPrincipal) -> dict[str, str]:
@@ -254,8 +271,8 @@ async def bulk_publish_tests(
     session: AsyncSession = Depends(get_db_session),
 ) -> MessageResponse:
     _ = current_admin
-    if payload.status not in ("published", "draft"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status must be 'published' or 'draft'.")
+    if payload.status not in ("published", "draft", "archived"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status must be 'published', 'draft', or 'archived'.")
     try:
         model_status = ModelTestStatus(payload.status)
         for test_id in payload.ids:
@@ -523,6 +540,134 @@ async def list_users(
         return []
 
 
+@router.get("/reviews", response_model=list[AdminReviewRead])
+async def list_reviews(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AdminReviewRead]:
+    _ = current_admin
+    try:
+        rows = (
+            await session.execute(
+                select(Review, User)
+                .outerjoin(User, Review.user_id == User.id)
+                .order_by(Review.created_at.desc())
+            )
+        ).all()
+        return [
+            AdminReviewRead(
+                id=review.id,
+                source=ReviewSource(review.source.value),
+                author_name=review.author_name,
+                band_label=review.band_label,
+                text=review.body,
+                is_visible=review.is_visible,
+                created_at=review.created_at,
+                user_id=review.user_id,
+                user_display_name=_resolve_user_display_name(user),
+                user_username=user.username if user is not None else None,
+                created_by_admin_id=review.created_by_admin_id,
+            )
+            for review, user in rows
+        ]
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load reviews.") from exc
+
+
+@router.post("/reviews", response_model=AdminReviewRead, status_code=status.HTTP_201_CREATED)
+async def create_review(
+    payload: AdminReviewCreateRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminReviewRead:
+    try:
+        linked_user: User | None = None
+        if payload.user_id is not None:
+            linked_user = await session.get(User, payload.user_id)
+            if linked_user is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Linked user not found.")
+
+        author_name = payload.author_name.strip() if payload.author_name else ""
+        if linked_user is not None and not author_name:
+            author_name = _resolve_user_display_name(linked_user) or linked_user.phone
+
+        review = Review(
+            user_id=linked_user.id if linked_user is not None else None,
+            created_by_admin_id=current_admin.id,
+            source=ModelReviewSource.ADMIN,
+            author_name=author_name,
+            band_label=payload.band_label.strip(),
+            body=payload.text.strip(),
+            is_visible=payload.is_visible,
+        )
+        session.add(review)
+        await session.commit()
+        await session.refresh(review)
+        return AdminReviewRead(
+            id=review.id,
+            source=ReviewSource(review.source.value),
+            author_name=review.author_name,
+            band_label=review.band_label,
+            text=review.body,
+            is_visible=review.is_visible,
+            created_at=review.created_at,
+            user_id=review.user_id,
+            user_display_name=_resolve_user_display_name(linked_user),
+            user_username=linked_user.username if linked_user is not None else None,
+            created_by_admin_id=review.created_by_admin_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create review.") from exc
+
+
+@router.patch("/reviews/{review_id}/visibility", response_model=AdminReviewRead)
+async def update_review_visibility(
+    review_id: UUID,
+    payload: AdminReviewVisibilityRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminReviewRead:
+    _ = current_admin
+    try:
+        review = await session.get(Review, review_id)
+        if review is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
+        review.is_visible = payload.is_visible
+        await session.commit()
+        linked_user = await session.get(User, review.user_id) if review.user_id is not None else None
+        return AdminReviewRead(
+            id=review.id,
+            source=ReviewSource(review.source.value),
+            author_name=review.author_name,
+            band_label=review.band_label,
+            text=review.body,
+            is_visible=review.is_visible,
+            created_at=review.created_at,
+            user_id=review.user_id,
+            user_display_name=_resolve_user_display_name(linked_user),
+            user_username=linked_user.username if linked_user is not None else None,
+            created_by_admin_id=review.created_by_admin_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update review.") from exc
+
+
 @router.get("/users/{user_id}", response_model=AdminUserDetailRead)
 async def get_user(
     user_id: UUID,
@@ -576,6 +721,87 @@ async def get_user(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load user.")
 
 
+class BulkPremiumRequest(BaseModel):
+    user_ids: List[UUID]
+    days: int = 30
+
+
+@router.patch("/users/bulk-premium", response_model=MessageResponse)
+async def bulk_grant_premium(
+    payload: BulkPremiumRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    _ = current_admin
+    from datetime import datetime, timedelta, timezone
+    try:
+        from app.services.notification_sender import create_and_send_notification
+        now = datetime.now(timezone.utc)
+        until = now + timedelta(days=payload.days)
+        for uid in payload.user_ids:
+            user = await session.get(User, uid)
+            if user is not None:
+                user.is_premium = True
+                user.premium_until = until
+                body = f"You've been gifted {payload.days} days of Premium! Valid until {until.strftime('%d.%m.%Y')}."
+                await create_and_send_notification(
+                    session,
+                    user_id=uid,
+                    type=NotificationType.gift_received,
+                    title="Premium activated!",
+                    body=body,
+                    telegram_text=f"🎉 <b>Premium activated!</b>\n\n{body}",
+                )
+        await session.commit()
+        return MessageResponse(message=f"{len(payload.user_ids)} ta userga {payload.days} kunlik premium berildi.")
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Bulk premium failed.") from exc
+
+
+@router.patch("/users/{user_id}/revoke-premium", response_model=MessageResponse)
+async def revoke_premium(
+    user_id: UUID,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    _ = current_admin
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    user.is_premium = False
+    user.premium_until = None
+    from app.services.notification_sender import create_and_send_notification
+    await create_and_send_notification(
+        session,
+        user_id=user_id,
+        type=NotificationType.premium_expired,
+        title="Premium revoked",
+        body="Your Premium subscription has been revoked by admin. Contact support to reactivate.",
+        telegram_text="❌ <b>Premium revoked</b>\n\nYour Premium subscription has been revoked by admin.",
+    )
+    await session.commit()
+    return MessageResponse(message="Premium bekor qilindi.")
+
+
+@router.patch("/users/{user_id}/toggle-leaderboard", response_model=MessageResponse)
+async def toggle_leaderboard(
+    user_id: UUID,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    _ = current_admin
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    user.show_on_leaderboard = not user.show_on_leaderboard
+    await session.commit()
+    return MessageResponse(message=f"Leaderboard: {'visible' if user.show_on_leaderboard else 'hidden'}.")
+
+
 @router.patch("/users/{user_id}", response_model=AdminUserRead)
 async def update_user(
     user_id: UUID,
@@ -589,6 +815,59 @@ async def update_user(
         first_name="Unknown",
         last_name=None,
         username=None,
+    )
+
+
+@router.post("/check-premiums", response_model=MessageResponse)
+async def check_premiums(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    _ = current_admin
+    from app.services.notification_sender import check_expired_premiums, check_expiring_premiums
+    expired = await check_expired_premiums(session)
+    expiring = await check_expiring_premiums(session)
+    return MessageResponse(message=f"Expired: {expired}, Expiring soon: {expiring}")
+
+
+class AdminSettingsRead(BaseModel):
+    project_name: str
+    environment: str
+    timezone: str
+    payment_paused: bool
+    max_sessions: int = 2
+    telegram_bot_connected: bool = False
+    total_users: int = 0
+    total_tests: int = 0
+    total_attempts: int = 0
+
+
+class AdminSettingsUpdate(BaseModel):
+    payment_paused: bool | None = None
+    max_sessions: int | None = None
+
+
+@router.get("/settings", response_model=AdminSettingsRead)
+async def get_settings_view(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminSettingsRead:
+    _ = current_admin
+    from app.core.config import get_settings as _get_settings
+    settings = _get_settings()
+    users_total = await session.scalar(select(func.count()).select_from(User)) or 0
+    tests_total = await session.scalar(select(func.count()).select_from(Test)) or 0
+    attempts_total = await session.scalar(select(func.count()).select_from(Attempt)) or 0
+    bot_connected = bool(settings.telegram_bot_token and settings.telegram_bot_token != "change-me")
+    return AdminSettingsRead(
+        project_name=settings.project_name,
+        environment=settings.environment,
+        timezone=settings.timezone,
+        payment_paused=settings.payment_paused,
+        telegram_bot_connected=bot_connected,
+        total_users=int(users_total),
+        total_tests=int(tests_total),
+        total_attempts=int(attempts_total),
     )
 
 
