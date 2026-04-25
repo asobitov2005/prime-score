@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.enums import AttemptStatus, TestMode, TestScope, TestType
 from app.schemas.tests import TestSnapshotRead
@@ -22,6 +22,31 @@ class AttemptAnswerResponse(BaseModel):
     value: str | None = None
     saved_at: datetime
     score_status: str = "draft"
+
+
+class AttemptTextHighlightRead(BaseModel):
+    id: str
+    start: int
+    end: int
+
+
+class AttemptUiStateRead(BaseModel):
+    theme: str | None = None
+    split_ratio: float | None = None
+    font_scale: float | None = None
+
+
+class AttemptProgressRequest(BaseModel):
+    time_spent_sec: int | None = None
+    active_question_id: str | None = None
+    text_highlights: dict[str, list[AttemptTextHighlightRead]] | None = None
+    ui_state: AttemptUiStateRead | None = None
+
+
+class AttemptProgressResponse(BaseModel):
+    attempt_id: UUID
+    saved_at: datetime
+    time_spent_sec: int = 0
 
 
 class AttemptRead(BaseModel):
@@ -44,7 +69,16 @@ class AttemptRead(BaseModel):
     test_type: TestType | None = None
     time_limit_seconds: int = 0
     last_answered_question_number: int | None = None
+    answers: dict[str, str] = Field(default_factory=dict)
+    active_question_id: str | None = None
+    text_highlights: dict[str, list[AttemptTextHighlightRead]] = Field(default_factory=dict)
+    ui_state: AttemptUiStateRead | None = None
     test_snapshot: TestSnapshotRead | None = None
+
+
+class AttemptSubmitRequest(BaseModel):
+    confirm: bool = False
+    reason: str | None = None
 
 
 class AttemptSubmitResponse(AttemptRead):

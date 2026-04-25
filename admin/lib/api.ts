@@ -1,4 +1,4 @@
-import type { AdminTestDraftState, AdminTestSummary } from "@/lib/types";
+import type { AdminTestDraftState, AdminTestSummary, TestFormat } from "@/lib/types";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 
@@ -20,7 +20,7 @@ type BackendAdminTest = {
   id: string;
   title: string;
   test_type: "reading" | "listening";
-  format: "full" | "part";
+  format: TestFormat;
   source: "cambridge" | "real_exam" | "custom";
   source_detail: string;
   access_type: "public" | "premium";
@@ -34,7 +34,7 @@ type BackendAdminDraftPayload = {
   metadata: {
     title: string;
     type: "reading" | "listening";
-    format: "full" | "part";
+    format: TestFormat;
     source: "cambridge" | "real_exam" | "custom";
     source_detail: string;
     access_type: "public" | "premium";
@@ -47,6 +47,7 @@ type BackendAdminDraftPayload = {
     subtitle: string;
     content: string;
     paragraphs: Array<{ id: string; label: string; text: string }>;
+    showLabels: boolean;
     media_kind: "text" | "audio";
     marker_count: number;
   }>;
@@ -59,6 +60,9 @@ type BackendAdminDraftPayload = {
     question_start: number;
     question_end: number;
     shared_options: string[];
+    question_block?: string;
+    answer_block?: string;
+    secondary_block?: string;
     questions: Array<{
       id?: string;
       label: string;
@@ -135,6 +139,54 @@ function getIeltsRange(index: number, type: string) {
   return "X-Y";
 }
 
+function parsePassageBlockStyle(rawText: string) {
+  const trimmed = rawText.trim();
+  const hasOuterBraces = trimmed.startsWith("{") && trimmed.endsWith("}");
+  let body = hasOuterBraces ? trimmed.slice(1, -1).trim() : trimmed;
+  let italic = false;
+  let center = false;
+
+  let matched = true;
+  while (matched) {
+    matched = false;
+    if (body.startsWith("<i>")) {
+      italic = true;
+      body = body.slice(3).trimStart();
+      matched = true;
+    }
+    if (body.startsWith("<c>")) {
+      center = true;
+      body = body.slice(3).trimStart();
+      matched = true;
+    }
+  }
+
+  return {
+    isStyled: italic || center,
+  };
+}
+
+function buildParagraphPayloads(content: string, showLabels: boolean): BackendAdminDraftPayload["content"][number]["paragraphs"] {
+  let labelIndex = 0;
+  return content
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, index) => {
+      const isLabelled = !parsePassageBlockStyle(block).isStyled;
+      const label = showLabels && isLabelled ? String.fromCharCode(65 + labelIndex) : "";
+      if (isLabelled) {
+        labelIndex += 1;
+      }
+
+      return {
+        id: `para-${index}`,
+        label,
+        text: block,
+      };
+    });
+}
+
 function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPayload {
   const resolvedQuestionType = (typeId: string): string => {
     if (typeId.includes("_")) {
@@ -178,14 +230,9 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
       time_limit_label: draft.metadata.timeLimitLabel
     },
     content: draft.content.sections.map((section, idx) => {
-      let parsedParagraphs = section.paragraphs || [];
-      if (parsedParagraphs.length === 0 && section.content) {
-        parsedParagraphs = section.content.split(/\n\s*\n/).filter(p => p.trim()).map((text, i) => ({
-          id: `para-${i}`,
-          label: section.showLabels ? String.fromCharCode(65 + i) : "",
-          text: text.trim()
-        }));
-      }
+      const parsedParagraphs = section.content.trim()
+        ? buildParagraphPayloads(section.content, Boolean(section.showLabels))
+        : section.paragraphs || [];
 
       // Auto-generate standardized IELTS subtitle/intro
       const range = getIeltsRange(idx, draft.metadata.type);
@@ -200,6 +247,7 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
         subtitle: autoSubtitle,
         content: section.content,
         paragraphs: parsedParagraphs,
+        showLabels: Boolean(section.showLabels),
         media_kind: section.mediaKind,
         marker_count: section.markerCount
       };
@@ -213,6 +261,9 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
       question_start: group.questionStart,
       question_end: group.questionEnd,
       shared_options: group.sharedOptions,
+      question_block: group.questionBlock,
+      answer_block: group.answerBlock,
+      secondary_block: group.secondaryBlock,
       questions: group.questions.map((question) => ({
         id: isUuidLike(question.id) ? question.id : undefined,
         label: question.label,
@@ -256,11 +307,23 @@ export const adminApi = {
     });
     return mapAdminTest(response);
   },
+  async quickFixPublished(testId: string, draft: AdminTestDraftState): Promise<AdminTestSummary> {
+    const response = await requestJson<BackendAdminTest>(`/tests/${testId}/quick-fix`, {
+      method: "PUT",
+      body: JSON.stringify(toBackendDraftPayload(draft))
+    });
+    return mapAdminTest(response);
+  },
   async publishTest(testId: string): Promise<AdminTestSummary> {
     const response = await requestJson<BackendAdminTest>(`/tests/${testId}/publish`, {
       method: "POST"
     });
     return mapAdminTest(response);
+  },
+  async deleteDraft(testId: string): Promise<{ message: string }> {
+    return requestJson(`/tests/${testId}`, {
+      method: "DELETE"
+    });
   },
   async bulkPublish(ids: string[], status: "published" | "draft" | "archived"): Promise<{ message: string }> {
     return requestJson(`/tests/bulk-publish`, {

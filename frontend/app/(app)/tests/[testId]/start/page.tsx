@@ -45,7 +45,7 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
               )}>
                 {test.type}
               </span>
-              <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-md bg-muted text-foreground">
+              <span className={cn("px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-md border", isFullTest ? "border-border/40 bg-muted text-foreground" : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400")}>
                 {isFullTest ? "Full Test" : "Practice"}
               </span>
             </div>
@@ -60,8 +60,7 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
                 testId={test.id} 
                 testType={test.type} 
                 mode="practice" 
-                scope={isFullTest ? "full" : "section"} 
-                sectionId={!isFullTest ? test.sections[0]?.id : undefined}
+                scope="full"
                 className="w-full h-auto p-4 flex items-center gap-4 text-left bg-card hover:bg-muted/50 border border-border/60 hover:border-primary/40 rounded-xl transition-all shadow-none group"
                 label={
                   <div className="flex items-center gap-4 w-full">
@@ -105,9 +104,9 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
             )}
 
             {!isFullTest && (
-               <div className="p-3 rounded-lg bg-primary/5 border border-primary/10 text-center">
-                  <p className="text-[10px] font-medium text-primary/80 uppercase tracking-widest mb-1">Passage Practice</p>
-                  <p className="text-[11px] text-muted-foreground">Focusing on Part 1 of this {test.type} test.</p>
+               <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
+                  <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-1">Passage Practice</p>
+                  <p className="text-[11px] text-muted-foreground">This non-full test starts directly in Practice mode.</p>
                </div>
             )}
 

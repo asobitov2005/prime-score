@@ -103,6 +103,7 @@ async def start_test(
                 scope=payload.scope,
                 section_id=payload.section_id,
                 mode=payload.mode,
+                force_new=payload.force_new,
             )
         except Exception:
             try:

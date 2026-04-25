@@ -49,7 +49,12 @@ export function TestStartPage({ test }: TestStartPageProps) {
       }
 
       const result = (await response.json()) as { attemptId: string };
-      router.push(`/attempts/${result.attemptId}/${destination}`);
+      const resumeToken = Date.now();
+      if (test.type === "reading") {
+        router.push(`/exam-preview/reading?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`);
+        return;
+      }
+      router.push(`/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`);
     } finally {
       setIsSubmitting(false);
     }

@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 // Make sure to match the type that is actually passed
@@ -18,6 +15,20 @@ export function QuestionRenderer({ question, compact = false, value = "", onValu
 
   const typeIdStr = question.question_type || question.typeId || "";
   const sharedOptions = question.options || question.sharedOptions || [];
+  const selectedMultipleValues = value
+    .split(",")
+    .map((item: string) => item.trim())
+    .filter(Boolean);
+  const selectionLimit = question.selectionLimit ?? 2;
+  const toggleMultipleChoiceValue = (letter: string) => {
+    if (selectedMultipleValues.includes(letter)) {
+      return selectedMultipleValues.filter((item: string) => item !== letter).join(",");
+    }
+    if (selectedMultipleValues.length >= selectionLimit) {
+      return selectedMultipleValues.join(",");
+    }
+    return [...selectedMultipleValues, letter].join(",");
+  };
 
   if (isMatching && sharedOptions.length > 0) {
     return (
@@ -59,6 +70,42 @@ export function QuestionRenderer({ question, compact = false, value = "", onValu
             </option>
           ))}
         </select>
+      </div>
+    );
+  }
+
+  if (isMultipleChoiceMultiple) {
+    const variants = question.options && question.options.length > 0 && !question.options[0].match(/^[ivx]+\./i) ? question.options : (question.variants && question.variants.length > 0 ? question.variants : ["A", "B", "C", "D", "E"]);
+    return (
+      <div className="space-y-4">
+        {question.prompt && <p className="font-serif font-medium text-foreground text-[15px] leading-relaxed">{question.prompt}</p>}
+        <div className="space-y-2.5">
+          {variants.map((variant: string, i: number) => {
+            const letter = String.fromCharCode(65 + i);
+            const checked = selectedMultipleValues.includes(letter);
+            return (
+              <button
+                key={letter}
+                type="button"
+                className={cn(
+                  "flex w-full items-start space-x-3 rounded-xl border p-4 text-left transition-colors",
+                  checked ? "border-primary/40 bg-primary/10" : "border-border/50 bg-background/50 hover:bg-muted/50"
+                )}
+                onClick={() => onValueChange(toggleMultipleChoiceValue(letter))}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  readOnly
+                  className="mt-0.5 h-4 w-4 rounded border-primary text-primary accent-current"
+                />
+                <span className="font-serif text-[15px] leading-relaxed cursor-pointer font-normal flex-1">
+                  <span className="font-bold mr-2 text-foreground">{letter}.</span> {variant}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   }

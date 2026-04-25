@@ -19,6 +19,7 @@ interface ReadingAttemptWorkspaceProps {
   passage: ReadingPassage;
   sections: TestSectionSummary[];
   meta: AttemptWorkspaceMeta;
+  initialAnswers?: Record<string, string>;
 }
 
 interface ListeningAttemptWorkspaceProps {
@@ -29,17 +30,23 @@ interface ListeningAttemptWorkspaceProps {
   part: ListeningPart;
   sections: TestSectionSummary[];
   meta: AttemptWorkspaceMeta;
+  initialAnswers?: Record<string, string>;
 }
 
-export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, passage, sections, meta }: ReadingAttemptWorkspaceProps) {
+export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, passage, sections, meta, initialAnswers }: ReadingAttemptWorkspaceProps) {
   const router = useRouter();
   const { activeAttemptTab, setActiveAttemptTab } = useUIStore();
   const visibleTab = activeAttemptTab === "transcript" ? "passage" : activeAttemptTab;
   const [currentQuestionId, setCurrentQuestionId] = useState(passage.questions[0]?.id ?? "");
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>(() => ({ ...(initialAnswers ?? {}) }));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState(meta.timeLimitSeconds);
+  const initialAnswersKey = JSON.stringify(initialAnswers ?? {});
+
+  useEffect(() => {
+    setAnswers({ ...(initialAnswers ?? {}) });
+  }, [attemptId, initialAnswers, initialAnswersKey]);
 
   // Full Screen & Anti-cheat Logic
   useEffect(() => {
@@ -55,17 +62,8 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
       }
     };
 
-    const handleAutoSubmit = async (reason: string) => {
-      if (isSubmitting) return;
-      console.warn(`Auto-submitting due to: ${reason}`);
-      setIsSubmitting(true);
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" });
-        if (document.fullscreenElement) await document.exitFullscreen();
-        router.push(`/attempts/${attemptId}/result?reason=${reason}`);
-      } catch (err) {
-        setIsSubmitting(false);
-      }
+    const handleAutoSubmit = (reason: string) => {
+      console.warn(`Exam integrity event: ${reason}`);
     };
 
     const handleVisibilityChange = () => {
@@ -110,7 +108,11 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" })
+      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirm: true, reason: "time_up" }),
+        })
         .then(() => {
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
@@ -168,7 +170,11 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
               onClick={async () => {
                 try {
                   setIsSubmitting(true);
-                  await fetch(`/api/attempts/${attemptId}/submit`, { method: "POST" });
+                  await fetch(`/api/attempts/${attemptId}/submit`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),
+                  });
                   router.push(`/attempts/${attemptId}/result`);
                 } finally {
                   setIsSubmitting(false);
@@ -236,7 +242,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
                   }}
                   className={`rounded-full px-3 py-1 text-sm font-bold transition-all shadow-sm ${answers[question.id] ? "ring-2 ring-primary/50" : ""} ${currentQuestionId === question.id ? "bg-primary text-primary-foreground scale-110" : "bg-muted text-foreground hover:bg-muted/80"}`}
                 >
-                  {question.number}
+                  {question.label ?? question.number}
                 </button>
               ))}
           </div>
@@ -317,15 +323,21 @@ export function ListeningAttemptWorkspace({
   scope,
   part,
   sections,
-  meta
+  meta,
+  initialAnswers
 }: ListeningAttemptWorkspaceProps) {
   const router = useRouter();
   const { activeAttemptTab, setActiveAttemptTab } = useUIStore();
   const [activeSegment, setActiveSegment] = useState(part.segments[0]?.id ?? "");
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>(() => ({ ...(initialAnswers ?? {}) }));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState(meta.timeLimitSeconds);
+  const initialAnswersKey = JSON.stringify(initialAnswers ?? {});
+
+  useEffect(() => {
+    setAnswers({ ...(initialAnswers ?? {}) });
+  }, [attemptId, initialAnswers, initialAnswersKey]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -345,16 +357,8 @@ export function ListeningAttemptWorkspace({
       }
     };
 
-    const handleAutoSubmit = async (reason: string) => {
-      if (isSubmitting) return;
-      setIsSubmitting(true);
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" });
-        if (document.fullscreenElement) await document.exitFullscreen();
-        router.push(`/attempts/${attemptId}/result?reason=${reason}`);
-      } catch (err) {
-        setIsSubmitting(false);
-      }
+    const handleAutoSubmit = (reason: string) => {
+      console.warn(`Exam integrity event: ${reason}`);
     };
 
     const handleVisibilityChange = () => {
@@ -381,11 +385,28 @@ export function ListeningAttemptWorkspace({
 
   useEffect(() => {
     if (mode !== "exam" || meta.timeLimitSeconds <= 0) return;
-...
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [mode, meta.timeLimitSeconds]);
+
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, { method: "POST" })
+      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirm: true, reason: "time_up" }),
+        })
         .then(() => {
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
@@ -476,7 +497,11 @@ export function ListeningAttemptWorkspace({
               onClick={async () => {
                 try {
                   setIsSubmitting(true);
-                  await fetch(`/api/attempts/${attemptId}/submit`, { method: "POST" });
+                  await fetch(`/api/attempts/${attemptId}/submit`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),
+                  });
                   router.push(`/attempts/${attemptId}/result`);
                 } finally {
                   setIsSubmitting(false);

@@ -9,8 +9,13 @@ export async function POST(request: Request) {
       scope: "full" | "section";
       sectionId?: string;
       mode: "practice" | "exam";
+      forceNew?: boolean;
+      force_new?: boolean;
     };
-    const result = await startBackendAttempt(payload);
+    const result = await startBackendAttempt({
+      ...payload,
+      forceNew: payload.forceNew ?? payload.force_new ?? false,
+    });
     return NextResponse.json(result);
   } catch {
     return NextResponse.json({ message: "Attempt start failed." }, { status: 500 });

@@ -43,13 +43,16 @@ type BackendMeAttempt = {
   test_id: string;
   test_title: string;
   test_type: TestType;
+  test_format?: "full" | "passage_1" | "passage_2" | "passage_3" | "part_1" | "part_2" | "part_3" | "part_4" | null;
   mode: "practice" | "exam";
   status: "draft" | "in_progress" | "completed" | "archived" | "auto_submitted";
   source?: string | null;
   raw_score?: number | null;
-  band_score?: number | null;
+  band_score?: number | string | null;
+  total_questions?: number | null;
   time_spent_sec?: number | null;
   started_at: string;
+  completed_at?: string | null;
   updated_at?: string | null;
 };
 
@@ -163,6 +166,15 @@ function formatAttemptDuration(totalSeconds: number | null | undefined): string 
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatBandScore(value: number | string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue.toFixed(1) : null;
+}
+
 function normalizeAttemptSource(source: string | null | undefined, title: string): string {
   const normalized = `${source ?? ""} ${title}`.toLowerCase();
   if (normalized.includes("cambridge")) {
@@ -172,6 +184,34 @@ function normalizeAttemptSource(source: string | null | undefined, title: string
     return "Real Exam Material";
   }
   return "Custom Practice";
+}
+
+function isSubmittedBackendAttempt(attempt: BackendMeAttempt): boolean {
+  return attempt.status === "completed" || attempt.status === "auto_submitted";
+}
+
+function mapBackendAttempt(attempt: BackendMeAttempt): AttemptRow {
+  const isSubmitted = isSubmittedBackendAttempt(attempt);
+  return {
+    id: attempt.attempt_id,
+    testId: attempt.test_id,
+    testTitle: attempt.test_title,
+    type: attempt.test_type,
+    testFormat: attempt.test_format ?? "full",
+    source: normalizeAttemptSource(attempt.source, attempt.test_title),
+    mode: attempt.mode,
+    date: formatDate(attempt.started_at),
+    lastSavedAt: formatDateTime(
+      isSubmitted
+        ? attempt.completed_at ?? attempt.updated_at ?? attempt.started_at
+        : attempt.updated_at ?? attempt.started_at
+    ),
+    score: attempt.raw_score !== null && attempt.raw_score !== undefined ? String(attempt.raw_score) : "Pending",
+    band: formatBandScore(attempt.band_score),
+    totalQuestions: attempt.total_questions ?? null,
+    timeSpent: formatAttemptDuration(attempt.time_spent_sec),
+    status: attempt.status === "auto_submitted" ? "submitted" : attempt.status === "completed" ? "completed" : "in_progress"
+  };
 }
 
 function mapQuestionTypeAnalysis(
@@ -325,21 +365,29 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
 export async function getUserAttempts(): Promise<AttemptRow[]> {
   try {
     const attempts = await requestBackend<BackendMeAttempt[]>("/me/attempts");
-    return attempts.map((attempt) => ({
-      id: attempt.attempt_id,
-      testId: attempt.test_id,
-      testTitle: attempt.test_title,
-      type: attempt.test_type,
-      source: normalizeAttemptSource(attempt.source, attempt.test_title),
-      mode: attempt.mode,
-      date: formatDate(attempt.started_at),
-      lastSavedAt: formatDateTime(attempt.updated_at ?? attempt.started_at),
-      score: attempt.raw_score !== null && attempt.raw_score !== undefined ? `${attempt.raw_score}` : "Pending",
-      band: attempt.band_score !== null && attempt.band_score !== undefined ? attempt.band_score.toFixed(1) : null,
-      timeSpent: formatAttemptDuration(attempt.time_spent_sec),
-      status: attempt.status === "auto_submitted" ? "submitted" : attempt.status === "completed" ? "completed" : "in_progress"
-    }));
+    const activeTestIds = new Set<string>();
+    return attempts
+      .filter((attempt) => {
+        if (isSubmittedBackendAttempt(attempt)) {
+          return true;
+        }
+        if (attempt.status !== "in_progress" || activeTestIds.has(attempt.test_id)) {
+          return false;
+        }
+        activeTestIds.add(attempt.test_id);
+        return true;
+      })
+      .map(mapBackendAttempt);
   } catch {
     return getAttemptsByType();
+  }
+}
+
+export async function getSubmittedAttempts(): Promise<AttemptRow[]> {
+  try {
+    const attempts = await requestBackend<BackendMeAttempt[]>("/me/attempts");
+    return attempts.filter(isSubmittedBackendAttempt).map(mapBackendAttempt);
+  } catch {
+    return getAttemptsByType().filter((attempt) => attempt.status === "completed" || attempt.status === "submitted");
   }
 }

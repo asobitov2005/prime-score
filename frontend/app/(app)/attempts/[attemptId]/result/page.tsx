@@ -45,7 +45,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
 
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard label="Raw score" value={result.raw_score !== null && result.raw_score !== undefined ? String(result.raw_score) : "Pending"} detail="Strict normalized scoring" />
-        <MetricCard label="Band score" value={result.band_score !== null && result.band_score !== undefined ? result.band_score.toFixed(1) : "N/A"} detail="Full attempts only" />
+        <MetricCard label="Band score" value={formatBandScore(result.band_score)} detail="Full attempts only" />
         <MetricCard label="Completed at" value={result.completed_at ? new Date(result.completed_at).toLocaleString("en-GB") : "In progress"} detail="Frozen attempt snapshot" />
       </div>
 
@@ -63,6 +63,15 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
       </div>
     </div>
   );
+}
+
+function formatBandScore(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "N/A";
+  }
+
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue.toFixed(1) : "N/A";
 }
 
 function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Badge, Card, CardContent, CardHeader, CardTitle, SectionHeader, buttonClassName, formatDate } from "@/components/ui";
@@ -31,10 +31,24 @@ function badgeToneForStatus(status: string): "neutral" | "success" | "warning" |
 
 const API_BASE = ADMIN_PUBLIC_API_BASE_URL;
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${day}.${month}.${year} ${hours}:${minutes}`;
+}
+
 /* ── Icons ── */
 const IconGlobe = () => <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>;
 const IconCrown = () => <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path d="M2 20h20M5 17l-1-10 5 4 3-6 3 6 5-4-1 10z"/></svg>;
 const IconArchive = () => <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>;
+const IconTrash = () => <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path d="M3 6h18M8 6V4h8v2m-7 4v7m6-7v7M6 6l1 14h10l1-14"/></svg>;
 const IconChevron = ({ open }: { open: boolean }) => <svg className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>;
 const IconX = () => <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>;
 const IconSearch = () => <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>;
@@ -109,6 +123,8 @@ export default function TestsPage() {
   const [bulkMsg, setBulkMsg] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   const [formatFilter, setFormatFilter] = useState("all");
@@ -163,10 +179,33 @@ export default function TestsPage() {
     return true;
   });
 
-  const allSelected = filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
+  const sortedFiltered = useMemo(() => {
+    const statusOrder: Record<string, number> = {
+      draft: 0,
+      published: 1,
+      archived: 2,
+    };
+
+    return [...filtered].sort((left, right) => {
+      const statusDiff = (statusOrder[left.status] ?? 99) - (statusOrder[right.status] ?? 99);
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      const rightUpdated = new Date(right.updatedAt).getTime();
+      const leftUpdated = new Date(left.updatedAt).getTime();
+      if (rightUpdated !== leftUpdated) {
+        return rightUpdated - leftUpdated;
+      }
+
+      return right.title.localeCompare(left.title);
+    });
+  }, [filtered]);
+
+  const allSelected = sortedFiltered.length > 0 && sortedFiltered.every((t) => selectedIds.has(t.id));
   const toggleAll = () => {
     if (allSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filtered.map((t) => t.id)));
+    else setSelectedIds(new Set(sortedFiltered.map((t) => t.id)));
   };
   const toggle = (id: string) => {
     setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -181,6 +220,49 @@ export default function TestsPage() {
 
   const ids = Array.from(selectedIds);
   const noneSelected = selectedIds.size === 0;
+  const selectedDraftIds = ids.filter((id) => tests.find((test) => test.id === id)?.status === "draft");
+
+  const deleteDraft = async (testId: string) => {
+    setDeleteLoadingId(testId);
+    setBulkMsg("");
+    try {
+      const result = await adminApi.deleteDraft(testId);
+      setBulkMsg(result.message);
+      setDeleteConfirmId(null);
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(testId);
+        return next;
+      });
+      await fetchTests();
+    } catch {
+      setBulkMsg("Draft delete failed.");
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
+
+  const deleteSelectedDrafts = async () => {
+    if (selectedDraftIds.length === 0) {
+      setBulkMsg("Only draft tests can be deleted.");
+      setActionsOpen(false);
+      return;
+    }
+
+    setBulkLoading(true);
+    setBulkMsg("");
+    setActionsOpen(false);
+    try {
+      await Promise.all(selectedDraftIds.map((testId) => adminApi.deleteDraft(testId)));
+      setBulkMsg(`${selectedDraftIds.length} draft deleted.`);
+      setSelectedIds(new Set());
+      await fetchTests();
+    } catch {
+      setBulkMsg("Draft delete failed.");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -225,6 +307,9 @@ export default function TestsPage() {
                 </button>
                 <button onClick={() => doBulk(() => adminApi.bulkPublish(ids, "archived"))} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30 text-red-500">
                   <IconArchive /> Archive
+                </button>
+                <button onClick={() => void deleteSelectedDrafts()} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30 text-red-600">
+                  <IconTrash /> Delete drafts
                 </button>
               </div>
             )}
@@ -280,7 +365,7 @@ export default function TestsPage() {
           )}
 
           <div className="ml-auto">
-            <Badge tone="neutral">{filtered.length} tests</Badge>
+            <Badge tone="neutral">{sortedFiltered.length} tests</Badge>
           </div>
         </div>
       </div>
@@ -310,10 +395,10 @@ export default function TestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {sortedFiltered.length === 0 ? (
                   <tr><td className="px-3 py-10 text-center text-sm text-muted-foreground" colSpan={7}>No tests found.</td></tr>
                 ) : null}
-                {filtered.map((row) => (
+                {sortedFiltered.map((row) => (
                   <tr key={row.id} className={cn("align-top transition-colors", selectedIds.has(row.id) ? "bg-primary/5" : "hover:bg-muted/30")}>
                     <td className="border-b border-border/50 px-4 py-4">
                       <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggle(row.id)} className="accent-primary h-4 w-4 rounded cursor-pointer" />
@@ -335,11 +420,58 @@ export default function TestsPage() {
                     <td className="border-b border-border/50 px-3 py-4">
                       <Badge tone={badgeToneForStatus(row.status)} className="text-[10px] uppercase font-black tracking-widest">{row.status}</Badge>
                     </td>
-                    <td className="border-b border-border/50 px-3 py-4 text-[11px] font-bold text-muted-foreground uppercase">{formatDate(row.updatedAt)}</td>
+                    <td className="border-b border-border/50 px-3 py-4 text-[11px] font-bold text-muted-foreground">{formatDateTime(row.updatedAt)}</td>
                     <td className="border-b border-border/50 px-3 py-4">
-                      <div className="flex justify-end gap-2">
-                        <Link href={`/tests/${row.id}/edit`} className={buttonClassName({ variant: "outline", size: "sm" })}>Edit</Link>
-                        <a href={`http://localhost:3100/tests/${row.id}`} target="_blank" rel="noreferrer" className={buttonClassName({ variant: "ghost", size: "sm" })}>Preview</a>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex justify-end gap-2">
+                          <Link href={`/tests/${row.id}/edit`} className={buttonClassName({ variant: "outline", size: "sm" })}>
+                            {row.status === "published" ? "Edit Published" : "Edit"}
+                          </Link>
+                          <a href={`http://localhost:3100/tests/${row.id}`} target="_blank" rel="noreferrer" className={buttonClassName({ variant: "ghost", size: "sm" })}>Preview</a>
+                          {row.status === "draft" ? (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmId((current) => current === row.id ? null : row.id)}
+                              className={cn(
+                                buttonClassName({ variant: "ghost", size: "sm" }),
+                                "text-red-600 hover:bg-red-500/10 hover:text-red-600"
+                              )}
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <IconTrash />
+                                Delete
+                              </span>
+                            </button>
+                          ) : null}
+                        </div>
+                        {deleteConfirmId === row.id ? (
+                          <div className="w-[240px] rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-left">
+                            <p className="text-sm font-semibold text-foreground">Delete this draft?</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              This will permanently remove the draft test and its question groups.
+                            </p>
+                            <div className="mt-3 flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirmId(null)}
+                                className={buttonClassName({ variant: "ghost", size: "sm" })}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deleteDraft(row.id)}
+                                disabled={deleteLoadingId === row.id}
+                                className={cn(
+                                  buttonClassName({ variant: "danger", size: "sm" }),
+                                  "disabled:opacity-60"
+                                )}
+                              >
+                                {deleteLoadingId === row.id ? "Deleting..." : "Delete Draft"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

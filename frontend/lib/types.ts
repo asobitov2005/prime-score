@@ -76,12 +76,14 @@ export interface TestQuestionOption {
 export interface TestQuestion {
   id: string;
   number: number;
+  label?: string;
   type: QuestionType;
   prompt: string;
   instructions?: string;
   options?: TestQuestionOption[];
   wordBank?: string[];
   answerSlots?: number;
+  selectionLimit?: number;
   sectionId?: string;
   sectionTitle?: string;
   groupId?: string;
@@ -209,14 +211,26 @@ export interface AttemptRow {
   testId: string;
   testTitle: string;
   type: TestType;
+  testFormat: TestCatalogItem["format"];
   source: string;
   mode: AttemptMode;
   date: string;
   lastSavedAt: string;
   score: string;
   band: string | null;
+  totalQuestions: number | null;
   timeSpent: string;
   status: "completed" | "in_progress" | "submitted";
+}
+
+export interface TestCardAttemptSummary {
+  id: string;
+  mode: AttemptMode;
+  status: AttemptRow["status"];
+  score: string;
+  band: string | null;
+  totalQuestions: number | null;
+  lastSavedAt: string;
 }
 
 export interface LeaderboardEntry {

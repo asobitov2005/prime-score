@@ -83,7 +83,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
       method: "PATCH",
       body: JSON.stringify(body)
     }),
-    submitAttempt: (attemptId: string) => request<{ ok: true }>(`/attempts/${attemptId}/submit`, { method: "POST" }),
+    submitAttempt: (attemptId: string) => request<{ ok: true }>(`/attempts/${attemptId}/submit`, { method: "POST", body: JSON.stringify({ confirm: true, reason: "user_confirmed" }) }),
     getAttemptResult: (attemptId: string) => request<unknown>(`/attempts/${attemptId}/result`),
     getAttemptReview: (attemptId: string) => request<unknown>(`/attempts/${attemptId}/review`),
     getDashboardStats: () => request<unknown>("/me/stats"),

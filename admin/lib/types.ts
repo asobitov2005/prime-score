@@ -149,9 +149,11 @@ export interface AdminTestDraftMetadata {
   type: TestType;
   format: TestFormat;
   source: "cambridge" | "real_exam" | "custom";
+  sourceDetail: string;
   accessType: TestAccessType;
   status: TestStatus;
   version: number;
+  timeLimitLabel: string;
 }
 
 export interface AdminTestDraftContentSection {
@@ -184,6 +186,7 @@ export interface AdminTestDraftQuestionGroup {
   questionStart: number;
   questionEnd: number;
   sharedOptions: string[];
+  rawContent?: string;
   // Block-based input fields
   questionBlock?: string;
   answerBlock?: string;

@@ -405,12 +405,12 @@ async def get_attempts(
     attempts = await _load_attempts(current_user, session)
     test_ids = {attempt.test_id for attempt in attempts}
     source_by_test_id: dict[UUID, str] = {}
+    format_by_test_id: dict[UUID, str] = {}
     if test_ids:
-        rows = await session.execute(select(Test.id, Test.source).where(Test.id.in_(test_ids)))
-        source_by_test_id = {
-            test_id: str(source.value if hasattr(source, "value") else source)
-            for test_id, source in rows.all()
-        }
+        rows = await session.execute(select(Test.id, Test.source, Test.format).where(Test.id.in_(test_ids)))
+        for test_id, source, test_format in rows.all():
+            source_by_test_id[test_id] = str(source.value if hasattr(source, "value") else source)
+            format_by_test_id[test_id] = str(test_format.value if hasattr(test_format, "value") else test_format)
     items: list[MeAttemptSummaryRead] = []
     for attempt in attempts:
         snapshot = attempt.test_snapshot
@@ -423,14 +423,17 @@ async def get_attempts(
                 test_id=attempt.test_id,
                 test_title=str(snapshot.get("title", "Untitled")),
                 test_type=snapshot.get("test_type"),
+                test_format=str(snapshot.get("format") or format_by_test_id.get(attempt.test_id) or "full"),
                 mode=attempt.mode,
                 status=attempt.status,
                 access_type=snapshot.get("access_type"),
                 source=snapshot_source or source_by_test_id.get(attempt.test_id),
                 raw_score=attempt.raw_score,
                 band_score=attempt.band_score,
+                total_questions=max(0, int(getattr(attempt, "total_questions", 0) or 0)),
                 time_spent_sec=max(0, int(getattr(attempt, "time_spent_sec", 0) or 0)),
                 started_at=attempt.started_at,
+                completed_at=getattr(attempt, "completed_at", None),
                 updated_at=getattr(attempt, "updated_at", None) or attempt.started_at,
             )
         )

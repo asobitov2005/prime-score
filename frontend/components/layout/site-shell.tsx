@@ -51,11 +51,7 @@ export function SiteShell({ children }: SiteShellProps) {
   const router = useRouter();
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
   const unreadCount = notifications.filter(n => !n.is_read).length;
-
-  // Admin and exam preview routes do not use the regular site chrome.
-  if (currentPath.startsWith("/admin") || currentPath.startsWith("/exam-preview/")) {
-    return <>{children}</>;
-  }
+  const hideSiteChrome = currentPath.startsWith("/admin") || currentPath.startsWith("/exam-preview/");
 
   const debugHeaders: Record<string, string> = {
     "X-Debug-User-Id": userId ?? "",
@@ -167,6 +163,10 @@ export function SiteShell({ children }: SiteShellProps) {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
+
+  if (hideSiteChrome) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative">

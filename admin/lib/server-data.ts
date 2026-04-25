@@ -12,6 +12,7 @@ import type {
   AdminTestDraftState,
   AdminTestSummary,
   AdminUserSummary,
+  TestFormat,
   TestType
 } from "@/lib/types";
 
@@ -25,7 +26,7 @@ type BackendAdminTest = {
   id: string;
   title: string;
   test_type: TestType;
-  format: "full" | "part";
+  format: TestFormat;
   source: "cambridge" | "real_exam" | "custom";
   source_detail: string;
   access_type: "public" | "premium";
@@ -39,7 +40,7 @@ type BackendAdminDraft = {
   metadata: {
     title: string;
     type: TestType;
-    format: "full" | "part";
+    format: TestFormat;
     source: "cambridge" | "real_exam" | "custom";
     source_detail: string;
     status: "draft" | "published" | "archived";
@@ -69,6 +70,9 @@ type BackendAdminDraft = {
     question_start: number;
     question_end: number;
     shared_options: string[];
+    question_block?: string;
+    answer_block?: string;
+    secondary_block?: string;
     raw_content?: string;
     questions: Array<{
       id: string;
@@ -215,6 +219,9 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
       questionStart: group.question_start,
       questionEnd: group.question_end,
       sharedOptions: group.shared_options,
+      questionBlock: group.question_block,
+      answerBlock: group.answer_block,
+      secondaryBlock: group.secondary_block,
       rawContent: group.raw_content,
       questions: group.questions.map(q => ({
         id: q.id,
@@ -260,12 +267,8 @@ export async function getAdminTestDraft(testId?: string, type: TestType = "readi
     return createEmptyDraft(type);
   }
 
-  try {
-    const draft = await requestAdmin<BackendAdminDraft>(`/tests/${testId}/draft`);
-    return mapAdminDraft(draft);
-  } catch {
-    return createEmptyDraft(type);
-  }
+  const draft = await requestAdmin<BackendAdminDraft>(`/tests/${testId}/draft`);
+  return mapAdminDraft(draft);
 }
 
 type BackendDashboard = {

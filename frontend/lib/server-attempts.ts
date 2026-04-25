@@ -17,11 +17,24 @@ const debugHeaders: Record<string, string> = {
   "X-Debug-Show-On-Leaderboard": "true"
 };
 
+export type BackendAttemptTextHighlight = {
+  id: string;
+  start: number;
+  end: number;
+};
+
+export type BackendAttemptUiState = {
+  theme?: "light" | "dark" | null;
+  split_ratio?: number | null;
+  font_scale?: number | null;
+};
+
 type StartAttemptPayload = {
   testId: string;
   scope: TestScope;
   sectionId?: string;
   mode: AttemptMode;
+  forceNew?: boolean;
 };
 
 type BackendStartAttemptResponse = {
@@ -29,7 +42,7 @@ type BackendStartAttemptResponse = {
   time_limit_seconds: number;
 };
 
-type BackendAttemptSnapshot = {
+export type BackendAttemptSnapshot = {
   test_id: string;
   title: string;
   test_type: TestType;
@@ -44,6 +57,12 @@ type BackendAttemptSnapshot = {
     title?: string | null;
     subtitle?: string | null;
     content?: string | null;
+    paragraphs?: Array<string | {
+      id?: string;
+      text?: string;
+      label?: string;
+    }>;
+    show_labels?: boolean;
     question_count: number;
     question_groups?: Array<{
       group_id: string;
@@ -51,6 +70,12 @@ type BackendAttemptSnapshot = {
       question_type: QuestionType;
       question_start: number;
       question_end: number;
+      shared_options?: string[];
+      shared_content?: {
+        question_block?: string;
+        answer_block?: string;
+        secondary_block?: string;
+      };
       questions: Array<{
         question_id: string;
         question_number: number;
@@ -61,14 +86,16 @@ type BackendAttemptSnapshot = {
         question_type: QuestionType;
         prompt: string;
         instructions: string;
+        label?: string | null;
         options: string[];
+        selection_limit?: number | null;
         word_limit?: number | null;
       }>;
     }>;
   }>;
 };
 
-type BackendAttemptRead = {
+export type BackendAttemptRead = {
   attempt_id: string;
   test_id: string;
   test_title: string;
@@ -77,6 +104,11 @@ type BackendAttemptRead = {
   section_id?: string | null;
   mode: AttemptMode;
   time_limit_seconds: number;
+  time_spent_sec?: number;
+  answers?: Record<string, string>;
+  active_question_id?: string | null;
+  text_highlights?: Record<string, BackendAttemptTextHighlight[]>;
+  ui_state?: BackendAttemptUiState | null;
   test_snapshot?: BackendAttemptSnapshot | null;
 };
 
@@ -87,7 +119,7 @@ export type BackendAttemptResult = {
   test_type: TestType;
   test_title?: string | null;
   raw_score?: number | null;
-  band_score?: number | null;
+  band_score?: number | string | null;
   answers_count: number;
   total_questions: number;
   score_status: string;
@@ -149,7 +181,8 @@ export async function startBackendAttempt(payload: StartAttemptPayload): Promise
     body: JSON.stringify({
       scope: payload.scope,
       section_id: payload.sectionId,
-      mode: payload.mode
+      mode: payload.mode,
+      force_new: payload.forceNew ?? false
     })
   });
 
@@ -185,8 +218,35 @@ export async function saveBackendAttemptAnswer(
   });
 }
 
-export async function submitBackendAttempt(attemptId: string): Promise<void> {
+export async function saveBackendAttemptProgress(
+  attemptId: string,
+  payload: {
+    timeSpentSec?: number;
+    activeQuestionId?: string;
+    textHighlights?: Record<string, BackendAttemptTextHighlight[]>;
+    uiState?: { theme?: "light" | "dark"; splitRatio?: number; fontScale?: number };
+  }
+): Promise<void> {
+  await requestBackend(`/attempts/${attemptId}/progress`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      time_spent_sec: payload.timeSpentSec,
+      active_question_id: payload.activeQuestionId,
+      text_highlights: payload.textHighlights,
+      ui_state: payload.uiState
+        ? {
+            theme: payload.uiState.theme,
+            split_ratio: payload.uiState.splitRatio,
+            font_scale: payload.uiState.fontScale,
+          }
+        : undefined,
+    })
+  });
+}
+
+export async function submitBackendAttempt(attemptId: string, reason: string = "user_confirmed"): Promise<void> {
   await requestBackend(`/attempts/${attemptId}/submit`, {
-    method: "POST"
+    method: "POST",
+    body: JSON.stringify({ confirm: true, reason })
   });
 }

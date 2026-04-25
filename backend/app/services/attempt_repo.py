@@ -35,7 +35,10 @@ def _principal_telegram_id(principal: DebugPrincipal) -> int:
 
 
 def _attempt_query() -> Select[tuple[Attempt]]:
-    return select(Attempt).order_by(Attempt.created_at.desc())
+    return select(Attempt).order_by(
+        func.coalesce(Attempt.submitted_at, Attempt.updated_at, Attempt.created_at).desc(),
+        Attempt.created_at.desc(),
+    )
 
 
 def _snapshot_questions(snapshot: dict[str, object]) -> dict[str, dict[str, object]]:
@@ -114,12 +117,19 @@ def _to_runtime(
         for item in snapshot.get("questions", [])
     }
 
+    latest_answers: dict[str, UserAnswer] = {}
     for answer in answers:
+        question_key = str(answer.question_id)
+        previous = latest_answers.get(question_key)
+        if previous is None or answer.updated_at > previous.updated_at:
+            latest_answers[question_key] = answer
+
+    for question_id, answer in latest_answers.items():
         value = answer.value.get("value")
-        answer_map[str(answer.question_id)] = "" if value is None else str(value)
-        question = questions_by_id.get(str(answer.question_id))
+        answer_map[question_id] = "" if value is None else str(value)
+        question = questions_by_id.get(question_id)
         if question is not None:
-            answer_numbers[str(answer.question_id)] = int(question["question_number"])
+            answer_numbers[question_id] = int(question["question_number"])
 
     return AttemptRuntime(
         attempt_id=attempt.id,
@@ -132,6 +142,7 @@ def _to_runtime(
         status=AttemptStatus(attempt.status.value),
         started_at=attempt.created_at,
         completed_at=attempt.submitted_at,
+        updated_at=attempt.updated_at or attempt.created_at,
         time_spent_sec=int(metadata.get("time_spent_sec", 0)),
         raw_score=attempt.raw_score,
         total_questions=int(snapshot.get("total_questions", attempt.max_score or 0)),
@@ -153,6 +164,53 @@ async def _load_answers(session: AsyncSession, attempt_id: UUID) -> list[UserAns
     return list(result.all())
 
 
+async def _load_existing_in_progress_attempt(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    test_id: UUID,
+    scope: TestScope,
+    section_id: UUID | None,
+    mode: TestMode,
+) -> AttemptRuntime | None:
+    query = _attempt_query().where(
+        Attempt.user_id == user_id,
+        Attempt.test_id == test_id,
+        Attempt.scope == ModelAttemptScope(scope.value),
+        Attempt.mode == ModelAttemptMode(mode.value),
+        Attempt.status == ModelAttemptStatus.IN_PROGRESS,
+    )
+    if section_id is None:
+        query = query.where(Attempt.section_id.is_(None))
+    else:
+        query = query.where(Attempt.section_id == section_id)
+
+    attempts = list((await session.scalars(query)).all())
+    if not attempts:
+        return None
+
+    best_runtime: AttemptRuntime | None = None
+    best_score: tuple[int, float, float] | None = None
+    for attempt in attempts:
+        answers = await _load_answers(session, attempt.id)
+        runtime = _to_runtime(attempt, answers=answers)
+        highlights_count = sum(
+            len(items)
+            for items in dict(runtime.metadata.get("text_highlights") or {}).values()
+            if isinstance(items, list)
+        )
+        has_answers_or_highlights = int(any(value.strip() for value in runtime.answers.values()) or bool(highlights_count))
+        has_time_progress = int(int(runtime.time_spent_sec or 0) > 0)
+        updated_ts = (attempt.updated_at or attempt.created_at).timestamp()
+        created_ts = attempt.created_at.timestamp()
+        progress_score = (has_answers_or_highlights, has_time_progress, updated_ts, created_ts)
+        if best_score is None or progress_score > best_score:
+            best_score = progress_score
+            best_runtime = runtime
+
+    return best_runtime
+
+
 async def start_attempt_in_db(
     session: AsyncSession,
     *,
@@ -161,8 +219,20 @@ async def start_attempt_in_db(
     scope: TestScope,
     section_id: UUID | None,
     mode: TestMode,
+    force_new: bool = False,
 ) -> AttemptRuntime:
     await ensure_debug_user(session, principal)
+    existing_attempt = None if force_new else await _load_existing_in_progress_attempt(
+        session,
+        user_id=principal.id,
+        test_id=test_id,
+        scope=scope,
+        section_id=section_id,
+        mode=mode,
+    )
+    if existing_attempt is not None:
+        return existing_attempt
+
     snapshot = await build_test_snapshot_from_db(
         session,
         test_id=test_id,
@@ -267,12 +337,19 @@ async def save_answer_in_db(
     if snapshot_question is None and get_question_fixture(attempt.test_id, question_id) is None:
         raise KeyError("question_not_found")
 
-    existing = await session.scalar(
-        select(UserAnswer).where(
-            UserAnswer.attempt_id == attempt_id,
-            UserAnswer.question_id == question_id,
-        )
+    existing_answers = list(
+        (
+            await session.scalars(
+                select(UserAnswer)
+                .where(
+                    UserAnswer.attempt_id == attempt_id,
+                    UserAnswer.question_id == question_id,
+                )
+                .order_by(UserAnswer.updated_at.desc(), UserAnswer.created_at.desc())
+            )
+        ).all()
     )
+    existing = existing_answers[0] if existing_answers else None
     if existing is None:
         existing = UserAnswer(
             attempt_id=attempt_id,
@@ -282,6 +359,8 @@ async def save_answer_in_db(
         session.add(existing)
     else:
         existing.value = {"value": value or ""}
+        for duplicate in existing_answers[1:]:
+            await session.delete(duplicate)
 
     question_number = int(snapshot_question["question_number"]) if snapshot_question is not None else int(get_question_fixture(attempt.test_id, question_id)["question_number"])
     await session.flush()
@@ -309,6 +388,91 @@ async def save_answer_in_db(
     await session.refresh(attempt)
     answers = await _load_answers(session, attempt_id)
     return _to_runtime(attempt, answers=answers), question_number
+
+
+async def save_progress_in_db(
+    session: AsyncSession,
+    *,
+    attempt_id: UUID,
+    time_spent_sec: int | None = None,
+    active_question_id: str | None = None,
+    text_highlights: dict[str, list[dict[str, object]]] | None = None,
+    ui_state: dict[str, object] | None = None,
+) -> AttemptRuntime:
+    attempt = await session.get(Attempt, attempt_id)
+    if attempt is None:
+        raise KeyError("attempt_not_found")
+
+    metadata = dict(attempt.attempt_metadata or {})
+
+    if time_spent_sec is not None:
+        normalized_time_spent = max(0, int(time_spent_sec))
+        if attempt.mode == ModelAttemptMode.EXAM and attempt.time_limit_seconds:
+            normalized_time_spent = min(normalized_time_spent, int(attempt.time_limit_seconds))
+        metadata["time_spent_sec"] = normalized_time_spent
+
+    if active_question_id is not None:
+        normalized_active_question_id = str(active_question_id).strip()
+        if normalized_active_question_id:
+            metadata["active_question_id"] = normalized_active_question_id
+        else:
+            metadata.pop("active_question_id", None)
+
+    if text_highlights is not None:
+        normalized_highlights: dict[str, list[dict[str, object]]] = {}
+        for block_key, items in text_highlights.items():
+            if not isinstance(block_key, str):
+                continue
+            normalized_items: list[dict[str, object]] = []
+            for item in items:
+                try:
+                    start = max(0, int(item.get("start", 0)))
+                    end = max(start, int(item.get("end", 0)))
+                except (TypeError, ValueError):
+                    continue
+                if end <= start:
+                    continue
+                item_id = str(item.get("id") or f"{block_key}-{start}-{end}")
+                normalized_items.append({"id": item_id, "start": start, "end": end})
+            normalized_highlights[block_key] = normalized_items
+        metadata["text_highlights"] = normalized_highlights
+
+    if ui_state is not None:
+        normalized_ui_state: dict[str, object] = {}
+        theme = ui_state.get("theme")
+        if isinstance(theme, str) and theme in {"light", "dark"}:
+            normalized_ui_state["theme"] = theme
+        split_ratio = ui_state.get("split_ratio")
+        if split_ratio is not None:
+            try:
+                normalized_ui_state["split_ratio"] = round(min(58, max(42, float(split_ratio))), 1)
+            except (TypeError, ValueError):
+                pass
+        font_scale = ui_state.get("font_scale")
+        if font_scale is not None:
+            try:
+                normalized_ui_state["font_scale"] = round(min(1.2, max(0.9, float(font_scale))), 2)
+            except (TypeError, ValueError):
+                pass
+        metadata["ui_state"] = normalized_ui_state
+
+    attempt.attempt_metadata = metadata
+    session.add(
+        AttemptEvent(
+            attempt_id=attempt_id,
+            event_type="progress_saved",
+            payload={
+                "time_spent_sec": metadata.get("time_spent_sec", 0),
+                "has_highlights": text_highlights is not None,
+                "has_ui_state": ui_state is not None,
+            },
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    await session.commit()
+    await session.refresh(attempt)
+    answers = await _load_answers(session, attempt_id)
+    return _to_runtime(attempt, answers=answers)
 
 
 async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> AttemptRuntime:

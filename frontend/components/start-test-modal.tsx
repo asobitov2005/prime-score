@@ -6,21 +6,26 @@ import { useRouter } from "next/navigation";
 import { Play, TimerReset, X, ArrowRight, Check, Crown, Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { TestCatalogItem } from "@/lib/types";
+import type { TestCardAttemptSummary, TestCatalogItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 
 interface StartTestModalProps {
   test: TestCatalogItem;
+  activeAttempt?: TestCardAttemptSummary;
+  completedAttempt?: TestCardAttemptSummary;
 }
 
-export function StartTestModal({ test }: StartTestModalProps) {
+export function StartTestModal({ test, activeAttempt, completedAttempt }: StartTestModalProps) {
   const router = useRouter();
-  const { isPremium, isAuthenticated } = useAuthStore();
+  const { isPremium } = useAuthStore();
+  const isFullTest = !test.format || test.format === "full";
   const [open, setOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const actionLabel = activeAttempt ? "Continue Test" : completedAttempt ? "Retake Test" : "Start Test";
+  const loadingLabel = activeAttempt ? "Opening..." : "Starting...";
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -33,9 +38,24 @@ export function StartTestModal({ test }: StartTestModalProps) {
     return () => { document.body.style.overflow = "unset"; };
   }, [open, showPremiumModal]);
 
+  function openAttempt(attempt: TestCardAttemptSummary) {
+    const resumeToken = Date.now();
+    setIsSubmitting(true);
+    setOpen(false);
+    if (test.type === "reading") {
+      router.push(`/exam-preview/reading?attemptId=${attempt.id}&mode=${attempt.mode}&resume=${resumeToken}`);
+      return;
+    }
+    router.push(`/attempts/${attempt.id}/${test.type}?resume=${resumeToken}`);
+  }
+
   function handleClick() {
     if (test.accessType === "premium" && !isPremium) {
       setShowPremiumModal(true);
+    } else if (activeAttempt) {
+      openAttempt(activeAttempt);
+    } else if (!isFullTest) {
+      void startTest("practice");
     } else {
       setOpen(true);
     }
@@ -43,23 +63,28 @@ export function StartTestModal({ test }: StartTestModalProps) {
 
   async function startTest(mode: "exam" | "practice") {
     const destination = test.type === "reading" ? "reading" : "listening";
-    const payload = { testId: test.id, scope: "full", mode };
-    if (test.id === "reading-cam18-t1") {
-      setOpen(false);
-      router.push(`/exam-preview/reading?mode=${mode}`);
-      return;
-    }
+    const payload = {
+      testId: test.id,
+      scope: "full",
+      mode,
+      forceNew: Boolean(completedAttempt && !activeAttempt),
+    };
     try {
       setIsSubmitting(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/start`, {
+      const response = await fetch("/api/attempts/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       if (!response.ok) throw new Error("Failed to start.");
-      const result = (await response.json()) as { attempt_id: string };
+      const result = (await response.json()) as { attemptId: string };
+      const resumeToken = Date.now();
       setOpen(false);
-      router.push(`/attempts/${result.attempt_id}/${destination}`);
+      if (test.type === "reading") {
+        router.push(`/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`);
+        return;
+      }
+      router.push(`/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -127,7 +152,7 @@ export function StartTestModal({ test }: StartTestModalProps) {
           <div className="space-y-3 pt-2">
             <Button
               onClick={() => { setShowPremiumModal(false); router.push("/pricing"); }}
-              className="w-full h-12 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5 border-0"
+              className="w-full h-12 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white dark:text-slate-950 shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5 border-0"
             >
               <Crown className="h-4 w-4 mr-2" />
               Get Premium
@@ -171,18 +196,8 @@ export function StartTestModal({ test }: StartTestModalProps) {
                 <span className="bg-muted/50 text-muted-foreground px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md border border-border/50">
                   Full Test
                 </span>
-                {test.id === "reading-cam18-t1" ? (
-                  <span className="bg-primary/10 text-primary px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md border border-primary/20">
-                    Exam Preview
-                  </span>
-                ) : null}
               </div>
               <h2 className="text-2xl font-black tracking-tight text-foreground leading-tight">{test.title}</h2>
-              {test.id === "reading-cam18-t1" ? (
-                <p className="text-xs font-semibold text-primary/85">
-                  This test opens the new split-screen exam atmosphere preview.
-                </p>
-              ) : null}
             </div>
           </div>
 
@@ -256,7 +271,7 @@ export function StartTestModal({ test }: StartTestModalProps) {
           </>
         ) : (
           <>
-            Start Practice
+            {isSubmitting ? loadingLabel : actionLabel}
             <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
           </>
         )}

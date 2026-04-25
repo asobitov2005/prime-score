@@ -17,7 +17,9 @@ type SnapshotQuestion = {
   question_type: TestQuestion["type"];
   prompt: string;
   instructions: string;
+  label?: string | null;
   options?: Array<string | { id?: string; label?: string }>;
+  selection_limit?: number | null;
   word_limit?: number | null;
 };
 
@@ -70,11 +72,13 @@ function mapQuestions(questions: SnapshotQuestion[]): TestQuestion[] {
   return questions.map((question) => ({
     id: question.question_id,
     number: question.question_number,
+    label: question.label ?? undefined,
     type: question.question_type,
     prompt: question.prompt,
     instructions: question.instructions,
     options: mapOptions(question.options),
     answerSlots: question.word_limit ?? undefined,
+    selectionLimit: question.selection_limit ?? undefined,
     sectionId: question.section_id,
     sectionTitle: question.section_title,
     groupId: question.group_id,

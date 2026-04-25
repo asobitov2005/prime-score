@@ -17,6 +17,8 @@ class TestSectionSnapshotRead(BaseModel):
     subtitle: str | None = None
     intro: str | None = None
     content: str | None = None
+    paragraphs: list[str] = []
+    show_labels: bool = False
     question_count: int = 0
     audio_duration_seconds: int | None = None
     question_groups: list["TestQuestionGroupSnapshotRead"] = []
@@ -32,7 +34,9 @@ class TestQuestionSnapshotRead(BaseModel):
     question_type: QuestionType
     prompt: str
     instructions: str
+    label: str | None = None
     options: list[str] = []
+    selection_limit: int | None = None
     word_limit: int | None = None
 
 
@@ -42,6 +46,8 @@ class TestQuestionGroupSnapshotRead(BaseModel):
     question_type: QuestionType
     question_start: int
     question_end: int
+    shared_options: list[str] = []
+    shared_content: dict[str, str] = {}
     questions: list[TestQuestionSnapshotRead] = []
 
 
@@ -99,6 +105,7 @@ class TestStartRequest(BaseModel):
     scope: TestScope
     section_id: UUID | None = None
     mode: TestMode = TestMode.practice
+    force_new: bool = False
 
 
 class TestStartResponse(BaseModel):

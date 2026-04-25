@@ -23,7 +23,12 @@ class Review(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     source: Mapped[ReviewSource] = mapped_column(
-        Enum(ReviewSource, name="reviewsource", native_enum=False),
+        Enum(
+            ReviewSource,
+            name="reviewsource",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
         nullable=False,
     )
     author_name: Mapped[str] = mapped_column(String(160), nullable=False)

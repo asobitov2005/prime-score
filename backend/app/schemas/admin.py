@@ -122,6 +122,7 @@ class AdminDraftDecisionsRead(BaseModel):
 class AdminDraftMetadataRead(BaseModel):
     title: str
     type: Literal["reading", "listening"]
+    format: str = "full"
     source: Literal["cambridge", "real_exam", "custom"]
     source_detail: str
     access_type: Literal["public", "premium"]
@@ -136,6 +137,8 @@ class AdminDraftContentSectionRead(BaseModel):
     title: str
     subtitle: str
     content: str
+    paragraphs: list[dict[str, object]] = Field(default_factory=list)
+    showLabels: bool = False
     media_kind: Literal["text", "audio"]
     marker_count: int = 0
 
@@ -146,9 +149,9 @@ class AdminDraftContentRead(BaseModel):
 
 class AdminDraftQuestionRead(BaseModel):
     id: UUID
-    section_id: UUID
+    section_id: UUID | None = None
     label: str
-    type_id: str
+    type_id: str | None = None
     prompt: str
     accepted_answers: list[str] = Field(default_factory=list)
     explanation: str
@@ -176,13 +179,17 @@ class AdminDraftQuestionGroupRead(BaseModel):
     question_start: int
     question_end: int
     shared_options: list[str] = Field(default_factory=list)
+    question_block: str = ""
+    answer_block: str = ""
+    secondary_block: str = ""
     questions: list[AdminDraftQuestionRead] = Field(default_factory=list)
 
 
 class AdminTestDraftRead(BaseModel):
     metadata: AdminDraftMetadataRead
     content: AdminDraftContentRead
-    question_groups: list[AdminDraftQuestionGroupRead] = Field(default_factory=list, alias="question_groups")
+    question_groups: list[AdminDraftQuestionGroupRead] = Field(default_factory=list, alias="questionGroups")
+    questions: list[AdminDraftQuestionRead] = Field(default_factory=list)
     review: AdminDraftReviewRead
     decisions: AdminDraftDecisionsRead
     
@@ -205,6 +212,8 @@ class AdminDraftContentSectionWrite(BaseModel):
     title: str
     subtitle: str
     content: str
+    paragraphs: list[dict[str, object]] = Field(default_factory=list)
+    showLabels: bool = False
     media_kind: Literal["text", "audio"]
     marker_count: int = 0
 
@@ -227,6 +236,9 @@ class AdminDraftQuestionGroupWrite(BaseModel):
     question_start: int
     question_end: int
     shared_options: list[str] = Field(default_factory=list)
+    question_block: str = ""
+    answer_block: str = ""
+    secondary_block: str = ""
     questions: list[AdminDraftQuestionWrite] = Field(default_factory=list)
 
 

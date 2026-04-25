@@ -8,7 +8,10 @@ import { FilterSelect } from "./filter-select";
 import { getCatalogTests } from "@/lib/server-data";
 import { getUserAttempts } from "@/lib/server-me";
 import { SearchInput } from "./search-input";
+import { SmartFilterShell } from "./smart-filter-shell";
+import { TestsRefreshOnMount } from "./refresh-on-mount";
 import { cn } from "@/lib/utils";
+import type { AttemptRow, TestCardAttemptSummary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,6 +24,39 @@ interface TestsPageProps {
     source?: string;
     q?: string;
   };
+}
+
+function isCompletedAttempt(attempt: AttemptRow) {
+  return attempt.status === "completed" || attempt.status === "submitted";
+}
+
+function toCardAttemptSummary(attempt: AttemptRow): TestCardAttemptSummary {
+  return {
+    id: attempt.id,
+    mode: attempt.mode,
+    status: attempt.status,
+    score: attempt.score,
+    band: attempt.band,
+    totalQuestions: attempt.totalQuestions,
+    lastSavedAt: attempt.lastSavedAt,
+  };
+}
+
+function formatCompletedScore(
+  attempt: TestCardAttemptSummary | undefined,
+  fallbackTotalQuestions: number,
+  isFullTest: boolean
+) {
+  if (!attempt || attempt.score === "Pending") {
+    return null;
+  }
+
+  const totalQuestions = attempt.totalQuestions && attempt.totalQuestions > 0 ? attempt.totalQuestions : fallbackTotalQuestions;
+  const correctLabel = attempt.score.includes("/")
+    ? `${attempt.score} correct`
+    : `${attempt.score}/${totalQuestions} correct`;
+  const bandLabel = isFullTest && attempt.band ? ` • Band ${attempt.band}` : "";
+  return `${correctLabel}${bandLabel}`;
 }
 
 export default async function TestsPage({ searchParams }: TestsPageProps) {
@@ -38,14 +74,20 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
     getUserAttempts()
   ]);
 
-  const tests = rawTests.filter(test => {
+  const testsById = new Map(rawTests.map((test) => [test.id, test]));
+  const tests = Array.from(testsById.values()).filter(test => {
     if (test.status !== "published") return false;
     if (!searchQuery) return true;
     return test.title.toLowerCase().includes(searchQuery) || test.sourceDetail.toLowerCase().includes(searchQuery);
   });
-  const completedTestIds = new Set(
-    userAttempts.filter(a => a.status === "completed").map(a => a.testId)
-  );
+  const latestAttemptByTestId = new Map<string, TestCardAttemptSummary>();
+
+  for (const attempt of userAttempts) {
+    if (!latestAttemptByTestId.has(attempt.testId)) {
+      latestAttemptByTestId.set(attempt.testId, toCardAttemptSummary(attempt));
+    }
+  }
+
   const attemptCountByTestId = userAttempts.reduce<Record<string, number>>((acc, a) => {
     acc[a.testId] = (acc[a.testId] ?? 0) + 1;
     return acc;
@@ -77,30 +119,10 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
 
   return (
     <div className="flex flex-col max-w-6xl mx-auto animate-in fade-in duration-500">
+      <TestsRefreshOnMount />
       
-      {/* Header Card */}
-      <div className="shrink-0 mb-6 mt-2">
-        <Card className="overflow-hidden bg-background border border-border/50 relative rounded-2xl shadow-sm">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-          
-          <CardHeader className="space-y-1 relative z-10 p-5 lg:px-6 border-b border-border/40 bg-muted/5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-0.5">
-                <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Practice Tests</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm font-medium">
-                  Choose from a wide range of IELTS {activeType} tests and improve your band score.
-                </CardDescription>
-              </div>
-              <div className="hidden md:flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
-                <Layers className="h-5 w-5" />
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
-      </div>
-
       {/* Filters Container */}
-      <div className="sticky top-20 md:top-28 lg:top-32 z-40 bg-background/95 backdrop-blur-md pb-4 space-y-4">
+      <SmartFilterShell className="sticky top-20 md:top-28 lg:top-32 z-40 mt-2 bg-background/95 backdrop-blur-md pb-4 space-y-4">
         {/* Primary Filter (Reading / Listening) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">
@@ -131,15 +153,14 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
             })}
           </div>
 
-          <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-muted/30 rounded-xl border border-border/40">
-            <span className="text-xs font-black text-primary">{tests.length}</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tests Available</span>
+          <div className="w-full md:max-w-sm">
+            <SearchInput activeType={activeType} />
           </div>
         </div>
 
         {/* Secondary Filter (Dynamic) */}
-        <div className="bg-card/40 border border-border/40 rounded-[2rem] p-1 overflow-hidden shadow-sm">
-          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar py-1 px-1">
+        <div className="flex flex-col gap-3 bg-card/40 border border-border/40 rounded-[2rem] p-1 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto custom-scrollbar py-1 px-1">
             {formats.map((f) => {
               const isActive = activeFormat === f.id;
               return (
@@ -151,7 +172,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                   className={cn(
                     "h-8 px-4 rounded-full font-bold text-xs whitespace-nowrap transition-all",
                     isActive 
-                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105" 
+                      ? "bg-primary text-primary-foreground dark:text-slate-950 shadow-lg shadow-primary/20 scale-105" 
                       : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   )}
                 >
@@ -162,13 +183,8 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
               );
             })}
           </div>
-        </div>
 
-        {/* Search & Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 pb-1">
-          <SearchInput activeType={activeType} />
-          
-          <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
+          <div className="flex w-full items-center justify-end gap-2 px-1 pb-1 sm:w-auto sm:pb-0">
             {hasActiveFilters && (
               <Button asChild variant="ghost" size="sm" className="h-10 px-4 text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
                 <Link href={`/tests?type=${activeType}`}>
@@ -184,7 +200,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
             </div>
           </div>
         </div>
-      </div>
+      </SmartFilterShell>
 
       {/* Test Grid area */}
       <div className="pb-8">
@@ -200,47 +216,18 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {activeType === "reading" ? (
-            <Card className="group relative overflow-hidden rounded-2xl border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/40" />
-              <CardHeader className="p-5 pb-3">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20 flex items-center gap-1">
-                    <Eye className="h-2.5 w-2.5" />
-                    <span className="text-[9px] font-semibold uppercase tracking-wider">Exam Preview</span>
-                  </div>
-                  <Badge variant="secondary" className="font-semibold uppercase text-[9px] tracking-widest px-2.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-none">
-                    Mock Reading
-                  </Badge>
-                </div>
-                <CardTitle className="text-[15px] font-semibold leading-tight text-foreground">
-                  Split-Screen Reading Exam
-                </CardTitle>
-                <CardDescription className="pt-1 text-xs font-medium text-muted-foreground">
-                  Try the new real-exam atmosphere with a 13-question reading preview and split passage/question layout.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="p-5 pt-1">
-                <div className="grid grid-cols-2 gap-2">
-                  <Button asChild className="h-9 rounded-xl text-xs font-bold">
-                    <Link href="/exam-preview/reading?mode=exam">Start Exam</Link>
-                  </Button>
-                  <Button asChild variant="outline" className="h-9 rounded-xl text-xs font-bold">
-                    <Link href="/exam-preview/reading?mode=practice">Practice Mode</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-
           {tests.map((test) => {
             const isFull = !test.format || test.format === "full";
-            const isCompleted = completedTestIds.has(test.id);
+            const latestAttempt = latestAttemptByTestId.get(test.id);
+            const activeAttempt = latestAttempt?.status === "in_progress" ? latestAttempt : undefined;
+            const completedAttempt = latestAttempt && isCompletedAttempt(latestAttempt) ? latestAttempt : undefined;
+            const isCompleted = Boolean(completedAttempt);
+            const completedScoreText = formatCompletedScore(completedAttempt, test.questionCount, isFull);
             const isExamPreviewTest = test.id === "reading-cam18-t1";
 
             return (
-              <Card key={test.id} className="group relative rounded-2xl border-border/50 bg-card/50 hover:bg-card hover:border-border transition-all duration-300 flex flex-col shadow-sm">
+              <Card key={test.id} className="group relative overflow-hidden rounded-2xl border-primary/20 bg-card/50 hover:bg-card hover:border-primary/30 transition-all duration-300 flex flex-col shadow-sm">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/40" />
                 <CardHeader className="p-5 pb-2 flex-1">
                    <div className="flex items-center justify-between mb-4">
                      <div className="flex gap-2">
@@ -277,6 +264,11 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                      <CardTitle className="text-[15px] font-semibold leading-tight text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2">
                        {test.title}
                      </CardTitle>
+                     {completedScoreText ? (
+                       <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                         {completedScoreText}
+                       </p>
+                     ) : null}
                      {isExamPreviewTest ? (
                        <p className="text-xs font-medium text-primary/85">
                          Opens the new split-screen exam layout preview.
@@ -294,7 +286,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
 
                 <CardContent className="p-5 pt-2 shrink-0">
                    <div className="pt-3 border-t border-border/5">
-                      <StartTestModal test={test} />
+                      <StartTestModal test={test} activeAttempt={activeAttempt} completedAttempt={completedAttempt} />
                    </div>
                 </CardContent>
               </Card>

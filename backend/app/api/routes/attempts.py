@@ -14,15 +14,20 @@ from app.schemas.attempts import (
     AttemptAnswerRequest,
     AttemptAnswerResponse,
     AttemptBreakdownItemRead,
+    AttemptProgressRequest,
+    AttemptProgressResponse,
     AttemptRead,
     AttemptResultRead,
     AttemptReviewItemRead,
     AttemptReviewRead,
+    AttemptSubmitRequest,
     AttemptSubmitResponse,
+    AttemptUiStateRead,
+    AttemptTextHighlightRead,
 )
 from app.schemas.tests import TestSnapshotRead
-from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, submit_attempt_in_db
-from app.services.runtime_store import get_attempt, save_answer, submit_attempt
+from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, save_progress_in_db, submit_attempt_in_db
+from app.services.runtime_store import get_attempt, save_answer, save_progress, submit_attempt
 
 router = APIRouter()
 
@@ -76,6 +81,18 @@ async def get_attempt_view(
         score_status=str(attempt.metadata.get("score_status", "queued")),
         time_limit_seconds=int(attempt.test_snapshot.get("time_limit_seconds", 0)),
         last_answered_question_number=attempt.metadata.get("last_answered_question_number"),
+        answers=attempt.answers,
+        active_question_id=str(attempt.metadata.get("active_question_id")) if attempt.metadata.get("active_question_id") else None,
+        text_highlights={
+            str(block_key): [AttemptTextHighlightRead(**item) for item in items if isinstance(item, dict)]
+            for block_key, items in dict(attempt.metadata.get("text_highlights") or {}).items()
+            if isinstance(items, list)
+        },
+        ui_state=(
+            AttemptUiStateRead(**ui_state)
+            if isinstance((ui_state := attempt.metadata.get("ui_state")), dict)
+            else None
+        ),
         test_snapshot=TestSnapshotRead(**attempt.test_snapshot),
     )
 
@@ -111,12 +128,66 @@ async def save_attempt_answer(
     )
 
 
+@router.patch("/{attempt_id}/progress", response_model=AttemptProgressResponse)
+async def save_attempt_progress(
+    attempt_id: UUID,
+    payload: AttemptProgressRequest,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> AttemptProgressResponse:
+    _ = await _require_attempt_owner(attempt_id, current_user, session)
+    try:
+        attempt = await save_progress_in_db(
+            session,
+            attempt_id=attempt_id,
+            time_spent_sec=payload.time_spent_sec,
+            active_question_id=payload.active_question_id,
+            text_highlights=(
+                {
+                    block_key: [item.model_dump() for item in items]
+                    for block_key, items in payload.text_highlights.items()
+                }
+                if payload.text_highlights is not None
+                else None
+            ),
+            ui_state=payload.ui_state.model_dump(exclude_none=True) if payload.ui_state is not None else None,
+        )
+    except Exception:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        attempt = save_progress(
+            attempt_id,
+            time_spent_sec=payload.time_spent_sec,
+            active_question_id=payload.active_question_id,
+            text_highlights=(
+                {
+                    block_key: [item.model_dump() for item in items]
+                    for block_key, items in payload.text_highlights.items()
+                }
+                if payload.text_highlights is not None
+                else None
+            ),
+            ui_state=payload.ui_state.model_dump(exclude_none=True) if payload.ui_state is not None else None,
+        )
+    return AttemptProgressResponse(
+        attempt_id=attempt.attempt_id,
+        saved_at=datetime.now(timezone.utc),
+        time_spent_sec=attempt.time_spent_sec,
+    )
+
+
 @router.post("/{attempt_id}/submit", response_model=AttemptSubmitResponse)
 async def submit_attempt_view(
     attempt_id: UUID,
+    payload: AttemptSubmitRequest | None = None,
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> AttemptSubmitResponse:
+    if payload is None or not payload.confirm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Submit confirmation is required.")
+
     _ = await _require_attempt_owner(attempt_id, current_user, session)
     try:
         attempt = await submit_attempt_in_db(session, attempt_id=attempt_id)

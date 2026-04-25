@@ -86,6 +86,7 @@ class AttemptRuntime:
     status: AttemptStatus = AttemptStatus.in_progress
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
+    updated_at: datetime | None = None
     time_spent_sec: int = 0
     raw_score: int | None = None
     total_questions: int = 0
@@ -133,6 +134,7 @@ def _serialize(value: object) -> object:
 
 def _deserialize_attempt(payload: dict[str, object]) -> AttemptRuntime:
     completed_at_raw = payload.get("completed_at")
+    updated_at_raw = payload.get("updated_at")
     band_score_raw = payload.get("band_score")
     return AttemptRuntime(
         attempt_id=UUID(str(payload["attempt_id"])),
@@ -145,6 +147,7 @@ def _deserialize_attempt(payload: dict[str, object]) -> AttemptRuntime:
         status=AttemptStatus(str(payload.get("status", AttemptStatus.in_progress.value))),
         started_at=datetime.fromisoformat(str(payload["started_at"])),
         completed_at=datetime.fromisoformat(str(completed_at_raw)) if completed_at_raw else None,
+        updated_at=datetime.fromisoformat(str(updated_at_raw)) if updated_at_raw else None,
         time_spent_sec=int(payload.get("time_spent_sec", 0)),
         raw_score=int(payload["raw_score"]) if payload.get("raw_score") is not None else None,
         total_questions=int(payload.get("total_questions", 0)),
@@ -171,6 +174,7 @@ def _attempt_payload(attempt: AttemptRuntime) -> dict[str, object]:
         "status": attempt.status.value,
         "started_at": attempt.started_at.isoformat(),
         "completed_at": attempt.completed_at.isoformat() if attempt.completed_at else None,
+        "updated_at": attempt.updated_at.isoformat() if attempt.updated_at else None,
         "time_spent_sec": attempt.time_spent_sec,
         "raw_score": attempt.raw_score,
         "total_questions": attempt.total_questions,
@@ -183,6 +187,10 @@ def _attempt_payload(attempt: AttemptRuntime) -> dict[str, object]:
         "section_breakdown": _serialize(attempt.section_breakdown),
         "question_type_breakdown": _serialize(attempt.question_type_breakdown),
     }
+
+
+def _attempt_sort_timestamp(attempt: AttemptRuntime) -> float:
+    return (attempt.completed_at or attempt.updated_at or attempt.started_at).timestamp()
 
 
 class RedisRuntimeStore:
@@ -209,7 +217,7 @@ class RedisRuntimeStore:
         payload = json.dumps(_attempt_payload(attempt), separators=(",", ":"))
         pipe = self.client.pipeline()
         pipe.set(self._attempt_key(attempt.attempt_id), payload, ex=RUNTIME_STORE_TTL_SECONDS)
-        pipe.zadd(self._user_key(attempt.user_id), {str(attempt.attempt_id): attempt.started_at.timestamp()})
+        pipe.zadd(self._user_key(attempt.user_id), {str(attempt.attempt_id): _attempt_sort_timestamp(attempt)})
         pipe.expire(self._user_key(attempt.user_id), RUNTIME_STORE_TTL_SECONDS)
         pipe.execute()
 
@@ -281,7 +289,7 @@ class FileRuntimeStore:
                 for payload in dict(document.get("attempts", {})).values()
                 if str(payload.get("user_id")) == str(user_id)
             ]
-            attempts.sort(key=lambda attempt: attempt.started_at, reverse=True)
+            attempts.sort(key=_attempt_sort_timestamp, reverse=True)
             return attempts, False
 
         return self._with_document(mutator)
@@ -305,10 +313,38 @@ def start_attempt(
     section_id: UUID | None,
     mode: TestMode,
 ) -> AttemptRuntime:
+    matching_attempts = [
+        attempt
+        for attempt in iter_user_attempts(user_id)
+        if attempt.test_id == test_id
+        and attempt.scope == scope
+        and attempt.section_id == section_id
+        and attempt.mode == mode
+        and attempt.status == AttemptStatus.in_progress
+    ]
+    if matching_attempts:
+        def progress_score(attempt: AttemptRuntime) -> tuple[int, int, float, float]:
+            highlights_count = sum(
+                len(items)
+                for items in dict(attempt.metadata.get("text_highlights") or {}).values()
+                if isinstance(items, list)
+            )
+            has_answers_or_highlights = int(any(value.strip() for value in attempt.answers.values()) or bool(highlights_count))
+            has_time_progress = int(int(attempt.time_spent_sec or 0) > 0)
+            return (
+                has_answers_or_highlights,
+                has_time_progress,
+                _attempt_sort_timestamp(attempt),
+                float(attempt.attempt_id.int),
+            )
+
+        return max(matching_attempts, key=progress_score)
+
     snapshot = build_test_snapshot(test_id=test_id, scope=scope, mode=mode.value, section_id=section_id)
     if snapshot is None:
         raise KeyError("test_not_found")
 
+    now = datetime.now(timezone.utc)
     attempt = AttemptRuntime(
         attempt_id=uuid4(),
         user_id=user_id,
@@ -317,6 +353,8 @@ def start_attempt(
         scope=scope,
         section_id=section_id,
         mode=mode,
+        started_at=now,
+        updated_at=now,
         total_questions=int(snapshot["total_questions"]),
         test_snapshot=snapshot,
         metadata={
@@ -354,8 +392,79 @@ def save_answer(attempt_id: UUID, question_id: UUID, value: str | None) -> tuple
     attempt.metadata["last_answered_question_number"] = question_number
     attempt.metadata["answers_count"] = len(attempt.answers)
     attempt.metadata["score_status"] = "draft"
+    attempt.updated_at = datetime.now(timezone.utc)
     _backend().save_attempt(attempt)
     return attempt, question_number
+
+
+def save_progress(
+    attempt_id: UUID,
+    *,
+    time_spent_sec: int | None = None,
+    active_question_id: str | None = None,
+    text_highlights: dict[str, list[dict[str, object]]] | None = None,
+    ui_state: dict[str, object] | None = None,
+) -> AttemptRuntime:
+    attempt = get_attempt(attempt_id)
+    if attempt is None:
+        raise KeyError("attempt_not_found")
+
+    if time_spent_sec is not None:
+        normalized_time_spent = max(0, int(time_spent_sec))
+        if attempt.mode == TestMode.exam and attempt.test_snapshot.get("time_limit_seconds"):
+            normalized_time_spent = min(normalized_time_spent, int(attempt.test_snapshot.get("time_limit_seconds", 0)))
+        attempt.time_spent_sec = normalized_time_spent
+        attempt.metadata["time_spent_sec"] = normalized_time_spent
+
+    if active_question_id is not None:
+        normalized_active_question_id = str(active_question_id).strip()
+        if normalized_active_question_id:
+            attempt.metadata["active_question_id"] = normalized_active_question_id
+        else:
+            attempt.metadata.pop("active_question_id", None)
+
+    if text_highlights is not None:
+        normalized_highlights: dict[str, list[dict[str, object]]] = {}
+        for block_key, items in text_highlights.items():
+            normalized_items: list[dict[str, object]] = []
+            for item in items:
+                try:
+                    start = max(0, int(item.get("start", 0)))
+                    end = max(start, int(item.get("end", 0)))
+                except (TypeError, ValueError):
+                    continue
+                if end <= start:
+                    continue
+                normalized_items.append({
+                    "id": str(item.get("id") or f"{block_key}-{start}-{end}"),
+                    "start": start,
+                    "end": end,
+                })
+            normalized_highlights[str(block_key)] = normalized_items
+        attempt.metadata["text_highlights"] = normalized_highlights
+
+    if ui_state is not None:
+        normalized_ui_state: dict[str, object] = {}
+        theme = ui_state.get("theme")
+        if isinstance(theme, str) and theme in {"light", "dark"}:
+            normalized_ui_state["theme"] = theme
+        split_ratio = ui_state.get("split_ratio")
+        if split_ratio is not None:
+            try:
+                normalized_ui_state["split_ratio"] = round(min(58, max(42, float(split_ratio))), 1)
+            except (TypeError, ValueError):
+                pass
+        font_scale = ui_state.get("font_scale")
+        if font_scale is not None:
+            try:
+                normalized_ui_state["font_scale"] = round(min(1.2, max(0.9, float(font_scale))), 2)
+            except (TypeError, ValueError):
+                pass
+        attempt.metadata["ui_state"] = normalized_ui_state
+
+    attempt.updated_at = datetime.now(timezone.utc)
+    _backend().save_attempt(attempt)
+    return attempt
 
 
 def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
@@ -365,6 +474,7 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
 
     now = datetime.now(timezone.utc)
     attempt.completed_at = now
+    attempt.updated_at = now
     attempt.time_spent_sec = max(0, int((now - attempt.started_at).total_seconds()))
     attempt.status = AttemptStatus.completed
 

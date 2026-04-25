@@ -50,9 +50,11 @@ from app.schemas.review import (
 from app.services.admin_auth import authenticate_admin, build_admin_principal, get_admin_by_id
 from app.services.test_content_repo import (
     build_admin_draft_state_from_db,
+    delete_draft_test_from_db,
     get_test_from_db,
     list_tests_from_db,
     publish_test_in_db,
+    quick_fix_published_test_in_db,
     save_test_draft_to_db,
 )
 
@@ -376,10 +378,69 @@ async def update_test_draft(
     return AdminTestRead(**saved)
 
 
+@router.put("/tests/{test_id}/quick-fix", response_model=AdminTestRead)
+async def quick_fix_test(
+    test_id: UUID,
+    payload: AdminTestDraftUpsertRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminTestRead:
+    _ = current_admin
+    try:
+        saved = await quick_fix_published_test_in_db(session, draft=payload.model_dump(), test_id=test_id)
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "only_published_can_be_quick_fixed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Quick Fix only works on published tests.",
+            ) from exc
+        if detail == "quick_fix_requires_new_version":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Quick Fix supports only in-place edits. Use New Version for structural changes.",
+            ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quick Fix failed.") from exc
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quick Fix failed.") from exc
+
+    if saved is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
+    return AdminTestRead(**saved)
+
+
 @router.delete("/tests/{test_id}", response_model=MessageResponse)
-async def delete_test(test_id: UUID, current_admin: AdminPrincipal = Depends(get_current_admin)) -> MessageResponse:
-    _ = (test_id, current_admin)
-    return MessageResponse(message="Test archived.")
+async def delete_test(
+    test_id: UUID,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    _ = current_admin
+    try:
+        result = await delete_draft_test_from_db(session, test_id=test_id)
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "only_draft_can_be_deleted":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only draft tests can be deleted.") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Draft delete failed.") from exc
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Draft delete failed.") from exc
+
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
+
+    if result == "archived":
+        return MessageResponse(message="Draft had attempt history, so it was archived instead of being deleted.")
+
+    return MessageResponse(message="Draft deleted.")
 
 
 @router.post("/tests/{test_id}/publish", response_model=AdminTestRead)

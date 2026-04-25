@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import re
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, func, select
@@ -18,6 +19,7 @@ from app.models.enums import TestFormat as ModelTestFormat
 from app.models.enums import TestSource as ModelTestSource
 from app.models.enums import TestStatus as ModelTestStatus
 from app.models.enums import TestType as ModelTestType
+from app.models.attempt import Attempt, UserAnswer
 from app.models.test import AnswerVariant, Question, QuestionGroup, Test, TestSection
 from app.services.fixtures import (
     TEST_CATALOG_FIXTURES,
@@ -72,6 +74,12 @@ def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: s
         "question_type": group.question_type.value,
         "question_start": group.question_start,
         "question_end": group.question_end,
+        "shared_options": list(group.shared_options),
+        "shared_content": {
+            "question_block": str(group.shared_content.get("question_block") or ""),
+            "answer_block": str(group.shared_content.get("answer_block") or ""),
+            "secondary_block": str(group.shared_content.get("secondary_block") or ""),
+        },
         "questions": [
             {
                 "question_id": question.id,
@@ -83,12 +91,35 @@ def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: s
                 "question_type": group.question_type.value,
                 "prompt": question.prompt,
                 "instructions": group.instructions or group.title,
-                "options": list(group.shared_options),
+                "label": str(question.question_metadata.get("label") or f"Q{question.number}"),
+                "options": list(question.question_metadata.get("variants", [])) or list(group.shared_options),
+                "selection_limit": question.question_metadata.get("selection_limit"),
                 "word_limit": question.word_limit,
             }
             for question in questions
         ],
     }
+
+
+def _extract_paragraph_text(item: object) -> str:
+    if isinstance(item, dict):
+        text = item.get("text")
+        if text is not None:
+            return str(text)
+    return str(item)
+
+
+def _serialize_paragraph_item(item: object) -> object:
+    if isinstance(item, dict):
+        payload: dict[str, object] = {"text": _extract_paragraph_text(item)}
+        item_id = item.get("id")
+        if item_id is not None:
+            payload["id"] = str(item_id)
+        if "label" in item:
+            label = item.get("label")
+            payload["label"] = "" if label is None else str(label)
+        return payload
+    return _extract_paragraph_text(item)
 
 
 def _serialize_snapshot_from_test(
@@ -157,6 +188,15 @@ def _serialize_snapshot_from_test(
                 "subtitle": str(section.content.get("subtitle") or section.intro or ""),
                 "intro": section.intro,
                 "content": str(section.content.get("body") or section.intro or ""),
+                "paragraphs": [
+                    _serialize_paragraph_item(item)
+                    for item in (
+                        section.content.get("paragraphs")
+                        or str(section.content.get("body") or section.intro or "").split("\n\n")
+                    )
+                    if _extract_paragraph_text(item).strip()
+                ],
+                "show_labels": bool(section.content.get("showLabels", False)),
                 "question_count": sum(len(group.questions) for group in section.question_groups),
                 "audio_duration_seconds": section.audio_duration_seconds,
                 "question_groups": [
@@ -178,7 +218,9 @@ def _serialize_snapshot_from_test(
                 "question_type": group.question_type.value,
                 "prompt": question.prompt,
                 "instructions": group.instructions or group.title,
-                "options": list(group.shared_options),
+                "label": str(question.question_metadata.get("label") or f"Q{question.number}"),
+                "options": list(question.question_metadata.get("variants", [])) or list(group.shared_options),
+                "selection_limit": question.question_metadata.get("selection_limit"),
                 "word_limit": question.word_limit,
             }
             for section in selected_sections
@@ -385,8 +427,44 @@ async def get_test_from_db(session: AsyncSession, test_id: UUID) -> dict[str, ob
 
 
 def _question_number(label: str, fallback: int) -> int:
-    digits = "".join(char for char in label if char.isdigit())
-    return int(digits) if digits else fallback
+    match = re.search(r"\d+", label)
+    return int(match.group(0)) if match else fallback
+
+
+def _matching_option_value(option: str) -> str:
+    stripped = option.strip()
+    prefix_match = stripped.split(".", 1)
+    if len(prefix_match) == 2 and prefix_match[0].strip():
+        return prefix_match[0].strip()
+    return stripped
+
+
+def _extract_paragraph_label(prompt: str) -> str | None:
+    cleaned = prompt.strip()
+    if not cleaned:
+        return None
+    if cleaned.lower().startswith("paragraph "):
+        suffix = cleaned[10:].strip()
+        return suffix[:1].upper() if suffix else None
+    return cleaned[:1].upper()
+
+
+def _rebuild_matching_headings_answer_block(group: QuestionGroup) -> str:
+    question_by_answer: dict[str, str] = {}
+    for question in sorted(group.questions, key=lambda item: item.number):
+        label = _extract_paragraph_label(question.prompt)
+        if not label:
+            continue
+        for answer in question.answer_variants:
+            value = answer.value.strip()
+            if value:
+                question_by_answer[value] = label
+    answer_lines = []
+    for option in group.shared_options:
+        option_value = _matching_option_value(str(option))
+        if option_value in question_by_answer:
+            answer_lines.append(question_by_answer[option_value])
+    return "\n".join(answer_lines)
 
 
 def _reading_time_limit_seconds(label: str) -> int:
@@ -409,6 +487,66 @@ async def _load_full_test_for_write(session: AsyncSession, test_id: UUID) -> Tes
     return (await session.scalars(query)).unique().first()
 
 
+async def _test_has_attempt_history(session: AsyncSession, test: Test) -> bool:
+    linked_attempts = await session.scalar(
+        select(func.count())
+        .select_from(Attempt)
+        .where(Attempt.test_id == test.id)
+    )
+    return bool(linked_attempts and linked_attempts > 0)
+
+
+async def _test_has_answer_history(session: AsyncSession, test: Test) -> bool:
+    question_ids = [
+        question.id
+        for section in test.sections
+        for group in section.question_groups
+        for question in group.questions
+    ]
+    if not question_ids:
+        return False
+
+    linked_answers = await session.scalar(
+        select(func.count())
+        .select_from(UserAnswer)
+        .where(UserAnswer.question_id.in_(question_ids))
+    )
+    return bool(linked_answers and linked_answers > 0)
+
+
+async def delete_draft_test_from_db(session: AsyncSession, *, test_id: UUID) -> str | None:
+    test = await _load_full_test_for_write(session, test_id)
+    if test is None:
+        return None
+
+    if test.status != ModelTestStatus.DRAFT:
+        raise ValueError("only_draft_can_be_deleted")
+
+    attempt_count = await session.scalar(
+        select(func.count())
+        .select_from(Attempt)
+        .where(Attempt.test_id == test_id)
+    )
+    if attempt_count and attempt_count > 0:
+        test.status = ModelTestStatus.ARCHIVED
+        await session.commit()
+        return "archived"
+
+    for section in test.sections:
+        for group in section.question_groups:
+            for question in group.questions:
+                for answer in question.answer_variants:
+                    await session.delete(answer)
+                await session.delete(question)
+            await session.delete(group)
+        await session.delete(section)
+
+    await session.flush()
+    await session.delete(test)
+    await session.commit()
+    return "deleted"
+
+
 async def save_test_draft_to_db(
     session: AsyncSession,
     *,
@@ -419,14 +557,32 @@ async def save_test_draft_to_db(
     
 
     metadata = draft["metadata"]
-    sections = draft["content"]
-    question_groups = draft.get("question_groups", [])
+    content = draft.get("content", [])
+    if isinstance(content, dict):
+        sections = list(content.get("sections", []))
+    else:
+        sections = list(content)
+
+    raw_question_groups = draft.get("question_groups", draft.get("questionGroups", []))
+    question_groups = list(raw_question_groups) if isinstance(raw_question_groups, list) else []
     
     test = await _load_full_test_for_write(session, test_id) if test_id is not None else None
+    next_version = 1
+    preserve_existing_version = False
+    if test is not None:
+        next_version = int(test.version)
+        preserve_existing_version = (
+            test.status != ModelTestStatus.DRAFT
+            or await _test_has_attempt_history(session, test)
+            or await _test_has_answer_history(session, test)
+        )
+        if preserve_existing_version:
+            next_version = int(test.version) + 1
+            test = None
 
     if test is None:
         test = Test(
-            id=test_id or uuid4(),
+            id=uuid4() if preserve_existing_version else (test_id or uuid4()),
             title=str(metadata["title"]),
             type=ModelTestType(str(metadata["type"])),
             format=ModelTestFormat(str(metadata.get("format", "full"))),
@@ -439,7 +595,7 @@ async def save_test_draft_to_db(
                 1800 if str(metadata["type"]) == TestType.listening.value else _reading_time_limit_seconds(str(metadata["time_limit_label"]))
             ),
             total_questions=sum(len(group.get("questions", [])) for group in question_groups) or 1,
-            version=1,
+            version=next_version,
             payments_paused=True,
         )
         session.add(test)
@@ -468,8 +624,16 @@ async def save_test_draft_to_db(
             await session.delete(section)
         await session.flush()
 
+    section_id_map: dict[str, UUID] = {}
+
     for index, section in enumerate(sections, start=1):
-        section_id = UUID(str(section["id"])) if section.get("id") else uuid4()
+        raw_section_id = str(section.get("id") or uuid4())
+        section_id = (
+            uuid4()
+            if preserve_existing_version
+            else (UUID(raw_section_id) if section.get("id") else uuid4())
+        )
+        section_id_map[raw_section_id] = section_id
         section_model = TestSection(
             id=section_id,
             test_id=test.id,
@@ -481,6 +645,7 @@ async def save_test_draft_to_db(
                 "subtitle": str(section["subtitle"]),
                 "body": str(section["content"]),
                 "paragraphs": section.get("paragraphs", []),
+                "showLabels": bool(section.get("showLabels", False)),
                 "media_kind": str(section["media_kind"]),
                 "marker_count": int(section["marker_count"]),
             },
@@ -491,8 +656,15 @@ async def save_test_draft_to_db(
         await session.flush()
 
     for group in question_groups:
-        section_id = UUID(str(group["section_id"]))
-        group_id = UUID(str(group["id"])) if group.get("id") else uuid4()
+        raw_section_id = str(group["section_id"])
+        section_id = section_id_map.get(raw_section_id)
+        if section_id is None:
+            raise KeyError("section_not_found_for_group")
+        group_id = (
+            uuid4()
+            if preserve_existing_version
+            else (UUID(str(group["id"])) if group.get("id") else uuid4())
+        )
         group_model = QuestionGroup(
             id=group_id,
             section_id=section_id,
@@ -501,7 +673,11 @@ async def save_test_draft_to_db(
             question_type=ModelQuestionType(str(group["type_id"])),
             question_start=int(group["question_start"]),
             question_end=int(group["question_end"]),
-            shared_content={},
+            shared_content={
+                "question_block": str(group.get("question_block") or ""),
+                "answer_block": str(group.get("answer_block") or ""),
+                "secondary_block": str(group.get("secondary_block") or ""),
+            },
             shared_options=list(group.get("shared_options", [])),
         )
         session.add(group_model)
@@ -510,13 +686,18 @@ async def save_test_draft_to_db(
         for question in group.get("questions", []):
             question_number = _question_number(str(question.get("label", "")), group_model.question_start)
             question_model = Question(
-                id=UUID(str(question["id"])) if question.get("id") else uuid4(),
+                id=(
+                    uuid4()
+                    if preserve_existing_version
+                    else (UUID(str(question["id"])) if question.get("id") else uuid4())
+                ),
                 question_group_id=group_model.id,
                 number=question_number,
                 prompt=str(question["prompt"]),
                 question_metadata={
                     "label": str(question.get("label", "")),
                     "variants": list(question.get("variants", [])),
+                    "selection_limit": len(list(question.get("accepted_answers", []))) if "mc_multiple" in str(group["type_id"]) else None,
                 },
                 explanation=str(question["explanation"]),
                 explanation_reference={},
@@ -542,6 +723,185 @@ async def save_test_draft_to_db(
     return _serialize_admin_test(fresh)
 
 
+async def quick_fix_published_test_in_db(
+    session: AsyncSession,
+    *,
+    draft: dict[str, object],
+    test_id: UUID,
+) -> dict[str, object] | None:
+    await ensure_test_admins_seeded(session)
+
+    metadata = draft["metadata"]
+    content = draft.get("content", [])
+    if isinstance(content, dict):
+        sections = list(content.get("sections", []))
+    else:
+        sections = list(content)
+
+    raw_question_groups = draft.get("question_groups", draft.get("questionGroups", []))
+    question_groups = list(raw_question_groups) if isinstance(raw_question_groups, list) else []
+
+    test = await _load_full_test_for_write(session, test_id)
+    if test is None:
+        return None
+    if test.status != ModelTestStatus.PUBLISHED:
+        raise ValueError("only_published_can_be_quick_fixed")
+
+    requested_type = str(metadata["type"])
+    requested_format = str(metadata.get("format", "full"))
+    requested_time_limit_seconds = (
+        1800
+        if requested_type == TestType.listening.value
+        else _reading_time_limit_seconds(str(metadata["time_limit_label"]))
+    )
+    if (
+        requested_type != test.type.value
+        or requested_format != test.format.value
+        or requested_time_limit_seconds != int(test.exam_time_limit_seconds or 0)
+    ):
+        raise ValueError("quick_fix_requires_new_version")
+
+    existing_sections = sorted(test.sections, key=lambda item: item.position)
+    if len(sections) != len(existing_sections):
+        raise ValueError("quick_fix_requires_new_version")
+
+    existing_section_ids = [str(section.id) for section in existing_sections]
+    payload_section_ids = [str(section.get("id") or "") for section in sections]
+    if payload_section_ids != existing_section_ids:
+        raise ValueError("quick_fix_requires_new_version")
+
+    existing_section_by_id = {str(section.id): section for section in existing_sections}
+    existing_group_by_id = {
+        str(group.id): group
+        for section in existing_sections
+        for group in section.question_groups
+    }
+
+    payload_group_ids = [str(group.get("id") or "") for group in question_groups]
+    if len(payload_group_ids) != len(existing_group_by_id) or set(payload_group_ids) != set(existing_group_by_id):
+        raise ValueError("quick_fix_requires_new_version")
+
+    payload_question_ids = [
+        str(question.get("id") or "")
+        for group in question_groups
+        for question in group.get("questions", [])
+    ]
+    existing_question_by_id = {
+        str(question.id): question
+        for group in existing_group_by_id.values()
+        for question in group.questions
+    }
+    if len(payload_question_ids) != len(existing_question_by_id) or set(payload_question_ids) != set(existing_question_by_id):
+        raise ValueError("quick_fix_requires_new_version")
+
+    test.title = str(metadata["title"])
+    test.access_type = ModelAccessType(str(metadata["access_type"]))
+    test.source = ModelTestSource(str(metadata["source"]))
+    test.source_detail = str(metadata.get("source_detail") or "")
+    test.description = f"{metadata['title']} quick fixed from admin builder."
+    test.total_questions = sum(len(group.get("questions", [])) for group in question_groups) or 1
+
+    for index, section_payload in enumerate(sections, start=1):
+        section_id = str(section_payload.get("id") or "")
+        section_model = existing_section_by_id.get(section_id)
+        if section_model is None:
+            raise ValueError("quick_fix_requires_new_version")
+
+        existing_media_kind = str(section_model.content.get("media_kind") or ("audio" if section_model.audio_duration_seconds else "text"))
+        existing_marker_count = int(section_model.content.get("marker_count") or 0)
+        next_media_kind = str(section_payload["media_kind"])
+        next_marker_count = int(section_payload["marker_count"])
+        if (
+            section_model.position != index
+            or existing_media_kind != next_media_kind
+            or existing_marker_count != next_marker_count
+        ):
+            raise ValueError("quick_fix_requires_new_version")
+
+        section_model.title = str(section_payload["title"])
+        section_model.intro = str(section_payload["subtitle"])
+        section_model.content = {
+            "label": str(section_payload["label"]),
+            "subtitle": str(section_payload["subtitle"]),
+            "body": str(section_payload["content"]),
+            "paragraphs": section_payload.get("paragraphs", []),
+            "showLabels": bool(section_payload.get("showLabels", False)),
+            "media_kind": next_media_kind,
+            "marker_count": next_marker_count,
+        }
+        section_model.audio_duration_seconds = 420 if next_media_kind == "audio" else None
+
+    for group_payload in question_groups:
+        group_id = str(group_payload.get("id") or "")
+        group_model = existing_group_by_id.get(group_id)
+        if group_model is None:
+            raise ValueError("quick_fix_requires_new_version")
+
+        section_id = str(group_payload["section_id"])
+        expected_section = existing_section_by_id.get(section_id)
+        if (
+            expected_section is None
+            or group_model.section_id != expected_section.id
+            or str(group_payload["type_id"]) != group_model.question_type.value
+            or int(group_payload["question_start"]) != int(group_model.question_start)
+            or int(group_payload["question_end"]) != int(group_model.question_end)
+        ):
+            raise ValueError("quick_fix_requires_new_version")
+
+        group_model.title = str(group_payload["title"])
+        group_model.instructions = str(group_payload["instructions"])
+        group_model.shared_content = {
+            "question_block": str(group_payload.get("question_block") or ""),
+            "answer_block": str(group_payload.get("answer_block") or ""),
+            "secondary_block": str(group_payload.get("secondary_block") or ""),
+        }
+        group_model.shared_options = list(group_payload.get("shared_options", []))
+
+        group_question_map = {str(question.id): question for question in group_model.questions}
+        payload_questions = list(group_payload.get("questions", []))
+        payload_group_question_ids = [str(question.get("id") or "") for question in payload_questions]
+        if len(payload_group_question_ids) != len(group_question_map) or set(payload_group_question_ids) != set(group_question_map):
+            raise ValueError("quick_fix_requires_new_version")
+
+        for question_payload in payload_questions:
+            question_id = str(question_payload.get("id") or "")
+            question_model = group_question_map.get(question_id)
+            if question_model is None:
+                raise ValueError("quick_fix_requires_new_version")
+
+            question_number = _question_number(str(question_payload.get("label", "")), group_model.question_start)
+            if int(question_model.number) != int(question_number):
+                raise ValueError("quick_fix_requires_new_version")
+
+            question_model.prompt = str(question_payload["prompt"])
+            question_model.question_metadata = {
+                "label": str(question_payload.get("label", "")),
+                "variants": list(question_payload.get("variants", [])),
+                "selection_limit": len(list(question_payload.get("accepted_answers", []))) if "mc_multiple" in str(group_payload["type_id"]) else None,
+            }
+            question_model.explanation = str(question_payload["explanation"])
+
+            for answer in list(question_model.answer_variants):
+                await session.delete(answer)
+            await session.flush()
+
+            answers = list(question_payload.get("accepted_answers", [])) or [""]
+            for answer_index, answer in enumerate(answers):
+                session.add(
+                    AnswerVariant(
+                        question_id=question_model.id,
+                        value=str(answer),
+                        is_primary=answer_index == 0,
+                    )
+                )
+
+    await session.commit()
+    fresh = await _load_full_test_for_write(session, test.id)
+    if fresh is None:
+        raise KeyError("test_not_found")
+    return _serialize_admin_test(fresh)
+
+
 async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[str, object] | None:
     from app.core.enums import NotificationType
     from app.services.notification_sender import notify_all_users
@@ -549,6 +909,23 @@ async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[st
     test = await session.get(Test, test_id)
     if test is None:
         return None
+
+    existing_published_versions = (
+        await session.scalars(
+            select(Test).where(
+                Test.id != test.id,
+                Test.status == ModelTestStatus.PUBLISHED,
+                Test.type == test.type,
+                Test.format == test.format,
+                Test.source == test.source,
+                Test.title == test.title,
+                func.coalesce(Test.source_detail, "") == (test.source_detail or ""),
+            )
+        )
+    ).all()
+    for existing in existing_published_versions:
+        existing.status = ModelTestStatus.ARCHIVED
+
     test.status = ModelTestStatus.PUBLISHED
     test.version += 1
 
@@ -623,6 +1000,19 @@ async def build_admin_draft_state_from_db(
                 "question_start": group.question_start,
                 "question_end": group.question_end,
                 "shared_options": list(group.shared_options),
+                "question_block": str(group.shared_content.get("question_block") or ""),
+                "answer_block": str(
+                    group.shared_content.get("answer_block")
+                    or (
+                        _rebuild_matching_headings_answer_block(group)
+                        if str(group.question_type.value) == ModelQuestionType.READING_MATCHING_HEADINGS.value
+                        else ""
+                    )
+                ),
+                "secondary_block": str(
+                    group.shared_content.get("secondary_block")
+                    or "\n".join(str(option) for option in group.shared_options)
+                ),
                 "questions": group_questions
             })
 
@@ -651,6 +1041,7 @@ async def build_admin_draft_state_from_db(
                     "subtitle": str(section.content.get("subtitle") or section.intro or "Structured content block"),
                     "content": str(section.content.get("body") or section.intro or ""),
                     "paragraphs": list(section.content.get("paragraphs", [])),
+                    "showLabels": bool(section.content.get("showLabels", False)),
                     "media_kind": "audio" if str(test.type.value) == ModelTestType.LISTENING.value else "text",
                     "marker_count": sum(len(group.questions) for group in section.question_groups),
                 }

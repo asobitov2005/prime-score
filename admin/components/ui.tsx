@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type {
   ButtonHTMLAttributes,
+  ForwardedRef,
   HTMLAttributes,
   InputHTMLAttributes,
   LabelHTMLAttributes,
@@ -8,6 +9,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes
 } from "react";
+import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
 export { cn };
@@ -113,9 +115,13 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   );
 }
 
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export const Textarea = forwardRef(function Textarea(
+  { className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>,
+  ref: ForwardedRef<HTMLTextAreaElement>
+) {
   return (
     <textarea
+      ref={ref}
       className={cn(
         "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
         className
@@ -123,7 +129,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
       {...props}
     />
   );
-}
+});
 
 export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (

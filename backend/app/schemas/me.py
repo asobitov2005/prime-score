@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.enums import AccessType, TestMode, TestSource, TestStatus, TestType
+from app.core.enums import AccessType, AttemptStatus, TestMode, TestSource, TestStatus, TestType
 from app.schemas.common import DebugPrincipal
 
 
@@ -45,14 +45,17 @@ class MeAttemptSummaryRead(BaseModel):
     test_id: UUID
     test_title: str
     test_type: TestType
+    test_format: str = "full"
     mode: TestMode
-    status: TestStatus
+    status: AttemptStatus
     access_type: AccessType
     source: TestSource | None = None
     raw_score: int | None = None
     band_score: Decimal | None = None
+    total_questions: int = 0
     time_spent_sec: int = 0
     started_at: datetime
+    completed_at: datetime | None = None
     updated_at: datetime | None = None
 
 

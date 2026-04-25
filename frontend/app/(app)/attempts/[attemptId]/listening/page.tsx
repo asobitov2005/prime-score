@@ -4,6 +4,10 @@ import { buildAttemptWorkspaceMeta, getListeningPart, getTestById } from "@/lib/
 import { buildListeningPartFromSnapshot, mapSnapshotSections } from "@/lib/attempt-snapshot";
 import { getBackendAttempt } from "@/lib/server-attempts";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
+
 interface ListeningAttemptPageProps {
   params: {
     attemptId: string;
@@ -60,6 +64,7 @@ export default async function ListeningAttemptPage({ params, searchParams }: Lis
       part={part}
       sections={resolvedSections}
       meta={meta}
+      initialAnswers={backendAttempt?.answers ?? {}}
     />
   );
 }

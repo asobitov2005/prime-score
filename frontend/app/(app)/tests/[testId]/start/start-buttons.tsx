@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ export function StartTestButton({
   mode: string;
   scope: string;
   sectionId?: string;
-  label: string;
+  label: ReactNode;
   variant?: "outline" | "default";
   className?: string;
 }) {
@@ -36,7 +37,7 @@ export function StartTestButton({
       onClick={async () => {
         try {
           setIsSubmitting(true);
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"}/attempts/start`, {
+          const response = await fetch("/api/attempts/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -48,8 +49,13 @@ export function StartTestButton({
           });
 
           if (!response.ok) throw new Error("Failed to start.");
-          const result = (await response.json()) as { attempt_id: string };
-          router.push(`/attempts/${result.attempt_id}/${testType}`);
+          const result = (await response.json()) as { attemptId: string };
+          const resumeToken = Date.now();
+          if (testType === "reading") {
+            router.push("/exam-preview/reading?attemptId=" + result.attemptId + "&mode=" + mode + "&resume=" + resumeToken);
+            return;
+          }
+          router.push("/attempts/" + result.attemptId + "/" + testType + "?resume=" + resumeToken);
         } catch (err) {
            console.error(err);
            setIsSubmitting(false);
