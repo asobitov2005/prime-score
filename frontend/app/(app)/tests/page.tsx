@@ -26,7 +26,7 @@ interface TestsPageProps {
   };
 }
 
-function isCompletedAttempt(attempt: AttemptRow) {
+function isCompletedAttempt(attempt: TestCardAttemptSummary) {
   return attempt.status === "completed" || attempt.status === "submitted";
 }
 
@@ -125,7 +125,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       <SmartFilterShell className="sticky top-20 md:top-28 lg:top-32 z-40 mt-2 bg-background/95 backdrop-blur-md pb-4 space-y-4">
         {/* Primary Filter (Reading / Listening) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">
+          <div className="flex gap-1.5 bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">
             {[
               { id: "reading", label: "Reading", icon: BookOpen },
               { id: "listening", label: "Listening", icon: Headphones }

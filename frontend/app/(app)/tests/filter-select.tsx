@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Check, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { emitNavigationStart } from "@/lib/navigation-transition";
 
 interface FilterSelectProps {
   activeType: string;
@@ -27,6 +28,7 @@ export function FilterSelect({ activeType, activeFormat, activeSource }: FilterS
 
   const handleSelect = (id: string) => {
     const url = `/tests?type=${activeType}&format=${activeFormat}${id ? `&source=${id}` : ""}`;
+    emitNavigationStart(url);
     router.push(url);
     setIsOpen(false);
   };

@@ -15,7 +15,7 @@ function formatBand(value: number | null): string {
 
 export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCardsProps) {
   const analyticsQuery = useDashboardAnalytics(initialAnalytics);
-  const analytics = analyticsQuery.data;
+  const analytics = analyticsQuery.data ?? initialAnalytics;
   const averageReading = getAverageBand(analytics, "reading");
   const averageListening = getAverageBand(analytics, "listening");
 

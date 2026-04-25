@@ -1,5 +1,6 @@
 import type {
   AuthRequestCodeBody,
+  AuthSessionListResponse,
   DashboardAnalyticsResponse,
   AuthSessionStatusResponse,
   AuthVerifyCodeBody,
@@ -55,10 +56,26 @@ export function createApiClient(config: ApiClientConfig = {}) {
     verifyCode: (body: AuthVerifyCodeBody) => request<{ accessToken: string; refreshToken: string }>("/auth/verify-code", { method: "POST", body: JSON.stringify(body) }),
     refresh: (refreshToken: string) => request<{ accessToken: string }>("/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) }),
     logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
-    listSessions: () => request<{ items: any[] }>("/auth/sessions", { method: "GET" }).catch(() => ({
+    listSessions: () => request<AuthSessionListResponse>("/auth/sessions", { method: "GET" }).catch(() => ({
       items: [
-        { id: "1", device_info: { type: "Desktop", browser: "Chrome" }, ip_address: "127.0.0.1", last_used_at: new Date().toISOString(), is_active: true },
-        { id: "2", device_info: { type: "Mobile", browser: "Safari" }, ip_address: "192.168.1.1", last_used_at: new Date(Date.now() - 86400000).toISOString(), is_active: true }
+        {
+          id: "1",
+          user_id: "debug-user",
+          device_info: { type: "Desktop", browser: "Chrome" },
+          ip_address: "127.0.0.1",
+          is_active: true,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          last_used_at: new Date().toISOString()
+        },
+        {
+          id: "2",
+          user_id: "debug-user",
+          device_info: { type: "Mobile", browser: "Safari" },
+          ip_address: "192.168.1.1",
+          is_active: true,
+          expires_at: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          last_used_at: new Date(Date.now() - 86400000).toISOString()
+        }
       ]
     })),
     getSessionStatus: (sessionId: string) => request<AuthSessionStatusResponse>(`/auth/sessions/${sessionId}/status`, { method: "GET" }),

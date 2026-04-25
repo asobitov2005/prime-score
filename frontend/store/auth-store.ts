@@ -9,6 +9,8 @@ export interface AuthSessionState {
   isPremium: boolean;
   premiumUntil: string | null;
   isAuthenticated: boolean;
+  hasHydrated: boolean;
+  setHasHydrated: (hasHydrated: boolean) => void;
   setSession: (session: { userId: string; sessionId: string; name: string; phoneNumber: string; isPremium: boolean; premiumUntil?: string | null }) => void;
   syncSession: (session: Partial<{ userId: string; sessionId: string; name: string; phoneNumber: string | null; isPremium: boolean; premiumUntil: string | null }>) => void;
   updateName: (newName: string) => void;
@@ -25,6 +27,11 @@ export const useAuthStore = create<AuthSessionState>()(
       isPremium: false,
       premiumUntil: null,
       isAuthenticated: false,
+      hasHydrated: false,
+      setHasHydrated: (hasHydrated) =>
+        set({
+          hasHydrated
+        }),
       setSession: ({ userId, sessionId, name, phoneNumber, isPremium, premiumUntil = null }) =>
         set({
           userId,
@@ -61,7 +68,19 @@ export const useAuthStore = create<AuthSessionState>()(
         })
     }),
     {
-      name: "prime-auth-storage"
+      name: "prime-auth-storage",
+      partialize: (state) => ({
+        userId: state.userId,
+        sessionId: state.sessionId,
+        name: state.name,
+        phoneNumber: state.phoneNumber,
+        isPremium: state.isPremium,
+        premiumUntil: state.premiumUntil,
+        isAuthenticated: state.isAuthenticated
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      }
     }
   )
 );

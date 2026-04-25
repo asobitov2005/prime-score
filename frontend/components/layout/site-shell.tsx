@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { createApiClient } from "@/lib/api/client";
 import { useRouter, usePathname } from "next/navigation";
+import { NavigationTransitionOverlay } from "@/components/layout/navigation-transition-overlay";
+import { emitNavigationStart, setPendingPublicRedirect } from "@/lib/navigation-transition";
 
 interface SiteShellProps {
   children: ReactNode;
@@ -39,7 +41,7 @@ const highlights = [
 
 export function SiteShell({ children }: SiteShellProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const { isAuthenticated, name, phoneNumber, userId, sessionId, clearSession, syncSession } = useAuthStore();
+  const { isAuthenticated, name, phoneNumber, userId, sessionId, clearSession, syncSession, hasHydrated } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -111,9 +113,11 @@ export function SiteShell({ children }: SiteShellProps) {
   };
 
   const handleSignOut = () => {
+    setPendingPublicRedirect("/");
+    emitNavigationStart("/");
     clearSession();
     setIsMenuOpen(false);
-    router.push("/");
+    router.replace("/");
   };
 
   useEffect(() => {
@@ -165,11 +169,18 @@ export function SiteShell({ children }: SiteShellProps) {
   }, []);
 
   if (hideSiteChrome) {
-    return <>{children}</>;
+    return (
+      <>
+        <NavigationTransitionOverlay />
+        {children}
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative">
+      <NavigationTransitionOverlay />
+
       {/* Page Progress Bar */}
       <div className="fixed top-0 left-0 right-0 h-1 bg-primary/10 z-[100]">
         <div className="h-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)] animate-progress" />
@@ -256,7 +267,7 @@ export function SiteShell({ children }: SiteShellProps) {
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
             
-            {!mounted ? (
+            {!mounted || !hasHydrated ? (
               <div className="h-11 w-24 bg-muted animate-pulse rounded-xl" />
             ) : isAuthenticated ? (
               <>

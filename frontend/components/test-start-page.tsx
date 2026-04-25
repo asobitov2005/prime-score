@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import type { AttemptMode, TestCatalogItem, TestScope } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { emitNavigationStart } from "@/lib/navigation-transition";
 
 interface TestStartPageProps {
   test: TestCatalogItem;
@@ -51,10 +52,14 @@ export function TestStartPage({ test }: TestStartPageProps) {
       const result = (await response.json()) as { attemptId: string };
       const resumeToken = Date.now();
       if (test.type === "reading") {
-        router.push(`/exam-preview/reading?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`);
+        const href = `/exam-preview/reading?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`;
+        emitNavigationStart(href);
+        router.push(href);
         return;
       }
-      router.push(`/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`);
+      const href = `/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`;
+      emitNavigationStart(href);
+      router.push(href);
     } finally {
       setIsSubmitting(false);
     }
@@ -148,7 +153,14 @@ export function TestStartPage({ test }: TestStartPageProps) {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={() => router.push(`/tests/${test.id}`)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const href = `/tests/${test.id}`;
+                emitNavigationStart(href);
+                router.push(href);
+              }}
+            >
               Back to detail
             </Button>
             <Button disabled={isSubmitting} onClick={() => void startAttempt()} className="inline-flex items-center gap-2">

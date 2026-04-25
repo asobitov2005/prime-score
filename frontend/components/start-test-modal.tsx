@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TestCardAttemptSummary, TestCatalogItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
+import { emitNavigationStart } from "@/lib/navigation-transition";
 
 interface StartTestModalProps {
   test: TestCatalogItem;
@@ -43,10 +44,14 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
     setIsSubmitting(true);
     setOpen(false);
     if (test.type === "reading") {
-      router.push(`/exam-preview/reading?attemptId=${attempt.id}&mode=${attempt.mode}&resume=${resumeToken}`);
+      const href = `/exam-preview/reading?attemptId=${attempt.id}&mode=${attempt.mode}&resume=${resumeToken}`;
+      emitNavigationStart(href);
+      router.push(href);
       return;
     }
-    router.push(`/attempts/${attempt.id}/${test.type}?resume=${resumeToken}`);
+    const href = `/attempts/${attempt.id}/${test.type}?resume=${resumeToken}`;
+    emitNavigationStart(href);
+    router.push(href);
   }
 
   function handleClick() {
@@ -81,10 +86,14 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
       const resumeToken = Date.now();
       setOpen(false);
       if (test.type === "reading") {
-        router.push(`/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`);
+        const href = `/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`;
+        emitNavigationStart(href);
+        router.push(href);
         return;
       }
-      router.push(`/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`);
+      const href = `/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`;
+      emitNavigationStart(href);
+      router.push(href);
     } catch (err) {
       console.error(err);
     } finally {
@@ -151,7 +160,11 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
 
           <div className="space-y-3 pt-2">
             <Button
-              onClick={() => { setShowPremiumModal(false); router.push("/pricing"); }}
+              onClick={() => {
+                setShowPremiumModal(false);
+                emitNavigationStart("/pricing");
+                router.push("/pricing");
+              }}
               className="w-full h-12 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white dark:text-slate-950 shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5 border-0"
             >
               <Crown className="h-4 w-4 mr-2" />

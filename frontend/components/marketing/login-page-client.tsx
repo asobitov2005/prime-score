@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldCheck, ExternalLink, MessageSquareShare, X } from "lucide-react";
+import { Loader2, CheckCircle2, ExternalLink, MessageSquareShare, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -8,21 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/auth-store";
+import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
 
 export function LoginPageClient() {
   const router = useRouter();
   const setSession = useAuthStore((state) => state.setSession);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const [step, setStep] = useState<"guide" | "verify" | "done">("guide");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace("/dashboard");
-    } else {
-      setMounted(true);
+    if (!hasHydrated || !isAuthenticated) {
+      return;
     }
-  }, [isAuthenticated, router]);
+    router.replace("/dashboard");
+  }, [hasHydrated, isAuthenticated, router]);
 
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -74,19 +74,13 @@ export function LoginPageClient() {
     }
   };
 
-  if (!mounted) {
+  if (!hasHydrated || isAuthenticated) {
     return (
-      <div className="fixed inset-0 w-full h-full flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
-          <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <ShieldCheck className="h-6 w-6 text-primary animate-pulse" />
-          </div>
-          <div className="h-1 w-24 rounded-full bg-muted overflow-hidden">
-            <div className="h-full w-1/2 bg-primary/40 rounded-full animate-[shimmer_1s_ease-in-out_infinite]" style={{ animation: "shimmer 1s ease-in-out infinite" }} />
-          </div>
-        </div>
-        <style>{`@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }`}</style>
-      </div>
+      <AppLoadingPlaceholder
+        mode="overlay"
+        title="Checking your session"
+        description="Restoring your sign-in state before PrimeScore opens the dashboard."
+      />
     );
   }
 
@@ -109,7 +103,7 @@ export function LoginPageClient() {
 
           <CardHeader className="space-y-3 pt-10 px-8 text-center border-b border-border/50 pb-8 bg-muted/5">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner ring-1 ring-primary/20">
-              <ShieldCheck className="h-7 w-7" />
+              <MessageSquareShare className="h-7 w-7" />
             </div>
             <div className="space-y-1">
               <CardTitle className="text-2xl font-bold tracking-tight text-foreground">Sign In</CardTitle>
@@ -191,7 +185,7 @@ export function LoginPageClient() {
             {step === "done" && (
               <div className="text-center space-y-6 animate-in zoom-in-95 duration-400 py-4">
                 <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center animate-in zoom-in-50 duration-500 delay-150 border border-emerald-500/20 shadow-sm">
-                  <ShieldCheck className="h-8 w-8" />
+                  <CheckCircle2 className="h-8 w-8" />
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-xl font-black text-foreground tracking-tight">Access Granted</h3>

@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "next/navigation";
+import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
+import { consumePendingPublicRedirect } from "@/lib/navigation-transition";
 
 interface AppShellProps {
   children: ReactNode;
@@ -29,8 +31,9 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { sidebar, toggleSidebar } = useUIStore();
-  const { isAuthenticated, isPremium, premiumUntil } = useAuthStore();
+  const { isAuthenticated, isPremium, premiumUntil, hasHydrated } = useAuthStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const isPublicTestsRoute = pathname === "/tests" || pathname.startsWith("/tests/");
 
   const premiumBadgeLabel = (() => {
     if (!isPremium) {
@@ -46,12 +49,13 @@ export function AppShell({ children }: AppShellProps) {
   })();
 
   useEffect(() => {
-    // If user is not authenticated and tries to access protected app routes (except /tests which might be open partially but app-shell wraps it)
-    // Actually, the user requested: if not logged in, only /tests is open. If they go to others, prompt to login.
-    if (!isAuthenticated && pathname !== "/tests" && !pathname.startsWith("/tests/")) {
-      router.push("/login");
+    if (!hasHydrated) {
+      return;
     }
-  }, [isAuthenticated, pathname, router]);
+    if (!isAuthenticated && !isPublicTestsRoute) {
+      router.replace(consumePendingPublicRedirect() ?? "/login");
+    }
+  }, [hasHydrated, isAuthenticated, isPublicTestsRoute, router]);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -65,9 +69,22 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, [isMobileOpen]);
 
-  // If not authenticated and trying to view a protected page, show nothing while redirecting
-  if (!isAuthenticated && pathname !== "/tests" && !pathname.startsWith("/tests/")) {
-    return null;
+  if (!hasHydrated && !isPublicTestsRoute) {
+    return (
+      <AppLoadingPlaceholder
+        title="Restoring your workspace"
+        description="Checking your PrimeScore session before the app layout opens."
+      />
+    );
+  }
+
+  if (hasHydrated && !isAuthenticated && !isPublicTestsRoute) {
+    return (
+      <AppLoadingPlaceholder
+        title="Redirecting to sign in"
+        description="Your session is not active, so PrimeScore is taking you to the login screen."
+      />
+    );
   }
 
   const SidebarContent = () => (

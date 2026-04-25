@@ -11,6 +11,16 @@ import { WelcomeHeader } from "./welcome-header";
 import { PremiumDashboardSpotlight } from "./premium-dashboard-spotlight";
 import { cn } from "@/lib/utils";
 
+interface InProgressTestCardState {
+  title: string;
+  progress: number;
+  time: string;
+}
+
+function getInProgressTest(): InProgressTestCardState | null {
+  return null;
+}
+
 export default async function DashboardPage() {
   const [attempts, analytics] = await Promise.all([getUserAttempts(), getDashboardAnalytics()]);
   
@@ -18,7 +28,7 @@ export default async function DashboardPage() {
   
   // --- 1. CONTINUE TEST OR FALLBACK LOGIC ---
   // In a real app, fetch an incomplete attempt from DB. Here we mock it as null to show the fallback.
-  const inProgressTest = null; 
+  const inProgressTest = getInProgressTest();
   // const inProgressTest = { title: "Cambridge 18 Reading Test 1", progress: 35, time: "26 min" };
 
   // --- 2. DYNAMIC RECOMMENDED ACTION LOGIC ---
@@ -171,8 +181,8 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-4">
             <PremiumDashboardSpotlight />
 
-            <Card className="bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl" asChild>
-              <Link href="/tests?type=reading">
+            <Link href="/tests?type=reading" className="block">
+              <Card className="bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
                 <div className="bg-blue-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
                   <BookOpenText className="h-5 w-5 text-blue-600 dark:text-blue-500" />
                 </div>
@@ -181,11 +191,11 @@ export default async function DashboardPage() {
                   <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/80 mt-0.5">Academic · 60 min</p>
                 </div>
                 <ArrowRight className="ml-auto h-5 w-5 text-blue-500/50 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-              </Link>
-            </Card>
+              </Card>
+            </Link>
             
-            <Card className="bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl" asChild>
-              <Link href="/tests?type=listening">
+            <Link href="/tests?type=listening" className="block">
+              <Card className="bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
                 <div className="bg-emerald-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
                   <Headphones className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
                 </div>
@@ -194,8 +204,8 @@ export default async function DashboardPage() {
                   <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/80 mt-0.5">Academic · 30 min</p>
                 </div>
                 <ArrowRight className="ml-auto h-5 w-5 text-emerald-500/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
-              </Link>
-            </Card>
+              </Card>
+            </Link>
           </div>
         </div>
       </div>
@@ -266,8 +276,9 @@ export default async function DashboardPage() {
             {featuredTests.map(test => {
               const isReading = test.type === "reading";
               return (
-                <Card key={test.id} className="p-4 border-border/40 shadow-sm hover:border-primary/30 transition-all hover:shadow-md cursor-pointer group rounded-2xl bg-card/30" asChild>
-                  <Link href={`/tests`} className="flex items-center gap-4">
+                <Link key={test.id} href="/tests" className="block">
+                  <Card className="p-4 border-border/40 shadow-sm hover:border-primary/30 transition-all hover:shadow-md cursor-pointer group rounded-2xl bg-card/30">
+                    <div className="flex items-center gap-4">
                       <div className={cn(
                         "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110", 
                         isReading ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
@@ -288,8 +299,9 @@ export default async function DashboardPage() {
                       )}>
                         <Play className="h-4 w-4 fill-current ml-0.5" />
                       </div>
-                  </Link>
-                </Card>
+                    </div>
+                  </Card>
+                </Link>
               );
             })}
           </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import type { AttemptMode, TestType } from "@/lib/types";
+import { emitNavigationStart } from "@/lib/navigation-transition";
 
 interface HistoryRetakeButtonProps {
   testId: string;
@@ -36,11 +37,15 @@ export function HistoryRetakeButton({ testId, testType, mode }: HistoryRetakeBut
       const result = (await response.json()) as { attemptId: string };
       const resumeToken = Date.now();
       if (testType === "reading") {
-        router.push(`/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`);
+        const href = `/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`;
+        emitNavigationStart(href);
+        router.push(href);
         return;
       }
 
-      router.push(`/attempts/${result.attemptId}/${testType}?resume=${resumeToken}`);
+      const href = `/attempts/${result.attemptId}/${testType}?resume=${resumeToken}`;
+      emitNavigationStart(href);
+      router.push(href);
     } catch (error) {
       console.error(error);
       setIsStarting(false);

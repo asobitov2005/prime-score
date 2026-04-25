@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { emitNavigationStart } from "@/lib/navigation-transition";
 
 export function StartTestButton({
   testId,
@@ -52,10 +53,14 @@ export function StartTestButton({
           const result = (await response.json()) as { attemptId: string };
           const resumeToken = Date.now();
           if (testType === "reading") {
-            router.push("/exam-preview/reading?attemptId=" + result.attemptId + "&mode=" + mode + "&resume=" + resumeToken);
+            const href = "/exam-preview/reading?attemptId=" + result.attemptId + "&mode=" + mode + "&resume=" + resumeToken;
+            emitNavigationStart(href);
+            router.push(href);
             return;
           }
-          router.push("/attempts/" + result.attemptId + "/" + testType + "?resume=" + resumeToken);
+          const href = "/attempts/" + result.attemptId + "/" + testType + "?resume=" + resumeToken;
+          emitNavigationStart(href);
+          router.push(href);
         } catch (err) {
            console.error(err);
            setIsSubmitting(false);

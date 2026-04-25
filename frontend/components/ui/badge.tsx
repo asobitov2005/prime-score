@@ -4,6 +4,7 @@ type BadgeTone = "default" | "secondary" | "success" | "warning" | "danger" | "o
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
+  variant?: BadgeTone;
 }
 
 const toneClasses: Record<BadgeTone, string> = {
@@ -15,12 +16,14 @@ const toneClasses: Record<BadgeTone, string> = {
   outline: "border border-border bg-background text-muted-foreground"
 };
 
-export function Badge({ className, tone = "default", ...props }: BadgeProps) {
+export function Badge({ className, tone, variant, ...props }: BadgeProps) {
+  const resolvedTone = tone ?? variant ?? "default";
+
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold tracking-wide",
-        toneClasses[tone],
+        toneClasses[resolvedTone],
         className
       )}
       {...props}

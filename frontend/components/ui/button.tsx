@@ -1,8 +1,8 @@
 import { cloneElement, forwardRef, isValidElement } from "react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive" | "link";
-type ButtonSize = "sm" | "default" | "lg";
+type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive" | "link" | "solid";
+type ButtonSize = "sm" | "default" | "lg" | "icon";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -12,6 +12,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variantClasses: Record<ButtonVariant, string> = {
   default: "bg-primary text-primary-foreground dark:text-slate-950 shadow-sm hover:bg-primary/90",
+  solid: "bg-primary text-primary-foreground dark:text-slate-950 shadow-sm hover:bg-primary/90",
   secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
   outline: "border border-border bg-background hover:bg-accent hover:text-accent-foreground",
   ghost: "hover:bg-accent hover:text-accent-foreground",
@@ -22,7 +23,8 @@ const variantClasses: Record<ButtonVariant, string> = {
 const sizeClasses: Record<ButtonSize, string> = {
   sm: "h-9 rounded-md px-3 text-sm",
   default: "h-11 rounded-md px-4",
-  lg: "h-12 rounded-md px-6 text-base"
+  lg: "h-12 rounded-md px-6 text-base",
+  icon: "h-10 w-10 rounded-md"
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
