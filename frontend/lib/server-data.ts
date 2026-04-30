@@ -1,15 +1,14 @@
 import { getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
+import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
+import { getTestSourceDetail, getTestSourceLabel, matchesTestSourceFilter } from "@/lib/test-source";
 import type { AccessType, TestCatalogItem, TestType } from "@/lib/types";
 
-const baseUrl = (
-  process.env.API_INTERNAL_BASE_URL
-  ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
+const baseUrl = getFrontendServerApiBaseUrl();
 
 type BackendTestCatalogItem = {
   id: string;
   title: string;
+  section_title?: string | null;
   test_type: TestType;
   format: string;
   access_type: AccessType;
@@ -36,9 +35,18 @@ type BackendTestDetail = BackendTestCatalogItem & {
 };
 
 async function requestApi<T>(path: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store"
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      cache: "no-store",
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "no body");
@@ -64,17 +72,18 @@ function mapCatalogItem(item: BackendTestCatalogItem): TestCatalogItem {
     id: item.id,
     slug: item.id,
     title: item.title,
+    sectionTitle: item.section_title ?? undefined,
     type: item.test_type,
-    format: item.format ?? "full",
+    format: (item.format ?? "full") as TestCatalogItem["format"],
     accessType: item.access_type,
     status: item.status,
     source: item.source ?? "custom",
-    sourceDetail: item.source_detail ?? "PrimeScore",
+    sourceDetail: getTestSourceDetail(item.source, item.source_detail),
     questionCount: item.total_questions,
     estimatedMinutes: item.exam_time_limit_min,
     isPremiumLocked: item.access_type === "premium",
     description: item.description ?? "Structured IELTS test detail.",
-    tags: [item.test_type, item.access_type, item.source ?? "custom"],
+    tags: [item.test_type, item.access_type, getTestSourceLabel(item.source)],
     sections: buildPlaceholderSections(item.section_count)
   };
 }
@@ -117,11 +126,7 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
       results = results.filter((test) => test.accessType === query.access);
     }
     if (query.source) {
-      const s = query.source.toLowerCase();
-      results = results.filter((test) => 
-        test.source.toLowerCase().includes(s) || 
-        test.sourceDetail.toLowerCase().includes(s)
-      );
+      results = results.filter((test) => matchesTestSourceFilter(test.source, test.sourceDetail, query.source));
     }
     return results;
   }

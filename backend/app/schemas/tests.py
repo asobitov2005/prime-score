@@ -9,6 +9,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.enums import AccessType, QuestionType, TestFormat, TestMode, TestScope, TestSource, TestStatus, TestType
 
 
+class TestParagraphSnapshotRead(BaseModel):
+    id: str | None = None
+    text: str | None = None
+    label: str | None = None
+
+
 class TestSectionSnapshotRead(BaseModel):
     section_id: UUID
     section_number: int
@@ -17,7 +23,7 @@ class TestSectionSnapshotRead(BaseModel):
     subtitle: str | None = None
     intro: str | None = None
     content: str | None = None
-    paragraphs: list[str] = []
+    paragraphs: list[str | TestParagraphSnapshotRead] = []
     show_labels: bool = False
     question_count: int = 0
     audio_duration_seconds: int | None = None
@@ -65,6 +71,7 @@ class TestCatalogItemRead(BaseModel):
     description: str | None = None
     exam_time_limit_min: int
     total_questions: int = 40
+    section_title: str | None = None
     version: int = 1
     section_count: int = 0
 

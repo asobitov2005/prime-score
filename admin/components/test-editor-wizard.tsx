@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Notice, ProgressBar, SectionHeader, Select, Textarea } from "@/components/ui";
 import { createEmptyDraft } from "@/lib/draft-template";
 import { listeningQuestionTypes, readingQuestionTypes } from "@/lib/question-types";
 import { adminApi } from "@/lib/api";
+import { adminTestSourceOptions } from "@/lib/test-source";
 import type {
   AdminDraftChecklistStatus,
   AdminTestDraftContentSection,
@@ -70,6 +71,93 @@ function extractMatchingOptionValue(option: string) {
 
 function stripMatchingOptionPrefix(option: string) {
   return option.trim().replace(/^([a-z0-9ivxlcdm]+)[.)]\s*/i, "").trim();
+}
+
+function createDraftId(prefix: string) {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
+    return `${prefix}-${cryptoApi.randomUUID()}`;
+  }
+  return `${prefix}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function alphabetLabelFromIndex(index: number) {
+  let current = index;
+  let label = "";
+
+  do {
+    label = String.fromCharCode(65 + (current % 26)) + label;
+    current = Math.floor(current / 26) - 1;
+  } while (current >= 0);
+
+  return label;
+}
+
+function romanNumeralFromIndex(index: number) {
+  const numerals: Array<[number, string]> = [
+    [1000, "m"],
+    [900, "cm"],
+    [500, "d"],
+    [400, "cd"],
+    [100, "c"],
+    [90, "xc"],
+    [50, "l"],
+    [40, "xl"],
+    [10, "x"],
+    [9, "ix"],
+    [5, "v"],
+    [4, "iv"],
+    [1, "i"],
+  ];
+
+  let value = index + 1;
+  let result = "";
+  for (const [amount, glyph] of numerals) {
+    while (value >= amount) {
+      result += glyph;
+      value -= amount;
+    }
+  }
+  return result;
+}
+
+function shouldAutoLetterMatchingOptions(typeId: string) {
+  return typeId.includes("matching_features");
+}
+
+function getMatchingOptionPreview(option: string, index: number, typeId: string) {
+  const fixedExampleMatch = option.trim().match(/^([A-Z]+)\s*->\s*(.+)$/i);
+  const optionBody = fixedExampleMatch ? fixedExampleMatch[2].trim() : option.trim();
+  const explicitValue = extractMatchingOptionValue(optionBody);
+  const explicitText = stripMatchingOptionPrefix(optionBody);
+
+  if (explicitValue !== optionBody.trim()) {
+    return {
+      value: explicitValue.toUpperCase(),
+      label: explicitText ? `${explicitValue.toUpperCase()}. ${explicitText}` : explicitValue.toUpperCase(),
+    };
+  }
+
+  if (typeId.includes("matching_headings")) {
+    const value = romanNumeralFromIndex(index);
+    return {
+      value,
+      label: optionBody.trim(),
+    };
+  }
+
+  if (shouldAutoLetterMatchingOptions(typeId)) {
+    const value = alphabetLabelFromIndex(index);
+    return {
+      value,
+      label: option.trim() ? `${value}. ${option.trim()}` : value,
+    };
+  }
+
+  return {
+    value: explicitValue,
+    label: option.trim(),
+  };
 }
 
 type PassageContentBlock = {
@@ -160,7 +248,51 @@ type MatchingHeadingPreviewRow = {
   answerValue: string;
   isDuplicate: boolean;
   isValidLabel: boolean;
+  isUnused: boolean;
+  isFixedExample: boolean;
 };
+
+function normalizeMatchingHeadingAnswerLine(line: string) {
+  const trimmed = line.trim().toUpperCase();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed === "—" || trimmed === "_") {
+    return "-";
+  }
+  return trimmed;
+}
+
+type MatchingHeadingEntry = {
+  fixedParagraphLabel: string | null;
+  headingText: string;
+  answerValue: string;
+  displayLabel: string;
+  rawLine: string;
+};
+
+function parseMatchingHeadingEntry(line: string, index: number) {
+  const fixedExampleMatch = line.trim().match(/^([A-Z]+)\s*->\s*(.+)$/i);
+  const fixedParagraphLabel = fixedExampleMatch ? fixedExampleMatch[1].toUpperCase() : null;
+  const headingBody = fixedExampleMatch ? fixedExampleMatch[2].trim() : line.trim();
+  const explicitValue = extractMatchingOptionValue(headingBody);
+  const explicitText = stripMatchingOptionPrefix(headingBody) || headingBody;
+  const hasExplicitValue = explicitValue !== headingBody;
+  const answerValue = hasExplicitValue ? explicitValue : romanNumeralFromIndex(index);
+  const headingText = hasExplicitValue ? explicitText : headingBody;
+
+  return {
+    fixedParagraphLabel,
+    headingText,
+    answerValue,
+    displayLabel: `${answerValue}. ${headingText}`.trim(),
+    rawLine: line,
+  } satisfies MatchingHeadingEntry;
+}
+
+function isFixedMatchingHeadingExample(line: string) {
+  return /^[A-Z]+\s*->\s*.+$/i.test(line.trim());
+}
 
 function analyzeMatchingHeadingsGroup(
   group: AdminTestDraftQuestionGroup,
@@ -170,44 +302,64 @@ function analyzeMatchingHeadingsGroup(
   const validLabels = paragraphLabelsForSection(section);
   const validLabelSet = new Set(validLabels);
   const headings = splitNonEmptyLines(group.secondaryBlock ?? "");
-  const labels = splitNonEmptyLines(group.answerBlock ?? "").map((label) => label.toUpperCase());
+  const headingEntries = headings.map((headingLine, index) => parseMatchingHeadingEntry(headingLine, index));
+  const answerLines = splitNonEmptyLines(group.answerBlock ?? "").map(normalizeMatchingHeadingAnswerLine);
   const labelCounts = new Map<string, number>();
+  let answerCursor = 0;
 
-  for (const label of labels) {
-    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
-  }
-
-  const previewRows: MatchingHeadingPreviewRow[] = headings.map((headingLine, index) => {
-    const label = labels[index] ?? "";
+  const previewRows: MatchingHeadingPreviewRow[] = headingEntries.map((entry) => {
+    const label = entry.fixedParagraphLabel ?? answerLines[answerCursor++] ?? "";
+    const isUnused = label === "-";
     return {
       label,
-      headingLine,
-      headingText: stripMatchingOptionPrefix(headingLine) || headingLine,
-      answerValue: extractMatchingOptionValue(headingLine),
-      isDuplicate: Boolean(label) && (labelCounts.get(label) ?? 0) > 1,
-      isValidLabel: Boolean(label) && validLabelSet.has(label),
+      headingLine: entry.displayLabel,
+      headingText: entry.headingText,
+      answerValue: entry.answerValue,
+      isDuplicate: false,
+      isValidLabel: false,
+      isUnused,
+      isFixedExample: Boolean(entry.fixedParagraphLabel),
     };
   });
 
-  const orderedRows = [...previewRows].sort((left, right) => {
-    const leftIndex = validLabels.indexOf(left.label);
-    const rightIndex = validLabels.indexOf(right.label);
-    return (leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex) - (rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex);
-  });
-
-  const usedLabels = new Set<string>();
-  const generatedQuestions: AdminTestDraftQuestion[] = [];
-  for (const row of orderedRows) {
-    if (!row.label || !row.isValidLabel || row.isDuplicate || usedLabels.has(row.label)) {
+  for (const row of previewRows) {
+    const label = row.label;
+    if (!label || label === "-") {
       continue;
     }
-    usedLabels.add(row.label);
-    const existingQuestion = group.questions.find((question) => paragraphLabelFromPrompt(question.prompt) === row.label);
+    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+  }
+
+  previewRows.forEach((row) => {
+    row.isDuplicate = Boolean(row.label) && !row.isUnused && (labelCounts.get(row.label) ?? 0) > 1;
+    row.isValidLabel = Boolean(row.label) && !row.isUnused && validLabelSet.has(row.label);
+  });
+
+  const assignedHeadingByParagraph = new Map<string, MatchingHeadingPreviewRow>();
+  const generatedQuestions: AdminTestDraftQuestion[] = [];
+  const fixedExampleLabels = new Set<string>();
+
+  for (const row of previewRows) {
+    if (!row.label || row.isUnused || !row.isValidLabel || row.isDuplicate || assignedHeadingByParagraph.has(row.label)) {
+      continue;
+    }
+    assignedHeadingByParagraph.set(row.label, row);
+    if (row.isFixedExample) {
+      fixedExampleLabels.add(row.label);
+    }
+  }
+
+  for (const paragraphLabel of validLabels) {
+    if (fixedExampleLabels.has(paragraphLabel)) {
+      continue;
+    }
+    const mappedHeading = assignedHeadingByParagraph.get(paragraphLabel);
+    const existingQuestion = group.questions.find((question) => paragraphLabelFromPrompt(question.prompt) === paragraphLabel);
     generatedQuestions.push({
-      id: existingQuestion?.id ?? `draft-q-${crypto.randomUUID()}`,
+      id: existingQuestion?.id ?? createDraftId("draft-q"),
       label: String(group.questionStart + generatedQuestions.length),
-      prompt: `Paragraph ${row.label}`,
-      acceptedAnswers: [row.answerValue],
+      prompt: `Paragraph ${paragraphLabel}`,
+      acceptedAnswers: mappedHeading ? [mappedHeading.answerValue] : [],
       explanation: existingQuestion?.explanation ?? "",
       variants: [],
     });
@@ -220,13 +372,26 @@ function analyzeMatchingHeadingsGroup(
   if (duplicateLabels.length > 0) {
     issues.push(`Duplicate paragraph labels are not allowed: ${duplicateLabels.join(", ")}.`);
   }
-  const invalidLabels = labels.filter((label) => !validLabelSet.has(label));
+  const labels = previewRows.map((row) => row.label);
+  const invalidLabels = labels.filter((label) => label && label !== "-" && !validLabelSet.has(label));
   if (invalidLabels.length > 0) {
     issues.push(`These labels are outside the passage range: ${[...new Set(invalidLabels)].join(", ")}.`);
   }
+  const expectedAnswerLines = headingEntries.filter((entry) => !entry.fixedParagraphLabel).length;
+  if (expectedAnswerLines === 0 && headingEntries.length === 0) {
+    issues.push("Add headings first before validating this group.");
+  } else if (expectedAnswerLines > 0 && answerLines.length === 0) {
+    issues.push("Add one paragraph label or '-' per non-fixed heading in the answer block.");
+  }
+  if (answerLines.length < expectedAnswerLines) {
+    issues.push(`Every non-fixed heading needs one answer line. Missing ${expectedAnswerLines - answerLines.length} line(s).`);
+  }
+  if (answerLines.length > expectedAnswerLines) {
+    issues.push(`You added ${answerLines.length - expectedAnswerLines} extra answer line(s).`);
+  }
   const missingLabels = validLabels.filter((label) => !labelCounts.has(label));
   if (missingLabels.length > 0) {
-    issues.push(`Every passage label must be used once. Missing labels: ${missingLabels.join(", ")}.`);
+    issues.push(`Every passage label must be assigned once. Missing labels: ${missingLabels.join(", ")}.`);
   }
   if (validLabels.length === 0) {
     issues.push("Add passage paragraphs first so matching headings can validate paragraph labels.");
@@ -237,6 +402,7 @@ function analyzeMatchingHeadingsGroup(
     issues,
     validLabels,
     generatedQuestions,
+    fixedExampleLabels,
   };
 }
 
@@ -254,7 +420,12 @@ function isBracketCompletionType(typeId: string) {
     || typeId.includes("summary_completion")
     || typeId.includes("note_completion")
     || typeId.includes("form_completion")
+    || typeId.includes("short_answer")
   );
+}
+
+function isDiagramLabelingType(typeId: string) {
+  return typeId.includes("diagram");
 }
 
 function parseBracketCompletionAnswers(line: string) {
@@ -358,6 +529,97 @@ function parseMultipleChoiceMultipleAnswerGroups(text: string) {
     .filter((group) => group.length > 0);
 }
 
+function normalizeLookupToken(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function resolveMcOptionLetter(token: string, variants: string[]) {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^[A-E]$/i.test(trimmed)) {
+    return trimmed.toUpperCase();
+  }
+
+  const normalized = normalizeLookupToken(trimmed);
+  for (let index = 0; index < variants.length; index += 1) {
+    const letter = String.fromCharCode(65 + index);
+    const optionText = variants[index] ?? "";
+    const candidates = [`${letter}. ${optionText}`, `${letter}) ${optionText}`, optionText];
+    if (candidates.some((candidate) => normalizeLookupToken(candidate) === normalized)) {
+      return letter;
+    }
+  }
+
+  return null;
+}
+
+function parseMcSingleAcceptedAnswers(line: string, variants: string[]) {
+  const tokens = line
+    .split("|")
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  return [...new Set(tokens.map((token) => resolveMcOptionLetter(token, variants) ?? token))];
+}
+
+function parseMcMultipleAcceptedAnswers(tokens: string[], variants: string[]) {
+  return [...new Set(
+    tokens
+      .map((token) => resolveMcOptionLetter(token, variants))
+      .filter((token): token is string => Boolean(token))
+  )];
+}
+
+function matchWordBankOptionVariants(token: string, options: string[]) {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = normalizeLookupToken(trimmed);
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index] ?? "";
+    const fullOption = option.trim();
+    const optionValue = extractMatchingOptionValue(fullOption);
+    const optionText = stripMatchingOptionPrefix(fullOption);
+    const orderLetter = String.fromCharCode(65 + index);
+    const candidates = [fullOption, optionValue, optionText, orderLetter];
+
+    if (candidates.some((candidate) => normalizeLookupToken(candidate) === normalized)) {
+      return [...new Set([fullOption, optionText, optionValue, orderLetter].filter(Boolean))];
+    }
+  }
+
+  return null;
+}
+
+function resolveWordBankAnswerVariants(token: string, options: string[]) {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const matchedVariants = matchWordBankOptionVariants(trimmed, options);
+  if (matchedVariants) {
+    return matchedVariants;
+  }
+
+  return [trimmed];
+}
+
+function parseWordBankAcceptedAnswers(line: string, options: string[]) {
+  return [...new Set(
+    line
+      .split(/[\/|]/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .flatMap((token) => resolveWordBankAnswerVariants(token, options))
+  )];
+}
+
 function questionSlotCount(group: AdminTestDraftQuestionGroup, question: AdminTestDraftQuestion) {
   if (!isMultipleChoiceMultipleType(group.typeId)) {
     return 1;
@@ -385,6 +647,258 @@ function totalQuestionSlots(group: AdminTestDraftQuestionGroup) {
   return group.questions.reduce((count, question) => count + questionSlotCount(group, question), 0);
 }
 
+function analyzeMatchingInformationGroup(
+  group: AdminTestDraftQuestionGroup,
+  sections: AdminTestDraftContentSection[]
+) {
+  const targetSection = sections.find((section) => section.id === group.sectionId);
+  const validLabels = paragraphLabelsForSection(targetSection);
+  const validLabelSet = new Set(validLabels);
+  const questionLines = splitNonEmptyLines(group.questionBlock ?? "");
+  const answerLines = splitNonEmptyLines(group.answerBlock ?? "").map((line) => line.toUpperCase());
+  const issues: string[] = [];
+
+  if (questionLines.length === 0) {
+    issues.push("Add one statement per line in the question block.");
+  }
+  if (answerLines.length === 0) {
+    issues.push("Add one paragraph label per line in the answer block.");
+  }
+  if (answerLines.length < questionLines.length) {
+    issues.push(`Every statement needs one paragraph label. Missing ${questionLines.length - answerLines.length} answer line(s).`);
+  }
+  if (answerLines.length > questionLines.length) {
+    issues.push(`You added ${answerLines.length - questionLines.length} extra answer line(s).`);
+  }
+  if (validLabels.length === 0) {
+    issues.push("Add labelled passage paragraphs first so matching information can validate paragraph labels.");
+  }
+
+  const invalidLabels = [...new Set(answerLines.filter((label) => label && !validLabelSet.has(label)))];
+  if (invalidLabels.length > 0) {
+    issues.push(`These paragraph labels are outside the current passage range: ${invalidLabels.join(", ")}.`);
+  }
+
+  return { issues, validLabels };
+}
+
+function analyzeCompletionGroup(group: AdminTestDraftQuestionGroup) {
+  const markerCount = (group.questionBlock?.match(/\[\]/g) ?? []).length;
+  const answerLines = splitNonEmptyLines(group.answerBlock ?? "");
+  const issues: string[] = [];
+
+  if (markerCount === 0) {
+    issues.push("Add [] markers in the question block to generate completion blanks.");
+  }
+  if (answerLines.length === 0) {
+    issues.push("Add one answer line per blank in the answer block.");
+  }
+  if (answerLines.length < markerCount) {
+    issues.push(`Every blank needs one answer line. Missing ${markerCount - answerLines.length} answer line(s).`);
+  }
+  if (answerLines.length > markerCount) {
+    issues.push(`You added ${answerLines.length - markerCount} extra answer line(s).`);
+  }
+
+  if (group.typeId.includes("wordbank")) {
+    if (group.sharedOptions.length === 0) {
+      issues.push("Add word bank options before validating this group.");
+    }
+
+    const invalidTokens = answerLines.flatMap((line) =>
+      line
+        .split(/[\/|]/)
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .filter((token) => !matchWordBankOptionVariants(token, group.sharedOptions))
+    );
+
+    const uniqueInvalidTokens = [...new Set(invalidTokens)];
+    if (uniqueInvalidTokens.length > 0) {
+      issues.push(`These word bank answers do not match any option: ${uniqueInvalidTokens.join(", ")}.`);
+    }
+  }
+
+  return { issues };
+}
+
+function analyzeMultipleChoiceGroup(group: AdminTestDraftQuestionGroup) {
+  const parsedQuestions = parseMultipleChoiceQuestionBlocks(group.questionBlock ?? "");
+  const answerLines = splitNonEmptyLines(group.answerBlock ?? "");
+  const answerGroups = isMultipleChoiceMultipleType(group.typeId)
+    ? parseMultipleChoiceMultipleAnswerGroups(group.answerBlock ?? "")
+    : [];
+  const issues: string[] = [];
+  const providedAnswerCount = isMultipleChoiceMultipleType(group.typeId) ? answerGroups.length : answerLines.length;
+
+  if (parsedQuestions.length === 0) {
+    issues.push("Add at least one multiple-choice question in the question block.");
+  }
+  if (providedAnswerCount === 0) {
+    issues.push("Add one correct answer line per question in the answer block.");
+  }
+  if (providedAnswerCount < parsedQuestions.length) {
+    issues.push(`Every question needs one answer line. Missing ${parsedQuestions.length - providedAnswerCount} answer line(s).`);
+  }
+  if (providedAnswerCount > parsedQuestions.length) {
+    issues.push(`You added ${providedAnswerCount - parsedQuestions.length} extra answer line(s).`);
+  }
+
+  const invalidTokens = parsedQuestions.flatMap((question, index) => {
+    if (isMultipleChoiceMultipleType(group.typeId)) {
+      return (answerGroups[index] ?? [])
+        .filter((token) => !resolveMcOptionLetter(token, question.variants));
+    }
+
+    const answerLine = answerLines[index] ?? "";
+    if (!answerLine) {
+      return [];
+    }
+
+    return answerLine
+      .split("|")
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .filter((token) => !resolveMcOptionLetter(token, question.variants));
+  });
+
+  const uniqueInvalidTokens = [...new Set(invalidTokens)];
+  if (uniqueInvalidTokens.length > 0) {
+    issues.push(`These answers do not match any option letter or option text: ${uniqueInvalidTokens.join(", ")}.`);
+  }
+
+  return { issues };
+}
+
+function collectGroupIssues(
+  group: AdminTestDraftQuestionGroup,
+  sections: AdminTestDraftContentSection[]
+) {
+  const issues: string[] = [];
+
+  if (group.questions.length === 0) {
+    issues.push("This group has no generated questions yet.");
+  }
+
+  if (group.typeId.includes("matching_headings")) {
+    issues.push(...analyzeMatchingHeadingsGroup(group, sections).issues);
+  }
+  if (isBinaryStatementType(group.typeId)) {
+    issues.push(...analyzeBinaryStatementGroup(group).issues);
+  }
+  if (isMatchingInformationType(group.typeId)) {
+    issues.push(...analyzeMatchingInformationGroup(group, sections).issues);
+  }
+  if (isBracketCompletionType(group.typeId)) {
+    issues.push(...analyzeCompletionGroup(group).issues);
+  }
+  if (group.typeId.includes("mc_")) {
+    issues.push(...analyzeMultipleChoiceGroup(group).issues);
+  }
+
+  return [...new Set(issues)];
+}
+
+function normalizeQuestionGroups(groups: AdminTestDraftQuestionGroup[]) {
+  let nextQuestionStart = 1;
+
+  return groups.map((group) => {
+    let cursor = nextQuestionStart;
+    const normalizedQuestions = group.questions.map((question) => {
+      const slotCount = questionSlotCount(group, question);
+      const range = {
+        start: cursor,
+        end: cursor + slotCount - 1,
+      };
+      cursor = range.end + 1;
+
+      const nextPrompt = (
+        isBracketCompletionType(group.typeId)
+        && /^Blank \d+$/i.test(question.prompt.trim())
+      )
+        ? `Blank ${range.start}`
+        : question.prompt;
+
+      return {
+        ...question,
+        label: formatQuestionRange(range),
+        prompt: nextPrompt,
+      };
+    });
+
+    const consumedSlots = Math.max(1, normalizedQuestions.reduce((count, question) => count + questionSlotCount(group, question), 0));
+    const normalizedGroup = {
+      ...group,
+      questionStart: nextQuestionStart,
+      questionEnd: nextQuestionStart + consumedSlots - 1,
+      questions: normalizedQuestions,
+    };
+
+    nextQuestionStart = normalizedGroup.questionEnd + 1;
+    return normalizedGroup;
+  });
+}
+
+function findSectionInsertIndex(
+  groups: AdminTestDraftQuestionGroup[],
+  sections: AdminTestDraftContentSection[],
+  targetSectionId: string,
+) {
+  const sectionOrder = new Map(sections.map((section, index) => [section.id, index]));
+  const targetOrder = sectionOrder.get(targetSectionId);
+  if (targetOrder === undefined) {
+    return groups.length;
+  }
+
+  let lastTargetIndex = -1;
+  for (let index = 0; index < groups.length; index += 1) {
+    const group = groups[index];
+    if (group.sectionId === targetSectionId) {
+      lastTargetIndex = index;
+      continue;
+    }
+
+    const currentOrder = sectionOrder.get(group.sectionId);
+    if (lastTargetIndex === -1 && currentOrder !== undefined && currentOrder > targetOrder) {
+      return index;
+    }
+  }
+
+  return lastTargetIndex >= 0 ? lastTargetIndex + 1 : groups.length;
+}
+
+function reorderQuestionGroupsForDrop(
+  groups: AdminTestDraftQuestionGroup[],
+  sections: AdminTestDraftContentSection[],
+  draggedGroupId: string,
+  targetSectionId: string,
+  beforeGroupId: string | null,
+) {
+  if (beforeGroupId === draggedGroupId) {
+    return groups;
+  }
+
+  const draggedGroup = groups.find((group) => group.id === draggedGroupId);
+  if (!draggedGroup) {
+    return groups;
+  }
+
+  const remainingGroups = groups.filter((group) => group.id !== draggedGroupId);
+  const targetIndex = beforeGroupId
+    ? remainingGroups.findIndex((group) => group.id === beforeGroupId)
+    : -1;
+  const insertionIndex = targetIndex >= 0
+    ? targetIndex
+    : findSectionInsertIndex(remainingGroups, sections, targetSectionId);
+
+  const nextGroups = [...remainingGroups];
+  nextGroups.splice(insertionIndex, 0, {
+    ...draggedGroup,
+    sectionId: targetSectionId,
+  });
+  return nextGroups;
+}
+
 function binaryAnswerOptionsForType(typeId: string) {
   if (typeId.includes("true_false")) {
     return ["TRUE", "FALSE", "NOT GIVEN"] as const;
@@ -395,16 +909,45 @@ function binaryAnswerOptionsForType(typeId: string) {
   return null;
 }
 
-function normalizeRestrictedAnswerLine(line: string) {
-  return line.trim().replace(/\s+/g, " ").toUpperCase();
+function normalizeRestrictedAnswerLine(line: string, allowedAnswers?: readonly string[]) {
+  const normalized = line.trim().replace(/\s+/g, " ").toUpperCase();
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized === "NG" || normalized.replace(/\s+/g, "") === "NOTGIVEN") {
+    return "NOT GIVEN";
+  }
+
+  if (allowedAnswers?.includes("TRUE")) {
+    if (normalized === "T") return "TRUE";
+    if (normalized === "F") return "FALSE";
+  }
+
+  if (allowedAnswers?.includes("YES")) {
+    if (normalized === "Y") return "YES";
+    if (normalized === "N") return "NO";
+  }
+
+  return normalized;
 }
 
-function normalizeRestrictedAnswerBlockInput(value: string) {
+function normalizeRestrictedAnswerBlockInput(value: string, allowedAnswers?: readonly string[]) {
   return value
     .split("\n")
     .map((line) => {
       if (!line.trim()) return "";
-      return normalizeRestrictedAnswerLine(line);
+      return normalizeRestrictedAnswerLine(line, allowedAnswers);
+    })
+    .join("\n");
+}
+
+function normalizeMatchingHeadingsAnswerBlockInput(value: string) {
+  return value
+    .split("\n")
+    .map((line) => {
+      if (!line.trim()) return "";
+      return normalizeMatchingHeadingAnswerLine(line);
     })
     .join("\n");
 }
@@ -421,7 +964,7 @@ function analyzeBinaryStatementGroup(group: AdminTestDraftQuestionGroup) {
   const allowedSet = new Set<string>(allowedAnswers);
   const questionLines = splitNonEmptyLines(group.questionBlock ?? "");
   const answerLines = splitNonEmptyLines(group.answerBlock ?? "");
-  const normalizedAnswers = answerLines.map(normalizeRestrictedAnswerLine);
+  const normalizedAnswers = answerLines.map((answer) => normalizeRestrictedAnswerLine(answer, allowedAnswers));
 
   const previewRows: BinaryStatementPreviewRow[] = questionLines.map((prompt, index) => {
     const normalizedAnswer = normalizedAnswers[index] ?? "";
@@ -437,7 +980,7 @@ function analyzeBinaryStatementGroup(group: AdminTestDraftQuestionGroup) {
     const existingQuestion = group.questions[index];
     const normalizedAnswer = normalizedAnswers[index] ?? "";
     return {
-      id: existingQuestion?.id ?? `draft-q-${crypto.randomUUID()}`,
+      id: existingQuestion?.id ?? createDraftId("draft-q"),
       label: String(group.questionStart + index),
       prompt,
       acceptedAnswers: allowedSet.has(normalizedAnswer) ? [normalizedAnswer] : [],
@@ -470,6 +1013,132 @@ function analyzeBinaryStatementGroup(group: AdminTestDraftQuestionGroup) {
     previewRows,
     issues,
     generatedQuestions,
+  };
+}
+
+function normalizeBinaryQuestionAcceptedAnswers(typeId: string, answers: string[]) {
+  const allowedAnswers = binaryAnswerOptionsForType(typeId) ?? undefined;
+  return answers
+    .map((answer) => normalizeRestrictedAnswerLine(answer, allowedAnswers))
+    .filter(Boolean);
+}
+
+function normalizeBinaryGroupDraft(group: AdminTestDraftQuestionGroup): AdminTestDraftQuestionGroup {
+  if (!isBinaryStatementType(group.typeId)) {
+    return group;
+  }
+
+  const allowedAnswers = binaryAnswerOptionsForType(group.typeId) ?? undefined;
+  return {
+    ...group,
+    answerBlock: normalizeRestrictedAnswerBlockInput(group.answerBlock ?? "", allowedAnswers),
+    questions: group.questions.map((question) => ({
+      ...question,
+      acceptedAnswers: normalizeBinaryQuestionAcceptedAnswers(group.typeId, question.acceptedAnswers),
+    })),
+  };
+}
+
+function normalizeBinaryDraftAnswers(draft: AdminTestDraftState): AdminTestDraftState {
+  const normalizedGroups = (draft.questionGroups ?? []).map(normalizeBinaryGroupDraft);
+  const groupQuestionMap = new Map(
+    normalizedGroups.flatMap((group) => group.questions.map((question) => [question.id, { group, question }] as const)),
+  );
+
+  return {
+    ...draft,
+    questionGroups: normalizedGroups,
+    questions: (draft.questions ?? []).map((question) => {
+      const entry = groupQuestionMap.get(question.id);
+      if (entry) {
+        return {
+          ...question,
+          acceptedAnswers: [...entry.question.acceptedAnswers],
+        };
+      }
+      return question;
+    }),
+  };
+}
+
+function hasMeaningfulDraftContent(draft: AdminTestDraftState): boolean {
+  if (draft.metadata.title.trim().length > 0) {
+    return true;
+  }
+
+  if (draft.metadata.sourceDetail.trim().length > 0) {
+    return true;
+  }
+
+  if (draft.content.sections.some((section) => section.content.trim().length > 0)) {
+    return true;
+  }
+
+  return (draft.questionGroups ?? []).length > 0;
+}
+
+function resolveDraftTitleForSave(draft: AdminTestDraftState): string {
+  if (draft.metadata.source === "custom") {
+    const explicitTitle = draft.metadata.title.trim();
+    const match = explicitTitle.match(/^(.*?)(?:\s+-\s+Test\s+(\d+))?$/i);
+    const baseTitle = match?.[1]?.trim() ?? explicitTitle;
+    return baseTitle.length > 0 ? baseTitle : explicitTitle;
+  }
+
+  const explicitTitle = draft.metadata.title.trim();
+  if (explicitTitle) {
+    return explicitTitle;
+  }
+
+  const sectionTitle = draft.content.sections.find((section) => section.content.trim().length > 0)?.title.trim();
+  if (sectionTitle) {
+    return sectionTitle;
+  }
+
+  return draft.metadata.type === "listening" ? "Untitled Listening Draft" : "Untitled Reading Draft";
+}
+
+function isExamPracticeAutoTitle(value: string) {
+  return /^Exam Practice Test \d+$/i.test(value.trim());
+}
+
+function extractExamPracticeNumber(value: string) {
+  const trimmed = value.trim();
+  const autoMatch = trimmed.match(/^Exam Practice Test (\d+)$/i);
+  if (autoMatch) {
+    return Number(autoMatch[1]);
+  }
+  const customMatch = trimmed.match(/ - Test (\d+)$/i);
+  if (customMatch) {
+    return Number(customMatch[1]);
+  }
+  return null;
+}
+
+function getNextExamPracticeTitleFromTests(tests: Array<{ source: string; title: string }>) {
+  let maxNumber = 0;
+  for (const test of tests) {
+    if (String(test.source).trim().toLowerCase() !== "custom") {
+      continue;
+    }
+    const number = extractExamPracticeNumber(test.title);
+    if (number !== null) {
+      maxNumber = Math.max(maxNumber, number);
+    }
+  }
+  return `Exam Practice Test ${maxNumber + 1}`;
+}
+
+function prepareDraftForSave(draft: AdminTestDraftState): AdminTestDraftState {
+  const normalizedDraft = normalizeBinaryDraftAnswers(draft);
+  const resolvedTitle = resolveDraftTitleForSave(normalizedDraft);
+
+  return {
+    ...normalizedDraft,
+    metadata: {
+      ...normalizedDraft.metadata,
+      title: resolvedTitle,
+    },
   };
 }
 
@@ -554,10 +1223,15 @@ function renderBraceBoldText(text: string, keyPrefix: string) {
 export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<WizardStepId>("metadata");
-  const draftSeed = useMemo(() => initialDraft ?? createEmptyDraft(), [initialDraft]);
+  const draftSeed = useMemo(
+    () => normalizeBinaryDraftAnswers(initialDraft ?? createEmptyDraft()),
+    [initialDraft],
+  );
+  const draftSeedStr = useMemo(() => JSON.stringify(draftSeed), [draftSeed]);
   const [draft, setDraft] = useState<AdminTestDraftState>(draftSeed);
   const [resolvedTestId, setResolvedTestId] = useState<string | undefined>(testId);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [publishState, setPublishState] = useState<"idle" | "publishing" | "published" | "error">("idle");
   const activeStepIndex = stepOrder.indexOf(activeStep);
   const completionRatio = ((activeStepIndex + 1) / stepOrder.length) * 100;
@@ -565,6 +1239,11 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
 
   // Auto-Save Effect (Debounced)
   const [lastSavedDraftStr, setLastSavedDraftStr] = useState<string>("");
+  const draftRef = useRef(draft);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
 
   useEffect(() => {
     if (isPublishedEdit || saveState === "saving" || publishState === "publishing" || publishState === "published") return;
@@ -573,7 +1252,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
     if (currentDraftStr === lastSavedDraftStr) return;
 
     const handler = setTimeout(() => {
-      if (draft.metadata.title.trim().length > 0) {
+      if (hasMeaningfulDraftContent(draft)) {
         void saveDraft(true, currentDraftStr);
       }
     }, 2000);
@@ -585,13 +1264,48 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
 
   useEffect(() => {
     setDraft(draftSeed);
-    setLastSavedDraftStr(JSON.stringify(draftSeed));
-  }, [draftSeed]);
+    setLastSavedDraftStr(draftSeedStr);
+  }, [draftSeed, draftSeedStr]);
+
+  useEffect(() => {
+    if (mode !== "edit" || !resolvedTestId) {
+      return;
+    }
+
+    let cancelled = false;
+    const seedAtRequest = draftSeedStr;
+
+    void adminApi.getDraft(resolvedTestId)
+      .then((latestDraft) => {
+        if (cancelled) {
+          return;
+        }
+
+        const normalizedLatestDraft = normalizeBinaryDraftAnswers(latestDraft);
+        const latestDraftStr = JSON.stringify(normalizedLatestDraft);
+        if (latestDraftStr === seedAtRequest) {
+          return;
+        }
+
+        if (JSON.stringify(draftRef.current) !== seedAtRequest) {
+          return;
+        }
+
+        setDraft(normalizedLatestDraft);
+        setLastSavedDraftStr(latestDraftStr);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftSeedStr, mode, resolvedTestId]);
 
   async function saveDraft(isAutoSave = false, draftStr?: string) {
     try {
       setSaveState("saving");
-      const currentDraftToSave = draft;
+      setSaveErrorMessage(null);
+      const currentDraftToSave = prepareDraftForSave(draft);
       
       const saved = resolvedTestId
         ? await adminApi.updateDraft(resolvedTestId, currentDraftToSave)
@@ -601,6 +1315,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
         ...currentDraftToSave,
         metadata: {
           ...currentDraftToSave.metadata,
+          title: saved.title,
           status: saved.status,
           version: saved.version,
           format: saved.format
@@ -612,6 +1327,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
         ...current,
         metadata: {
           ...current.metadata,
+          title: saved.title,
           status: saved.status,
           version: saved.version,
           format: saved.format
@@ -634,11 +1350,16 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
       } else if (!testId && isAutoSave) {
         window.history.replaceState(null, "", `/tests/${saved.id}/edit`);
       }
+
+      if (!isAutoSave) {
+        router.refresh();
+      }
       
       setTimeout(() => {
         setSaveState(current => current === "saved" ? "idle" : current);
       }, 3000);
-    } catch {
+    } catch (error) {
+      setSaveErrorMessage(error instanceof Error ? error.message : "Save failed.");
       setSaveState("error");
     }
   }
@@ -655,6 +1376,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
         ...draft,
         metadata: {
           ...draft.metadata,
+          title: saved.title,
           status: saved.status,
           version: saved.version,
           format: saved.format,
@@ -665,6 +1387,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
         ...current,
         metadata: {
           ...current.metadata,
+          title: saved.title,
           status: saved.status,
           version: saved.version,
           format: saved.format,
@@ -685,20 +1408,24 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
     if (!targetTestId) {
       try {
         setSaveState("saving");
-        const saved = await adminApi.createDraft(draft);
+        setSaveErrorMessage(null);
+        const preparedDraft = prepareDraftForSave(draft);
+        const saved = await adminApi.createDraft(preparedDraft);
         targetTestId = saved.id;
         setResolvedTestId(saved.id);
         setDraft((current) => ({
           ...current,
           metadata: {
             ...current.metadata,
+            title: saved.title,
             version: saved.version,
             status: saved.status
           }
         }));
         setSaveState("saved");
         router.replace(`/tests/${saved.id}/edit`);
-      } catch {
+      } catch (error) {
+        setSaveErrorMessage(error instanceof Error ? error.message : "Save failed.");
         setSaveState("error");
         return;
       }
@@ -751,7 +1478,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
                 Saved
               </span>
             )}
-            {saveState === "error" && <span className="text-destructive">Save failed</span>}
+            {saveState === "error" && <span className="text-destructive">{saveErrorMessage ?? "Save failed"}</span>}
             {saveState === "idle" && resolvedTestId && <span>Up to date</span>}
           </div>
 
@@ -842,6 +1569,43 @@ function MetadataPanel({
   draft: AdminTestDraftState;
   setDraft: React.Dispatch<React.SetStateAction<AdminTestDraftState>>;
 }) {
+  async function handleSourceChange(nextSource: AdminTestDraftState["metadata"]["source"]) {
+    const shouldAutoApplyTitle =
+      nextSource === "custom"
+      && (
+        draft.metadata.title.trim().length === 0
+        || isExamPracticeAutoTitle(draft.metadata.title)
+        || draft.metadata.source !== "custom"
+      );
+
+    if (!shouldAutoApplyTitle) {
+      setDraft((current) => ({ ...current, metadata: { ...current.metadata, source: nextSource } }));
+      return;
+    }
+
+    try {
+      const tests = await adminApi.listTests();
+      const nextTitle = getNextExamPracticeTitleFromTests(tests);
+      setDraft((current) => ({
+        ...current,
+        metadata: {
+          ...current.metadata,
+          source: nextSource,
+          title: nextTitle,
+        },
+      }));
+    } catch {
+      setDraft((current) => ({
+        ...current,
+        metadata: {
+          ...current.metadata,
+          source: nextSource,
+          title: nextSource === "custom" ? "Exam Practice Test" : current.metadata.title,
+        },
+      }));
+    }
+  }
+
   return (
     <Card className="border-primary/10 shadow-sm">
       <CardHeader className="border-b bg-muted/20">
@@ -902,10 +1666,10 @@ function MetadataPanel({
              <Select 
               className="h-11 font-medium"
               value={draft.metadata.source} 
-              onChange={(event) => setDraft((current) => ({ ...current, metadata: { ...current.metadata, source: event.target.value as any } }))}>
-              <option value="cambridge">Cambridge Official</option>
-              <option value="real_exam">Real Exam Material</option>
-              <option value="custom">Custom Practice</option>
+              onChange={(event) => { void handleSourceChange(event.target.value as AdminTestDraftState["metadata"]["source"]); }}>
+              {adminTestSourceOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </Select>
           </EditableField>
         </div>
@@ -935,7 +1699,7 @@ function ContentPanel({
         sections: [
           ...current.content.sections,
           {
-            id: "draft-section-" + crypto.randomUUID(),
+            id: createDraftId("draft-section"),
             label: current.metadata.type === "listening" ? "Part " + (current.content.sections.length + 1) : "Passage " + (current.content.sections.length + 1),
             title: current.metadata.type === "listening" ? "Listening Part " + (current.content.sections.length + 1) : "Reading Passage " + (current.content.sections.length + 1),
             subtitle: "",
@@ -1217,7 +1981,7 @@ function QuestionsPanel({
   setDraft: React.Dispatch<React.SetStateAction<AdminTestDraftState>>;
 }) {
   const pathname = usePathname();
-  const [groupNumberInputs, setGroupNumberInputs] = useState<Record<string, { start: string; end: string }>>({});
+  const sectionLabelPrefix = draft.metadata.type === "reading" ? "Passage" : "Part";
   const [questionBlockSizes, setQuestionBlockSizes] = useState<Record<string, { width: number; height: number }>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<string | null>(null);
@@ -1225,27 +1989,16 @@ function QuestionsPanel({
   const [panelSplitOffset, setPanelSplitOffset] = useState<number>(0);
   const [isDraggingPanelSplit, setIsDraggingPanelSplit] = useState(false);
   const [questionEditorGridWidths, setQuestionEditorGridWidths] = useState<Record<string, number>>({});
+  const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
+  const [groupDropTarget, setGroupDropTarget] = useState<{ sectionId: string; beforeGroupId: string | null } | null>(null);
   const questionBlockRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const questionEditorGridRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const questionsLayoutRef = useRef<HTMLDivElement | null>(null);
+  const activeGroupDragRef = useRef<{ groupId: string } | null>(null);
   const collapseStorageKey = useMemo(() => `admin-question-groups:${pathname}`, [pathname]);
   const questionBlockSizeStorageKey = useMemo(() => `admin-question-block-sizes:${pathname}`, [pathname]);
   const panelSplitStorageKey = useMemo(() => `admin-question-panel-split:${pathname}`, [pathname]);
   const clampPanelSplitOffset = (value: number) => Math.max(-14, Math.min(18, value));
-
-  useEffect(() => {
-    setGroupNumberInputs((current) => {
-      const next: Record<string, { start: string; end: string }> = {};
-      for (const group of draft.questionGroups ?? []) {
-        const existing = current[group.id];
-        next[group.id] = {
-          start: existing?.start ?? String(group.questionStart),
-          end: existing?.end ?? String(group.questionEnd),
-        };
-      }
-      return next;
-    });
-  }, [draft.questionGroups]);
 
   useEffect(() => {
     let storedCollapsedGroups: Record<string, boolean> = {};
@@ -1384,208 +2137,260 @@ function QuestionsPanel({
     };
   }, [draft.questionGroups]);
 
-  const addGroup = () => {
+  const addGroup = (sectionId?: string) => {
     const groups = draft.questionGroups ?? [];
-    let nextStart = 1;
-    if (groups.length > 0) {
-      const maxEnd = Math.max(...groups.map(g => g.questionEnd));
-      nextStart = maxEnd + 1;
-    }
     const typeId = draft.metadata.type === "listening" ? "listening_form_completion" : "reading_true_false_not_given";
     const nextGroupNum = groups.length + 1;
+    const targetSectionId = sectionId ?? draft.content.sections[0]?.id ?? "";
     const newGroup: AdminTestDraftQuestionGroup = {
-      id: `draft-group-${crypto.randomUUID()}`,
-      sectionId: draft.content.sections[0]?.id ?? "",
+      id: createDraftId("draft-group"),
+      sectionId: targetSectionId,
       title: `Question Group ${nextGroupNum}`,
       instructions: defaultInstructions[typeId] || "Enter instructions for this group of questions.",
       typeId,
-      questionStart: nextStart,
-      questionEnd: nextStart,
+      questionStart: 1,
+      questionEnd: 1,
       sharedOptions: [],
       questions: []
     };
     setDraft((current) => ({
       ...current,
-      questionGroups: [...groups, newGroup]
+      questionGroups: normalizeQuestionGroups(
+        reorderQuestionGroupsForDrop(
+          [...(current.questionGroups ?? []), newGroup],
+          current.content.sections,
+          newGroup.id,
+          targetSectionId,
+          null,
+        )
+      )
     }));
+  };
+
+  const moveGroup = (groupId: string, targetSectionId: string, beforeGroupId: string | null) => {
+    setDraft((current) => ({
+      ...current,
+      questionGroups: normalizeQuestionGroups(
+        reorderQuestionGroupsForDrop(
+          current.questionGroups ?? [],
+          current.content.sections,
+          groupId,
+          targetSectionId,
+          beforeGroupId,
+        )
+      ),
+    }));
+  };
+
+  const handleDiagramImageUpload = (groupId: string, file?: File | null) => {
+    if (!file) return;
+    void adminApi.uploadImage(file).then((asset) => {
+      updateGroup(groupId, { diagramImageUrl: asset.publicUrl });
+    }).catch(() => undefined);
   };
 
   const updateGroup = (groupId: string, updates: Partial<AdminTestDraftQuestionGroup>) => {
     setDraft((current) => ({
       ...current,
-      questionGroups: (current.questionGroups ?? []).map((g) => {
-        if (g.id !== groupId) return g;
+      questionGroups: normalizeQuestionGroups((() => {
+        const nextGroups = (current.questionGroups ?? []).map((g) => {
+          if (g.id !== groupId) return g;
 
-        let newGroup = { ...g, ...updates };
+          let newGroup = { ...g, ...updates };
 
-        if (updates.typeId && updates.typeId !== g.typeId) {
-          newGroup.instructions = defaultInstructions[updates.typeId] || newGroup.instructions;
-        }
-
-        const shouldRebuildFromBlocks =
-          updates.questionBlock !== undefined
-          || updates.answerBlock !== undefined
-          || updates.secondaryBlock !== undefined;
-        const shouldRebuildMatchingHeadings =
-          newGroup.typeId.includes("matching_headings")
-          && (
-            shouldRebuildFromBlocks
-            || updates.sectionId !== undefined
-            || updates.questionStart !== undefined
-          );
-        const shouldRebuildMatchingInformation =
-          isMatchingInformationType(newGroup.typeId)
-          && (
-            shouldRebuildFromBlocks
-            || updates.sectionId !== undefined
-            || updates.questionStart !== undefined
-          );
-        const shouldRebuildBracketCompletion =
-          isBracketCompletionType(newGroup.typeId)
-          && (
-            shouldRebuildFromBlocks
-            || updates.questionStart !== undefined
-          );
-        const shouldRebuildBinaryStatements =
-          isBinaryStatementType(newGroup.typeId)
-          && (
-            shouldRebuildFromBlocks
-            || updates.questionStart !== undefined
-          );
-
-        if (shouldRebuildFromBlocks || shouldRebuildMatchingHeadings || shouldRebuildMatchingInformation || shouldRebuildBracketCompletion || shouldRebuildBinaryStatements) {
-          const qBlock = updates.questionBlock ?? g.questionBlock ?? "";
-          const aBlock = updates.answerBlock ?? g.answerBlock ?? "";
-          const sBlock = updates.secondaryBlock ?? g.secondaryBlock ?? "";
-
-          const isMatchingHeadings = newGroup.typeId.includes("matching_headings");
-          const isMatchingInformation = isMatchingInformationType(newGroup.typeId);
-          const isBracketCompletion = isBracketCompletionType(newGroup.typeId);
-          const isBinaryStatements = isBinaryStatementType(newGroup.typeId);
-          const isMultipleChoiceMultiple = isMultipleChoiceMultipleType(newGroup.typeId);
-          const parsedMultipleChoiceBlocks = newGroup.typeId.includes("mc_")
-            ? parseMultipleChoiceQuestionBlocks(qBlock)
-            : [];
-          const qLines = newGroup.typeId.includes("mc_")
-            ? parsedMultipleChoiceBlocks.map((block) => block.prompt)
-            : isMatchingInformation
-              ? splitNonEmptyLines(qBlock)
-              : qBlock.split("\n\n").map((line) => line.trim()).filter(Boolean);
-          const aLines = aBlock.split("\n").map((line) => line.trim()).filter(Boolean);
-          const newQuestions: AdminTestDraftQuestion[] = [];
-
-          if (isMatchingInformation) {
-            const targetSection = current.content.sections.find((section) => section.id === newGroup.sectionId);
-            newGroup.sharedOptions = paragraphLabelsForSection(targetSection);
-          } else if (
-            newGroup.typeId.includes("matching_headings")
-            || newGroup.typeId.includes("matching_features")
-            || newGroup.typeId.includes("wordbank")
-          ) {
-            newGroup.sharedOptions = sBlock.split("\n").map((line) => line.trim()).filter(Boolean);
-          } else {
-            newGroup.sharedOptions = [];
+          if (updates.typeId && updates.typeId !== g.typeId) {
+            newGroup.instructions = defaultInstructions[updates.typeId] || newGroup.instructions;
           }
 
-          if (isMatchingHeadings) {
-            newQuestions.push(...analyzeMatchingHeadingsGroup(newGroup, current.content.sections).generatedQuestions);
-          } else if (isBracketCompletion) {
-            const markerCount = (qBlock.match(/\[\]/g) ?? []).length;
-            for (let index = 0; index < markerCount; index += 1) {
-              const existingQuestion = g.questions[index];
-              const questionNumber = newGroup.questionStart + index;
-              newQuestions.push({
-                id: existingQuestion?.id ?? `draft-q-${crypto.randomUUID()}`,
-                label: `${questionNumber}`,
-                prompt: `Blank ${questionNumber}`,
-                acceptedAnswers: parseBracketCompletionAnswers(aLines[index] ?? ""),
-                explanation: existingQuestion?.explanation ?? "",
-                variants: [],
+          if (newGroup.typeId.includes("matching_headings")) {
+            newGroup.answerBlock = normalizeMatchingHeadingsAnswerBlockInput(newGroup.answerBlock ?? "");
+          }
+
+          const shouldRebuildFromBlocks =
+            updates.questionBlock !== undefined
+            || updates.answerBlock !== undefined
+            || updates.secondaryBlock !== undefined;
+          const shouldRebuildMatchingHeadings =
+            newGroup.typeId.includes("matching_headings")
+            && (
+              shouldRebuildFromBlocks
+              || updates.sectionId !== undefined
+              || updates.questionStart !== undefined
+            );
+          const shouldRebuildMatchingInformation =
+            isMatchingInformationType(newGroup.typeId)
+            && (
+              shouldRebuildFromBlocks
+              || updates.sectionId !== undefined
+              || updates.questionStart !== undefined
+            );
+          const shouldRebuildBracketCompletion =
+            isBracketCompletionType(newGroup.typeId)
+            && (
+              shouldRebuildFromBlocks
+              || updates.questionStart !== undefined
+            );
+          const shouldRebuildBinaryStatements =
+            isBinaryStatementType(newGroup.typeId)
+            && (
+              shouldRebuildFromBlocks
+              || updates.questionStart !== undefined
+            );
+
+          if (shouldRebuildFromBlocks || shouldRebuildMatchingHeadings || shouldRebuildMatchingInformation || shouldRebuildBracketCompletion || shouldRebuildBinaryStatements) {
+            const qBlock = updates.questionBlock ?? g.questionBlock ?? "";
+            const aBlock = updates.answerBlock ?? g.answerBlock ?? "";
+            const sBlock = updates.secondaryBlock ?? g.secondaryBlock ?? "";
+
+            const isMatchingHeadings = newGroup.typeId.includes("matching_headings");
+            const isMatchingInformation = isMatchingInformationType(newGroup.typeId);
+            const isBracketCompletion = isBracketCompletionType(newGroup.typeId);
+            const isBinaryStatements = isBinaryStatementType(newGroup.typeId);
+            const isMultipleChoiceMultiple = isMultipleChoiceMultipleType(newGroup.typeId);
+            const parsedMultipleChoiceBlocks = newGroup.typeId.includes("mc_")
+              ? parseMultipleChoiceQuestionBlocks(qBlock)
+              : [];
+            const qLines = newGroup.typeId.includes("mc_")
+              ? parsedMultipleChoiceBlocks.map((block) => block.prompt)
+              : isMatchingInformation
+                ? splitNonEmptyLines(qBlock)
+                : qBlock.split("\n\n").map((line) => line.trim()).filter(Boolean);
+            const aLines = aBlock.split("\n").map((line) => line.trim()).filter(Boolean);
+            const newQuestions: AdminTestDraftQuestion[] = [];
+
+            if (isMatchingInformation) {
+              const targetSection = current.content.sections.find((section) => section.id === newGroup.sectionId);
+              newGroup.sharedOptions = paragraphLabelsForSection(targetSection);
+            } else if (
+              newGroup.typeId.includes("matching_headings")
+              || newGroup.typeId.includes("matching_features")
+              || newGroup.typeId.includes("matching_sentence_endings")
+              || newGroup.typeId.includes("wordbank")
+            ) {
+              newGroup.sharedOptions = sBlock.split("\n").map((line) => line.trim()).filter(Boolean);
+            } else {
+              newGroup.sharedOptions = [];
+            }
+
+            if (isMatchingHeadings) {
+              newQuestions.push(...analyzeMatchingHeadingsGroup(newGroup, current.content.sections).generatedQuestions);
+            } else if (isBracketCompletion) {
+              const markerCount = (qBlock.match(/\[\]/g) ?? []).length;
+              for (let index = 0; index < markerCount; index += 1) {
+                const existingQuestion = g.questions[index];
+                const questionNumber = newGroup.questionStart + index;
+                newQuestions.push({
+                  id: existingQuestion?.id ?? createDraftId("draft-q"),
+                  label: `${questionNumber}`,
+                  prompt: `Blank ${questionNumber}`,
+                  acceptedAnswers: newGroup.typeId.includes("wordbank")
+                    ? parseWordBankAcceptedAnswers(aLines[index] ?? "", newGroup.sharedOptions)
+                    : parseBracketCompletionAnswers(aLines[index] ?? ""),
+                  explanation: existingQuestion?.explanation ?? "",
+                  variants: [],
+                });
+              }
+            } else if (isBinaryStatements) {
+              newQuestions.push(...analyzeBinaryStatementGroup(newGroup).generatedQuestions);
+            } else {
+              const multipleChoiceAnswerGroups = isMultipleChoiceMultiple
+                ? parseMultipleChoiceMultipleAnswerGroups(aBlock)
+                : [];
+              let nextQuestionNumber = newGroup.questionStart;
+
+              qLines.forEach((qText, index) => {
+                const existingQuestion = g.questions[index];
+                let prompt = qText;
+                let variants: string[] = [];
+                let acceptedAnswers: string[] = [];
+
+                if (newGroup.typeId.includes("mc_")) {
+                  const parsedQuestion = parsedMultipleChoiceBlocks[index] ?? parseMultipleChoiceQuestionBlock(qText);
+                  prompt = parsedQuestion.prompt;
+                  variants = parsedQuestion.variants;
+                }
+
+                if (isMultipleChoiceMultiple) {
+                  acceptedAnswers = parseMcMultipleAcceptedAnswers(
+                    multipleChoiceAnswerGroups[index] ?? [],
+                    variants,
+                  );
+                } else if (newGroup.typeId.includes("mc_") && aLines[index]) {
+                  acceptedAnswers = parseMcSingleAcceptedAnswers(aLines[index], variants);
+                } else if (aLines[index]) {
+                  acceptedAnswers = aLines[index].split("|").map((answer) => answer.trim()).filter(Boolean);
+                }
+
+                const slotCount = isMultipleChoiceMultiple ? Math.max(1, acceptedAnswers.length) : 1;
+                const questionRange = {
+                  start: nextQuestionNumber,
+                  end: nextQuestionNumber + slotCount - 1,
+                };
+                nextQuestionNumber = questionRange.end + 1;
+
+                newQuestions.push({
+                  id: existingQuestion?.id ?? createDraftId("draft-q"),
+                  label: formatQuestionRange(questionRange),
+                  prompt,
+                  acceptedAnswers,
+                  explanation: existingQuestion?.explanation ?? "",
+                  variants,
+                });
               });
             }
-          } else if (isBinaryStatements) {
-            newQuestions.push(...analyzeBinaryStatementGroup(newGroup).generatedQuestions);
-          } else {
-            const multipleChoiceAnswerGroups = isMultipleChoiceMultiple
-              ? parseMultipleChoiceMultipleAnswerGroups(aBlock)
-              : [];
-            let nextQuestionNumber = newGroup.questionStart;
 
-            qLines.forEach((qText, index) => {
-              const existingQuestion = g.questions[index];
-              let prompt = qText;
-              let variants: string[] = [];
-              let acceptedAnswers: string[] = [];
-
-              if (isMultipleChoiceMultiple) {
-                acceptedAnswers = multipleChoiceAnswerGroups[index] ?? [];
-              } else if (aLines[index]) {
-                acceptedAnswers = aLines[index].split("|").map((answer) => answer.trim()).filter(Boolean);
-              }
-
-              if (newGroup.typeId.includes("mc_")) {
-                const parsedQuestion = parsedMultipleChoiceBlocks[index] ?? parseMultipleChoiceQuestionBlock(qText);
-                prompt = parsedQuestion.prompt;
-                variants = parsedQuestion.variants;
-              }
-
-              const slotCount = isMultipleChoiceMultiple ? Math.max(1, acceptedAnswers.length) : 1;
-              const questionRange = {
-                start: nextQuestionNumber,
-                end: nextQuestionNumber + slotCount - 1,
-              };
-              nextQuestionNumber = questionRange.end + 1;
-
-              newQuestions.push({
-                id: existingQuestion?.id ?? `draft-q-${crypto.randomUUID()}`,
-                label: formatQuestionRange(questionRange),
-                prompt,
-                acceptedAnswers,
-                explanation: existingQuestion?.explanation ?? "",
-                variants,
-              });
-            });
+            newGroup.questions = newQuestions;
+            newGroup.questionEnd = newGroup.questionStart + Math.max(0, totalQuestionSlots({ ...newGroup, questions: newQuestions }) - 1);
           }
 
-          newGroup.questions = newQuestions;
-          newGroup.questionEnd = newGroup.questionStart + Math.max(0, totalQuestionSlots({ ...newGroup, questions: newQuestions }) - 1);
+          return newGroup;
+        });
+
+        if (updates.sectionId) {
+          return reorderQuestionGroupsForDrop(
+            nextGroups,
+            current.content.sections,
+            groupId,
+            updates.sectionId,
+            null,
+          );
         }
 
-        return newGroup;
-      })
+        return nextGroups;
+      })())
     }));
   };
 
   const removeGroup = (groupId: string) => {
     setDraft((current) => ({
       ...current,
-      questionGroups: (current.questionGroups ?? []).filter((g) => g.id !== groupId)
+      questionGroups: normalizeQuestionGroups((current.questionGroups ?? []).filter((g) => g.id !== groupId))
     }));
   };
 
   const updateQuestion = (groupId: string, questionId: string, updates: Partial<AdminTestDraftQuestion>) => {
     setDraft((current) => ({
       ...current,
-      questionGroups: (current.questionGroups ?? []).map((g) => {
+      questionGroups: normalizeQuestionGroups((current.questionGroups ?? []).map((g) => {
         if (g.id !== groupId) return g;
         return {
           ...g,
           questions: g.questions.map((q) => q.id === questionId ? { ...q, ...updates } : q)
         };
-      })
+      }))
     }));
   };
 
   const removeQuestion = (groupId: string, questionId: string) => {
     setDraft((current) => ({
       ...current,
-      questionGroups: (current.questionGroups ?? []).map((g) => {
+      questionGroups: normalizeQuestionGroups((current.questionGroups ?? []).map((g) => {
         if (g.id !== groupId) return g;
         return {
           ...g,
           questions: g.questions.filter((q) => q.id !== questionId)
         };
-      })
+      }))
     }));
   };
 
@@ -1629,47 +2434,21 @@ function QuestionsPanel({
     return `You should spend about 20 minutes on Questions ${range}, which are based on Reading Passage ${index + 1} below.`;
   };
 
-  const updateGroupNumberInput = (groupId: string, field: "start" | "end", value: string) => {
-    setGroupNumberInputs((current) => ({
-      ...current,
-      [groupId]: {
-        start: current[groupId]?.start ?? "",
-        end: current[groupId]?.end ?? "",
-        [field]: value,
-      },
-    }));
-  };
-
-  const commitGroupNumberInput = (groupId: string, field: "start" | "end") => {
-    const entry = groupNumberInputs[groupId];
-    const rawValue = entry?.[field] ?? "";
-    const parsed = Number.parseInt(rawValue, 10);
-
-    if (!rawValue.trim() || Number.isNaN(parsed) || parsed < 1) {
-      const group = draft.questionGroups.find((item) => item.id === groupId);
-      if (!group) return;
-      setGroupNumberInputs((current) => ({
-        ...current,
-        [groupId]: {
-          start: field === "start" ? String(group.questionStart) : current[groupId]?.start ?? String(group.questionStart),
-          end: field === "end" ? String(group.questionEnd) : current[groupId]?.end ?? String(group.questionEnd),
-        },
-      }));
-      return;
-    }
-
-    updateGroup(groupId, field === "start" ? { questionStart: parsed } : { questionEnd: parsed });
-  };
-
   const groupedQuestionGroups = useMemo(() => {
-    const sectionLabelPrefix = draft.metadata.type === "reading" ? "Passage" : "Part";
-    const grouped = draft.content.sections
+    const grouped: Array<{
+      key: string;
+      sectionId: string | null;
+      sectionLabel: string;
+      groups: AdminTestDraftQuestionGroup[];
+      canAddGroups: boolean;
+    }> = draft.content.sections
       .map((section, index) => ({
         key: section.id,
+        sectionId: section.id,
         sectionLabel: `${sectionLabelPrefix} ${index + 1}`,
         groups: (draft.questionGroups ?? []).filter((group) => group.sectionId === section.id),
-      }))
-      .filter((entry) => entry.groups.length > 0);
+        canAddGroups: true,
+      }));
 
     const orphanGroups = (draft.questionGroups ?? []).filter(
       (group) => !draft.content.sections.some((section) => section.id === group.sectionId)
@@ -1677,12 +2456,14 @@ function QuestionsPanel({
     if (orphanGroups.length > 0) {
       grouped.push({
         key: "unassigned",
+        sectionId: null,
         sectionLabel: `${sectionLabelPrefix} ?`,
         groups: orphanGroups,
+        canAddGroups: false,
       });
     }
     return grouped;
-  }, [draft.content.sections, draft.metadata.type, draft.questionGroups]);
+  }, [draft.content.sections, draft.questionGroups, sectionLabelPrefix]);
 
   const widestQuestionBlockWidth = useMemo(() => {
     const widths = Object.values(questionBlockSizes)
@@ -1764,6 +2545,116 @@ function QuestionsPanel({
     };
   }, [baseReviewWidth, isDraggingPanelSplit]);
 
+  const handleGroupDrop = (sectionId: string, beforeGroupId: string | null) => {
+    if (!draggedGroupId) return;
+    moveGroup(draggedGroupId, sectionId, beforeGroupId);
+    setDraggedGroupId(null);
+    setGroupDropTarget(null);
+  };
+
+  const resolveGroupDropTargetFromPoint = (clientX: number, clientY: number, draggedId: string) => {
+    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    const cardTarget = target?.closest("[data-group-card-id]") as HTMLElement | null;
+
+    if (cardTarget) {
+      const sectionId = cardTarget.dataset.groupSectionId ?? "";
+      const currentGroupId = cardTarget.dataset.groupCardId ?? "";
+      const nextGroupId = cardTarget.dataset.groupNextGroupId || null;
+      if (!sectionId || !currentGroupId || currentGroupId === draggedId) {
+        return null;
+      }
+
+      const bounds = cardTarget.getBoundingClientRect();
+      const midpointY = bounds.top + bounds.height / 2;
+      return {
+        sectionId,
+        beforeGroupId: clientY < midpointY ? currentGroupId : nextGroupId,
+      };
+    }
+
+    const zoneTarget = target?.closest("[data-group-drop-section-id]") as HTMLElement | null;
+    if (zoneTarget) {
+      const sectionId = zoneTarget.dataset.groupDropSectionId ?? "";
+      const beforeGroupId = zoneTarget.dataset.groupDropBeforeId || null;
+      if (sectionId) {
+        return { sectionId, beforeGroupId };
+      }
+    }
+
+    return null;
+  };
+
+  const startGroupPointerDrag = (groupId: string, event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+
+    activeGroupDragRef.current = { groupId };
+    setDraggedGroupId(groupId);
+    setGroupDropTarget(null);
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const activeDrag = activeGroupDragRef.current;
+      if (!activeDrag) return;
+      setGroupDropTarget(resolveGroupDropTargetFromPoint(moveEvent.clientX, moveEvent.clientY, activeDrag.groupId));
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      activeGroupDragRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setDraggedGroupId(null);
+      setGroupDropTarget(null);
+    };
+
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      const activeDrag = activeGroupDragRef.current;
+      if (!activeDrag) {
+        cleanup();
+        return;
+      }
+
+      const targetDrop = resolveGroupDropTargetFromPoint(upEvent.clientX, upEvent.clientY, activeDrag.groupId);
+      if (targetDrop) {
+        moveGroup(activeDrag.groupId, targetDrop.sectionId, targetDrop.beforeGroupId);
+      }
+      cleanup();
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  };
+
+  const renderGroupDropZone = (sectionId: string, beforeGroupId: string | null) => {
+    const isActiveTarget =
+      Boolean(draggedGroupId)
+      && groupDropTarget?.sectionId === sectionId
+      && groupDropTarget?.beforeGroupId === beforeGroupId;
+
+    return (
+      <div
+        key={`${sectionId}-${beforeGroupId ?? "end"}`}
+        data-group-drop-section-id={sectionId}
+        data-group-drop-before-id={beforeGroupId ?? ""}
+        className={cn(
+          "rounded-lg border border-dashed px-3 py-2 text-center text-xs font-semibold uppercase tracking-[0.16em] transition",
+          draggedGroupId
+            ? isActiveTarget
+              ? "border-primary/60 bg-primary/10 text-primary"
+              : "border-border/70 bg-muted/20 text-muted-foreground hover:border-primary/40"
+            : "pointer-events-none h-0 overflow-hidden border-transparent p-0 text-transparent"
+        )}
+      >
+        Drop group here
+      </div>
+    );
+  };
+
   return (
     <div className="relative">
       <div
@@ -1775,11 +2666,8 @@ function QuestionsPanel({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-xl font-bold">Questions Inventory</h3>
-            <p className="text-sm text-muted-foreground">Manage question groups and their correct answers.</p>
+            <p className="text-sm text-muted-foreground">Manage question groups, then drag them between passages to fix order and numbering.</p>
           </div>
-          <Button type="button" variant="solid" onClick={addGroup}>
-            + Add Group
-          </Button>
         </div>
 
         {groupedQuestionGroups.map((sectionGroup) => (
@@ -1795,13 +2683,37 @@ function QuestionsPanel({
               </div>
             </div>
             <div className="flex-1 space-y-6">
-        {sectionGroup.groups.map((group) => {
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/60 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">{sectionGroup.sectionLabel}</p>
+            <p className="text-xs text-muted-foreground">
+              {sectionGroup.groups.length > 0
+                ? `${sectionGroup.groups.length} group${sectionGroup.groups.length === 1 ? "" : "s"} in this ${sectionLabelPrefix.toLowerCase()}.`
+                : `No groups yet in this ${sectionLabelPrefix.toLowerCase()}.`}
+            </p>
+          </div>
+          {sectionGroup.canAddGroups && sectionGroup.sectionId ? (
+            <Button type="button" variant="solid" size="sm" onClick={() => addGroup(sectionGroup.sectionId ?? undefined)}>
+              + Add Group
+            </Button>
+          ) : null}
+        </div>
+        {sectionGroup.sectionId ? renderGroupDropZone(sectionGroup.sectionId, sectionGroup.groups[0]?.id ?? null) : null}
+        {sectionGroup.groups.map((group, groupIndex) => {
+          const nextGroupId = sectionGroup.groups[groupIndex + 1]?.id ?? null;
           const matchingHeadingsMeta = group.typeId.includes("matching_headings")
             ? analyzeMatchingHeadingsGroup(group, draft.content.sections)
+            : null;
+          const matchingInformationMeta = isMatchingInformationType(group.typeId)
+            ? analyzeMatchingInformationGroup(group, draft.content.sections)
             : null;
           const binaryStatementsMeta = isBinaryStatementType(group.typeId)
             ? analyzeBinaryStatementGroup(group)
             : null;
+          const completionMeta = isBracketCompletionType(group.typeId)
+            ? analyzeCompletionGroup(group)
+            : null;
+          const groupIssues = collectGroupIssues(group, draft.content.sections);
           const questionTypeLabel =
             (draft.metadata.type === "listening" ? listeningQuestionTypes : readingQuestionTypes).find((option) => option.id === group.typeId)?.label
             ?? previewTypeLabel(group.typeId);
@@ -1810,8 +2722,7 @@ function QuestionsPanel({
             group.questions.length > 0
             && configuredQuestions === group.questions.length
             && group.questionEnd >= group.questionStart
-            && (matchingHeadingsMeta?.issues.length ?? 0) === 0
-            && (binaryStatementsMeta?.issues.length ?? 0) === 0;
+            && groupIssues.length === 0;
           const isGroupCollapsed = collapsedGroups[group.id] ?? false;
           const showDeleteConfirm = deleteConfirmGroupId === group.id;
           const questionBlockSize = questionBlockSizes[group.id];
@@ -1827,8 +2738,32 @@ function QuestionsPanel({
             "--question-block-width": clampedQuestionBlockWidth ? `${clampedQuestionBlockWidth}px` : "1fr",
           } as CSSProperties;
 
+          const isDropBefore =
+            groupDropTarget?.sectionId === sectionGroup.sectionId
+            && groupDropTarget?.beforeGroupId === group.id;
+          const isDropAfter =
+            groupDropTarget?.sectionId === sectionGroup.sectionId
+            && groupDropTarget?.beforeGroupId === nextGroupId
+            && draggedGroupId !== group.id;
+
           return (
-          <Card key={group.id} className="overflow-hidden border-primary/20 bg-primary/5 shadow-sm">
+          <div
+            key={group.id}
+            data-group-card-id={group.id}
+            data-group-section-id={sectionGroup.sectionId ?? ""}
+            data-group-next-group-id={nextGroupId ?? ""}
+            className={cn(
+              "space-y-3 rounded-2xl transition",
+              isDropBefore && "ring-2 ring-primary/35 ring-offset-2 ring-offset-background",
+              isDropAfter && "shadow-[0_10px_0_-6px_rgba(59,130,246,0.45)]"
+            )}
+          >
+          <Card
+            className={cn(
+              "overflow-hidden border-primary/20 bg-primary/5 shadow-sm transition",
+              draggedGroupId === group.id && "opacity-65 ring-2 ring-primary/35"
+            )}
+          >
             <CardHeader className={cn("px-4", isGroupCollapsed ? "py-3" : "pt-4 pb-3")}>
               <div className={cn("flex items-start justify-between gap-4 border-b border-primary/10", isGroupCollapsed ? "pb-3" : "pb-4")}>
                 <div className={cn(isGroupCollapsed ? "space-y-1" : "space-y-2")}>
@@ -1837,9 +2772,25 @@ function QuestionsPanel({
                     <Badge tone="info">{questionTypeLabel}</Badge>
                     <Badge tone="neutral">{sectionGroup.sectionLabel}</Badge>
                     <Badge tone="neutral">{totalQuestionSlots(group)} questions</Badge>
+                    <Badge tone={isGroupValid ? "success" : "warning"}>
+                      {isGroupValid ? "Ready" : `${configuredQuestions}/${group.questions.length} ready`}
+                    </Badge>
+                    {groupIssues.length > 0 ? (
+                      <Badge tone="warning">
+                        {groupIssues.length} issue{groupIssues.length === 1 ? "" : "s"}
+                      </Badge>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <div
+                    onPointerDown={(event) => startGroupPointerDrag(group.id, event)}
+                    className="flex h-8 items-center rounded-md border border-border/70 bg-background px-2 text-[11px] font-semibold text-muted-foreground cursor-grab active:cursor-grabbing select-none"
+                    title="Drag to move this group"
+                    aria-label="Drag to move this group"
+                  >
+                    Drag
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
@@ -1920,7 +2871,7 @@ function QuestionsPanel({
                       </Select>
                     </EditableField>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <EditableField label="Target Section">
                       <Select
                         className="bg-background"
@@ -1932,34 +2883,63 @@ function QuestionsPanel({
                         ))}
                       </Select>
                     </EditableField>
-                    <EditableField label="Start Q#">
-                      <Input
-                        type="number"
-                        className="bg-background"
-                        value={groupNumberInputs[group.id]?.start ?? String(group.questionStart)}
-                        onChange={(e) => updateGroupNumberInput(group.id, "start", e.target.value)}
-                        onBlur={() => commitGroupNumberInput(group.id, "start")}
-                      />
-                    </EditableField>
-                    <EditableField label="End Q#">
-                      <Input
-                        type="number"
-                        className="bg-background"
-                        value={groupNumberInputs[group.id]?.end ?? String(group.questionEnd)}
-                        onChange={(e) => updateGroupNumberInput(group.id, "end", e.target.value)}
-                        onBlur={() => commitGroupNumberInput(group.id, "end")}
-                      />
-                    </EditableField>
+                    <ReadOnlyField label="Question Range" value={`${formatQuestionRange({ start: group.questionStart, end: group.questionEnd })} (auto)`} />
                   </div>
                   <EditableField label="Group Instructions">
                     <Textarea className="bg-background min-h-[60px]" value={group.instructions} onChange={(e) => updateGroup(group.id, { instructions: e.target.value })} />
                   </EditableField>
 
-                  {(group.typeId.includes("matching_headings") || group.typeId.includes("matching_features") || group.typeId.includes("wordbank")) && (
+                  {isDiagramLabelingType(group.typeId) ? (
+                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
+                      <EditableField label="Diagram Title">
+                        <Input
+                          className="bg-background"
+                          value={group.diagramTitle || ""}
+                          onChange={(e) => updateGroup(group.id, { diagramTitle: e.target.value })}
+                          placeholder="e.g. Cross-section of the water filter"
+                        />
+                      </EditableField>
+                      <EditableField label="Diagram Image">
+                        <div className="space-y-3 rounded-xl border border-border/70 bg-card/45 p-3">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
+                            onChange={(event) => handleDiagramImageUpload(group.id, event.target.files?.[0] ?? null)}
+                          />
+                          {group.diagramImageUrl ? (
+                            <div className="space-y-3">
+                              <div className="overflow-hidden rounded-xl border border-border bg-background/70 p-2">
+                                <img
+                                  src={group.diagramImageUrl}
+                                  alt={group.diagramTitle || group.title}
+                                  className="max-h-[220px] w-full rounded-lg object-contain"
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => updateGroup(group.id, { diagramImageUrl: "" })}
+                              >
+                                Remove image
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">Upload the diagram asset shown above the blanks in preview and exam mode.</p>
+                          )}
+                        </div>
+                      </EditableField>
+                    </div>
+                  ) : null}
+
+                  {(group.typeId.includes("matching_headings") || group.typeId.includes("matching_features") || group.typeId.includes("matching_sentence_endings") || group.typeId.includes("wordbank")) && (
                     <EditableField
                       label={
                         group.typeId.includes("matching_headings")
                           ? "Headings"
+                          : group.typeId.includes("matching_sentence_endings")
+                            ? "Sentence Endings"
                           : group.typeId.includes("wordbank")
                             ? "Word Bank"
                             : "Options"
@@ -1972,6 +2952,8 @@ function QuestionsPanel({
                         placeholder={
                           group.typeId.includes("matching_headings")
                             ? "i. Planning a bigger idea\nii. Looking back at early mistakes\n..."
+                            : group.typeId.includes("matching_sentence_endings")
+                              ? "A. was first proposed in 1920.\nB. reduced travel costs for workers.\nC. remained popular in rural areas."
                             : group.typeId.includes("wordbank")
                               ? "A. Option One\nB. Option Two\nC. Option Three"
                               : "A. Option One\nB. Option Two\n..."
@@ -2009,7 +2991,9 @@ function QuestionsPanel({
                           value={group.questionBlock || ""}
                           onChange={(e) => updateGroup(group.id, { questionBlock: e.target.value })}
                           placeholder={isBracketCompletionType(group.typeId)
-                            ? "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days."
+                            ? group.typeId.includes("wordbank")
+                              ? "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days."
+                              : "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days."
                             : isBinaryStatementType(group.typeId)
                               ? "Other countries had built underground railways before the Metropolitan line opened.\nThe first trains were designed for passengers in warmer climates.\nSteam engines were initially used on the route."
                                 : isMatchingInformationType(group.typeId)
@@ -2030,7 +3014,7 @@ function QuestionsPanel({
                             className="bg-muted/30 font-mono text-sm min-h-[250px]"
                             value={group.answerBlock || ""}
                             onChange={(e) => updateGroup(group.id, { answerBlock: e.target.value })}
-                            placeholder={"A\nC\nB\nD"}
+                            placeholder={"H\n-\nC\nA"}
                           />
                         </div>
 
@@ -2049,7 +3033,9 @@ function QuestionsPanel({
                                   key={`${group.id}-map-${index}`}
                                   className={cn(
                                     "rounded-lg border px-3 py-2 text-sm",
-                                    row.label && row.isValidLabel && !row.isDuplicate
+                                    row.isUnused
+                                      ? "border-border/60 bg-muted/20"
+                                      : row.label && row.isValidLabel && !row.isDuplicate
                                       ? "border-success/25 bg-success/5"
                                       : "border-danger/25 bg-danger/5"
                                   )}
@@ -2057,10 +3043,13 @@ function QuestionsPanel({
                                   <p className="font-semibold text-foreground">
                                     {(row.label || "—").toUpperCase()} {"->"} {row.headingText || row.headingLine}
                                   </p>
+                                  {row.isUnused ? (
+                                    <p className="mt-1 text-xs text-muted-foreground">Unused heading.</p>
+                                  ) : null}
                                   {row.label && row.isDuplicate ? (
                                     <p className="mt-1 text-xs text-danger">Duplicate paragraph label.</p>
                                   ) : null}
-                                  {row.label && !row.isValidLabel ? (
+                                  {row.label && !row.isUnused && !row.isValidLabel ? (
                                     <p className="mt-1 text-xs text-danger">Label is outside the current passage range.</p>
                                   ) : null}
                                 </div>
@@ -2095,21 +3084,46 @@ function QuestionsPanel({
                           <Textarea 
                             className={cn("bg-muted/30 font-mono text-sm", isMultipleChoiceMultipleType(group.typeId) ? "min-h-[138px]" : "min-h-[250px]")}
                             value={group.answerBlock || ""}
-                            onChange={(e) => updateGroup(group.id, {
-                              answerBlock: isBinaryStatementType(group.typeId)
-                                ? normalizeRestrictedAnswerBlockInput(e.target.value)
-                                : e.target.value,
-                            })}
+                            onChange={(e) => updateGroup(group.id, { answerBlock: e.target.value })}
                             placeholder={isBracketCompletionType(group.typeId)
-                              ? "fathers/dads\nthree weeks/21 days"
+                              ? group.typeId.includes("wordbank")
+                                ? "A\nC\nB\n\nor use the words directly:\nsolar gain\ninsulation\nshade"
+                                : "fathers/dads\nthree weeks/21 days"
                               : isBinaryStatementType(group.typeId)
                                 ? (binaryStatementsMeta?.allowedAnswers ?? []).join("\n")
                                 : isMatchingInformationType(group.typeId)
                                   ? "A\nC\nB"
-                                  : isMultipleChoiceMultipleType(group.typeId)
+                                : isMultipleChoiceMultipleType(group.typeId)
                                     ? "A\nB\nD\n\nC\nE"
-                                    : "answer1|variant2\nanswer2|variant3"}
+                                    : group.typeId.includes("mc_")
+                                      ? "A\nC\nB"
+                                      : "answer1|variant2\nanswer2|variant3"}
                           />
+                        {group.typeId.includes("mc_single") ? (
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Use one answer line per question. You can enter either the option letter or the full option text.
+                          </p>
+                        ) : null}
+                        {isMultipleChoiceMultipleType(group.typeId) ? (
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Use one answer block per question. Separate questions with a blank line, and put 2 or 3 option letters inside each block.
+                          </p>
+                        ) : null}
+                        {isMatchingInformationType(group.typeId) ? (
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Use one paragraph label per statement. The preview will render these as paragraph dropdowns.
+                          </p>
+                        ) : null}
+                        {group.typeId.includes("matching_headings") ? (
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Use one paragraph label per heading. Put `-` on a line when that heading is unused.
+                          </p>
+                        ) : null}
+                        {group.typeId.includes("wordbank") ? (
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Use one answer line per blank. You can enter either the word-bank letter or the exact option text.
+                          </p>
+                        ) : null}
                         {isBinaryStatementType(group.typeId) ? (
                           <div className="space-y-3 rounded-md border border-border bg-card/45 px-4 py-3">
                             <div className="flex flex-wrap items-center gap-2">
@@ -2136,6 +3150,30 @@ function QuestionsPanel({
                       </div>
                     )}
                   </div>
+                  {group.typeId.includes("matching_information") && matchingInformationMeta ? (
+                    <div className="rounded-md border border-border bg-card/45 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Paragraph Labels</p>
+                        {matchingInformationMeta.validLabels.length > 0 ? (
+                          <Badge tone="neutral">Valid: {matchingInformationMeta.validLabels.join(", ")}</Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                  {!group.typeId.includes("matching_headings") && groupIssues.length > 0 ? (
+                    <div className="space-y-2">
+                      {groupIssues.map((issue) => (
+                        <Notice key={`${group.id}-${issue}`} tone="warning" title="Group issue" description={issue} />
+                      ))}
+                    </div>
+                  ) : null}
+                  {!group.typeId.includes("matching_headings") && groupIssues.length === 0 && (matchingInformationMeta || completionMeta) ? (
+                    <Notice
+                      tone="success"
+                      title="Group validator passed"
+                      description="This group's generated questions, answers, and numbering look consistent."
+                    />
+                  ) : null}
                 </div>
                 </div>
               ) : null}
@@ -2159,11 +3197,6 @@ function QuestionsPanel({
                           <div className="rounded bg-muted px-3 py-1 text-xs font-black text-foreground">
                             Q{formatQuestionRange(questionRangeAtIndex(group, qIndex))}
                           </div>
-                          <Input 
-                            className="h-8 w-24 text-xs font-bold bg-muted/30" 
-                            value={question.label} 
-                            onChange={(e) => updateQuestion(group.id, question.id, { label: e.target.value })} 
-                          />
                           {isQuestionConfigured(group, question) ? (
                             <Badge tone="success">✓</Badge>
                           ) : (
@@ -2178,6 +3211,11 @@ function QuestionsPanel({
                       <div className="grid gap-5">
                         {isBracketCompletionType(group.typeId) ? (
                           <ReadOnlyField label="Generated Blank" value={`This blank comes from [] marker #${group.questionStart + qIndex}`} />
+                        ) : isMatchingInformationType(group.typeId) ? (
+                          <ReadOnlyField
+                            label="Generated Statement"
+                            value={question.prompt || "Enter statements in the question block above"}
+                          />
                         ) : (
                           <EditableField label="Question Stem / Prompt">
                             <Textarea 
@@ -2211,32 +3249,29 @@ function QuestionsPanel({
                               label="Accepted Answer"
                               value={question.acceptedAnswers.join(" / ") || "Enter this in the answer block above"}
                             />
+                          ) : isMatchingInformationType(group.typeId) ? (
+                            <ReadOnlyField
+                              label="Paragraph Label"
+                              value={question.acceptedAnswers.join(" / ") || "Enter this in the answer block above"}
+                            />
                           ) : isMultipleChoiceMultipleType(group.typeId) ? (
                             <ReadOnlyField
                               label="Accepted Answers"
                               value={question.acceptedAnswers.join(" / ") || "Enter grouped answer lines above"}
                             />
+                          ) : group.typeId.includes("mc_") ? (
+                            <ReadOnlyField
+                              label="Accepted Answer"
+                              value={question.acceptedAnswers.join(" / ") || "Enter this in the answer block above"}
+                            />
                           ) : (
                           <EditableField label="Correct Answer Selection">
-                            {group.typeId.includes("mc_") ? (
-                              <Select 
-                                className="font-bold border-primary/20"
-                                value={question.acceptedAnswers[0] || ""} 
-                                onChange={(e) => updateQuestion(group.id, question.id, { acceptedAnswers: [e.target.value] })}
-                              >
-                                <option value="">Select Correct Option...</option>
-                                {(question.variants ?? []).map(opt => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </Select>
-                            ) : (
-                              <Input 
-                                className="font-bold border-primary/20"
-                                placeholder="Type answer(s)..."
-                                value={question.acceptedAnswers.join(", ")} 
-                                onChange={(e) => updateQuestion(group.id, question.id, { acceptedAnswers: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} 
-                              />
-                            )}
+                            <Input
+                              className="font-bold border-primary/20"
+                              placeholder="Type answer(s)..."
+                              value={question.acceptedAnswers.join(", ")}
+                              onChange={(e) => updateQuestion(group.id, question.id, { acceptedAnswers: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                            />
                           </EditableField>
                           )}
                         </div>
@@ -2248,6 +3283,8 @@ function QuestionsPanel({
             </CardContent>
             ) : null}
           </Card>
+          {sectionGroup.sectionId ? renderGroupDropZone(sectionGroup.sectionId, nextGroupId) : null}
+          </div>
           );
         })}
             </div>
@@ -2359,6 +3396,26 @@ function EditorPreviewSection({
   groups: AdminTestDraftState["questionGroups"];
   compact?: boolean;
 }) {
+  const formatPreviewGroupHeading = (group: AdminTestDraftState["questionGroups"][number]) => {
+    if (isMultipleChoiceMultipleType(group.typeId)) {
+      return "Multiple-answer questions";
+    }
+    return `Questions ${group.questionStart}-${group.questionEnd}`;
+  };
+
+  const formatPreviewQuestionHeading = (
+    group: AdminTestDraftState["questionGroups"][number],
+    questionNumber: string
+  ) => {
+    if (isMultipleChoiceMultipleType(group.typeId) && questionNumber.includes("-")) {
+      return `Questions ${questionNumber}`;
+    }
+    if (isMatchingInformationType(group.typeId)) {
+      return questionNumber;
+    }
+    return `Question ${questionNumber}`;
+  };
+
   const matchingHeadingQuestions = useMemo(
     () =>
       groups
@@ -2372,6 +3429,20 @@ function EditorPreviewSection({
         ),
     [groups]
   );
+  const matchingHeadingExamples = useMemo(() => {
+    const exampleMap = new Map<string, string>();
+    groups
+      .filter((group) => group.typeId.includes("matching_headings"))
+      .forEach((group) => {
+        const meta = analyzeMatchingHeadingsGroup(group, [section]);
+        meta.previewRows.forEach((row) => {
+          if (row.isFixedExample && row.label && row.isValidLabel && !row.isDuplicate && !row.isUnused) {
+            exampleMap.set(row.label, row.headingText || row.headingLine);
+          }
+        });
+      });
+    return exampleMap;
+  }, [groups, section]);
   const matchingHeadingLabels = useMemo(
     () => new Set(matchingHeadingQuestions.map((question) => question.label).filter(Boolean) as string[]),
     [matchingHeadingQuestions]
@@ -2419,6 +3490,7 @@ function EditorPreviewSection({
 
   function renderCompletionPreview(group: AdminTestDraftState["questionGroups"][number]) {
     const segments = (group.questionBlock ?? "").split("[]");
+    const isWordBankCompletion = group.typeId.includes("wordbank");
     return (
       <div className="rounded-2xl border border-border/70 bg-muted/10 px-4 py-4">
         {group.title ? (
@@ -2434,25 +3506,72 @@ function EditorPreviewSection({
               <span key={`${group.id}-completion-${index}`}>
                 {renderBraceBoldText(segment, `${group.id}-completion-segment-${index}`)}
                 {question ? (
-                  <button
-                    type="button"
-                    id={`${previewId}-${section.id}-${question.id}`}
-                    onClick={() => setActiveQuestionId(question.id)}
-                    className={cn(
-                      compact
-                        ? "mx-1 inline-flex h-8 min-w-[46px] items-center justify-center rounded-md border text-[12px] font-black transition"
-                        : "mx-1 inline-flex h-9 min-w-[52px] items-center justify-center rounded-md border text-sm font-black transition",
-                      isActive
-                        ? "border-primary bg-primary/12 text-primary shadow-sm"
-                        : "border-border bg-background text-muted-foreground"
-                    )}
-                  >
-                    {group.questionStart + index}
-                  </button>
+                  isWordBankCompletion ? (
+                    <select
+                      id={`${previewId}-${section.id}-${question.id}`}
+                      value=""
+                      onChange={() => undefined}
+                      onFocus={() => setActiveQuestionId(question.id)}
+                      className={cn(
+                        compact
+                          ? "mx-1 inline-flex h-8 min-w-[132px] rounded-md border bg-background px-3 text-[12px] font-semibold transition"
+                          : "mx-1 inline-flex h-9 min-w-[156px] rounded-md border bg-background px-3 text-sm font-semibold transition",
+                        isActive
+                          ? "border-primary text-primary shadow-sm"
+                          : "border-border text-muted-foreground"
+                      )}
+                    >
+                      <option value="">Select answer</option>
+                      {group.sharedOptions.map((option) => (
+                        <option key={`${question.id}-${option}`} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <button
+                      type="button"
+                      id={`${previewId}-${section.id}-${question.id}`}
+                      onClick={() => setActiveQuestionId(question.id)}
+                      className={cn(
+                        compact
+                          ? "mx-1 inline-flex h-8 min-w-[46px] items-center justify-center rounded-md border text-[12px] font-black transition"
+                          : "mx-1 inline-flex h-9 min-w-[52px] items-center justify-center rounded-md border text-sm font-black transition",
+                        isActive
+                          ? "border-primary bg-primary/12 text-primary shadow-sm"
+                          : "border-border bg-background text-muted-foreground"
+                      )}
+                    >
+                      {group.questionStart + index}
+                    </button>
+                  )
                 ) : null}
               </span>
             );
           })}
+        </div>
+      </div>
+    );
+  }
+
+  function renderDiagramPreview(group: AdminTestDraftState["questionGroups"][number]) {
+    if (!isDiagramLabelingType(group.typeId) || !group.diagramImageUrl) {
+      return null;
+    }
+
+    return (
+      <div className={cn("border border-border/70 bg-muted/20", compact ? "rounded-[1rem] p-3" : "rounded-2xl p-4")}>
+        {group.diagramTitle ? (
+          <p className={cn("mb-3 text-center font-bold tracking-tight text-foreground", compact ? "text-[14px]" : "text-[16px]")}>
+            {renderBraceBoldText(group.diagramTitle, `${group.id}-diagram-title`)}
+          </p>
+        ) : null}
+        <div className="overflow-hidden rounded-xl border border-border bg-background/80 p-2">
+          <img
+            src={group.diagramImageUrl}
+            alt={group.diagramTitle || group.title}
+            className={cn("w-full object-contain", compact ? "max-h-[220px]" : "max-h-[320px]")}
+          />
         </div>
       </div>
     );
@@ -2495,6 +3614,11 @@ function EditorPreviewSection({
                     Drop heading here
                   </div>
                 ) : null}
+                {paragraph.label && matchingHeadingExamples.has(paragraph.label) ? (
+                  <div className={cn("flex items-center rounded-xl border border-success/30 bg-success/5 px-3.5 font-semibold text-foreground", compact ? "min-h-[32px] text-[11px]" : "min-h-[38px] text-[13px]")}>
+                    {matchingHeadingExamples.get(paragraph.label)}
+                  </div>
+                ) : null}
                 <p
                   className={cn(
                     "whitespace-pre-wrap font-sans text-foreground",
@@ -2527,7 +3651,7 @@ function EditorPreviewSection({
                       {previewTypeLabel(group.typeId)}
                     </p>
                     <h3 className={cn("mt-1 font-black tracking-tight text-foreground", compact ? "text-[14px]" : "text-[15px]")}>
-                      Questions {group.questionStart}-{group.questionEnd}
+                      {formatPreviewGroupHeading(group)}
                     </h3>
                   </div>
                   <Badge tone="neutral">{totalQuestionSlots(group)} questions</Badge>
@@ -2538,22 +3662,32 @@ function EditorPreviewSection({
               </div>
 
               <div className={cn("space-y-3.5", compact ? "px-3 py-3 lg:px-3.5" : "px-3.5 py-3.5 lg:px-4")}>
+                {renderDiagramPreview(group)}
                 {((group.typeId.includes("matching") && !group.typeId.includes("matching_information")) || group.typeId.includes("wordbank")) && group.sharedOptions.length > 0 ? (
                   <div className={cn("border border-border/70 bg-muted/20", compact ? "rounded-[1rem] px-3 py-2.5" : "rounded-2xl px-4 py-3")}>
                     {group.typeId.includes("matching_headings") ? (
                       <p className={cn("mb-3 font-bold tracking-tight text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
                         List of Headings
                       </p>
+                    ) : group.typeId.includes("matching_sentence_endings") ? (
+                      <p className={cn("mb-3 font-bold tracking-tight text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
+                        Sentence Endings
+                      </p>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
-                    {group.sharedOptions.map((option) => (
+                    {group.sharedOptions
+                      .filter((option) => !(group.typeId.includes("matching_headings") && isFixedMatchingHeadingExample(option)))
+                      .map((option, index) => {
+                      const optionPreview = getMatchingOptionPreview(option, index, group.typeId);
+                      return (
                       <span
                         key={option}
                         className={cn("rounded-full border border-border bg-card font-semibold text-foreground", compact ? "px-2.5 py-1 text-[11px]" : "px-3 py-1 text-xs")}
                       >
-                        {renderBraceBoldText(option, `${group.id}-option-${option}`)}
+                        {renderBraceBoldText(optionPreview.label, `${group.id}-option-${optionPreview.value}`)}
                       </span>
-                    ))}
+                      );
+                    })}
                     </div>
                   </div>
                 ) : null}
@@ -2563,6 +3697,7 @@ function EditorPreviewSection({
                 {!group.typeId.includes("matching_headings") && !isBracketCompletionType(group.typeId) ? group.questions.map((question, questionIndex) => {
                   const questionNumber = formatQuestionRange(questionRangeAtIndex(group, questionIndex));
                   const active = activeQuestionId === question.id;
+                  const hasRangeQuestionHeading = isMultipleChoiceMultipleType(group.typeId) && questionNumber.includes("-");
 
                   return (
                     <div
@@ -2575,9 +3710,9 @@ function EditorPreviewSection({
                             active && "border-primary/40 bg-primary/5 shadow-[0_0_0_1px_rgba(255,138,25,0.16)]"
                           )}
                     >
-                      <div className={cn("flex items-start gap-2.5", compact ? "mb-2" : "mb-2.5")}>
-                        <div className={cn("flex shrink-0 items-center justify-center rounded-lg bg-primary px-2 font-black leading-none text-primary-foreground whitespace-nowrap", compact ? "h-6 min-w-[34px] text-[9px]" : "h-7 min-w-[40px] text-[10px]")}>
-                          {questionNumber}
+                      <div className={cn(hasRangeQuestionHeading ? "space-y-2" : "flex items-start gap-2.5", compact ? "mb-2" : "mb-2.5")}>
+                        <div className={cn("inline-flex shrink-0 items-center justify-center rounded-lg bg-primary px-2 font-black leading-none text-primary-foreground whitespace-nowrap", compact ? "h-6 min-w-[34px] text-[9px]" : "h-7 min-w-[40px] text-[10px]")}>
+                          {formatPreviewQuestionHeading(group, questionNumber)}
                         </div>
                         <div className={cn("flex-1", compact ? "space-y-2" : "space-y-3")}>
                           {question.prompt ? (
@@ -2729,6 +3864,50 @@ function renderAdminPreviewAnswer(
     );
   }
 
+  if (group.typeId.includes("matching_information")) {
+    return (
+      <div className="max-w-[180px]">
+        <select
+          value=""
+          onChange={() => undefined}
+          className="flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 text-sm font-semibold text-muted-foreground"
+        >
+          <option value="">Select paragraph</option>
+          {group.sharedOptions.map((option) => {
+            const value = extractMatchingOptionValue(option);
+            return (
+              <option key={`${question.id}-${value}`} value={value}>
+                {value}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+    );
+  }
+
+  if (group.typeId.includes("matching_features") || group.typeId.includes("matching_sentence_endings")) {
+    return (
+      <div className="max-w-[260px]">
+        <select
+          value=""
+          onChange={() => undefined}
+          className="flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 text-sm font-semibold text-muted-foreground"
+        >
+          <option value="">Select answer</option>
+          {group.sharedOptions.map((option, index) => {
+            const optionPreview = getMatchingOptionPreview(option, index, group.typeId);
+            return (
+              <option key={`${question.id}-${optionPreview.value}`} value={optionPreview.value}>
+                {optionPreview.label}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-xs rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground">
       Answer input
@@ -2761,24 +3940,15 @@ function ReviewPanel({ draft }: { draft: AdminTestDraftState }) {
     } else {
       let totalQ = 0;
       groups.forEach((g) => {
-        totalQ += g.questions.length;
+        totalQ += totalQuestionSlots(g);
         if (g.questions.length === 0) {
           checks.push({ label: `Group: ${g.title}`, status: "error", detail: "This group has no questions." });
         }
         if (g.questionEnd < g.questionStart) {
           checks.push({ label: `Group: ${g.title}`, status: "error", detail: "Question range is invalid (End < Start)." });
         }
-        if (g.typeId.includes("matching_headings")) {
-          const matchingMeta = analyzeMatchingHeadingsGroup(g, draft.content.sections);
-          for (const issue of matchingMeta.issues) {
-            checks.push({ label: `Matching headings: ${g.title}`, status: "error", detail: issue });
-          }
-        }
-        if (isBinaryStatementType(g.typeId)) {
-          const binaryMeta = analyzeBinaryStatementGroup(g);
-          for (const issue of binaryMeta.issues) {
-            checks.push({ label: `Statements: ${g.title}`, status: "error", detail: issue });
-          }
+        for (const issue of collectGroupIssues(g, draft.content.sections)) {
+          checks.push({ label: `Group: ${g.title}`, status: "error", detail: issue });
         }
       });
       
@@ -2851,7 +4021,7 @@ function ReviewPanel({ draft }: { draft: AdminTestDraftState }) {
               <p>Access: <span className="text-foreground uppercase">{draft.metadata.accessType}</span></p>
               <p>Sections: <span className="text-foreground">{draft.content.sections.length}</span></p>
               <p>Groups: <span className="text-foreground">{draft.questionGroups?.length ?? 0}</span></p>
-              <p>Total Questions: <span className="text-foreground">{(draft.questionGroups ?? []).reduce((acc, g) => acc + g.questions.length, 0)}</span></p>
+              <p>Total Questions: <span className="text-foreground">{(draft.questionGroups ?? []).reduce((acc, g) => acc + totalQuestionSlots(g), 0)}</span></p>
             </div>
           </div>
           <div className="space-y-3">

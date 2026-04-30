@@ -1,10 +1,6 @@
-import { mockPlans } from "@/lib/mock-data";
+import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 
-const baseUrl = (
-  process.env.API_INTERNAL_BASE_URL
-  ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
+const baseUrl = getFrontendServerApiBaseUrl();
 
 type BackendPublicPlan = {
   id: string;
@@ -13,6 +9,10 @@ type BackendPublicPlan = {
   price: string | number;
   currency?: string;
   discount_percent?: number;
+  badge_label?: string | null;
+  perks?: string[];
+  display_order?: number;
+  is_featured?: boolean;
   payment_paused?: boolean;
 };
 
@@ -24,9 +24,10 @@ export interface MarketingPlan {
   monthlyLabel: string;
   badgeLabel: string;
   perks: string[];
-  paymentPaused: boolean;
   currency: string;
   numericPrice: number;
+  displayOrder: number;
+  isFeatured: boolean;
 }
 
 function toNumber(value: string | number): number {
@@ -39,56 +40,15 @@ function toNumber(value: string | number): number {
 }
 
 function formatMoney(value: number, currency: string): string {
+  if (currency === "UZS") {
+    return `${Math.round(value).toLocaleString("en-US").replace(/,/g, " ")} sum`;
+  }
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    maximumFractionDigits: currency === "UZS" ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(value);
-}
-
-function buildBadgeLabel(durationDays: number): string {
-  if (durationDays >= 365) {
-    return "Best annual value";
-  }
-  if (durationDays >= 180) {
-    return "Most popular";
-  }
-  if (durationDays >= 90) {
-    return "Best balance";
-  }
-  return "Start here";
-}
-
-function buildPerks(durationDays: number): string[] {
-  if (durationDays >= 365) {
-    return [
-      "All premium Reading and Listening tests",
-      "Explanation access across your prep cycle",
-      "Best fit for long-term band improvement",
-    ];
-  }
-
-  if (durationDays >= 180) {
-    return [
-      "Full premium test library",
-      "Detailed explanations for review sessions",
-      "Strong option for steady multi-month prep",
-    ];
-  }
-
-  if (durationDays >= 90) {
-    return [
-      "Premium tests for an intensive prep block",
-      "Explanations to fix repeated mistakes",
-      "Good balance before your exam date",
-    ];
-  }
-
-  return [
-    "Quick access to premium tests",
-    "Explanations for focused short-term revision",
-    "Best for a final sprint before test day",
-  ];
 }
 
 function mapBackendPlan(payload: BackendPublicPlan): MarketingPlan {
@@ -97,56 +57,56 @@ function mapBackendPlan(payload: BackendPublicPlan): MarketingPlan {
   const monthlyEquivalent = payload.duration_days > 0
     ? (numericPrice / payload.duration_days) * 30
     : numericPrice;
+  const perks = Array.isArray(payload.perks)
+    ? payload.perks.map((item) => String(item ?? "").trim()).filter(Boolean)
+    : [];
 
   return {
     id: payload.id,
     title: payload.name,
     durationDays: payload.duration_days,
     priceLabel: formatMoney(numericPrice, currency),
-    monthlyLabel: `Approx. ${formatMoney(monthlyEquivalent, currency)} / 30 days`,
-    badgeLabel: buildBadgeLabel(payload.duration_days),
-    perks: buildPerks(payload.duration_days),
-    paymentPaused: Boolean(payload.payment_paused),
+    monthlyLabel: payload.duration_days <= 30 ? "" : `${formatMoney(monthlyEquivalent, currency)} / 30 days`,
+    badgeLabel: (payload.badge_label ?? "").trim() || "Premium Plan",
+    perks,
     currency,
     numericPrice,
-  };
-}
-
-function mapMockPlan(index: number): MarketingPlan {
-  const plan = mockPlans[index];
-  const numericPrice = Number(plan.price.replace(/[^\d.]/g, ""));
-
-  return {
-    id: plan.id,
-    title: plan.title,
-    durationDays: plan.durationDays,
-    priceLabel: plan.price,
-    monthlyLabel: `Approx. $${((numericPrice / plan.durationDays) * 30).toFixed(2)} / 30 days`,
-    badgeLabel:
-      plan.durationDays === 365 ? "Best annual value" :
-      plan.durationDays === 180 ? "Most popular" :
-      plan.durationDays === 90 ? "Best balance" :
-      "Start here",
-    perks: plan.perks,
-    paymentPaused: true,
-    currency: "USD",
-    numericPrice,
+    displayOrder: payload.display_order ?? 0,
+    isFeatured: Boolean(payload.is_featured),
   };
 }
 
 export async function getPublicPlans(): Promise<MarketingPlan[]> {
   try {
-    const response = await fetch(`${baseUrl}/plans`, {
-      next: { revalidate: 3600, tags: ["public-plans"] },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/plans`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error("Failed to load public plans.");
     }
 
     const payload = (await response.json()) as BackendPublicPlan[];
-    return payload.map(mapBackendPlan);
+    return payload
+      .map(mapBackendPlan)
+      .sort((left, right) => {
+        if (left.displayOrder !== right.displayOrder) {
+          return left.displayOrder - right.displayOrder;
+        }
+        if (left.durationDays !== right.durationDays) {
+          return left.durationDays - right.durationDays;
+        }
+        return left.numericPrice - right.numericPrice;
+      });
   } catch {
-    return mockPlans.map((_, index) => mapMockPlan(index));
+    return [];
   }
 }

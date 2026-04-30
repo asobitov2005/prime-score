@@ -44,13 +44,28 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
-    env_file:
-      - ./backend/.env.example
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -63,22 +78,63 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
-    env_file:
-      - ./backend/.env.example
     environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
       RUN_APP_BOOTSTRAP: "0"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info"]
+      minio:
+        condition: service_started
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "-Q", "default,heavy,notifications,admin_ai", "--concurrency=4", "-Ofair"]
+
+  bot:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      RUN_APP_BOOTSTRAP: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "app.bot.main"]
 
   frontend:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
         API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000/api}
     restart: unless-stopped
     env_file:
@@ -89,7 +145,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
       API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000/api}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]
@@ -101,7 +157,7 @@ services:
     build:
       context: ./admin
       args:
-        NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-http://localhost:8000/api/admin}
+        NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-/api/admin}
         ADMIN_API_INTERNAL_BASE_URL: ${ADMIN_API_INTERNAL_BASE_URL:-http://api:8000/api/admin}
     restart: unless-stopped
     env_file:
@@ -112,7 +168,7 @@ services:
     ports:
       - "${ADMIN_PORT:-3001}:3001"
     environment:
-      NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-http://localhost:8000/api/admin}
+      NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-/api/admin}
       ADMIN_API_INTERNAL_BASE_URL: ${ADMIN_API_INTERNAL_BASE_URL:-http://api:8000/api/admin}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { saveBackendAttemptProgress } from "@/lib/server-attempts";
+import { ServerUserApiError } from "@/lib/server-user-auth";
 
 export async function PATCH(
   request: Request,
@@ -33,7 +34,10 @@ export async function PATCH(
     });
 
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof ServerUserApiError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
     return NextResponse.json({ message: "Progress save failed." }, { status: 500 });
   }
 }

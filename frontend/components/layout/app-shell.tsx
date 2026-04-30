@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BookOpenText, Gauge, History, Medal, Menu, ShieldAlert, X, Settings2, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { BookMarked, BookOpenText, ChevronDown, CreditCard, FileStack, Gauge, History, Medal, Menu, Newspaper, PenSquare, PencilRuler, Podcast, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -21,32 +20,31 @@ interface AppShellProps {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/tests", label: "Tests", icon: BookOpenText },
+  { href: "/writing", label: "Writing", icon: PenSquare },
+  { href: "/speaking", label: "Speaking", icon: Podcast, soon: true },
+  { href: "/articles", label: "Articles", icon: Newspaper, soon: true },
   { href: "/history", label: "History", icon: History },
   { href: "/leaderboard", label: "Leaderboard", icon: Medal },
-  { href: "/subscription", label: "Subscription", icon: ShieldAlert },
+  { href: "/subscription", label: "Subscription", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings2 }
+] as const;
+
+const testSourceItems = [
+  { href: "/tests?source=cambridge", label: "Cambridge Official", id: "cambridge", icon: BookMarked },
+  { href: "/tests?source=real_exam", label: "Recent Exam Papers", id: "real_exam", icon: FileStack },
+  { href: "/tests?source=custom", label: "Exam Practice Tests", id: "custom", icon: PencilRuler },
 ] as const;
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { sidebar, toggleSidebar } = useUIStore();
-  const { isAuthenticated, isPremium, premiumUntil, hasHydrated } = useAuthStore();
+  const { isAuthenticated, hasHydrated } = useAuthStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isTestsSubmenuOpen, setIsTestsSubmenuOpen] = useState(false);
   const isPublicTestsRoute = pathname === "/tests" || pathname.startsWith("/tests/");
-
-  const premiumBadgeLabel = (() => {
-    if (!isPremium) {
-      return "Paused";
-    }
-    if (!premiumUntil) {
-      return "Active";
-    }
-
-    const diffMs = new Date(premiumUntil).getTime() - Date.now();
-    const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-    return `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`;
-  })();
+  const activeSource = searchParams.get("source") ?? "";
 
   useEffect(() => {
     if (!hasHydrated) {
@@ -60,6 +58,14 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (pathname.startsWith("/tests")) {
+      setIsTestsSubmenuOpen(Boolean(activeSource));
+      return;
+    }
+    setIsTestsSubmenuOpen(false);
+  }, [pathname, activeSource]);
 
   useEffect(() => {
     if (isMobileOpen) {
@@ -93,62 +99,113 @@ export function AppShell({ children }: AppShellProps) {
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3 pl-2">Main Menu</p>
         <nav className="space-y-1">
           {navItems.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = pathname.startsWith(item.href);
             const Icon = item.icon;
+            const isSoonItem = "soon" in item && item.soon;
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200",
-                  active 
-                    ? "bg-primary text-background shadow-sm" 
-                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-95"
+              <div key={item.href} className="space-y-1">
+                <div className="relative">
+                  {isSoonItem ? (
+                    <div
+                      aria-disabled="true"
+                      className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 pr-11 text-sm font-semibold text-muted-foreground/65"
+                    >
+                      <Icon className="h-4 w-4 opacity-60" />
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                        <span>{item.label}</span>
+                        <span className="rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/75">
+                          Soon
+                        </span>
+                      </span>
+                    </div>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 pr-11 text-sm font-semibold transition-all duration-200",
+                        active
+                          ? "bg-primary text-background shadow-sm"
+                          : "text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-95"
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-4 w-4",
+                          active ? "opacity-100" : "opacity-70"
+                        )}
+                      />
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <span>{item.label}</span>
+                      </span>
+                    </Link>
+                  )}
+
+                  {item.href === "/tests" && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setIsTestsSubmenuOpen((current) => !current);
+                      }}
+                      className={cn(
+                        "absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+                        active
+                          ? "text-background hover:bg-background/15"
+                          : "text-foreground/80 hover:bg-muted/70 hover:text-foreground"
+                      )}
+                      aria-label="Toggle test sources"
+                      aria-expanded={isTestsSubmenuOpen}
+                    >
+                      <ChevronDown className={cn("h-[18px] w-[18px] stroke-[2.4] transition-transform", isTestsSubmenuOpen && "rotate-180")} />
+                    </button>
+                  )}
+                </div>
+
+                {item.href === "/tests" && (
+                  <div
+                    className={cn(
+                      "grid pl-5 transition-all duration-300 ease-out",
+                      isTestsSubmenuOpen ? "mt-1 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                    )}
+                  >
+                    <div className="relative space-y-1 overflow-hidden pl-3 before:absolute before:bottom-1 before:left-0 before:top-1 before:w-px before:rounded-full before:bg-slate-300 dark:before:bg-slate-600">
+                      {testSourceItems.map((sourceItem) => {
+                        const isSourceActive = active && activeSource === sourceItem.id;
+                        const SourceIcon = sourceItem.icon;
+
+                        return (
+                          <Link
+                            key={sourceItem.id}
+                            href={sourceItem.href}
+                            className={cn(
+                              "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm font-semibold transition-all before:absolute before:-left-3 before:top-1/2 before:h-px before:w-2 before:-translate-y-1/2 before:rounded-full before:bg-slate-300 dark:before:bg-slate-600",
+                              isSourceActive
+                                ? "bg-muted text-foreground"
+                                : "text-muted-foreground/85 hover:bg-muted/60 hover:text-foreground"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                                isSourceActive ? "bg-muted-foreground/15" : "bg-muted/80"
+                              )}
+                            >
+                              <SourceIcon className="h-3.5 w-3.5" />
+                            </span>
+                            <span>{sourceItem.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
-              >
-                <Icon className={cn("h-4 w-4", active ? "opacity-100" : "opacity-70")} />
-                {item.label}
-              </Link>
+              </div>
             );
           })}
         </nav>
       </Card>
 
-      {isPremium && (
-        <Card className="relative overflow-hidden p-4 border-primary/20 shadow-sm bg-gradient-to-br from-primary/10 via-card/95 to-card rounded-xl">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
-          <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-primary/10 blur-2xl" />
-          <div className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-primary">
-            <Sparkles className="h-3 w-3" />
-            Premium Active
-          </div>
-        </Card>
-      )}
-
-      <Card className="p-4 border-border/50 shadow-sm bg-card/60 backdrop-blur-md rounded-xl">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Account Status</p>
-        <div className="space-y-3 text-xs">
-          <div className="flex items-center justify-between group">
-            <span className="font-semibold text-muted-foreground transition-colors group-hover:text-foreground">Sessions</span>
-            <Badge variant="outline" className="font-bold text-[10px] py-0 px-2 h-5">2 / 2</Badge>
-          </div>
-          <div className="flex items-center justify-between group">
-            <span className="font-semibold text-muted-foreground transition-colors group-hover:text-foreground">Premium</span>
-            <Badge
-              variant="secondary"
-              className={cn(
-                "font-bold text-[9px] py-0 px-2 h-5",
-                isPremium
-                  ? "text-primary bg-primary/10 hover:bg-primary/20"
-                  : "text-amber-600 bg-amber-500/10 hover:bg-amber-500/20"
-              )}
-            >
-              {premiumBadgeLabel}
-            </Badge>
-          </div>
-        </div>
-      </Card>
     </>
   );
 
@@ -188,7 +245,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <aside className={cn(
-        "hidden lg:block w-64 shrink-0 transition-all duration-300 sticky top-32", 
+        "hidden lg:block w-64 shrink-0 transition-all duration-300 sticky top-[var(--app-shell-sticky-top,7.5rem)]", 
         sidebar === "collapsed" ? "lg:hidden" : "lg:block"
       )}>
         <div className="space-y-4">

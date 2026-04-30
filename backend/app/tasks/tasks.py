@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+from celery import Task
 from typing import Any
 
+from app.services.admin_ai_agent import run_admin_ai_job
 from app.tasks.celery_app import celery_app
+
+
+@celery_app.task(
+    bind=True,
+    name="primescore.run_admin_ai_job",
+    acks_late=True,
+)
+def run_admin_ai_job_task(self: Task[Any, Any], job_id: str) -> dict[str, Any]:
+    run_admin_ai_job(job_id)
+    return {"job_id": job_id, "status": "completed"}
 
 
 @celery_app.task(name="primescore.score_attempt")
@@ -38,4 +50,3 @@ def process_audio_upload(audio_id: str) -> dict[str, Any]:
 @celery_app.task(name="primescore.cleanup_abandoned_attempts")
 def cleanup_abandoned_attempts() -> dict[str, Any]:
     return {"status": "ok", "cleaned": True}
-

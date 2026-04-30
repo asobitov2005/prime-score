@@ -28,7 +28,10 @@ export function AdminShell({
   const initials = admin.username.slice(0, 2).toUpperCase();
   const roleLabel = admin.role === "super_admin" ? "Super Admin" : "Admin";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const isBuilderPage = pathname === "/tests/new" || /^\/tests\/[^/]+\/edit$/.test(pathname);
+  const isWideWorkspacePage =
+    pathname === "/tests/new"
+    || /^\/tests\/[^/]+\/edit$/.test(pathname)
+    || pathname === "/ai";
 
   useEffect(() => {
     const stored = window.localStorage.getItem("admin-sidebar-collapsed");
@@ -83,7 +86,7 @@ export function AdminShell({
         </header>
 
         <main className="flex-1 p-6 lg:p-8 xl:p-10">
-          <div className={isBuilderPage ? "mx-auto max-w-[min(1700px,100%)]" : "mx-auto max-w-7xl"}>
+          <div className={isWideWorkspacePage ? "mx-auto max-w-[min(1820px,100%)]" : "mx-auto max-w-7xl"}>
             {children}
           </div>
         </main>

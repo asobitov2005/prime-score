@@ -19,7 +19,7 @@ from app.models.enums import TestType as ModelTestType
 from app.models.user import User
 from app.services.fixtures import build_test_snapshot, get_question_fixture
 from app.services.runtime_store import AttemptRuntime, _band_for_raw_score
-from app.services.scoring import is_answer_correct
+from app.services.scoring import is_answer_correct, mc_multiple_question_weight
 from app.services.snapshots import freeze_test_snapshot
 from app.services.test_content_repo import build_test_snapshot_from_db
 
@@ -57,6 +57,26 @@ def _snapshot_answer_key(snapshot: dict[str, object]) -> dict[str, dict[str, obj
             if isinstance(value, dict)
         }
     return {}
+
+
+def _snapshot_group_shared_options(snapshot: dict[str, object]) -> dict[str, list[str]]:
+    group_options: dict[str, list[str]] = {}
+    for section in snapshot.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for group in section.get("question_groups", []):
+            if not isinstance(group, dict):
+                continue
+            group_id = str(group.get("group_id", "")).strip()
+            if not group_id:
+                continue
+            shared_options = [
+                str(option)
+                for option in group.get("shared_options", [])
+                if isinstance(option, (str, int, float))
+            ]
+            group_options[group_id] = shared_options
+    return group_options
 
 
 async def _db_answer_key(session: AsyncSession, question_ids: list[UUID]) -> dict[str, dict[str, object]]:
@@ -484,6 +504,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
     answer_map = {str(answer.question_id): str(answer.value.get("value") or "") for answer in answers}
     snapshot = dict(attempt.test_snapshot or {})
     snapshot_questions = _snapshot_questions(snapshot)
+    snapshot_group_shared_options = _snapshot_group_shared_options(snapshot)
     db_answer_key = await _db_answer_key(session, [UUID(question_id) for question_id in snapshot_questions])
     snapshot_answer_key = _snapshot_answer_key(snapshot)
     now = datetime.now(timezone.utc)
@@ -503,6 +524,10 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             "group_title": str(snapshot_question["group_title"]),
             "question_type": str(snapshot_question["question_type"]),
             "prompt": str(snapshot_question["prompt"]),
+            "options": (
+                [str(option) for option in snapshot_question.get("options", [])]
+                or snapshot_group_shared_options.get(str(snapshot_question.get("group_id", "")), [])
+            ),
         }
         answer_key = db_answer_key.get(str(question_id)) or snapshot_answer_key.get(str(question_id))
         fixture = get_question_fixture(attempt.test_id, question_id)
@@ -517,7 +542,15 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
         accepted_answers = [str(item) for item in answer_key.get("accepted_answers", [])]
         explanation = str(answer_key.get("explanation") or "")
         is_correct = bool(answer_value) and is_answer_correct(answer_value, accepted_answers)
-        raw_score += int(is_correct)
+        question_weight = (
+            mc_multiple_question_weight(
+                question_label=str(snapshot_question.get("label") or question_payload["question_number"]),
+                accepted_answers=accepted_answers,
+            )
+            if "mc_multiple" in str(question_payload["question_type"])
+            else 1
+        )
+        raw_score += question_weight if is_correct else 0
 
         scoring_item = {
             "question_id": str(question_id),
@@ -527,6 +560,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             "group_title": question_payload["group_title"],
             "question_type": question_payload["question_type"],
             "prompt": question_payload["prompt"],
+            "options": question_payload["options"],
             "answer_value": answer_value,
             "is_correct": is_correct,
             "correct_answers": accepted_answers,
@@ -539,16 +573,16 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             section_key,
             {"title": question_payload["section_title"], "correct": 0, "total": 0},
         )
-        section_state["total"] += 1
-        section_state["correct"] += int(is_correct)
+        section_state["total"] += question_weight
+        section_state["correct"] += question_weight if is_correct else 0
 
         type_key = str(question_payload["question_type"])
         type_state = type_counts.setdefault(
             type_key,
             {"question_type": question_payload["question_type"], "correct": 0, "total": 0},
         )
-        type_state["total"] += 1
-        type_state["correct"] += int(is_correct)
+        type_state["total"] += question_weight
+        type_state["correct"] += question_weight if is_correct else 0
 
     band_score = (
         _band_for_raw_score(TestType(str(snapshot["test_type"])), raw_score)

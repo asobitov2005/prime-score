@@ -10,5 +10,5 @@ interface NewTestPageProps {
 export default async function NewTestPage({ searchParams }: NewTestPageProps) {
   const type = searchParams.type || "reading";
   const initialDraft = await getAdminTestDraft(undefined, type);
-  return <TestEditorWizard mode="create" initialDraft={initialDraft} />;
+  return <TestEditorWizard mode="create" initialDraft={initialDraft ?? undefined} />;
 }

@@ -40,6 +40,7 @@ class AdminTestRead(AdminTestUpsertRequest):
     id: UUID
     format: str | None = None
     status: TestStatus = TestStatus.draft
+    review_status: Literal["needs_review", "approved", "rejected"] = "needs_review"
     version: int = 1
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -67,6 +68,12 @@ class AdminUploadUrlResponse(BaseModel):
     fields: dict[str, str] = Field(default_factory=dict)
 
 
+class AdminUploadedAssetResponse(BaseModel):
+    public_url: str
+    filename: str
+    content_type: str
+
+
 class AdminUserRead(BaseModel):
     id: UUID
     telegram_id: int
@@ -79,13 +86,72 @@ class AdminUserRead(BaseModel):
 
 class AdminPlanRead(BaseModel):
     id: UUID
+    catalog: Literal["public", "gift"] = "public"
     name: str
     duration_days: int
     price: Decimal
     discount_percent: int = 0
     currency: str = "UZS"
+    badge_label: str | None = None
+    perks: list[str] = Field(default_factory=list)
     is_active: bool = True
     display_order: int = 0
+    is_featured: bool = False
+
+
+class AdminPlanUpsertRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    duration_days: int = Field(ge=1, le=3660)
+    price: Decimal = Field(gt=0)
+    badge_label: str | None = Field(default=None, max_length=80)
+    perks: list[str] = Field(default_factory=list)
+    is_active: bool = True
+    display_order: int = Field(default=0, ge=0, le=5000)
+    is_featured: bool = False
+
+
+class AdminGiftCodeRead(BaseModel):
+    id: UUID
+    code: str
+    plan_id: UUID | None = None
+    plan_name: str = "Unknown plan"
+    duration_days: int | None = None
+    status: Literal["available", "paused", "redeemed", "revoked", "expired"]
+    raw_status: str
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    max_uses: int = 1
+    used_count: int = 0
+    remaining_uses: int | None = None
+    per_user_limit: int = 1
+    target_user_type: Literal["all", "premium", "free"] = "all"
+    redeemed_at: datetime | None = None
+    created_at: datetime | None = None
+    recipient_user_id: UUID | None = None
+    recipient_name: str | None = None
+    recipient_username: str | None = None
+
+
+class AdminGiftCodeCreateRequest(BaseModel):
+    plan_id: UUID
+    quantity: int = Field(default=1, ge=1, le=50)
+    prefix: str | None = Field(default=None, max_length=16)
+    custom_code: str | None = Field(default=None, min_length=4, max_length=50)
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    max_uses: int = Field(default=1, ge=1, le=5000)
+    per_user_limit: int = Field(default=1, ge=1, le=100)
+    target_user_type: Literal["all", "premium", "free"] = "all"
+    starts_paused: bool = False
+
+
+class AdminGiftCodeCreateResponse(BaseModel):
+    message: str
+    items: list[AdminGiftCodeRead] = Field(default_factory=list)
+
+
+class AdminGiftCodeUpdateRequest(BaseModel):
+    status: Literal["available", "paused", "revoked"]
 
 
 class AdminPromoCodeRead(BaseModel):
@@ -182,6 +248,8 @@ class AdminDraftQuestionGroupRead(BaseModel):
     question_block: str = ""
     answer_block: str = ""
     secondary_block: str = ""
+    diagram_title: str = ""
+    diagram_image_url: str = ""
     questions: list[AdminDraftQuestionRead] = Field(default_factory=list)
 
 
@@ -239,6 +307,8 @@ class AdminDraftQuestionGroupWrite(BaseModel):
     question_block: str = ""
     answer_block: str = ""
     secondary_block: str = ""
+    diagram_title: str = ""
+    diagram_image_url: str = ""
     questions: list[AdminDraftQuestionWrite] = Field(default_factory=list)
 
 

@@ -29,6 +29,10 @@ type SnapshotQuestionGroup = {
   question_type: TestQuestion["type"];
   question_start: number;
   question_end: number;
+  shared_content?: {
+    diagram_title?: string;
+    diagram_image_url?: string;
+  };
   questions: SnapshotQuestion[];
 };
 
@@ -108,6 +112,8 @@ export function buildReadingPassageFromSnapshot(snapshot: AttemptSnapshot, secti
     type: group.question_type,
     questionStart: group.question_start,
     questionEnd: group.question_end,
+    diagramTitle: group.shared_content?.diagram_title ?? undefined,
+    diagramImageUrl: group.shared_content?.diagram_image_url ?? undefined,
     questions: mapQuestions(group.questions)
   }));
   const questions = questionGroups.flatMap((group) => group.questions);
@@ -136,6 +142,8 @@ export function buildListeningPartFromSnapshot(snapshot: AttemptSnapshot, sectio
     type: group.question_type,
     questionStart: group.question_start,
     questionEnd: group.question_end,
+    diagramTitle: group.shared_content?.diagram_title ?? undefined,
+    diagramImageUrl: group.shared_content?.diagram_image_url ?? undefined,
     questions: mapQuestions(group.questions)
   }));
   const questions = questionGroups.flatMap((group) => group.questions);

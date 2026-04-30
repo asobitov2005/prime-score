@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { startBackendAttempt } from "@/lib/server-attempts";
+import { ServerUserApiError } from "@/lib/server-user-auth";
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +18,10 @@ export async function POST(request: Request) {
       forceNew: payload.forceNew ?? payload.force_new ?? false,
     });
     return NextResponse.json(result);
-  } catch {
+  } catch (error) {
+    if (error instanceof ServerUserApiError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
     return NextResponse.json({ message: "Attempt start failed." }, { status: 500 });
   }
 }

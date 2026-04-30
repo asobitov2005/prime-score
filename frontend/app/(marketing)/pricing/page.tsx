@@ -90,14 +90,14 @@ export default async function PricingPage() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                     </span>
-                    <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
+                    <span className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
                       One-Time Plans · No Auto-Renew
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <h1 className="max-w-4xl text-3xl sm:text-4xl lg:text-5xl font-black tracking-tighter text-foreground leading-[1.1] flex flex-col">
+                  <h1 className="max-w-4xl text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-[1.1] flex flex-col">
                     <span>Upgrade Your</span>
                     <span className="bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent pb-2">
                       IELTS Practice
@@ -111,13 +111,13 @@ export default async function PricingPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
-                  <Button asChild size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-bold shadow-xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background">
+                  <Button asChild size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-semibold shadow-xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background">
                     <Link href="/login">
                       Start Free
                       <ArrowRight className="ml-2 h-5 w-5" />
                     </Link>
                   </Button>
-                  <Button asChild variant="outline" size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-bold border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-2xl transition-all hover:scale-105">
+                  <Button asChild variant="outline" size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-medium border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-2xl transition-all hover:scale-105">
                     <Link href="/tests">
                       See Public Tests
                     </Link>
@@ -133,7 +133,7 @@ export default async function PricingPage() {
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
                       <BookOpenText className="h-5 w-5" />
                     </div>
-                    <h2 className="text-lg md:text-xl font-black tracking-tight text-foreground">Free access stays useful</h2>
+                    <h2 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">Free access stays useful</h2>
                   </div>
                   <p className="mt-2 text-sm md:text-[15px] font-medium leading-relaxed text-muted-foreground">
                     Public Reading and Listening tests let new users start immediately without paying first.
@@ -147,7 +147,7 @@ export default async function PricingPage() {
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 shadow-inner">
                       <Headphones className="h-5 w-5" />
                     </div>
-                    <h2 className="text-lg md:text-xl font-black tracking-tight text-foreground">Premium unlocks more depth</h2>
+                    <h2 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">Premium unlocks more depth</h2>
                   </div>
                   <p className="mt-2 text-sm md:text-[15px] font-medium leading-relaxed text-muted-foreground">
                     Premium is for learners who want more premium tests and explanation-led review before exam day.
@@ -161,7 +161,7 @@ export default async function PricingPage() {
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 shadow-inner">
                       <Sparkles className="h-5 w-5" />
                     </div>
-                    <h2 className="text-lg md:text-xl font-black tracking-tight text-foreground">Built around real timelines</h2>
+                    <h2 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">Built around real timelines</h2>
                   </div>
                   <p className="mt-2 text-sm md:text-[15px] font-medium leading-relaxed text-muted-foreground">
                     Short plans fit a final sprint. Longer plans fit steady band improvement over multiple months.
@@ -172,11 +172,11 @@ export default async function PricingPage() {
 
             <section className="space-y-8 border-t border-border/30 pt-16">
               <div className="max-w-3xl space-y-4">
-                <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-primary">
+                <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   Compare Plans
                 </div>
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter text-foreground leading-[1.08]">
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground leading-[1.08]">
                   Choose the plan that matches your{" "}
                   <span className="bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent">
                     target test date.
@@ -192,7 +192,7 @@ export default async function PricingPage() {
 
             <section className="border-t border-border/30 pt-16">
               <div className="mb-10 max-w-3xl space-y-4">
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter text-foreground leading-[1.08]">
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground leading-[1.08]">
                   Pricing questions{" "}
                   <span className="bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent">
                     students usually ask.
@@ -203,7 +203,7 @@ export default async function PricingPage() {
               <div className="grid gap-5 md:grid-cols-2">
                 {pricingFaqs.map((item) => (
                   <div key={item.question} className="rounded-[2rem] border border-border/50 bg-card/80 p-6 shadow-sm">
-                    <h3 className="text-base md:text-lg font-black tracking-tight text-foreground leading-snug">{item.question}</h3>
+                    <h3 className="text-base md:text-lg font-semibold tracking-tight text-foreground leading-snug">{item.question}</h3>
                     <p className="mt-3 text-[13px] md:text-sm font-medium leading-relaxed text-muted-foreground">{item.answer}</p>
                   </div>
                 ))}

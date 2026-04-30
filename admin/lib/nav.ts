@@ -11,7 +11,8 @@ import {
   Globe,
   Headphones,
   MessageSquareText,
-  Settings
+  Settings,
+  Sparkles
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -52,6 +53,12 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/tests?type=listening",
         description: "Manage IELTS listening materials",
         icon: Headphones
+      },
+      {
+        label: "AI Workspace",
+        href: "/ai",
+        description: "Threaded admin copilots, jobs, and tool traces",
+        icon: Sparkles
       }
     ]
   },
@@ -86,9 +93,9 @@ export const adminNavGroups: AdminNavGroup[] = [
         icon: CreditCard
       },
       {
-        label: "Promo Codes",
+        label: "Redeem Codes",
         href: "/promo-codes",
-        description: "Discount and gift code management",
+        description: "Premium redeem code creation and control",
         icon: Ticket
       }
     ]

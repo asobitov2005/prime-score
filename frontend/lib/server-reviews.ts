@@ -1,10 +1,7 @@
 import { mockReviews, type ReviewItem } from "@/lib/mock-data";
+import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 
-const baseUrl = (
-  process.env.API_INTERNAL_BASE_URL
-  ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
+const baseUrl = getFrontendServerApiBaseUrl();
 
 type BackendPublicReview = {
   id: string;
@@ -54,9 +51,17 @@ function mapReview(payload: BackendPublicReview): ReviewItem {
 
 export async function getPublicReviews(limit = 6): Promise<ReviewItem[]> {
   try {
-    const response = await fetch(`${baseUrl}/reviews`, {
-      next: { revalidate: 3600, tags: ["public-reviews"] },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/reviews`, {
+        next: { revalidate: 3600, tags: ["public-reviews"] },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error("Failed to load public reviews.");

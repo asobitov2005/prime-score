@@ -18,6 +18,7 @@ type AdminTestRow = {
   sourceDetail: string;
   accessType: string;
   status: string;
+  reviewStatus: string;
   updatedAt: string;
   questions: number;
   version: number;
@@ -26,6 +27,12 @@ type AdminTestRow = {
 function badgeToneForStatus(status: string): "neutral" | "success" | "warning" | "paused" {
   if (status === "published") return "success";
   if (status === "draft") return "warning";
+  return "paused";
+}
+
+function badgeToneForReviewStatus(status: string): "neutral" | "success" | "warning" | "paused" {
+  if (status === "approved") return "success";
+  if (status === "needs_review") return "warning";
   return "paused";
 }
 
@@ -160,7 +167,7 @@ export default function TestsPage() {
       setTests(data.map((t: any) => ({
         id: t.id, title: t.title, type: t.test_type, format: t.format ?? "full",
         source: t.source, sourceDetail: t.source_detail ?? "", accessType: t.access_type,
-        status: t.status, updatedAt: t.updated_at ?? new Date().toISOString(),
+        status: t.status, reviewStatus: t.review_status ?? "needs_review", updatedAt: t.updated_at ?? new Date().toISOString(),
         questions: t.total_questions, version: t.version,
       })));
     } catch { setTests([]); }
@@ -418,7 +425,12 @@ export default function TestsPage() {
                       <Badge tone={row.accessType === "public" ? "success" : "paused"} className="text-[10px] uppercase font-black tracking-widest">{row.accessType}</Badge>
                     </td>
                     <td className="border-b border-border/50 px-3 py-4">
-                      <Badge tone={badgeToneForStatus(row.status)} className="text-[10px] uppercase font-black tracking-widest">{row.status}</Badge>
+                      <div className="flex flex-col gap-1.5">
+                        <Badge tone={badgeToneForStatus(row.status)} className="text-[10px] uppercase font-black tracking-widest">{row.status}</Badge>
+                        <Badge tone={badgeToneForReviewStatus(row.reviewStatus)} className="text-[10px] uppercase font-black tracking-widest">
+                          review: {row.reviewStatus}
+                        </Badge>
+                      </div>
                     </td>
                     <td className="border-b border-border/50 px-3 py-4 text-[11px] font-bold text-muted-foreground">{formatDateTime(row.updatedAt)}</td>
                     <td className="border-b border-border/50 px-3 py-4">

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, status
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import UserRole
 from app.core.security import decode_token
 from app.db.session import get_async_session
+from app.models.user import Session as UserSession
+from app.models.user import User
 from app.schemas.common import AdminPrincipal, DebugPrincipal
 from app.services.admin_auth import build_admin_principal, get_admin_by_id
 
@@ -20,6 +23,7 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
 
 
 async def get_current_user(
+    authorization: str | None = Header(default=None, alias="Authorization"),
     x_debug_user_id: str | None = Header(default=None, alias="X-Debug-User-Id"),
     x_debug_first_name: str = Header(default="Prime", alias="X-Debug-First-Name"),
     x_debug_last_name: str | None = Header(default=None, alias="X-Debug-Last-Name"),
@@ -29,7 +33,57 @@ async def get_current_user(
     x_debug_show_on_leaderboard: str | None = Header(
         default=None, alias="X-Debug-Show-On-Leaderboard"
     ),
+    session: AsyncSession = Depends(get_async_session),
 ) -> DebugPrincipal:
+    if authorization:
+        token = _extract_bearer_token(authorization)
+        try:
+            payload = decode_token(token)
+            user_id = UUID(str(payload["sub"]))
+            session_id = UUID(str(payload["sid"]))
+        except (JWTError, KeyError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user access token.",
+            ) from exc
+
+        if payload.get("scope") == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user token scope.",
+            )
+
+        user_session = await session.get(UserSession, session_id)
+        if (
+            user_session is None
+            or user_session.user_id != user_id
+            or not user_session.is_active
+            or user_session.expires_at <= datetime.now(UTC)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User session is no longer active.",
+            )
+
+        user = await session.get(User, user_id)
+        if user is None or user.deleted_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is not available.",
+            )
+
+        return DebugPrincipal(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            username=user.username or user.phone,
+            role=UserRole.user,
+            is_premium=user.is_premium,
+            premium_until=user.premium_until,
+            show_on_leaderboard=user.show_on_leaderboard,
+            telegram_id=user.telegram_id,
+        )
+
     if not x_debug_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

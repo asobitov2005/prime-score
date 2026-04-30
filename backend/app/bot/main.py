@@ -13,6 +13,7 @@ from app.db.session import get_session_maker
 from app.models import ops as _ops_models
 from app.models.user import User
 from app.services.code_store import get_code_store
+from app.services.user_names import normalize_user_name_parts
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,11 +50,12 @@ async def _get_saved_contact(telegram_id: int) -> dict | None:
     if user is None:
         return None
 
-    name_parts = [part for part in [user.first_name, user.last_name] if part]
+    first_name, last_name = normalize_user_name_parts(user.first_name, user.last_name)
     return {
         "telegram_id": user.telegram_id,
         "phone": user.phone,
-        "name": " ".join(name_parts).strip() or user.username or "User",
+        "first_name": first_name,
+        "last_name": last_name,
     }
 
 
@@ -76,7 +78,8 @@ async def run_bot() -> None:
                 await store.save_contact(
                     telegram_id=contact["telegram_id"],
                     phone=contact["phone"],
-                    name=contact["name"],
+                    first_name=contact["first_name"],
+                    last_name=contact.get("last_name"),
                 )
 
         if contact is not None:
@@ -108,10 +111,15 @@ async def run_bot() -> None:
         if not phone.startswith("+"):
             phone = "+" + phone
 
+        first_name, last_name = normalize_user_name_parts(
+            message.from_user.first_name or message.from_user.username or "User",
+            message.from_user.last_name,
+        )
         await store.save_contact(
             telegram_id=message.from_user.id,
             phone=phone,
-            name=message.from_user.first_name or message.from_user.username or "User",
+            first_name=first_name,
+            last_name=last_name,
         )
         await message.answer(
             "✅ <b>Phone number received.</b>\n\n"
@@ -129,7 +137,8 @@ async def run_bot() -> None:
                 await store.save_contact(
                     telegram_id=contact["telegram_id"],
                     phone=contact["phone"],
-                    name=contact["name"],
+                    first_name=contact["first_name"],
+                    last_name=contact.get("last_name"),
                 )
 
         if not contact:
@@ -142,7 +151,8 @@ async def run_bot() -> None:
         code = await store.create_code(
             telegram_id=contact["telegram_id"],
             phone=contact["phone"],
-            name=contact["name"],
+            first_name=contact["first_name"],
+            last_name=contact.get("last_name"),
         )
 
         sent = await message.answer(
@@ -163,7 +173,8 @@ async def run_bot() -> None:
                 await store.save_contact(
                     telegram_id=contact["telegram_id"],
                     phone=contact["phone"],
-                    name=contact["name"],
+                    first_name=contact["first_name"],
+                    last_name=contact.get("last_name"),
                 )
 
         if contact:

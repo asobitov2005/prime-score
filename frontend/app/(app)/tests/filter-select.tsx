@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, Check, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { emitNavigationStart } from "@/lib/navigation-transition";
+import { testSourceOptions } from "@/lib/test-source";
 
 interface FilterSelectProps {
   activeType: string;
@@ -12,19 +13,12 @@ interface FilterSelectProps {
   activeSource: string;
 }
 
-const options = [
-  { id: "", label: "All Materials" },
-  { id: "cambridge", label: "Cambridge Official" },
-  { id: "real_exam", label: "Real Exam Recent Tests" },
-  { id: "custom", label: "Custom Tests" },
-];
-
 export function FilterSelect({ activeType, activeFormat, activeSource }: FilterSelectProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find(o => o.id === activeSource) || options[0];
+  const selectedOption = testSourceOptions.find((option) => option.id === activeSource) || testSourceOptions[0];
 
   const handleSelect = (id: string) => {
     const url = `/tests?type=${activeType}&format=${activeFormat}${id ? `&source=${id}` : ""}`;
@@ -84,7 +78,7 @@ export function FilterSelect({ activeType, activeFormat, activeSource }: FilterS
           : "opacity-0 scale-95 -translate-y-2 pointer-events-none"
       )}>
         <div className="space-y-0.5">
-          {options.map((option) => {
+          {testSourceOptions.map((option) => {
             const isSelected = activeSource === option.id;
             return (
               <button

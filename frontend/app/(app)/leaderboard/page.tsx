@@ -42,7 +42,7 @@ export default function LeaderboardPage() {
       </Card>
 
       {/* Sticky Filter — sticks at navbar level */}
-      <div className="sticky top-20 md:top-28 lg:top-32 z-40 bg-background/95 backdrop-blur-md pb-4">
+      <div className="sticky top-16 md:top-20 z-40 bg-background/95 backdrop-blur-md pb-4">
         <div className="bg-muted/40 p-1.5 rounded-[1.25rem] flex items-center overflow-x-auto no-scrollbar border border-border/50 shadow-inner w-full md:w-max">
           {[
             { id: "combined", label: "Overall" },

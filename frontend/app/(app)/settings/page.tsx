@@ -1,28 +1,37 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2, Crown, Sparkles } from "lucide-react";
+import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2, Crown } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/auth-store";
 import { createApiClient } from "@/lib/api/client";
+import { buildUserDisplayName, splitUserDisplayName } from "@/lib/user-name";
 import type { AuthSessionRead } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const { name, phoneNumber, updateName, isPremium, sessionId: currentSessionId } = useAuthStore();
+  const { name, phoneNumber, updateName, isPremium, sessionId: currentSessionId, isAuthenticated, hasHydrated } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(name);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   
   const [sessions, setSessions] = useState<AuthSessionRead[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [isSigningOutOthers, setIsSigningOutOthers] = useState(false);
 
-  const api = createApiClient();
+  const api = useMemo(() => createApiClient(), []);
 
   const fetchSessions = useCallback(async () => {
+    if (!hasHydrated || !isAuthenticated) {
+      setSessions([]);
+      setIsLoadingSessions(false);
+      return;
+    }
+
     setIsLoadingSessions(true);
     try {
       const response = await api.listSessions();
@@ -32,11 +41,15 @@ export default function SettingsPage() {
     } finally {
       setIsLoadingSessions(false);
     }
-  }, []);
+  }, [api, hasHydrated, isAuthenticated]);
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
+
+  useEffect(() => {
+    setEditName(name);
+  }, [name]);
 
   const handleRevokeSession = async (sessionId: string) => {
     setRevokingId(sessionId);
@@ -50,10 +63,46 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSave = () => {
-    if (editName.trim()) {
-      updateName(editName.trim());
+  const handleSignOutOthers = async () => {
+    const otherSessions = sessions.filter((session) => session.id !== currentSessionId);
+    if (otherSessions.length === 0) {
+      return;
+    }
+
+    setIsSigningOutOthers(true);
+    try {
+      await Promise.allSettled(otherSessions.map((session) => api.revokeSession(session.id)));
+      setSessions((prev) => prev.filter((session) => session.id === currentSessionId));
+    } catch (error) {
+      console.error("Failed to revoke other sessions:", error);
+    } finally {
+      setIsSigningOutOthers(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      return;
+    }
+
+    const { firstName, lastName } = splitUserDisplayName(trimmedName);
+    if (!firstName) {
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const profile = await api.updateMe({
+        first_name: firstName,
+        last_name: lastName,
+      });
+      updateName(buildUserDisplayName(profile.first_name, profile.last_name, trimmedName));
       setIsEditing(false);
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -75,56 +124,95 @@ export default function SettingsPage() {
     return date.toLocaleDateString();
   };
 
+  const resolveSessionMeta = (session: AuthSessionRead) => {
+    const rawUserAgent = String(session.device_info?.user_agent ?? session.device_info?.browser ?? "").trim();
+    const lowerUserAgent = rawUserAgent.toLowerCase();
+    const sessionBrowser = String(session.device_info?.browser ?? "").trim();
+    const sessionOs = String(session.device_info?.os ?? "").trim();
+    const sessionType = String(session.device_info?.type ?? "").trim();
+
+    const browser = sessionBrowser
+      || (lowerUserAgent.includes("edg/") ? "Edge" :
+        lowerUserAgent.includes("opr/") || lowerUserAgent.includes("opera") ? "Opera" :
+        lowerUserAgent.includes("firefox/") || lowerUserAgent.includes("fxios/") ? "Firefox" :
+        (lowerUserAgent.includes("chrome/") || lowerUserAgent.includes("crios/")) && !lowerUserAgent.includes("edg/") && !lowerUserAgent.includes("opr/") ? "Chrome" :
+        lowerUserAgent.includes("safari/") && !lowerUserAgent.includes("chrome/") && !lowerUserAgent.includes("crios/") ? "Safari" :
+        "Browser");
+
+    const isTabletDevice = sessionType === "Tablet" || lowerUserAgent.includes("ipad") || lowerUserAgent.includes("tablet");
+    const isMobileDevice = !isTabletDevice && (
+      sessionType === "Mobile"
+      || lowerUserAgent.includes("android")
+      || lowerUserAgent.includes("iphone")
+      || lowerUserAgent.includes("mobile")
+    );
+    const platformLabel = sessionOs || (isMobileDevice ? "Mobile OS" : "Desktop OS");
+
+    return {
+      isMobileDevice,
+      primaryLabel: browser,
+      deviceLabel: isTabletDevice
+        ? `${platformLabel} tablet`
+        : isMobileDevice
+          ? `${platformLabel} phone`
+          : platformLabel,
+    };
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+    <div className="space-y-4 animate-in fade-in duration-500 pb-6">
       <Card className="overflow-hidden bg-background border border-border/50 relative rounded-2xl shadow-sm">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-        <CardHeader className="space-y-1 relative z-10 p-5 lg:px-6 border-b border-border/40 bg-muted/5">
-          <div className="flex items-start gap-4">
-            <div className="hidden md:flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Settings2 className="h-5 w-5" />
+        <CardHeader className="space-y-1 relative z-10 p-4 lg:px-5 border-b border-border/40 bg-muted/5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="hidden md:flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Settings2 className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Account Settings</CardTitle>
+                <CardDescription className="text-muted-foreground text-sm font-medium">
+                  Manage your profile, preferences, and active sessions.
+                </CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Account Settings</CardTitle>
-              <CardDescription className="text-muted-foreground text-sm font-medium">
-                Manage your profile, preferences, and active sessions.
-              </CardDescription>
-            </div>
+
+            {isPremium ? (
+              <div className="hidden shrink-0 md:flex flex-col items-end gap-1 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-right">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary">
+                  <Crown className="h-3.5 w-3.5" />
+                  Premium Active
+                </div>
+              </div>
+            ) : null}
           </div>
+
+          {isPremium ? (
+            <div className="md:hidden pt-2">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary">
+                <Crown className="h-3.5 w-3.5" />
+                Premium Active
+              </div>
+            </div>
+          ) : null}
         </CardHeader>
         
-        <CardContent className="p-4 lg:p-6 space-y-6">
-          {isPremium && (
-            <Card className="relative overflow-hidden rounded-2xl border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/80 to-transparent" />
-              <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
-              <CardContent className="relative z-10 p-5 lg:p-6">
-                <div className="space-y-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-primary">
-                    <Crown className="h-3.5 w-3.5" />
-                    Premium Active
-                    <Sparkles className="h-3 w-3 opacity-80" />
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold tracking-tight text-foreground">Your premium access is live.</p>
-                    <p className="mt-1 max-w-2xl text-sm font-medium text-muted-foreground">
-                      You already have the strongest PrimeScore access level with premium tests, explanation-led review, and a cleaner exam-prep workflow.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
+        <CardContent className="p-4 lg:p-5 space-y-4">
           {/* Profile Info */}
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
-              <CardHeader className="p-4 border-b border-border/40 bg-muted/5">
+          <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
+            <CardHeader className="p-4 border-b border-border/40 bg-muted/5">
+              <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <User className="h-4 w-4 text-primary" /> Profile Information
                 </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/5 px-3 py-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-600">Telegram Connected</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Full Name</p>
@@ -134,19 +222,34 @@ export default function SettingsPage() {
                       </Button>
                     )}
                   </div>
-                  
+
                   {isEditing ? (
                     <div className="flex items-center gap-2">
-                      <Input 
-                        value={editName} 
-                        onChange={(e) => setEditName(e.target.value)} 
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
                         className="h-8 text-sm font-bold"
                         autoFocus
+                        disabled={isSavingProfile}
                       />
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600" onClick={handleSave}>
-                        <Check className="h-4 w-4" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600"
+                        onClick={() => {
+                          void handleSave();
+                        }}
+                        disabled={isSavingProfile}
+                      >
+                        {isSavingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600" onClick={handleCancel}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        onClick={handleCancel}
+                        disabled={isSavingProfile}
+                      >
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
@@ -154,32 +257,14 @@ export default function SettingsPage() {
                     <p className="font-bold text-foreground">{name}</p>
                   )}
                 </div>
-                <div className="space-y-1 pt-2">
+
+                <div className="space-y-1 md:border-l md:border-border/40 md:pl-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Phone Number</p>
                   <p className="font-bold text-foreground">{phoneNumber || "No number attached"}</p>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
-              <CardHeader className="p-4 border-b border-border/40 bg-muted/5">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-emerald-500" /> Security & Auth
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="font-bold text-sm text-foreground">Telegram Connected</p>
-                    <p className="text-[11px] text-muted-foreground">Your account is secured by Telegram.</p>
-                  </div>
-                  <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                    <Check className="h-4 w-4 text-emerald-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Active Sessions */}
           <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
@@ -188,47 +273,54 @@ export default function SettingsPage() {
                 <Monitor className="h-4 w-4 text-primary" /> Active Sessions
               </CardTitle>
               {sessions.length > 1 && (
-                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => {
-                   // In a real app, you'd call an endpoint to logout all other sessions
-                   alert("Logging out other sessions...");
-                }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-50"
+                  disabled={isSigningOutOthers}
+                  onClick={() => {
+                    void handleSignOutOthers();
+                  }}
+                >
+                  {isSigningOutOthers ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                   Sign out all others
                 </Button>
               )}
             </CardHeader>
             <CardContent className="p-0">
               {isLoadingSessions ? (
-                <div className="p-8 flex flex-col items-center justify-center space-y-2">
+                <div className="p-6 flex flex-col items-center justify-center space-y-2">
                   <Loader2 className="h-6 w-6 text-primary animate-spin" />
                   <p className="text-xs text-muted-foreground">Loading active sessions...</p>
                 </div>
               ) : sessions.length === 0 ? (
-                <div className="p-8 text-center">
+                <div className="p-6 text-center">
                   <p className="text-sm text-muted-foreground">No active sessions found.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/40">
                   {sessions.map((session) => {
-                    const isMobile = session.device_info?.type === "Mobile";
-                    const browser = session.device_info?.browser?.split(" ")[0] || "Web Browser";
+                    const sessionMeta = resolveSessionMeta(session);
                     
                     return (
-                      <div key={session.id} className="p-4 flex items-center justify-between hover:bg-muted/5 transition-colors">
-                        <div className="flex items-center gap-4">
+                      <div key={session.id} className="p-3.5 flex items-center justify-between hover:bg-muted/5 transition-colors">
+                        <div className="flex items-center gap-3">
                           <div className={cn(
                             "h-10 w-10 rounded-xl flex items-center justify-center",
-                            isMobile ? "bg-blue-500/10 text-blue-500" : "bg-primary/10 text-primary"
+                            sessionMeta.isMobileDevice ? "bg-blue-500/10 text-blue-500" : "bg-primary/10 text-primary"
                           )}>
-                            {isMobile ? <Smartphone className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
+                            {sessionMeta.isMobileDevice ? <Smartphone className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="font-bold text-sm text-foreground">{isMobile ? "Mobile App" : browser}</p>
+                              <p className="font-bold text-sm text-foreground">{sessionMeta.primaryLabel}</p>
                               {session.id === currentSessionId && (
                                 <span className="text-[9px] font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded">Current</span>
                               )}
                             </div>
                             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
+                              <span>{sessionMeta.deviceLabel}</span>
+                              <span>•</span>
                               <span className="flex items-center gap-1"><Globe className="h-3 w-3 opacity-60" /> {session.ip_address || "Unknown IP"}</span>
                               <span>•</span>
                               <span>Active {formatLastUsed(session.last_used_at)}</span>
@@ -264,17 +356,14 @@ export default function SettingsPage() {
                 <CreditCard className="h-4 w-4 text-primary" /> Subscription Plan
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-2">
+            <CardContent className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-sm text-foreground">Current Plan:</p>
                   <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${isPremium ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                     {isPremium ? "Premium" : "Free Basic"}
                   </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground max-w-sm">
-                  {isPremium ? "You have full access to premium tests, exclusive explanations, and the full PrimeScore prep flow." : "Upgrade to Premium to unlock all full IELTS mock tests and advanced analytics."}
-                </p>
               </div>
               {!isPremium && (
                 <Button asChild size="sm" className="h-9 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-transform active:scale-95">

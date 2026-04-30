@@ -78,11 +78,11 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+    <div className="space-y-5 animate-in fade-in duration-500 pb-12">
       
       {/* 1. Welcome + Quick Action & Continue Test */}
-      <div className="space-y-6">
-        <div className="lg:sticky lg:top-32 lg:z-20">
+      <div className="space-y-4">
+        <div>
           <WelcomeHeader />
         </div>
 
@@ -130,19 +130,19 @@ export default async function DashboardPage() {
                   <div className="absolute top-0 right-0 p-6 opacity-5 dark:opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
                     <Target className="w-40 h-40 -rotate-12 text-blue-900 dark:text-white" />
                   </div>
-                  <CardContent className="p-5 md:p-6 flex flex-col justify-between relative z-10">
+                  <CardContent className="p-4 md:p-5 flex flex-col justify-between relative z-10">
                     <div>
                       <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-3 font-bold tracking-wider uppercase text-[10px] backdrop-blur-sm">
                         Recommended For You
                       </Badge>
-                      <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-2 text-blue-950 dark:text-white">Ready for your next challenge?</h2>
-                      <p className="text-blue-800/80 dark:text-white/70 font-medium mb-6 text-sm max-w-md">
+                      <h2 className="text-2xl md:text-3xl font-semibold tracking-tight mb-2 text-blue-950 dark:text-white">Ready for your next challenge?</h2>
+                      <p className="text-blue-800/80 dark:text-white/70 font-medium mb-4 text-sm max-w-md">
                         Take the latest Cambridge Official test to measure your true band score under real exam conditions.
                       </p>
                     </div>
                     
                     <div>
-                      <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-black px-8 h-11 rounded-xl shadow-lg shadow-primary/20 transition-transform active:scale-95" asChild>
+                      <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 h-11 rounded-xl shadow-lg shadow-primary/20 transition-transform active:scale-95" asChild>
                          <Link href="/tests">
                            <Play className="mr-2 h-5 w-5 fill-current" /> Start Cambridge 18
                          </Link>
@@ -164,13 +164,13 @@ export default async function DashboardPage() {
                   <div className="bg-amber-500/20 p-1.5 rounded-md">
                     <BrainCircuit className="h-4 w-4 text-amber-600 dark:text-amber-500" />
                   </div>
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500">Recommended Next Step</h3>
+                  <h3 className="text-[10px] font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-500">Recommended Next Step</h3>
                 </div>
-                <p className="font-bold text-foreground text-base leading-tight mb-1.5">{recTitle}</p>
+                <p className="font-semibold text-foreground text-base leading-tight mb-1.5">{recTitle}</p>
                 <p className="text-xs font-medium text-muted-foreground mb-3 leading-5">
                   {recDesc}
                 </p>
-                <Button asChild size="sm" className="w-fit bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md transition-transform active:scale-95">
+                <Button asChild size="sm" className="w-fit bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl shadow-md transition-transform active:scale-95">
                   <Link href={recHref}>{recBtnText} <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></Link>
                 </Button>
               </CardContent>
@@ -187,8 +187,8 @@ export default async function DashboardPage() {
                   <BookOpenText className="h-5 w-5 text-blue-600 dark:text-blue-500" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-blue-950 dark:text-blue-100 text-sm">Start Reading Test</h3>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/80 mt-0.5">Academic · 60 min</p>
+                  <h3 className="font-semibold text-blue-950 dark:text-blue-100 text-sm">Start Reading Test</h3>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/80 mt-0.5">Academic · 60 min</p>
                 </div>
                 <ArrowRight className="ml-auto h-5 w-5 text-blue-500/50 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
               </Card>
@@ -200,8 +200,8 @@ export default async function DashboardPage() {
                   <Headphones className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-emerald-950 dark:text-emerald-100 text-sm">Start Listening Test</h3>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/80 mt-0.5">Academic · 30 min</p>
+                  <h3 className="font-semibold text-emerald-950 dark:text-emerald-100 text-sm">Start Listening Test</h3>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/80 mt-0.5">Academic · 30 min</p>
                 </div>
                 <ArrowRight className="ml-auto h-5 w-5 text-emerald-500/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
               </Card>
@@ -218,7 +218,7 @@ export default async function DashboardPage() {
         {/* Left: Recent Activity */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-xl font-black tracking-tight text-foreground">Recent Activity</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
             <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
               <Link href="/history">View all <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
             </Button>
@@ -266,7 +266,7 @@ export default async function DashboardPage() {
         {/* Right: Featured / Quick Tests */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-xl font-black tracking-tight text-foreground">Quick Tests</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Quick Tests</h2>
             <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
               <Link href="/tests">Browse <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
             </Button>

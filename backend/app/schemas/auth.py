@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,7 +41,7 @@ class AuthSessionRead(BaseModel):
     id: UUID
     user_id: UUID
     device_info: dict[str, str] = {}
-    ip_address: str | None = None
+    ip_address: str | IPv4Address | IPv6Address | None = None
     is_active: bool = True
     expires_at: datetime
     last_used_at: datetime | None = None

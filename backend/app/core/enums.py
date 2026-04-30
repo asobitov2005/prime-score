@@ -92,11 +92,17 @@ class PaymentMethod(StrEnum):
     click = "click"
     uzum = "uzum"
     manual = "manual"
+    card_transfer = "card_transfer"
 
 
 class PaymentStatus(StrEnum):
+    paused = "paused"
     pending = "pending"
+    matched = "matched"
     completed = "completed"
+    expired = "expired"
+    canceled = "canceled"
+    review = "review"
     failed = "failed"
     refunded = "refunded"
 

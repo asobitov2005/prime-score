@@ -130,21 +130,12 @@
 }
 
 @layer utilities {
-  .animate-progress {
-    animation: progress-grow auto linear;
-    animation-timeline: scroll(root);
-  }
   .animate-marquee-up {
     animation: marquee-up 80s linear infinite;
   }
   .animate-marquee-down {
     animation: marquee-down 80s linear infinite;
   }
-}
-
-@keyframes progress-grow {
-  from { width: 0%; }
-  to { width: 100%; }
 }
 
 @keyframes marquee-up {
@@ -182,5 +173,17 @@
   }
   100% {
     transform: translateX(190%);
+  }
+}
+
+@keyframes prime-route-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  55% {
+    transform: translateX(160%);
+  }
+  100% {
+    transform: translateX(320%);
   }
 }

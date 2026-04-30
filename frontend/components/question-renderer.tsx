@@ -3,6 +3,11 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  getMatchingOptionViewModel,
+  normalizeMatchingAnswerValue,
+  shouldAutoLetterMatchingOptions,
+} from "@/lib/matching-option-format";
 import { cn } from "@/lib/utils";
 
 // Make sure to match the type that is actually passed
@@ -10,8 +15,8 @@ export function QuestionRenderer({ question, compact = false, value = "", onValu
   const isMultipleChoiceSingle = question.question_type ? question.question_type.includes("mc_single") : (question.typeId ? question.typeId.includes("mc_single") : false);
   const isMultipleChoiceMultiple = question.question_type ? question.question_type.includes("mc_multiple") : (question.typeId ? question.typeId.includes("mc_multiple") : false);
   const isTrueFalse = question.question_type ? (question.question_type.includes("true_false") || question.question_type.includes("yes_no")) : (question.typeId ? (question.typeId.includes("true_false") || question.typeId.includes("yes_no")) : false);
-  const isMatching = question.question_type ? (question.question_type.includes("matching_headings") || question.question_type.includes("matching_features") || question.question_type.includes("matching_information")) : (question.typeId ? (question.typeId.includes("matching_headings") || question.typeId.includes("matching_features") || question.typeId.includes("matching_information")) : false);
-  const isWordBank = question.question_type ? (question.question_type.includes("wordbank") || question.question_type.includes("matching_sentence_endings")) : (question.typeId ? (question.typeId.includes("wordbank") || question.typeId.includes("matching_sentence_endings")) : false);
+  const isMatching = question.question_type ? (question.question_type.includes("matching_headings") || question.question_type.includes("matching_features") || question.question_type.includes("matching_information") || question.question_type.includes("matching_sentence_endings")) : (question.typeId ? (question.typeId.includes("matching_headings") || question.typeId.includes("matching_features") || question.typeId.includes("matching_information") || question.typeId.includes("matching_sentence_endings")) : false);
+  const isWordBank = question.question_type ? question.question_type.includes("wordbank") : (question.typeId ? question.typeId.includes("wordbank") : false);
 
   const typeIdStr = question.question_type || question.typeId || "";
   const sharedOptions = question.options || question.sharedOptions || [];
@@ -19,7 +24,13 @@ export function QuestionRenderer({ question, compact = false, value = "", onValu
     .split(",")
     .map((item: string) => item.trim())
     .filter(Boolean);
-  const selectionLimit = question.selectionLimit ?? 2;
+  const inferredSelectionLimit = Array.isArray(question.acceptedAnswers)
+    ? question.acceptedAnswers.filter((item: string) => item.trim().length > 0).length
+    : 0;
+  const selectionLimit = question.selectionLimit ?? (inferredSelectionLimit >= 2 ? inferredSelectionLimit : 2);
+  const normalizedMatchingValue = isMatching
+    ? normalizeMatchingAnswerValue(value, sharedOptions, typeIdStr)
+    : value;
   const toggleMultipleChoiceValue = (letter: string) => {
     if (selectedMultipleValues.includes(letter)) {
       return selectedMultipleValues.filter((item: string) => item !== letter).join(",");
@@ -35,17 +46,17 @@ export function QuestionRenderer({ question, compact = false, value = "", onValu
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 py-2">
         <p className="font-semibold text-[15px] min-w-[120px] shrink-0 text-foreground">{question.prompt}</p>
         <select 
-          value={value} 
+          value={normalizedMatchingValue}
           onChange={(e) => onValueChange(e.target.value)} 
           className="flex h-11 w-full items-center justify-between whitespace-nowrap rounded-md border border-border/60 bg-background px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-xs"
         >
           <option value="">Select answer...</option>
-          {sharedOptions.map((opt: string) => {
-            const prefixMatch = opt.match(/^([a-zA-Zivx]+)\./);
-            const val = prefixMatch ? prefixMatch[1] : opt;
+          {sharedOptions.map((opt: string, index: number) => {
+            const optionView = getMatchingOptionViewModel(opt, index, typeIdStr);
+            const isAutoLettered = shouldAutoLetterMatchingOptions(typeIdStr);
             return (
-              <option key={opt} value={val}>
-                {val}
+              <option key={opt} value={optionView.value}>
+                {isAutoLettered ? optionView.label : optionView.value}
               </option>
             );
           })}

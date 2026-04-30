@@ -24,7 +24,7 @@ except ModuleNotFoundError:
 from app.core.config import get_settings
 from app.core.enums import AttemptStatus, TestMode, TestScope, TestType
 from app.services.fixtures import build_test_snapshot, get_question_fixture
-from app.services.scoring import is_answer_correct
+from app.services.scoring import is_answer_correct, mc_multiple_question_weight
 
 
 READING_BAND_TABLE = [
@@ -72,6 +72,26 @@ RUNTIME_STORE_FILE = Path(
         str(Path(tempfile.gettempdir()) / "primescore-runtime-store.json"),
     )
 )
+
+
+def _snapshot_group_shared_options(snapshot: dict[str, object]) -> dict[str, list[str]]:
+    group_options: dict[str, list[str]] = {}
+    for section in snapshot.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for group in section.get("question_groups", []):
+            if not isinstance(group, dict):
+                continue
+            group_id = str(group.get("group_id", "")).strip()
+            if not group_id:
+                continue
+            shared_options = [
+                str(option)
+                for option in group.get("shared_options", [])
+                if isinstance(option, (str, int, float))
+            ]
+            group_options[group_id] = shared_options
+    return group_options
 
 
 @dataclass(slots=True)
@@ -479,6 +499,7 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
     attempt.status = AttemptStatus.completed
 
     snapshot_questions = list(attempt.test_snapshot.get("questions", []))
+    snapshot_group_shared_options = _snapshot_group_shared_options(attempt.test_snapshot)
     scoring_items: list[dict[str, object]] = []
     section_counts: dict[str, dict[str, object]] = {}
     type_counts: dict[str, dict[str, object]] = {}
@@ -491,7 +512,15 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
             continue
         answer_value = attempt.answers.get(str(question_id))
         is_correct = bool(answer_value) and is_answer_correct(answer_value, list(fixture["accepted_answers"]))
-        raw_score += int(is_correct)
+        question_weight = (
+            mc_multiple_question_weight(
+                question_label=str(snapshot_question.get("label") or fixture["question_number"]),
+                accepted_answers=list(fixture["accepted_answers"]),
+            )
+            if "mc_multiple" in str(fixture["question_type"])
+            else 1
+        )
+        raw_score += question_weight if is_correct else 0
 
         scoring_item = {
             "question_id": str(question_id),
@@ -501,6 +530,10 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
             "group_title": fixture["group_title"],
             "question_type": str(fixture["question_type"]),
             "prompt": fixture["prompt"],
+            "options": (
+                [str(option) for option in snapshot_question.get("options", [])]
+                or snapshot_group_shared_options.get(str(snapshot_question.get("group_id", "")), [])
+            ),
             "answer_value": answer_value,
             "is_correct": is_correct,
             "correct_answers": list(fixture["accepted_answers"]),
@@ -513,16 +546,16 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
             section_key,
             {"title": fixture["section_title"], "correct": 0, "total": 0},
         )
-        section_state["total"] += 1
-        section_state["correct"] += int(is_correct)
+        section_state["total"] += question_weight
+        section_state["correct"] += question_weight if is_correct else 0
 
         type_key = str(fixture["question_type"])
         type_state = type_counts.setdefault(
             type_key,
             {"question_type": str(fixture["question_type"]), "correct": 0, "total": 0},
         )
-        type_state["total"] += 1
-        type_state["correct"] += int(is_correct)
+        type_state["total"] += question_weight
+        type_state["correct"] += question_weight if is_correct else 0
 
     attempt.scoring_items = sorted(scoring_items, key=lambda item: item["question_number"])
     attempt.section_breakdown = list(section_counts.values())

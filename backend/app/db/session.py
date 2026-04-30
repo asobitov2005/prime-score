@@ -16,6 +16,11 @@ def get_session_maker() -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(bind=get_engine(), expire_on_commit=False, class_=AsyncSession)
 
 
+def reset_session_state() -> None:
+    get_session_maker.cache_clear()
+    get_engine.cache_clear()
+
+
 async def get_async_session() -> AsyncSession:
     session_local = get_session_maker()
     async with session_local() as session:

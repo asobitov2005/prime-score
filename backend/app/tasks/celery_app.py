@@ -15,7 +15,11 @@ celery_app = Celery(
 
 celery_app.conf.update(
     task_default_queue="default",
+    task_track_started=True,
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
     task_routes={
+        "primescore.run_admin_ai_job": {"queue": "admin_ai"},
         "primescore.score_attempt": {"queue": "default"},
         "primescore.refresh_leaderboard": {"queue": "default"},
         "primescore.aggregate_analytics_daily": {"queue": "heavy"},
@@ -39,4 +43,3 @@ celery_app.conf.update(
     },
     timezone=settings.timezone,
 )
-

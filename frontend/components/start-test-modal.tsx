@@ -54,6 +54,14 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
     router.push(href);
   }
 
+  function openReview(attempt: TestCardAttemptSummary) {
+    setIsSubmitting(true);
+    setOpen(false);
+    const href = `/attempts/${attempt.id}/result`;
+    emitNavigationStart(href);
+    router.push(href);
+  }
+
   function handleClick() {
     if (test.accessType === "premium" && !isPremium) {
       setShowPremiumModal(true);
@@ -165,7 +173,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
                 emitNavigationStart("/pricing");
                 router.push("/pricing");
               }}
-              className="w-full h-12 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white dark:text-slate-950 shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5 border-0"
+              className="w-full h-12 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5 border-0"
             >
               <Crown className="h-4 w-4 mr-2" />
               Get Premium
@@ -273,22 +281,43 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
 
   return (
     <>
-      <Button onClick={handleClick} size="sm" className={cn(
-        "w-full h-9 text-xs font-bold rounded-lg shadow-sm group/btn transition-all active:scale-95",
-        test.accessType === "premium" && !isPremium && "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border border-amber-500/30 shadow-none"
-      )}>
-        {test.accessType === "premium" && !isPremium ? (
-          <>
-            <Lock className="mr-1.5 h-3.5 w-3.5" />
-            Unlock Premium
-          </>
-        ) : (
-          <>
-            {isSubmitting ? loadingLabel : actionLabel}
+      {completedAttempt && !activeAttempt ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            onClick={() => openReview(completedAttempt)}
+            size="sm"
+            className="h-9 text-xs font-bold rounded-lg shadow-sm group/btn transition-all active:scale-95"
+          >
+            Review Test
             <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
-          </>
-        )}
-      </Button>
+          </Button>
+          <Button
+            onClick={handleClick}
+            size="sm"
+            variant="outline"
+            className="h-9 text-xs font-bold rounded-lg transition-all active:scale-95"
+          >
+            {isSubmitting ? loadingLabel : "Try Again"}
+          </Button>
+        </div>
+      ) : (
+        <Button onClick={handleClick} size="sm" className={cn(
+          "w-full h-9 text-xs font-bold rounded-lg shadow-sm group/btn transition-all active:scale-95",
+          test.accessType === "premium" && !isPremium && "border border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 shadow-none dark:bg-amber-500/20 dark:text-amber-100 dark:hover:bg-amber-500/30"
+        )}>
+          {test.accessType === "premium" && !isPremium ? (
+            <>
+              <Lock className="mr-1.5 h-3.5 w-3.5" />
+              Unlock Premium
+            </>
+          ) : (
+            <>
+              {isSubmitting ? loadingLabel : actionLabel}
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
+            </>
+          )}
+        </Button>
+      )}
 
       {mounted && open && createPortal(<TestModal />, document.body)}
       {mounted && showPremiumModal && createPortal(<PremiumModal />, document.body)}

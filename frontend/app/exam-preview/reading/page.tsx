@@ -99,6 +99,45 @@ function buildReadingSectionIntro(sectionNumber: number, questionStart: number |
   return `You should spend about 20 minutes on Questions ${questionStart}-${questionEnd}, which are based on Reading Passage ${sectionNumber} below.`;
 }
 
+function resolveReadingSectionNumber(snapshotFormat: string | null | undefined, fallbackNumber: number, sectionIndex: number, totalSections: number) {
+  if (totalSections > 1) {
+    return fallbackNumber || sectionIndex + 1;
+  }
+
+  const formatMatch = String(snapshotFormat ?? "").match(/^passage_(\d+)$/i);
+  if (formatMatch) {
+    return Number(formatMatch[1]);
+  }
+
+  return fallbackNumber || 1;
+}
+
+function readingSectionQuestionOffset(sectionNumber: number) {
+  if (sectionNumber <= 1) return 0;
+  if (sectionNumber === 2) return 13;
+  if (sectionNumber === 3) return 26;
+  return 0;
+}
+
+function offsetQuestionLabel(label: string | null | undefined, offset: number) {
+  if (!label || offset === 0) {
+    return label ?? undefined;
+  }
+  return label.replace(/\d+/g, (value) => String(Number(value) + offset));
+}
+
+function offsetQuestionReferences(text: string | null | undefined, offset: number) {
+  if (!text || offset === 0) {
+    return text ?? undefined;
+  }
+  return text.replace(/\bQuestions?\s+(\d+)(?:-(\d+))?/g, (_, start, end) => {
+    if (end) {
+      return `Questions ${Number(start) + offset}-${Number(end) + offset}`;
+    }
+    return `Question ${Number(start) + offset}`;
+  });
+}
+
 async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPreviewData | null> {
   const attempt = await getBackendAttempt(attemptId).catch(() => null);
   const snapshot = attempt?.test_snapshot;
@@ -111,16 +150,27 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
   const questionGroups: ReadingExamPreviewData["questionGroups"] = [];
   let firstQuestionNumber: number | null = null;
   let lastQuestionNumber: number | null = null;
+  const sections = snapshot.sections ?? [];
 
-  snapshot.sections.forEach((section) => {
+  sections.forEach((section, sectionIndex) => {
     const sectionQuestionNumbers = (section.question_groups ?? []).flatMap((group) => [
       group.question_start,
       group.question_end,
     ]);
     const sectionQuestionStart = sectionQuestionNumbers.length ? Math.min(...sectionQuestionNumbers) : null;
     const sectionQuestionEnd = sectionQuestionNumbers.length ? Math.max(...sectionQuestionNumbers) : null;
-    const sectionPreviewLabel = `Reading Passage ${section.section_number}`;
-    const sectionIntro = buildReadingSectionIntro(section.section_number, sectionQuestionStart, sectionQuestionEnd);
+    const resolvedSectionNumber = resolveReadingSectionNumber(
+      snapshot.format,
+      section.section_number,
+      sectionIndex,
+      sections.length,
+    );
+    const sectionQuestionOffset = sections.length > 1 ? 0 : readingSectionQuestionOffset(resolvedSectionNumber);
+    const adjustedSectionQuestionStart = sectionQuestionStart === null ? null : sectionQuestionStart + sectionQuestionOffset;
+    const adjustedSectionQuestionEnd = sectionQuestionEnd === null ? null : sectionQuestionEnd + sectionQuestionOffset;
+    const resolvedSectionLabel = `Passage ${resolvedSectionNumber}`;
+    const sectionPreviewLabel = `Reading Passage ${resolvedSectionNumber}`;
+    const sectionIntro = buildReadingSectionIntro(resolvedSectionNumber, adjustedSectionQuestionStart, adjustedSectionQuestionEnd);
 
     const rawParagraphs = section.paragraphs?.length
       ? section.paragraphs
@@ -151,32 +201,38 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
         sectionPreviewLabel: index === 0 ? sectionPreviewLabel : undefined,
         sectionIntro: index === 0 ? (sectionIntro ?? undefined) : undefined,
         sectionTitle: index === 0 ? (section.title ?? undefined) : undefined,
-        sectionLabel: index === 0 ? (section.label ?? `Passage ${section.section_number}`) : undefined,
+        sectionLabel: index === 0 ? resolvedSectionLabel : undefined,
       });
     });
 
     (section.question_groups ?? []).forEach((group) => {
+      const adjustedGroupQuestionStart = group.question_start + sectionQuestionOffset;
+      const adjustedGroupQuestionEnd = group.question_end + sectionQuestionOffset;
       firstQuestionNumber = firstQuestionNumber === null
-        ? group.question_start
-        : Math.min(firstQuestionNumber, group.question_start);
+        ? adjustedGroupQuestionStart
+        : Math.min(firstQuestionNumber, adjustedGroupQuestionStart);
       lastQuestionNumber = lastQuestionNumber === null
-        ? group.question_end
-        : Math.max(lastQuestionNumber, group.question_end);
+        ? adjustedGroupQuestionEnd
+        : Math.max(lastQuestionNumber, adjustedGroupQuestionEnd);
 
       questionGroups.push({
         id: group.group_id,
-        title: group.group_title,
-        instruction: group.questions[0]?.instructions ?? group.group_title,
+        title: offsetQuestionReferences(group.group_title, sectionQuestionOffset) ?? group.group_title,
+        instruction: offsetQuestionReferences(group.questions[0]?.instructions ?? group.group_title, sectionQuestionOffset) ?? group.group_title,
         type: group.question_type,
         sectionId: section.section_id,
         sectionTitle: section.title ?? undefined,
-        sectionLabel: section.label ?? `Passage ${section.section_number}`,
+        sectionLabel: resolvedSectionLabel,
         questionBlock: group.shared_content?.question_block ?? "",
         secondaryBlock: group.shared_content?.secondary_block ?? "",
+        diagramTitle: group.shared_content?.diagram_title ?? "",
+        diagramImageUrl: group.shared_content?.diagram_image_url ?? "",
         sharedOptions: group.shared_options ?? [],
         questions: group.questions.map((question) => ({
           id: question.question_id,
-          number: question.question_number,
+          number: question.question_number + sectionQuestionOffset,
+          label: offsetQuestionLabel(question.label ?? undefined, sectionQuestionOffset),
+          selectionLimit: question.selection_limit ?? undefined,
           type: question.question_type,
           prompt: question.prompt,
           instruction: question.instructions,
@@ -190,8 +246,10 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
     attemptId,
     exitHref: "/tests?type=reading",
     title: snapshot.title,
-    subtitle: buildSubtitle(firstQuestionNumber, lastQuestionNumber, snapshot.sections.length > 1),
-    partLabel: snapshot.sections.length > 1 ? "Reading Test" : (snapshot.sections[0]?.label ?? "Passage 1"),
+    subtitle: buildSubtitle(firstQuestionNumber, lastQuestionNumber, sections.length > 1),
+    partLabel: sections.length > 1
+      ? "Reading Test"
+      : `Passage ${resolveReadingSectionNumber(snapshot.format, sections[0]?.section_number ?? 1, 0, sections.length)}`,
     timeLimitSeconds: snapshot.time_limit_seconds,
     paragraphs,
     questionGroups,
@@ -220,14 +278,5 @@ export default async function ReadingExamPreviewPage({ searchParams }: ReadingEx
     notFound();
   }
 
-  const stateKey = [
-    attemptId,
-    data.initialTimeSpentSeconds ?? 0,
-    data.initialUiState?.activeQuestionId ?? "",
-    ...Object.entries(data.initialAnswers ?? {})
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([questionId, value]) => questionId + ":" + value),
-  ].join("|");
-
-  return <ReadingExamPreview key={stateKey} mode={mode} data={data} />;
+  return <ReadingExamPreview mode={mode} data={data} />;
 }

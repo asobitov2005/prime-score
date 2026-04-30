@@ -58,8 +58,14 @@ export function HistoryRetakeButton({ testId, testType, mode }: HistoryRetakeBut
       variant="outline"
       size="sm"
       disabled={isStarting}
-      onClick={retake}
-      className="h-8 rounded-xl border-border/60 bg-background px-3 text-[11px] font-bold text-foreground shadow-sm hover:bg-muted/40"
+      onClick={(event) => {
+        event.stopPropagation();
+        void retake();
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+      }}
+      className="h-9 rounded-lg border-border/70 bg-background px-3.5 text-[11px] font-bold text-foreground shadow-sm hover:bg-muted/40"
     >
       {isStarting ? "Starting..." : "Retake"}
     </Button>

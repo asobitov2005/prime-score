@@ -1,37 +1,39 @@
-import { Gift, ShieldCheck } from "lucide-react";
-import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Crown } from "lucide-react";
+import { RedeemCodePanel } from "@/components/subscription/redeem-code-panel";
+import { SubscriptionHeroStatus } from "@/components/subscription/subscription-hero-status";
+import { SubscriptionWorkspace } from "@/components/subscription/subscription-workspace";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { getMyPayments } from "@/lib/server-payments";
 import { getPublicPlans } from "@/lib/server-plans";
 
 export default async function SubscriptionPage() {
-  const plans = await getPublicPlans();
+  const [plans, payments] = await Promise.all([getPublicPlans(), getMyPayments()]);
 
   return (
-    <div className="space-y-6 pb-10 animate-in fade-in duration-500">
-      <Card className="overflow-hidden rounded-[2rem] border border-border/50 bg-card/80 shadow-sm backdrop-blur-xl">
-        <div className="h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-        <div className="grid gap-5 px-5 py-5 md:grid-cols-[1fr_auto] md:items-center lg:px-6 lg:py-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-primary">
-              <ShieldCheck className="h-3 w-3" />
-              Premium Access
-            </div>
+    <div className="-mt-1 space-y-3 animate-in fade-in duration-500 md:-mt-2">
+      <Card className="relative overflow-hidden rounded-xl border border-border/50 bg-background shadow-sm">
+        <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+
+        <CardHeader className="relative z-10 space-y-1 bg-muted/5 p-3.5 lg:px-4">
+          <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
-                Choose a PrimeScore plan that fits your IELTS timeline.
-              </h1>
+              <CardTitle className="text-base font-semibold tracking-tight text-foreground md:text-lg">
+                Subscription
+              </CardTitle>
+              <SubscriptionHeroStatus />
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Crown className="h-4 w-4" />
+              </div>
+              <RedeemCodePanel buttonClassName="h-9 rounded-lg px-3.5 text-[12px] font-semibold" />
             </div>
           </div>
-
-          <Button variant="outline" className="h-11 rounded-xl border-border/60 bg-muted/20 px-5 text-sm font-bold hover:bg-muted/40">
-            <Gift className="mr-2 h-4 w-4" />
-            Redeem Code
-          </Button>
-        </div>
+        </CardHeader>
       </Card>
 
-      <PricingPlanGrid plans={plans} showStateCard={false} showPlanNotes={false} denseCards={true} />
+      <SubscriptionWorkspace plans={plans} initialPayments={payments} />
     </div>
   );
 }

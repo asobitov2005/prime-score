@@ -26,6 +26,7 @@ class Test(UUIDMixin, TimestampMixin, Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_by: Mapped[UUID | None] = mapped_column(ForeignKey("admins.id"), nullable=True, index=True)
     payments_paused: Mapped[bool] = mapped_column(Boolean, default=True)
+    review_status: Mapped[str] = mapped_column(String(32), default="needs_review", index=True)
 
     sections: Mapped[list["TestSection"]] = relationship(back_populates="test")
 

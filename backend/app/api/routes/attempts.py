@@ -14,6 +14,7 @@ from app.schemas.attempts import (
     AttemptAnswerRequest,
     AttemptAnswerResponse,
     AttemptBreakdownItemRead,
+    AttemptDiagramGroupRead,
     AttemptProgressRequest,
     AttemptProgressResponse,
     AttemptRead,
@@ -27,9 +28,69 @@ from app.schemas.attempts import (
 )
 from app.schemas.tests import TestSnapshotRead
 from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, save_progress_in_db, submit_attempt_in_db
+from app.services.object_storage import normalize_storage_asset_path
 from app.services.runtime_store import get_attempt, save_answer, save_progress, submit_attempt
 
 router = APIRouter()
+
+
+def _normalize_attempt_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
+    normalized_snapshot = dict(snapshot)
+    normalized_sections: list[dict[str, object]] = []
+
+    for raw_section in snapshot.get("sections", []):
+        if not isinstance(raw_section, dict):
+            continue
+        normalized_section = dict(raw_section)
+        normalized_groups: list[dict[str, object]] = []
+        for raw_group in raw_section.get("question_groups", []):
+            if not isinstance(raw_group, dict):
+                continue
+            normalized_group = dict(raw_group)
+            shared_content = raw_group.get("shared_content")
+            if isinstance(shared_content, dict):
+                normalized_shared_content = dict(shared_content)
+                normalized_shared_content["diagram_image_url"] = normalize_storage_asset_path(
+                    shared_content.get("diagram_image_url")
+                )
+                normalized_group["shared_content"] = normalized_shared_content
+            normalized_groups.append(normalized_group)
+        normalized_section["question_groups"] = normalized_groups
+        normalized_sections.append(normalized_section)
+
+    normalized_snapshot["sections"] = normalized_sections
+    return normalized_snapshot
+
+
+def _extract_diagram_groups(snapshot: dict[str, object]) -> list[AttemptDiagramGroupRead]:
+    diagram_groups: list[AttemptDiagramGroupRead] = []
+    for section in snapshot.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        section_title = str(section.get("title") or section.get("label") or "Section")
+        for group in section.get("question_groups", []):
+            if not isinstance(group, dict):
+                continue
+            if "diagram" not in str(group.get("question_type") or ""):
+                continue
+            shared_content = group.get("shared_content")
+            if not isinstance(shared_content, dict):
+                continue
+            diagram_image_url = normalize_storage_asset_path(shared_content.get("diagram_image_url"))
+            if not diagram_image_url:
+                continue
+            diagram_groups.append(
+                AttemptDiagramGroupRead(
+                    group_id=group["group_id"],
+                    section_title=section_title,
+                    group_title=str(group.get("group_title") or ""),
+                    question_start=int(group.get("question_start") or 0),
+                    question_end=int(group.get("question_end") or 0),
+                    diagram_title=str(shared_content.get("diagram_title") or "") or None,
+                    diagram_image_url=diagram_image_url,
+                )
+            )
+    return diagram_groups
 
 
 async def _require_attempt_owner(
@@ -61,6 +122,7 @@ async def get_attempt_view(
     session: AsyncSession = Depends(get_db_session),
 ) -> AttemptRead:
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
+    normalized_snapshot = _normalize_attempt_snapshot(attempt.test_snapshot)
     return AttemptRead(
         attempt_id=attempt.attempt_id,
         test_id=attempt.test_id,
@@ -93,7 +155,7 @@ async def get_attempt_view(
             if isinstance((ui_state := attempt.metadata.get("ui_state")), dict)
             else None
         ),
-        test_snapshot=TestSnapshotRead(**attempt.test_snapshot),
+        test_snapshot=TestSnapshotRead(**normalized_snapshot),
     )
 
 
@@ -229,6 +291,7 @@ async def get_result(
 ) -> AttemptResultRead:
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
     snapshot = attempt.test_snapshot
+    diagram_groups = _extract_diagram_groups(snapshot)
     return AttemptResultRead(
         attempt_id=attempt.attempt_id,
         status=attempt.status,
@@ -253,6 +316,7 @@ async def get_result(
             )
             for item in attempt.question_type_breakdown
         ],
+        diagram_groups=diagram_groups,
     )
 
 
@@ -263,6 +327,7 @@ async def get_review(
     session: AsyncSession = Depends(get_db_session),
 ) -> AttemptReviewRead:
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
+    diagram_groups = _extract_diagram_groups(attempt.test_snapshot)
     items = [
         AttemptReviewItemRead(
             question_id=item["question_id"],
@@ -271,6 +336,7 @@ async def get_review(
             section_title=str(item["section_title"]),
             group_title=str(item["group_title"]),
             question_type=str(item["question_type"]),
+            options=[str(option) for option in item.get("options", [])],
             answer_value=item["answer_value"],
             is_correct=item["is_correct"],
             correct_answers=list(item["correct_answers"]),
@@ -283,5 +349,6 @@ async def get_review(
         test_title=str(attempt.test_snapshot.get("title")),
         test_type=attempt.test_snapshot.get("test_type"),
         can_show_explanations=current_user.is_premium,
+        diagram_groups=diagram_groups,
         items=items,
     )

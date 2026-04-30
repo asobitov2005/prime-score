@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, BookOpenText, CheckCircle2, Headphones, ShieldCheck, Zap } from "lucide-react";
+import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
 import { Button } from "@/components/ui/button";
 import { mockTests, type ReviewItem } from "@/lib/mock-data";
@@ -78,13 +79,13 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                   </span>
-                  <span className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
+                  <span className="text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
                     Free IELTS Mock Tests
                   </span>
                 </div>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 ease-out fill-mode-both flex flex-col">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 ease-out fill-mode-both flex flex-col">
                 <span>Master your</span>
                 <span className="relative h-[1.15em] overflow-hidden inline-block w-full">
                   {skills.map((skill, index) => (
@@ -121,20 +122,20 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                       <div
                         key={index}
                         className={cn(
-                          "flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background text-[10px] font-black text-white shadow-sm",
+                          "flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background text-[10px] font-semibold text-white shadow-sm",
                           user.bg,
                         )}
                       >
                         {user.initial}
                       </div>
                     ))}
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background bg-primary text-[9px] font-black text-primary-foreground">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background bg-primary text-[9px] font-semibold text-primary-foreground">
                       +2k
                     </div>
                   </div>
                   <div className="flex flex-col -space-y-0.5">
-                    <span className="text-[13px] font-black text-foreground">2,481+ online</span>
-                    <p className="text-[10px] font-bold text-muted-foreground/70 tracking-tight">Active students</p>
+                    <span className="text-[13px] font-semibold text-foreground">2,481+ online</span>
+                    <p className="text-[10px] font-medium text-muted-foreground/70 tracking-tight">Active students</p>
                   </div>
                 </div>
 
@@ -143,21 +144,20 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                     <BookOpenText className="h-5 w-5" />
                   </div>
                   <div className="flex flex-col -space-y-0.5">
-                    <span className="text-[13px] font-black text-foreground">120+ Full Tests</span>
-                    <p className="text-[10px] font-bold text-muted-foreground/70 tracking-tight">Authentic practice</p>
+                    <span className="text-[13px] font-semibold text-foreground">120+ Full Tests</span>
+                    <p className="text-[10px] font-medium text-muted-foreground/70 tracking-tight">Authentic practice</p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500 ease-out fill-mode-both">
-              <Button asChild size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-bold shadow-xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background">
-                <Link href="/login">
-                  Get Started for Free
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-bold border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-2xl transition-all hover:scale-105">
+              <MarketingAuthCta
+                guestLabel="Get Started for Free"
+                authLabel="Go to Dashboard"
+                className="w-full sm:w-auto h-14 px-10 text-base font-semibold shadow-xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background"
+              />
+              <Button asChild variant="outline" size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-medium border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-2xl transition-all hover:scale-105">
                 <Link href="#features">
                   View Features
                 </Link>
@@ -173,8 +173,8 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
 
               <div className="p-6 md:p-8 space-y-5 relative z-10 pt-8">
                 <div className="flex items-center justify-between px-1">
-                  <h3 className="font-bold text-lg md:text-xl tracking-tight text-[#0a1b3f] dark:text-foreground">Featured Tests</h3>
-                  <Link href="/tests" className="flex items-center gap-1 text-[13px] font-bold text-[#d94b04] hover:text-[#d94b04]/80 transition-colors">
+                  <h3 className="font-semibold text-lg md:text-xl tracking-tight text-[#0a1b3f] dark:text-foreground">Featured Tests</h3>
+                  <Link href="/tests" className="flex items-center gap-1 text-[13px] font-medium text-[#d94b04] hover:text-[#d94b04]/80 transition-colors">
                     View all <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
@@ -185,7 +185,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                       key={tab}
                       onClick={() => setActiveTab(tab)}
                       className={cn(
-                        "flex-1 px-4 py-2.5 text-[13px] md:text-[14px] font-black rounded-xl transition-all duration-300 whitespace-nowrap",
+                        "flex-1 px-4 py-2.5 text-[13px] md:text-[14px] font-medium rounded-xl transition-all duration-300 whitespace-nowrap",
                         activeTab === tab
                           ? "bg-white dark:bg-[#0a1b3f] text-[#0a1b3f] dark:text-primary shadow-[0_4px_12px_-2px_rgba(0,0,0,0.12)] border border-white dark:border-primary/20 scale-[1.02]"
                           : "text-[#7b8390] dark:text-muted-foreground/50 hover:text-[#0a1b3f] dark:hover:text-foreground",
@@ -228,13 +228,13 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                             ) : isListening ? (
                               <Headphones className="h-5 w-5 md:h-6 md:w-6" />
                             ) : (
-                              <span className="font-serif font-bold text-base md:text-lg">W</span>
+                              <span className="font-serif font-semibold text-base md:text-lg">W</span>
                             )}
                           </div>
                           <div className="space-y-1 min-w-0">
-                            <p className="font-bold text-[14px] md:text-[15px] text-foreground leading-tight truncate">{test.title}</p>
+                            <p className="font-semibold text-[14px] md:text-[15px] text-foreground leading-tight truncate">{test.title}</p>
                             <div className="flex flex-wrap items-center gap-1.5 text-[11px] md:text-[12px] font-medium text-muted-foreground/80">
-                              <span className="uppercase tracking-wider font-bold">{test.source.replace("Official", "").trim()}</span>
+                              <span className="uppercase tracking-wider font-medium">{test.source.replace("Official", "").trim()}</span>
                               <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
                               <span>{test.questionCount} questions</span>
                               <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
@@ -244,7 +244,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                         </div>
 
                         <div className="flex items-center gap-3 shrink-0 pl-1">
-                          <span className={cn("hidden sm:flex px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider shadow-sm", badgeBg, badgeText)}>
+                          <span className={cn("hidden sm:flex px-2.5 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-[0.14em] shadow-sm", badgeBg, badgeText)}>
                             {badgeLabel}
                           </span>
                           <div className="flex h-10 w-10 items-center justify-center text-[#0a1b3f] dark:text-foreground/80 transition-all duration-300 group-hover:scale-125 group-hover:text-[#d94b04] dark:group-hover:text-primary">
@@ -260,7 +260,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                       </div>
                     );
                   }) : (
-                    <div className="p-6 text-center text-sm font-bold text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border/50">
+                    <div className="p-6 text-center text-sm font-medium text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border/50">
                       No tests found for {activeTab}.
                     </div>
                   )}
@@ -272,7 +272,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
 
         <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
           <div className="text-center space-y-4 mb-16">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1]">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Everything you need to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Succeed.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-lg max-w-2xl mx-auto">
@@ -286,7 +286,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                 <ShieldCheck className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-foreground mb-2">Real exam conditions</h3>
+                <h3 className="font-semibold text-base text-foreground mb-2">Real exam conditions</h3>
                 <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
                   Experience IELTS-style timing and interface for accurate practice.
                 </p>
@@ -298,7 +298,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                 <BookOpenText className="h-6 w-6 text-blue-500" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-foreground mb-2">Reading & Listening</h3>
+                <h3 className="font-semibold text-base text-foreground mb-2">Reading & Listening</h3>
                 <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
                   Practice both sections with authentic question types.
                 </p>
@@ -310,7 +310,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                 <Zap className="h-6 w-6 text-amber-500" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-foreground mb-2">Instant band score</h3>
+                <h3 className="font-semibold text-base text-foreground mb-2">Instant band score</h3>
                 <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
                   Get your estimated band score immediately after completion.
                 </p>
@@ -322,7 +322,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                 <CheckCircle2 className="h-6 w-6 text-emerald-500" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-foreground mb-2">Detailed answer review</h3>
+                <h3 className="font-semibold text-base text-foreground mb-2">Detailed answer review</h3>
                 <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
                   See correct answers with highlighted text to understand your mistakes.
                 </p>
@@ -333,7 +333,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
 
         <section id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
           <div className="text-center space-y-4 mb-12">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1]">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Pricing that matches your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">exam timeline.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-lg max-w-3xl mx-auto leading-relaxed">
@@ -344,7 +344,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
           <PricingPlanGrid plans={plans} compact />
 
           <div className="mt-8 flex justify-center">
-            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-bold border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-all shadow-xl bg-background/80 backdrop-blur-md">
+            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-all shadow-xl bg-background/80 backdrop-blur-md">
               <Link href="/pricing">
                 Compare all plans <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -358,7 +358,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
           className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 pb-20"
         >
           <div className="text-center space-y-4 mb-16">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1]">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Trusted by <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Students.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-lg max-w-2xl mx-auto">
@@ -395,7 +395,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
           </div>
 
           <div className="mt-8 flex justify-center relative z-20">
-            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-bold border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-all shadow-xl bg-background/80 backdrop-blur-md">
+            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-all shadow-xl bg-background/80 backdrop-blur-md">
               <Link href="/reviews">
                 View all reviews <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -405,7 +405,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
 
         <section className="relative z-10 w-full mt-4 lg:mt-6 pt-6 pb-0 border-t border-border/30 text-center flex flex-col items-center">
           <div className="max-w-3xl mx-auto space-y-6">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
             </h2>
             <p className="text-lg md:text-xl font-medium text-muted-foreground/90 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-150">
@@ -413,12 +413,11 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
             </p>
 
             <div className="pt-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-              <Button asChild size="lg" className="h-14 px-10 text-base font-bold shadow-2xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background">
-                <Link href="/login">
-                  Get Started for Free
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
+              <MarketingAuthCta
+                guestLabel="Get Started for Free"
+                authLabel="Go to Dashboard"
+                className="h-14 px-10 text-base font-semibold shadow-2xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background"
+              />
             </div>
           </div>
         </section>
@@ -437,12 +436,12 @@ function ReviewCard({ review }: { review: ReviewItem }) {
         <p className="text-sm font-medium text-muted-foreground leading-relaxed italic">"{review.text}"</p>
       </div>
       <div className="flex items-center gap-3 pt-2 border-t border-border/40">
-        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black shadow-inner ring-2 ring-background">
+        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold shadow-inner ring-2 ring-background">
           {review.name.charAt(0)}
         </div>
         <div>
-          <p className="text-sm font-bold text-foreground">{review.name}</p>
-          <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">Band {review.band}</p>
+          <p className="text-sm font-semibold text-foreground">{review.name}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-500">Band {review.band}</p>
         </div>
       </div>
     </div>

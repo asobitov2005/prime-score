@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const siteName = "PrimeScore";
 export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://primescore.uz").replace(/\/$/, "");
 export const defaultOgImage = "/logo.jpg";
+export const defaultSiteIcon = "/logo.svg";
 
 export const brandAliases = [
   "Prime Score",
@@ -128,6 +129,11 @@ export function buildDefaultMetadata(): Metadata {
     authors: [{ name: siteName }],
     creator: siteName,
     publisher: siteName,
+    icons: {
+      icon: defaultSiteIcon,
+      shortcut: defaultSiteIcon,
+      apple: defaultSiteIcon,
+    },
     openGraph: {
       type: "website",
       siteName,

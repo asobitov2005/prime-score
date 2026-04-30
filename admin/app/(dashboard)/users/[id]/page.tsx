@@ -218,7 +218,7 @@ export default function UserDetailPage() {
       {/* Details Grid */}
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle className="text-sm font-bold">Account ma'lumotlari</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm font-bold">Account ma&apos;lumotlari</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <InfoRow label="ID" value={user.id} mono />
             <InfoRow label="Telegram ID" value={String(user.telegram_id)} mono />

@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
 import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, ArrowUp, Bell } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { createApiClient } from "@/lib/api/client";
+import { buildUserDisplayName } from "@/lib/user-name";
 import { useRouter, usePathname } from "next/navigation";
 import { NavigationTransitionOverlay } from "@/components/layout/navigation-transition-overlay";
 import { emitNavigationStart, setPendingPublicRedirect } from "@/lib/navigation-transition";
@@ -41,35 +42,31 @@ const highlights = [
 
 export function SiteShell({ children }: SiteShellProps) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const { isAuthenticated, name, phoneNumber, userId, sessionId, clearSession, syncSession, hasHydrated } = useAuthStore();
+  const { isAuthenticated, name, phoneNumber, sessionId, refreshToken, clearSession, syncSession, hasHydrated } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<{ id: string; type: string; title: string; body: string; is_read: boolean; created_at: string }[]>([]);
-  const [notifLoading, setNotifLoading] = useState(false);
   const currentPath = usePathname();
   const router = useRouter();
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
   const unreadCount = notifications.filter(n => !n.is_read).length;
   const hideSiteChrome = currentPath.startsWith("/admin") || currentPath.startsWith("/exam-preview/");
 
-  const debugHeaders: Record<string, string> = {
-    "X-Debug-User-Id": userId ?? "",
-    "X-Debug-First-Name": name || "User",
-  };
-
   const fetchNotifications = async () => {
+    const api = createApiClient();
     try {
-      const res = await fetch(`${API_BASE}/me/notifications`, { headers: debugHeaders });
-      if (res.ok) setNotifications(await res.json());
+      const items = await api.listNotifications();
+      setNotifications(items);
     } catch {}
   };
 
   const markAllRead = async () => {
+    const api = createApiClient();
     try {
-      await fetch(`${API_BASE}/me/notifications/read-all`, { method: "PATCH", headers: debugHeaders });
+      await api.markAllNotificationsRead();
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     } catch {}
   };
@@ -82,8 +79,16 @@ export function SiteShell({ children }: SiteShellProps) {
   // Handle scroll to top visibility
   useEffect(() => {
     const handleScroll = () => {
+      const nextScrollY = window.scrollY;
       setShowScrollTop(window.scrollY > 400);
+      setIsHeaderCompact((current) => {
+        if (current) {
+          return nextScrollY > 12;
+        }
+        return nextScrollY > 72;
+      });
     };
+    handleScroll();
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -113,21 +118,23 @@ export function SiteShell({ children }: SiteShellProps) {
   };
 
   const handleSignOut = () => {
+    const api = createApiClient();
     setPendingPublicRedirect("/");
     emitNavigationStart("/");
+    void api.logout({ sessionId, refreshToken }).catch(() => undefined);
     clearSession();
     setIsMenuOpen(false);
     router.replace("/");
   };
 
   useEffect(() => {
-    if (isAuthenticated && userId) {
+    if (isAuthenticated && hasHydrated) {
       setNotifications([]);
       fetchNotifications();
     } else {
       setNotifications([]);
     }
-  }, [isAuthenticated, userId]);
+  }, [hasHydrated, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated || !sessionId) {
@@ -145,22 +152,27 @@ export function SiteShell({ children }: SiteShellProps) {
         syncSession({
           userId: response.user.id,
           sessionId: response.session_id,
-          name: response.user.first_name,
+          name: buildUserDisplayName(response.user.first_name, response.user.last_name),
           phoneNumber: response.user.username ?? null,
           isPremium: Boolean(response.user.is_premium),
           premiumUntil: response.user.premium_until ?? null,
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) {
+          clearSession();
+        }
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, sessionId, syncSession]);
+  }, [clearSession, isAuthenticated, sessionId, syncSession]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       setIsMenuOpen(false);
+      setIsMockTestsOpen(false);
       const target = e.target as HTMLElement;
       if (!target.closest(".notif-panel")) setNotifOpen(false);
     };
@@ -178,30 +190,40 @@ export function SiteShell({ children }: SiteShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative">
+    <div
+      className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative"
+      style={{
+        "--app-shell-sticky-top": isHeaderCompact ? "5.75rem" : "7.5rem",
+      } as CSSProperties}
+    >
       <NavigationTransitionOverlay />
 
-      {/* Page Progress Bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-primary/10 z-[100]">
-        <div className="h-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)] animate-progress" />
-      </div>
-
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-sm transition-all h-20 md:h-28 flex items-center shrink-0">
+      <header className={cn(
+        "sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-sm transition-all duration-300 flex items-center shrink-0",
+        isHeaderCompact ? "h-16 md:h-20" : "h-20 md:h-28"
+      )}>
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2 group focus-visible:outline-none rounded-xl">
-            <div className="relative h-14 md:h-20 transition-transform duration-300 group-hover:scale-105 flex items-center justify-center">
+            <div className={cn(
+              "relative transition-all duration-300 group-hover:scale-105 flex items-center justify-center",
+              isHeaderCompact ? "h-10 md:h-12" : "h-12 md:h-16"
+            )}>
               <img src={theme === "light" ? "/logo-light.svg" : "/logo.svg"} alt="PrimeScore" className="relative z-10 h-full w-auto object-contain drop-shadow-sm" />
             </div>
           </Link>
 
-          <nav className="hidden items-center gap-6 md:flex ml-auto mr-6">
+          <nav className={cn(
+            "hidden items-center md:flex ml-auto mr-6 transition-all duration-300",
+            isHeaderCompact ? "gap-4" : "gap-6"
+          )}>
             <div 
-              className="relative group py-4"
+              className={cn("relative group transition-all duration-300", isHeaderCompact ? "py-2" : "py-4")}
+              onClick={(e) => e.stopPropagation()}
               onMouseEnter={() => setIsMockTestsOpen(true)}
               onMouseLeave={() => {
                 setTimeout(() => {
-                  const isStillHovering = document.querySelector('.practice-tests-dropdown:hover');
-                  const isStillHoveringParent = document.querySelector('.practice-tests-parent:hover');
+                  const isStillHovering = document.querySelector(".practice-tests-dropdown:hover");
+                  const isStillHoveringParent = document.querySelector(".practice-tests-parent:hover");
                   if (!isStillHovering && !isStillHoveringParent) {
                     setIsMockTestsOpen(false);
                   }
@@ -209,8 +231,10 @@ export function SiteShell({ children }: SiteShellProps) {
               }}
             >
               <button
+                type="button"
+                onClick={() => setIsMockTestsOpen((current) => !current)}
                 className={cn(
-                  "practice-tests-parent flex items-center gap-1 rounded-lg px-3 py-1.5 text-[14px] font-black transition-all hover:bg-muted/30 active:scale-95 outline-none",
+                  "practice-tests-parent flex items-center gap-1 rounded-lg px-3 py-1.5 text-[14px] font-semibold transition-all hover:bg-muted/30 active:scale-95 outline-none",
                   currentPath.startsWith("/tests") ? "text-primary bg-primary/5" : "text-muted-foreground/80 hover:text-foreground"
                 )}
               >
@@ -218,13 +242,13 @@ export function SiteShell({ children }: SiteShellProps) {
               </button>
 
               <div className={cn(
-                "practice-tests-dropdown absolute top-full left-1/2 -translate-x-1/2 mt-1 w-[380px] rounded-2xl border border-border bg-card p-2.5 shadow-2xl transition-all duration-300 z-[60] flex gap-2",
+                "practice-tests-dropdown absolute top-full left-1/2 -translate-x-1/2 mt-1 w-[340px] rounded-2xl border border-border bg-card p-2 shadow-2xl transition-all duration-300 z-[60] flex gap-2",
                 isMockTestsOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
               )}>
                 <Link 
                   href="/tests?type=reading" 
                   onClick={() => setIsMockTestsOpen(false)}
-                  className="flex-1 flex items-center gap-3.5 px-4 py-4 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 hover:border-primary/30 transition-all group/item"
+                  className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
                   <div className="w-10 h-10 shrink-0 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
@@ -237,7 +261,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 <Link 
                   href="/tests?type=listening" 
                   onClick={() => setIsMockTestsOpen(false)}
-                  className="flex-1 flex items-center gap-3.5 px-4 py-4 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 hover:border-primary/30 transition-all group/item"
+                  className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
                   <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
                     <Headphones className="h-5 w-5" />
@@ -324,7 +348,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   className="flex items-center gap-2.5 p-1.5 pl-3 rounded-2xl border border-border bg-muted/40 hover:bg-muted transition-all active:scale-95 group outline-none"
                 >
                   <span className="text-xs font-bold text-foreground opacity-80 group-hover:opacity-100">{name}</span>
-                  <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-sm font-black shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-primary text-black dark:text-primary-foreground flex items-center justify-center text-sm font-medium shadow-sm">
                     {name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
                   </div>
                   <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-300", isMenuOpen && "rotate-180")} />
@@ -401,7 +425,7 @@ function NavLink({ href, label, active }: { href: string; label: string; active?
     <Link
       href={href}
       className={cn(
-        "rounded-lg px-3 py-1.5 text-[14px] font-black transition-all hover:bg-muted/30 active:scale-95",
+        "rounded-lg px-3 py-1.5 text-[14px] font-semibold transition-all hover:bg-muted/30 active:scale-95",
         active ? "text-primary bg-primary/5" : "text-muted-foreground/80 hover:text-foreground"
       )}
     >

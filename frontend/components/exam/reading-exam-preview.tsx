@@ -6,6 +6,13 @@ import { Check, CheckCircle2, ChevronDown, Eraser, Expand, GripVertical, Highlig
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
+import {
+  getMatchingOptionViewModel,
+  normalizeMatchingAnswerValue,
+  shouldAutoLetterMatchingOptions,
+} from "@/lib/matching-option-format";
+import { readBrowserSessionCookies } from "@/lib/user-session-cookies";
 import { cn } from "@/lib/utils";
 import type { QuestionType } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
@@ -60,6 +67,8 @@ interface PreviewGroup {
   sectionLabel?: string;
   questionBlock?: string;
   secondaryBlock?: string;
+  diagramTitle?: string;
+  diagramImageUrl?: string;
   sharedOptions?: string[];
   questions: PreviewQuestion[];
 }
@@ -202,6 +211,8 @@ const DEFAULT_EXAM_DATA: ReadingExamPreviewData = {
   questionGroups: QUESTION_GROUPS,
 };
 
+const attemptApiBaseUrl = getFrontendClientApiBaseUrl();
+
 function formatCountdown(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -211,6 +222,34 @@ function formatCountdown(totalSeconds: number) {
 function formatMinutesLeft(totalSeconds: number) {
   const minutesLeft = Math.max(1, Math.ceil(totalSeconds / 60));
   return `${minutesLeft} minute${minutesLeft === 1 ? "" : "s"} left`;
+}
+
+function getDocumentTheme(): "light" | "dark" {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+
+  const savedTheme = window.localStorage.getItem("prime-theme");
+  if (savedTheme === "light" || savedTheme === "dark") {
+    return savedTheme;
+  }
+
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function buildAttemptRequestHeaders(accessToken: string | null | undefined) {
+  const fallbackToken = readBrowserSessionCookies().accessToken;
+  const resolvedToken = accessToken ?? fallbackToken;
+
+  return {
+    "Content-Type": "application/json",
+    ...(resolvedToken ? { Authorization: `Bearer ${resolvedToken}` } : {}),
+  };
+}
+
+function inlineAnswerWidth(value: string | undefined, placeholder: string) {
+  const contentLength = Math.max((value ?? "").length, placeholder.length, 8);
+  return Math.min(260, Math.max(132, contentLength * 9 + 32));
 }
 
 function clampSplitRatio(value: number) {
@@ -271,6 +310,10 @@ function isCompletion(type: PreviewQuestion["type"]) {
   return type === "gap" || type.includes("completion") || type.includes("short_answer") || type.includes("labeling");
 }
 
+function isWordBankCompletion(type: PreviewQuestion["type"]) {
+  return type.includes("summary_completion_wordbank");
+}
+
 function paragraphLabelFromPrompt(prompt: string) {
   const match = prompt.trim().match(/paragraph\s+([a-z])/i);
   return match ? match[1].toUpperCase() : null;
@@ -283,6 +326,7 @@ function usesBracketCompletionLayout(type: PreviewGroup["type"]) {
     || type.includes("table_completion")
     || type.includes("flowchart_completion")
     || type.includes("summary_completion")
+    || type.includes("short_answer")
   );
 }
 
@@ -293,14 +337,54 @@ function splitOptionLines(block?: string) {
     .filter(Boolean);
 }
 
-function optionValue(option: string) {
-  const match = option.match(/^([A-Za-z0-9ivxIVX]+)[.)]\s*(.*)$/);
-  return match ? match[1] : option;
+function optionValue(option: unknown) {
+  const safeOption = typeof option === "string" ? option : "";
+  if (!safeOption) {
+    return "";
+  }
+  const match = safeOption.match(/^([A-Za-z0-9ivxIVX]+)[.)]\s*(.*)$/);
+  return match ? match[1] : safeOption;
 }
 
-function optionText(option: string) {
-  const match = option.match(/^([A-Za-z0-9ivxIVX]+)[.)]\s*(.*)$/);
-  return match ? match[2] : option;
+function optionText(option: unknown) {
+  const safeOption = typeof option === "string" ? option : "";
+  if (!safeOption) {
+    return "";
+  }
+  const match = safeOption.match(/^([A-Za-z0-9ivxIVX]+)[.)]\s*(.*)$/);
+  return match ? match[2] : safeOption;
+}
+
+function normalizeOptionList(options: Array<string | null | undefined>) {
+  return options
+    .map((option) => (typeof option === "string" ? option.trim() : ""))
+    .filter(Boolean);
+}
+
+function typedOptionLines(group: PreviewGroup) {
+  return group.secondaryBlock?.trim()
+    ? splitOptionLines(group.secondaryBlock)
+    : normalizeOptionList(group.sharedOptions ?? []);
+}
+
+function typedQuestionOptionLines(group: PreviewGroup, question: PreviewQuestion, matchingInformationOptions: string[]) {
+  if (question.type.includes("matching_information")) {
+    return matchingInformationOptions.length > 0
+      ? matchingInformationOptions
+      : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
+  }
+
+  return group.secondaryBlock?.trim()
+    ? splitOptionLines(group.secondaryBlock)
+    : normalizeOptionList(question.options ?? []);
+}
+
+function typedOptionView(option: string, index: number, type: PreviewGroup["type"] | PreviewQuestion["type"]) {
+  return getMatchingOptionViewModel(option, index, type);
+}
+
+function normalizeHeadingComparableValue(value: string | undefined) {
+  return String(value ?? "").trim().toUpperCase();
 }
 
 function parsePassageBlockStyle(rawText: string) {
@@ -408,17 +492,97 @@ function hasMultiValue(current: string | undefined, value: string) {
     .includes(value);
 }
 
+function mcMultipleQuestionWeight(question: PreviewQuestion) {
+  const label = String(question.label ?? "").trim();
+  const rangeMatch = label.match(/^(\d+)\s*-\s*(\d+)$/);
+  if (rangeMatch) {
+    const start = Number(rangeMatch[1]);
+    const end = Number(rangeMatch[2]);
+    if (end >= start) {
+      return Math.max(1, end - start + 1);
+    }
+  }
+
+  return question.selectionLimit && question.selectionLimit > 1 ? question.selectionLimit : 1;
+}
+
+function answeredQuestionWeight(question: PreviewQuestion, answerValue: string | undefined) {
+  if (!isMcqMultiple(question.type)) {
+    return answerValue?.trim() ? 1 : 0;
+  }
+
+  const selectedCount = (answerValue ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .length;
+
+  return Math.min(mcMultipleQuestionWeight(question), selectedCount);
+}
+
+function isQuestionFullyAnswered(question: PreviewQuestion, answerValue: string | undefined) {
+  if (!isMcqMultiple(question.type)) {
+    return Boolean(answerValue?.trim());
+  }
+
+  return answeredQuestionWeight(question, answerValue) >= mcMultipleQuestionWeight(question);
+}
+
+function questionDisplaySlots(question: PreviewQuestion) {
+  const label = String(question.label ?? "").trim();
+  const rangeMatch = label.match(/^(\d+)\s*-\s*(\d+)$/);
+  if (rangeMatch) {
+    const start = Number(rangeMatch[1]);
+    const end = Number(rangeMatch[2]);
+    if (end >= start) {
+      return Array.from({ length: end - start + 1 }, (_, index) => String(start + index));
+    }
+  }
+
+  return [label || String(question.number)];
+}
+
+function primaryQuestionDisplayLabel(question: PreviewQuestion) {
+  return questionDisplaySlots(question)[0] ?? String(question.number);
+}
+
+function sectionKeyForParagraph(paragraph: PreviewParagraph) {
+  return paragraph.sectionId ?? paragraph.sectionLabel ?? "section";
+}
+
+function sectionKeyForGroup(group: PreviewGroup) {
+  return group.sectionId ?? group.sectionLabel ?? "section";
+}
+
+function findSectionIdForQuestion(
+  questionId: string | undefined,
+  questionGroups: PreviewGroup[],
+  paragraphs: PreviewParagraph[]
+) {
+  if (questionId) {
+    const ownerGroup = questionGroups.find((group) => group.questions.some((question) => question.id === questionId));
+    if (ownerGroup) {
+      return sectionKeyForGroup(ownerGroup);
+    }
+  }
+
+  return paragraphs[0] ? sectionKeyForParagraph(paragraphs[0]) : (questionGroups[0] ? sectionKeyForGroup(questionGroups[0]) : "section");
+}
+
 export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: ReadingExamPreviewData }) {
   const router = useRouter();
   const isAttemptPreview = Boolean(data?.attemptId);
   const candidateName = useAuthStore((state) => state.name) || "Guest Candidate";
+  const accessToken = useAuthStore((state) => state.accessToken);
   const containerRef = useRef<HTMLElement | null>(null);
+  const readingPaneRef = useRef<HTMLDivElement | null>(null);
   const questionPaneRef = useRef<HTMLDivElement | null>(null);
   const textBlockRefs = useRef<Record<string, HTMLElement | null>>({});
   const examData = data ?? DEFAULT_EXAM_DATA;
   const initialTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
+  const initialQuestionId = examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "";
   const [answers, setAnswers] = useState<Record<string, string>>(examData.initialAnswers ?? {});
-  const [theme, setTheme] = useState<"light" | "dark">(examData.initialUiState?.theme === "light" ? "light" : "dark");
+  const [theme, setTheme] = useState<"light" | "dark">(() => getDocumentTheme());
   const [splitRatio, setSplitRatio] = useState(clampSplitRatio(examData.initialUiState?.splitRatio ?? 54));
   const [fontScale, setFontScale] = useState(clampFontScale(examData.initialUiState?.fontScale ?? 1));
   const [timeLeft, setTimeLeft] = useState(
@@ -430,13 +594,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeDialog, setActiveDialog] = useState<PreviewDialog>(null);
-  const [activeQuestionId, setActiveQuestionId] = useState(
-    examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? ""
+  const [activeQuestionId, setActiveQuestionId] = useState(initialQuestionId);
+  const [activeSectionId, setActiveSectionId] = useState(
+    findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs)
   );
+  const [showPassageQuestionNav, setShowPassageQuestionNav] = useState(false);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [draggingHeading, setDraggingHeading] = useState<{ groupId: string; value: string; sourceQuestionId?: string } | null>(null);
   const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
   const [dragOverHeadingBankGroupId, setDragOverHeadingBankGroupId] = useState<string | null>(null);
+  const [draggingWordBank, setDraggingWordBank] = useState<{ groupId: string; value: string; sourceQuestionId?: string } | null>(null);
+  const [dragOverWordBankQuestionId, setDragOverWordBankQuestionId] = useState<string | null>(null);
+  const [dragOverWordBankGroupId, setDragOverWordBankGroupId] = useState<string | null>(null);
   const [dragPreviewPosition, setDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
   const [textHighlights, setTextHighlights] = useState<Record<string, TextHighlight[]>>(examData.initialTextHighlights ?? {});
   const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarState>(null);
@@ -472,9 +641,79 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     sourceQuestionId?: string;
     dragging: boolean;
   } | null>(null);
+  const allQuestions = useMemo(() => examData.questionGroups.flatMap((group) => group.questions), [examData.questionGroups]);
+  const previewSections = useMemo(() => {
+    const ordered: Array<{
+      id: string;
+      label: string;
+      title?: string;
+      previewLabel?: string;
+      paragraphs: PreviewParagraph[];
+      questionGroups: PreviewGroup[];
+      questions: PreviewQuestion[];
+    }> = [];
+    const byId = new Map<string, (typeof ordered)[number]>();
+
+    const ensureSection = (id: string, fallbackLabel: string) => {
+      const existing = byId.get(id);
+      if (existing) {
+        return existing;
+      }
+
+      const next = {
+        id,
+        label: fallbackLabel,
+        title: undefined as string | undefined,
+        previewLabel: undefined as string | undefined,
+        paragraphs: [] as PreviewParagraph[],
+        questionGroups: [] as PreviewGroup[],
+        questions: [] as PreviewQuestion[],
+      };
+      byId.set(id, next);
+      ordered.push(next);
+      return next;
+    };
+
+    examData.paragraphs.forEach((paragraph) => {
+      const id = sectionKeyForParagraph(paragraph);
+      const section = ensureSection(id, paragraph.sectionLabel ?? `Passage ${ordered.length + 1}`);
+      if (paragraph.sectionLabel) {
+        section.label = paragraph.sectionLabel;
+      }
+      if (paragraph.sectionTitle && !section.title) {
+        section.title = paragraph.sectionTitle;
+      }
+      if (paragraph.sectionPreviewLabel && !section.previewLabel) {
+        section.previewLabel = paragraph.sectionPreviewLabel;
+      }
+      section.paragraphs.push(paragraph);
+    });
+
+    examData.questionGroups.forEach((group) => {
+      const id = sectionKeyForGroup(group);
+      const section = ensureSection(id, group.sectionLabel ?? `Passage ${ordered.length + 1}`);
+      if (group.sectionLabel) {
+        section.label = group.sectionLabel;
+      }
+      if (group.sectionTitle && !section.title) {
+        section.title = group.sectionTitle;
+      }
+      section.questionGroups.push(group);
+      section.questions.push(...group.questions);
+    });
+
+    return ordered;
+  }, [examData.paragraphs, examData.questionGroups]);
+  const currentSection = useMemo(
+    () => previewSections.find((section) => section.id === activeSectionId) ?? previewSections[0],
+    [activeSectionId, previewSections]
+  );
+  const currentParagraphs = currentSection?.paragraphs ?? examData.paragraphs;
+  const currentQuestionGroups = currentSection?.questionGroups ?? examData.questionGroups;
+  const currentQuestions = currentSection?.questions ?? allQuestions;
 
   useEffect(() => {
-    const fallbackTheme = document.documentElement.classList.contains("light") ? "light" : "dark";
+    const currentTheme = getDocumentTheme();
     const backup = readAttemptBackup();
     const serverAnswers = examData.initialAnswers ?? {};
     const backupAnswers = backup?.answers ?? {};
@@ -485,12 +724,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     const serverTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
     const backupTimeSpentSeconds = Math.max(0, backup?.timeSpentSec ?? 0);
     const shouldUseBackup = Boolean(backup) && backupTimeSpentSeconds >= serverTimeSpentSeconds;
-    const nextTheme = (shouldUseBackup ? backup?.uiState?.theme : undefined) ?? examData.initialUiState?.theme ?? fallbackTheme;
+    const nextTheme = currentTheme;
     const nextAnswers = shouldUseBackup && backupAnswerCount > 0 ? { ...serverAnswers, ...backupAnswers } : serverAnswers;
     const nextTextHighlights = shouldUseBackup && backupHighlightCount > 0 ? { ...serverHighlights, ...backupHighlights } : serverHighlights;
     const nextSplitRatio = clampSplitRatio((shouldUseBackup ? backup?.uiState?.splitRatio : undefined) ?? examData.initialUiState?.splitRatio ?? 54);
     const nextFontScale = clampFontScale((shouldUseBackup ? backup?.uiState?.fontScale : undefined) ?? examData.initialUiState?.fontScale ?? 1);
-    const nextActiveQuestionId = (shouldUseBackup ? backup?.uiState?.activeQuestionId : undefined) ?? examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "";
+    const nextActiveQuestionId = (shouldUseBackup ? backup?.uiState?.activeQuestionId : undefined) ?? initialQuestionId;
+    const nextSectionId = findSectionIdForQuestion(nextActiveQuestionId, examData.questionGroups, examData.paragraphs);
     const nextTimeSpentSeconds = shouldUseBackup ? Math.max(serverTimeSpentSeconds, backupTimeSpentSeconds) : serverTimeSpentSeconds;
 
     document.documentElement.classList.add(nextTheme);
@@ -501,6 +741,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     setSplitRatio(nextSplitRatio);
     setFontScale(nextFontScale);
     setActiveQuestionId(nextActiveQuestionId);
+    setActiveSectionId(nextSectionId);
+    setShowPassageQuestionNav(previewSections.length <= 1);
     setTimeLeft(
       mode === "exam"
         ? Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - nextTimeSpentSeconds)
@@ -523,7 +765,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     setActiveDialog(null);
     setSyncState(examData.attemptId ? "saved" : "idle");
     pendingAnswerValuesRef.current = {};
-  }, [examData, mode]);
+  }, [examData, initialQuestionId, mode, previewSections.length]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -557,14 +799,21 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }, [timeLeft, mode, isSubmitted]);
 
   const answeredCount = useMemo(
-    () => Object.values(answers).filter((value) => value.trim().length > 0).length,
-    [answers]
+    () => allQuestions.reduce((count, question) => count + answeredQuestionWeight(question, answers[question.id]), 0),
+    [allQuestions, answers]
   );
   const totalQuestions = useMemo(
-    () => examData.questionGroups.reduce((count, group) => count + group.questions.length, 0),
-    [examData.questionGroups]
+    () => allQuestions.reduce((count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1), 0),
+    [allQuestions]
   );
-  const allQuestions = useMemo(() => examData.questionGroups.flatMap((group) => group.questions), [examData.questionGroups]);
+  const currentAnsweredCount = useMemo(
+    () => currentQuestions.reduce((count, question) => count + answeredQuestionWeight(question, answers[question.id]), 0),
+    [answers, currentQuestions]
+  );
+  const currentTotalQuestions = useMemo(
+    () => currentQuestions.reduce((count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1), 0),
+    [currentQuestions]
+  );
   const matchingInformationParagraphOptions = useMemo(() => {
     const optionsBySection = new Map<string, string[]>();
     const seenBySection = new Map<string, Set<string>>();
@@ -606,6 +855,29 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       });
     return targets;
   }, [examData.questionGroups]);
+  const matchingHeadingExamples = useMemo(() => {
+    const examples = new Map<string, { groupId: string; value: string; text: string }>();
+    examData.questionGroups
+      .filter((group) => group.type.includes("matching_headings"))
+      .forEach((group) => {
+        const options = group.secondaryBlock?.trim()
+          ? splitOptionLines(group.secondaryBlock)
+          : (group.sharedOptions ?? []);
+
+        options.forEach((option, index) => {
+          const optionView = typedOptionView(option, index, group.type);
+          if (!optionView.fixedParagraphLabel) {
+            return;
+          }
+          examples.set(`${group.sectionId ?? group.sectionLabel ?? "section"}:${optionView.fixedParagraphLabel}`, {
+            groupId: group.id,
+            value: optionView.value,
+            text: optionView.text,
+          });
+        });
+      });
+    return examples;
+  }, [examData.questionGroups]);
   const headingOptionLookup = useMemo(() => {
     const lookup = new Map<string, { value: string; text: string }>();
     examData.questionGroups
@@ -615,11 +887,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           ? splitOptionLines(group.secondaryBlock)
           : (group.sharedOptions ?? []);
 
-        options.forEach((option) => {
-          const value = optionValue(option);
-          lookup.set(`${group.id}:${value}`, {
-            value,
-            text: optionText(option),
+        options.forEach((option, index) => {
+          const optionView = typedOptionView(option, index, group.type);
+          lookup.set(`${group.id}:${optionView.value}`, {
+            value: optionView.value,
+            text: optionView.text,
           });
         });
       });
@@ -649,14 +921,19 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     "--reading-pane": `${splitRatio}%`,
     "--question-pane": `${100 - splitRatio}%`,
   } as CSSProperties;
-  const examToneStyle = (theme === "dark"
+  const examToneStyle = (theme === "light"
     ? {
-        "--foreground": "210 14% 82%",
-        "--card-foreground": "210 14% 82%",
-        "--popover-foreground": "210 14% 82%",
-        "--muted-foreground": "215 12% 66%",
+        "--foreground": "222 47% 11%",
+        "--card-foreground": "222 47% 11%",
+        "--popover-foreground": "222 47% 11%",
+        "--muted-foreground": "215 16% 47%",
       }
-    : {}) as CSSProperties;
+    : {
+        "--foreground": "210 33% 99%",
+        "--card-foreground": "210 33% 99%",
+        "--popover-foreground": "210 33% 99%",
+        "--muted-foreground": "210 20% 92%",
+      }) as CSSProperties;
   const attemptBackupKey = examData.attemptId ? `prime-attempt-backup:${examData.attemptId}` : null;
 
   function readAttemptBackup() {
@@ -712,6 +989,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       setActiveQuestionId(allQuestions[0]?.id ?? "");
     }
   }, [activeQuestionId, allQuestions]);
+
+  useEffect(() => {
+    if (!previewSections.some((section) => section.id === activeSectionId)) {
+      setActiveSectionId(previewSections[0]?.id ?? "section");
+    }
+  }, [activeSectionId, previewSections]);
 
   function markSyncSaved() {
     setSyncState("saved");
@@ -773,16 +1056,19 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     setSyncState("saving");
     try {
-      const response = await fetch(`/api/attempts/${examData.attemptId}/progress`, {
+      const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/progress`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: buildAttemptRequestHeaders(accessToken),
+        credentials: "same-origin",
         body: JSON.stringify({
-          timeSpentSec: latestProgressRef.current.timeSpentSec,
-          activeQuestionId: latestProgressRef.current.activeQuestionId,
-          textHighlights: latestProgressRef.current.textHighlights,
-          uiState: latestProgressRef.current.uiState,
+          time_spent_sec: latestProgressRef.current.timeSpentSec,
+          active_question_id: latestProgressRef.current.activeQuestionId,
+          text_highlights: latestProgressRef.current.textHighlights,
+          ui_state: {
+            theme: latestProgressRef.current.uiState.theme,
+            split_ratio: latestProgressRef.current.uiState.splitRatio,
+            font_scale: latestProgressRef.current.uiState.fontScale,
+          },
         }),
       });
       if (!response.ok) {
@@ -825,13 +1111,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     await Promise.all(
       pendingEntries.map(async ([questionId, value]) => {
         try {
-          const response = await fetch(`/api/attempts/${examData.attemptId}/answer`, {
+          const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
             method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: buildAttemptRequestHeaders(accessToken),
+            credentials: "same-origin",
             body: JSON.stringify({
-              questionId,
+              question_id: questionId,
               value,
             }),
           });
@@ -901,6 +1186,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   function handleSubmit() {
     if (isSubmitted) return;
+    if (unansweredCount === 0) {
+      void submitAttempt();
+      return;
+    }
     setActiveDialog("submit");
   }
 
@@ -924,13 +1213,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     saveTimersRef.current[questionId] = window.setTimeout(async () => {
       try {
-        const response = await fetch(`/api/attempts/${examData.attemptId}/answer`, {
+        const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: buildAttemptRequestHeaders(accessToken),
+          credentials: "same-origin",
           body: JSON.stringify({
-            questionId,
+            question_id: questionId,
             value,
           }),
         });
@@ -959,9 +1247,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     try {
       await flushPendingAnswerSaves();
       await flushPendingProgressSave();
-      const response = await fetch(`/api/attempts/${examData.attemptId}/submit`, {
+      const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/submit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildAttemptRequestHeaders(accessToken),
+        credentials: "same-origin",
         body: JSON.stringify({ confirm: true, reason: mode === "exam" && timeLeft === 0 ? "time_up" : "user_confirmed" }),
       });
       if (!response.ok) {
@@ -985,13 +1274,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     await submitAttempt();
   }
 
+  function selectSection(sectionId: string) {
+    const targetSection = previewSections.find((section) => section.id === sectionId);
+    if (!targetSection) {
+      return;
+    }
+
+    setActiveSectionId(sectionId);
+    setShowPassageQuestionNav(true);
+    setActiveQuestionId(targetSection.questions[0]?.id ?? "");
+    readingPaneRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    questionPaneRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function navigateToQuestion(questionId: string) {
+    setActiveSectionId(findSectionIdForQuestion(questionId, examData.questionGroups, examData.paragraphs));
     setActiveQuestionId(questionId);
 
-    const inlineBlank = questionPaneRef.current?.querySelector<HTMLInputElement>(`[data-question-anchor="${questionId}"]`);
+    const inlineBlank = questionPaneRef.current?.querySelector<HTMLElement>(`[data-question-anchor="${questionId}"]`);
     if (inlineBlank) {
       inlineBlank.scrollIntoView({ behavior: "smooth", block: "center" });
-      window.setTimeout(() => inlineBlank.focus(), 120);
+      window.setTimeout(() => {
+        if ("focus" in inlineBlank && typeof inlineBlank.focus === "function") {
+          inlineBlank.focus();
+        }
+      }, 120);
       return;
     }
 
@@ -1264,6 +1571,30 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     return bankTarget.dataset.headingBankGroupId === groupId;
   }
 
+  function resolveWordBankDropTarget(clientX: number, clientY: number, groupId: string) {
+    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    const dropTarget = target?.closest("[data-wordbank-drop-question-id]") as HTMLElement | null;
+    if (!dropTarget) {
+      return null;
+    }
+
+    if (dropTarget.dataset.wordbankDropGroupId !== groupId) {
+      return null;
+    }
+
+    return dropTarget.dataset.wordbankDropQuestionId ?? null;
+  }
+
+  function isWordBankBankDropTarget(clientX: number, clientY: number, groupId: string) {
+    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    const bankTarget = target?.closest("[data-wordbank-bank-group-id]") as HTMLElement | null;
+    if (!bankTarget) {
+      return false;
+    }
+
+    return bankTarget.dataset.wordbankBankGroupId === groupId;
+  }
+
   function beginHeadingPointerDrag(
     event: ReactPointerEvent<HTMLElement>,
     payload: { groupId: string; value: string; sourceQuestionId?: string }
@@ -1328,6 +1659,82 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       if (state?.dragging) {
         const targetQuestionId = resolveHeadingDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
         const droppedBackToBank = isHeadingBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
+        if (targetQuestionId) {
+          setActiveQuestionId(targetQuestionId);
+          if (state.sourceQuestionId && state.sourceQuestionId !== targetQuestionId) {
+            persistAnswer(state.sourceQuestionId, "");
+          }
+          persistAnswer(targetQuestionId, state.value);
+        } else if (droppedBackToBank && state.sourceQuestionId) {
+          persistAnswer(state.sourceQuestionId, "");
+        }
+      }
+
+      cleanup();
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
+
+  function beginWordBankPointerDrag(
+    event: ReactPointerEvent<HTMLElement>,
+    payload: { groupId: string; value: string; sourceQuestionId?: string }
+  ) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const state = {
+      startX: event.clientX,
+      startY: event.clientY,
+      groupId: payload.groupId,
+      value: payload.value,
+      sourceQuestionId: payload.sourceQuestionId,
+      dragging: false,
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!state.dragging) {
+        const deltaX = Math.abs(moveEvent.clientX - state.startX);
+        const deltaY = Math.abs(moveEvent.clientY - state.startY);
+        if (Math.max(deltaX, deltaY) < 10) {
+          return;
+        }
+
+        state.dragging = true;
+        setDraggingWordBank({ groupId: state.groupId, value: state.value, sourceQuestionId: state.sourceQuestionId });
+        setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+        document.body.style.cursor = "grabbing";
+        document.body.style.userSelect = "none";
+        window.getSelection()?.removeAllRanges();
+      }
+
+      setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+      const targetQuestionId = resolveWordBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId);
+      setDragOverWordBankQuestionId(targetQuestionId);
+      setDragOverWordBankGroupId(
+        targetQuestionId ? null : (isWordBankBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId) ? state.groupId : null)
+      );
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setDraggingWordBank(null);
+      setDragOverWordBankQuestionId(null);
+      setDragOverWordBankGroupId(null);
+      setDragPreviewPosition(null);
+    };
+
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      if (state.dragging) {
+        const targetQuestionId = resolveWordBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
+        const droppedBackToBank = isWordBankBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
         if (targetQuestionId) {
           setActiveQuestionId(targetQuestionId);
           if (state.sourceQuestionId && state.sourceQuestionId !== targetQuestionId) {
@@ -1513,37 +1920,52 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       return null;
     }
 
-    const baseOptions = group.secondaryBlock?.trim()
-      ? splitOptionLines(group.secondaryBlock)
-      : (group.sharedOptions ?? []);
+    const baseOptions = typedOptionLines(group);
+    const baseOptionEntries = baseOptions.map((option, index) => ({
+      option,
+      index,
+      optionView: typedOptionView(option, index, group.type),
+    }));
 
     const selectedValues = group.type.includes("matching_headings")
-      ? new Set(
-          group.questions
-            .map((question) => answers[question.id] ?? "")
-            .filter(Boolean)
-        )
-      : new Set<string>();
+      ? new Set<string>([
+          ...group.questions
+            .map((question) => normalizeHeadingComparableValue(answers[question.id] ?? ""))
+            .filter(Boolean),
+          ...examData.paragraphs
+            .map((paragraph) => matchingHeadingExamples.get(`${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`))
+            .filter((entry): entry is { groupId: string; value: string; text: string } => Boolean(entry && entry.groupId === group.id))
+            .map((entry) => normalizeHeadingComparableValue(entry.value)),
+        ])
+      : group.type.includes("wordbank")
+        ? new Set<string>(
+            group.questions
+              .map((question) => String(answers[question.id] ?? "").trim())
+              .filter(Boolean)
+              .map((value) => normalizeHeadingComparableValue(value))
+          )
+        : new Set<string>();
 
-    const bankOptions = group.type.includes("matching_headings")
-      ? baseOptions.filter((option) => {
-          const value = optionValue(option);
-          return !selectedValues.has(value) || draggingHeading?.value === value;
+    const bankOptions = group.type.includes("matching_headings") || group.type.includes("wordbank")
+      ? baseOptionEntries.filter((entry) => {
+          const value = normalizeHeadingComparableValue(group.type.includes("wordbank") ? (entry.optionView.text || entry.optionView.label || entry.option) : entry.optionView.value);
+          return !selectedValues.has(value);
         })
-      : baseOptions;
+      : baseOptionEntries;
 
     if (bankOptions.length === 0) {
       return null;
     }
 
-    const isBankDropReady = draggingHeading?.groupId === group.id;
+    const isBankDropReady = draggingHeading?.groupId === group.id || draggingWordBank?.groupId === group.id;
 
     return (
       <div
-        data-heading-bank-group-id={group.id}
+        data-heading-bank-group-id={group.type.includes("matching_headings") ? group.id : undefined}
+        data-wordbank-bank-group-id={group.type.includes("wordbank") ? group.id : undefined}
         className={cn(
-          "max-w-[34rem] rounded-2xl border border-border/75 bg-background/70 p-4 transition",
-          dragOverHeadingBankGroupId === group.id && isBankDropReady && "border-primary/50 bg-primary/5 shadow-sm"
+          "max-w-[34rem] p-1 transition",
+          (dragOverHeadingBankGroupId === group.id || dragOverWordBankGroupId === group.id) && isBankDropReady && "rounded-xl bg-primary/5"
         )}
       >
         <p
@@ -1551,46 +1973,67 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             "mb-3 font-black uppercase tracking-[0.18em]",
             group.type.includes("matching_headings")
               ? "text-[13px] text-foreground"
-              : "text-[10px] text-muted-foreground"
+              : "text-[10px] text-foreground/80"
           )}
         >
           {group.type.includes("matching_headings") ? "List of Headings" : "Options"}
         </p>
-        <div className="space-y-2">
-          {bankOptions.map((option, index) => {
-            const value = optionValue(option);
-            const text = optionText(option);
-            const hasPrefix = value !== text;
+        <div className={cn(
+          group.type.includes("wordbank")
+            ? "flex flex-wrap gap-2"
+            : "space-y-2"
+        )}>
+          {bankOptions.map((entry) => {
+            const { option, index, optionView } = entry;
+            const value = optionView.value;
+            const text = optionView.text || optionView.label;
+            const hasPrefix = !group.type.includes("matching_headings")
+              && (optionView.hasExplicitPrefix || shouldAutoLetterMatchingOptions(group.type));
             const optionBlockKey = `option-bank-${group.id}-${value}-${text}`;
-            const isDraggingOption =
-              draggingHeading?.groupId === group.id &&
-              draggingHeading?.value === value &&
-              !draggingHeading?.sourceQuestionId;
+            const comparableWordBankValue = entry.optionView.text || entry.optionView.label || option;
+            const isDraggingOption = group.type.includes("matching_headings")
+              ? (
+                  draggingHeading?.groupId === group.id &&
+                  normalizeHeadingComparableValue(draggingHeading?.value) === normalizeHeadingComparableValue(value) &&
+                  !draggingHeading?.sourceQuestionId
+                )
+              : (
+                  group.type.includes("wordbank")
+                  && draggingWordBank?.groupId === group.id
+                  && normalizeHeadingComparableValue(draggingWordBank?.value) === normalizeHeadingComparableValue(comparableWordBankValue)
+                  && !draggingWordBank?.sourceQuestionId
+                );
+
+            if (isDraggingOption) {
+              return null;
+            }
 
             return (
               <div
                 key={`${group.id}-${value}-${text}-${index}`}
                 onPointerDown={(event) => {
-                  if (!group.type.includes("matching_headings")) {
+                  if (group.type.includes("matching_headings")) {
+                    beginHeadingPointerDrag(event, { groupId: group.id, value });
                     return;
                   }
-                  const target = event.target as HTMLElement | null;
-                  if (target?.closest("[data-highlight-text]")) {
-                    return;
+                  if (group.type.includes("wordbank")) {
+                    beginWordBankPointerDrag(event, {
+                      groupId: group.id,
+                      value: comparableWordBankValue,
+                    });
                   }
-                  beginHeadingPointerDrag(event, { groupId: group.id, value });
                 }}
                 className={cn(
                   "rounded-xl border px-3 py-2 transition-transform duration-150",
                   group.type.includes("matching_headings")
                     ? "border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
-                    : "border-border/55 bg-card",
-                  hasPrefix ? "flex gap-3" : "block",
-                  isDraggingOption &&
-                    "scale-[1.02] border-[#2f436f]/85 bg-[#2f436f]/[0.08] opacity-35 shadow-[0_18px_45px_-24px_rgba(47,67,111,0.6)] dark:border-[#89a4d8]/70 dark:bg-[#4b6498]/[0.18] dark:shadow-[0_18px_45px_-24px_rgba(137,164,216,0.4)]"
+                    : group.type.includes("wordbank")
+                      ? "inline-flex w-auto max-w-full cursor-grab items-center border-border/55 bg-card active:cursor-grabbing hover:bg-muted/20"
+                      : "border-border/55 bg-card",
+                  hasPrefix ? "flex gap-3" : "block"
                 )}
               >
-                {hasPrefix ? (
+              {hasPrefix ? (
                   <>
                     {group.type.includes("matching_headings") ? (
                       <span
@@ -1600,7 +2043,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         <GripVertical className="h-4 w-4" />
                       </span>
                     ) : null}
-                    <span className="w-8 shrink-0 text-[13px] font-black uppercase tracking-[0.12em] text-primary">
+                    <span className="w-8 shrink-0 text-[13px] font-black uppercase tracking-[0.12em] text-foreground/85">
                       {value}
                     </span>
                     <span
@@ -1630,7 +2073,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         }}
                       data-highlight-text
                       onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
-                      className="select-text block flex-1 text-[16px] font-bold leading-6 text-foreground"
+                      className={cn(
+                        "select-text text-[16px] font-bold leading-6 text-foreground",
+                        group.type.includes("wordbank") ? "block whitespace-nowrap" : "block flex-1"
+                      )}
                     >
                       {renderHighlightedText(optionBlockKey, text)}
                     </span>
@@ -1644,28 +2090,71 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     );
   }
 
-  function renderMatchingHeadingDropArea(paragraph: PreviewParagraph) {
-    const target = matchingHeadingTargets.get(
-      `${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`
+  function renderDiagramBlock(group: PreviewGroup) {
+    if (!group.type.includes("diagram") || !group.diagramImageUrl) {
+      return null;
+    }
+
+    return (
+      <div className="p-1">
+        {group.diagramTitle ? (
+          <p className="mb-4 text-center text-[17px] font-bold tracking-tight text-foreground">
+            {renderFormattedText(group.diagramTitle, `diagram-title-${group.id}`)}
+          </p>
+        ) : null}
+        <div className="overflow-hidden rounded-xl p-2">
+          <img
+            src={group.diagramImageUrl}
+            alt={group.diagramTitle || group.title}
+            className="max-h-[340px] w-full object-contain"
+          />
+        </div>
+      </div>
     );
+  }
+
+  function renderMatchingHeadingDropArea(paragraph: PreviewParagraph) {
+    const paragraphKey = `${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`;
+    const target = matchingHeadingTargets.get(paragraphKey);
+    const fixedExample = matchingHeadingExamples.get(paragraphKey);
+
+    if (!target && !fixedExample) {
+      return null;
+    }
+
+    if (!target && fixedExample) {
+      return (
+        <div className={cn(
+          "mb-2 flex min-h-[28px] items-center justify-center rounded-md border border-success/40 bg-success/8 px-2.5 py-1 text-sm font-semibold text-foreground transition-all duration-150"
+        )}>
+          <span className="ml-2.5 flex-1 text-left text-[15px] font-bold leading-6 text-inherit">
+            {renderFormattedText(fixedExample.text, `selected-heading-example-${paragraph.paragraphKey}`)}
+          </span>
+        </div>
+      );
+    }
 
     if (!target) {
       return null;
     }
 
-    const currentValue = answers[target.question.id] ?? "";
-    const optionLines = target.group.secondaryBlock?.trim()
-      ? splitOptionLines(target.group.secondaryBlock)
-      : (target.group.sharedOptions ?? []);
-    const currentOption = optionLines.find((option) => optionValue(option) === currentValue);
+    const isDraggingSelectedHeading =
+      draggingHeading?.groupId === target.group.id &&
+      normalizeHeadingComparableValue(draggingHeading?.value) === normalizeHeadingComparableValue(answers[target.question.id] ?? "") &&
+      draggingHeading?.sourceQuestionId === target.question.id;
+    const currentValue = isDraggingSelectedHeading ? "" : (answers[target.question.id] ?? "");
+    const optionLines = typedOptionLines(target.group);
+    const currentOption = optionLines.find(
+      (option, index) =>
+        normalizeHeadingComparableValue(typedOptionView(option, index, target.group.type).value) === normalizeHeadingComparableValue(currentValue)
+    );
+    const currentHeadingText = currentOption
+      ? optionText(currentOption)
+      : headingOptionLookup.get(`${target.group.id}:${currentValue}`)?.text ?? currentValue;
     const isActive = activeQuestionId === target.question.id;
     const isDropReady = draggingHeading?.groupId === target.group.id;
     const isDropHover = dragOverQuestionId === target.question.id && isDropReady;
     const hasValue = Boolean(currentValue);
-    const isDraggingSelectedHeading =
-      draggingHeading?.groupId === target.group.id &&
-      draggingHeading?.value === currentValue &&
-      draggingHeading?.sourceQuestionId === target.question.id;
     const dropTone = theme === "light"
       ? {
           hover: "border-[#2f436f] text-[#2f436f] bg-[#2f436f]/16 ring-2 ring-[#2f436f]/18 shadow-sm",
@@ -1673,9 +2162,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           idle: "border-[#2f436f]/70 text-[#2f436f]/90",
         }
       : {
-          hover: "border-primary text-primary bg-primary/16 ring-2 ring-primary/18 shadow-sm",
-          filled: "border-primary/65 text-primary/95 bg-primary/8",
-          idle: "border-[#2f436f]/70 text-[#89a4d8]",
+          hover: "border-slate-300 text-[#FBFCFD] bg-slate-700/70 ring-2 ring-slate-300/18 shadow-sm",
+          filled: "border-slate-500/80 text-[#FBFCFD] bg-slate-700/35",
+          idle: "border-slate-500/75 text-[#FBFCFD]/88",
         };
 
     return (
@@ -1702,10 +2191,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             : hasValue
               ? dropTone.filled
               : isActive
-                ? "border-[#2f436f] text-[#2f436f]"
+                ? "border-[#2f436f] text-[#2f436f] bg-[#2f436f]/[0.03]"
                 : dropTone.idle,
-          isDraggingSelectedHeading &&
-            "scale-[1.02] opacity-35 shadow-[0_18px_45px_-24px_rgba(47,67,111,0.6)] dark:shadow-[0_18px_45px_-24px_rgba(137,164,216,0.4)]"
         )}
       >
         <span className="flex min-w-[18px] items-center justify-center text-[16px] font-black leading-none text-inherit">
@@ -1713,7 +2200,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         </span>
         {currentValue ? (
           <span className="ml-2.5 flex-1 text-left text-[15px] font-bold leading-6 text-inherit">
-            {renderFormattedText(optionText(currentOption!), `selected-heading-${target.question.id}`)}
+            {renderFormattedText(currentHeadingText, `selected-heading-${target.question.id}`)}
           </span>
         ) : null}
       </div>
@@ -1722,8 +2209,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   function renderInlineCompletionGroup(group: PreviewGroup) {
     const segments = (group.questionBlock ?? "").split("[]");
+    const isWordBankGroup = group.type.includes("wordbank");
     return (
-      <div className="rounded-2xl border border-border/75 bg-background/70 px-4 py-4">
+      <div className="px-2 py-2">
         {group.title ? (
           <p className="mb-4 text-center text-[17px] font-bold tracking-tight text-foreground">
             {renderFormattedText(group.title, `completion-title-${group.id}`)}
@@ -1748,24 +2236,60 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   {renderHighlightedText(`inline-completion-${group.id}-${index}`, segment)}
                 </span>
                 {question ? (
-                  <Input
-                    value={answers[question.id] ?? ""}
-                    onFocus={() => setActiveQuestionId(question.id)}
-                    onChange={(event) => persistAnswer(question.id, event.target.value)}
-                    placeholder={question.label ?? String(question.number)}
-                    data-question-anchor={question.id}
-                    className={cn(
-                      "mx-1 inline-flex h-7 w-[104px] rounded-md border px-2 text-center text-sm font-black align-middle shadow-none placeholder:text-[13px] placeholder:font-extrabold placeholder:tracking-[0.08em] placeholder:opacity-100",
-                      theme === "light"
-                        ? "border-[#2f436f]/45 bg-[#f8faff]"
-                        : "border-primary/30 bg-card",
-                      numberedPlaceholderClass,
-                      inputFocusClass,
-                      activeQuestionId === question.id && activeInputClass
-                    )}
-                    autoComplete="off"
-                    spellCheck="false"
-                  />
+                  isWordBankGroup ? (
+                    <button
+                      type="button"
+                      data-question-anchor={question.id}
+                      data-wordbank-drop-question-id={question.id}
+                      data-wordbank-drop-group-id={group.id}
+                      onClick={() => setActiveQuestionId(question.id)}
+                      onPointerDown={(event) => {
+                        const currentValue = answers[question.id] ?? "";
+                        if (!currentValue) {
+                          return;
+                        }
+                        beginWordBankPointerDrag(event, {
+                          groupId: group.id,
+                          value: currentValue,
+                          sourceQuestionId: question.id,
+                        });
+                      }}
+                      className={cn(
+                        "mx-1 inline-flex h-8 min-w-[132px] items-center rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none transition",
+                        theme === "light"
+                          ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
+                          : "border-slate-500/55 bg-card text-foreground",
+                        dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
+                        answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+                        activeQuestionId === question.id && activeInputClass
+                      )}
+                      style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
+                    >
+                      <span className={cn(!answers[question.id] && numberedPlaceholderClass)}>
+                        {answers[question.id] || (question.label ?? String(question.number))}
+                      </span>
+                    </button>
+                  ) : (
+                    <Input
+                      value={answers[question.id] ?? ""}
+                      onFocus={() => setActiveQuestionId(question.id)}
+                      onChange={(event) => persistAnswer(question.id, event.target.value)}
+                      placeholder={question.label ?? String(question.number)}
+                      data-question-anchor={question.id}
+                      className={cn(
+                        "mx-1 inline-flex h-8 min-w-[132px] rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none placeholder:text-[13px] placeholder:font-semibold placeholder:tracking-[0.04em] placeholder:opacity-100",
+                        theme === "light"
+                          ? "border-[#2f436f]/45 bg-[#f8faff]"
+                          : "border-primary/30 bg-card",
+                        numberedPlaceholderClass,
+                        inputFocusClass,
+                        activeQuestionId === question.id && activeInputClass
+                      )}
+                      style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
+                      autoComplete="off"
+                      spellCheck="false"
+                    />
+                  )
                 ) : null}
               </span>
             );
@@ -1782,7 +2306,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         : ["YES", "NO", "NOT GIVEN"];
 
       return (
-        <div className="space-y-2.5">
+        <div className="space-y-0">
           {options.map((option) => {
             const selected = answers[question.id] === option;
             return (
@@ -1795,31 +2319,32 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   persistAnswer(question.id, option);
                 }}
                 className={cn(
-                  "flex w-full items-center gap-3 px-0 py-1.5 text-left transition",
-                  theme === "light"
-                    ? selected
-                      ? "text-[#23395d]"
-                      : "text-slate-700"
-                    : selected
-                      ? "text-slate-100"
-                      : "text-slate-300/85"
+                  "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+                  selected
+                    ? "bg-card"
+                    : "bg-card hover:bg-muted/20"
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.8px] transition",
+                    "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition",
                     theme === "light"
                       ? selected
-                        ? "border-[#2f436f] text-[#2f436f]"
+                        ? "border-slate-700 text-slate-700"
                         : "border-slate-400/85 text-transparent"
                       : selected
-                        ? "border-primary text-primary"
-                        : "border-slate-500/80 text-transparent"
+                        ? "border-slate-300 text-slate-300"
+                        : "border-slate-500/85 text-transparent"
                   )}
                 >
-                  <span className={cn("h-2 w-2 rounded-full bg-current transition", selected ? "opacity-100" : "opacity-0")} />
+                  <span className={cn("h-1.5 w-1.5 rounded-full bg-current transition", selected ? "opacity-100" : "opacity-0")} />
                 </span>
-                <span className="text-[12px] font-black uppercase tracking-[0.18em]">{option}</span>
+                <span
+                  className="font-sans text-foreground"
+                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
+                >
+                  {option}
+                </span>
               </button>
             );
           })}
@@ -1829,9 +2354,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     if (isMcq(question.type) && !isMcqMultiple(question.type)) {
       return (
-        <div className="space-y-2 pl-12">
+        <div className="space-y-0">
           {(question.options ?? []).map((option, index) => {
             const optionLetter = String.fromCharCode(65 + index);
+            const checked = answers[question.id] === optionLetter;
             return (
               <button
                 key={`${question.id}-${optionLetter}`}
@@ -1842,17 +2368,21 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   persistAnswer(question.id, optionLetter);
                 }}
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition",
-                  answers[question.id] === optionLetter
-                    ? "border-primary/30 bg-primary/10 shadow-sm"
-                    : "border-border bg-card hover:border-primary/30"
+                  "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+                  checked
+                    ? "bg-card shadow-none"
+                    : "bg-card hover:bg-muted/20"
                 )}
               >
-                <span className={cn(
-                  "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black",
-                  answers[question.id] === optionLetter ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
-                )}>
-                  {optionLetter}
+                <span
+                  className={cn(
+                    "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition",
+                    checked
+                      ? "border-slate-700 text-slate-700 dark:border-slate-300 dark:text-slate-300"
+                      : "border-slate-400/85 text-transparent dark:border-slate-500/85"
+                  )}
+                >
+                  <span className={cn("h-1.5 w-1.5 rounded-full bg-current transition", checked ? "opacity-100" : "opacity-0")} />
                 </span>
                 <span
                   ref={(node) => {
@@ -1863,6 +2393,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   className="select-text font-sans text-foreground"
                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                 >
+                  <span className="mr-2 font-black">{optionLetter}.</span>
                   {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
                 </span>
               </button>
@@ -1873,11 +2404,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     }
 
     if (isMcqMultiple(question.type)) {
+      const maxSelections = mcMultipleQuestionWeight(question);
+      const selectedCount = (answers[question.id] ?? "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .length;
       return (
-        <div className="space-y-2 pl-12">
+        <div className="space-y-0">
           {(question.options ?? []).map((option, index) => {
             const optionLetter = String.fromCharCode(65 + index);
             const checked = hasMultiValue(answers[question.id], optionLetter);
+            const disabled = !checked && selectedCount >= maxSelections;
 
             return (
               <button
@@ -1885,21 +2423,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 type="button"
                 onClick={() => {
                   if (hasActiveSelection()) return;
+                  if (disabled) return;
                   setActiveQuestionId(question.id);
-                  persistAnswer(question.id, toggleMultiValue(answers[question.id], optionLetter, question.selectionLimit ?? 2));
+                  persistAnswer(question.id, toggleMultiValue(answers[question.id], optionLetter, maxSelections));
                 }}
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition",
-                  checked ? "border-primary/30 bg-primary/10 shadow-sm" : "border-border bg-card hover:border-primary/30"
+                  "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+                  disabled && "opacity-70",
+                  checked
+                    ? "bg-card shadow-none"
+                    : disabled
+                      ? "bg-card"
+                      : "bg-card hover:bg-muted/20"
                 )}
               >
                 <span
                   className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2",
-                    checked ? "border-primary bg-primary" : "border-border bg-background"
+                    "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border-2 transition",
+                    checked
+                      ? "border-slate-950 bg-slate-950 ring-1 ring-slate-950/20 dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50/20"
+                      : disabled
+                        ? "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70"
+                        : "border-slate-500 bg-background dark:border-slate-400 dark:bg-transparent"
                   )}
                 >
-                  {checked ? <span className="h-2 w-2 rounded-sm bg-primary-foreground" /> : null}
+                  {checked ? <Check className="h-3 w-3 text-white dark:text-slate-950" strokeWidth={3} /> : null}
                 </span>
                 <span
                   ref={(node) => {
@@ -1907,7 +2455,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   }}
                   data-highlight-text
                   onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
-                  className="select-text font-sans text-foreground"
+                  className={cn("select-text font-sans text-foreground", disabled && "text-muted-foreground")}
                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                 >
                   <span className="mr-2 font-black">{optionLetter}.</span>
@@ -1924,20 +2472,22 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       const isMatchingInformation = question.type.includes("matching_information");
       const sectionKey = group.sectionId ?? group.sectionLabel ?? "section";
       const matchingInformationOptions = matchingInformationParagraphOptions.get(sectionKey) ?? [];
-      const matchingOptions = isMatchingInformation
-        ? (matchingInformationOptions.length > 0 ? matchingInformationOptions : (group.sharedOptions ?? question.options ?? []))
-        : group.secondaryBlock?.trim()
-          ? splitOptionLines(group.secondaryBlock)
-          : (question.options ?? []);
+      const matchingOptions = typedQuestionOptionLines(group, question, matchingInformationOptions);
+      const normalizedMatchingValue = normalizeMatchingAnswerValue(
+        answers[question.id] ?? "",
+        matchingOptions,
+        question.type
+      );
 
       return (
-        <div className={isMatchingInformation ? "min-w-[112px] max-w-[160px] flex-none" : "pl-12"}>
-          <div className="relative max-w-sm">
+        <div className={isMatchingInformation ? "min-w-[92px] max-w-[126px] flex-none" : "pl-12"}>
+          <div className={cn("relative", isMatchingInformation ? "max-w-[126px]" : "max-w-sm")}>
             <select
-              value={answers[question.id] ?? ""}
+              value={normalizedMatchingValue}
               onChange={(event) => persistAnswer(question.id, event.target.value)}
               className={cn(
-                "flex h-9 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                "flex w-full appearance-none items-center rounded-xl border border-border bg-card text-sm font-semibold text-foreground shadow-none outline-none transition",
+                isMatchingInformation ? "h-8 px-3 pr-8" : "h-9 px-4 pr-10",
                 theme === "light"
                   ? "focus:border-[#2f436f]"
                   : "focus:border-primary/45"
@@ -1945,10 +2495,50 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             >
               <option value="">Select answer</option>
               {matchingOptions.map((option, index) => {
-                const value = optionValue(option);
+                const optionView = typedOptionView(option, index, question.type);
+                const shouldShowLabel =
+                  !question.type.includes("matching_headings") && shouldAutoLetterMatchingOptions(question.type);
                 return (
-                  <option key={`${question.id}-matching-${index}`} value={value}>
-                    {value}
+                  <option key={`${question.id}-matching-${index}`} value={optionView.value}>
+                    {question.type.includes("matching_headings")
+                      ? optionView.text || optionView.label
+                      : shouldShowLabel
+                        ? optionView.label
+                        : optionView.value}
+                  </option>
+                );
+              })}
+            </select>
+            <ChevronDown className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground", isMatchingInformation ? "right-2 h-3.5 w-3.5" : "right-3 h-4 w-4")} />
+          </div>
+        </div>
+      );
+    }
+
+    if (isWordBankCompletion(question.type)) {
+      const wordBankOptions = group.secondaryBlock?.trim()
+        ? splitOptionLines(group.secondaryBlock)
+        : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
+
+      return (
+        <div className="pl-12">
+          <div className="relative max-w-md">
+            <select
+              value={answers[question.id] ?? ""}
+              onChange={(event) => persistAnswer(question.id, event.target.value)}
+              className={cn(
+                "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                theme === "light"
+                  ? "focus:border-[#2f436f]"
+                  : "focus:border-slate-400"
+              )}
+            >
+              <option value="">Select word</option>
+              {wordBankOptions.map((option, index) => {
+                const label = optionText(option) || option;
+                return (
+                  <option key={`${question.id}-wordbank-${index}`} value={label}>
+                    {label}
                   </option>
                 );
               })}
@@ -1967,7 +2557,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             onFocus={() => setActiveQuestionId(question.id)}
             onChange={(event) => persistAnswer(question.id, event.target.value)}
             placeholder="Type your answer"
-            className={cn("h-9 max-w-sm rounded-xl border-border bg-card text-sm font-bold shadow-none", inputFocusClass)}
+            className={cn("h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none", inputFocusClass)}
             autoComplete="off"
             spellCheck="false"
           />
@@ -1982,7 +2572,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           onFocus={() => setActiveQuestionId(question.id)}
           onChange={(event) => persistAnswer(question.id, event.target.value)}
           placeholder="Type your answer"
-          className={cn("h-9 max-w-sm rounded-xl border-border bg-card text-sm font-bold shadow-none", inputFocusClass)}
+          className={cn("h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none", inputFocusClass)}
           autoComplete="off"
           spellCheck="false"
         />
@@ -1991,8 +2581,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground" style={examToneStyle}>
-      {draggingHeading && dragPreviewPosition ? (
+    <div
+      className={cn(
+        "min-h-screen font-sans text-foreground",
+        theme === "light" ? "bg-[#FBFCFD]" : "bg-background"
+      )}
+      style={examToneStyle}
+    >
+      {(draggingHeading || draggingWordBank) && dragPreviewPosition ? (
         <div
           className="pointer-events-none fixed z-[95] -translate-x-1/2 -translate-y-1/2"
           style={{ left: dragPreviewPosition.x, top: dragPreviewPosition.y }}
@@ -2005,6 +2601,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               <GripVertical className="h-4 w-4" />
             </span>
             {(() => {
+              if (draggingWordBank) {
+                return (
+                  <span className="text-[15px] font-semibold leading-6 text-foreground">
+                    {draggingWordBank.value}
+                  </span>
+                );
+              }
+              if (!draggingHeading) {
+                return null;
+              }
               const draggingOption = headingOptionLookup.get(`${draggingHeading.groupId}:${draggingHeading.value}`);
               if (!draggingOption) {
                 return (
@@ -2013,19 +2619,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   </span>
                 );
               }
-
-              const hasPrefix = draggingOption.value !== draggingOption.text;
-
-              return hasPrefix ? (
-                <>
-                  <span className="w-8 shrink-0 text-[13px] font-black uppercase tracking-[0.12em] text-primary">
-                    {draggingOption.value}
-                  </span>
-                  <span className="text-[15px] font-semibold leading-6 text-foreground">
-                    {draggingOption.text}
-                  </span>
-                </>
-              ) : (
+              return (
                 <span className="text-[15px] font-semibold leading-6 text-foreground">
                   {draggingOption.text}
                 </span>
@@ -2067,12 +2661,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           <div className="w-full max-w-md rounded-[1.75rem] border border-border/80 bg-card p-6 shadow-[0_40px_120px_-30px_rgba(15,23,42,0.55)]">
             <div className="mb-5 space-y-2">
               <Badge className={cn(
-                "rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] shadow-none",
+                "rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-none",
                 activeDialog === "submit"
                   ? unansweredCount > 0
                     ? "bg-red-500/10 text-red-400"
-                    : "bg-primary/10 text-primary"
-                  : "bg-primary/10 text-primary"
+                    : "bg-slate-500/6 text-slate-500 dark:bg-slate-200/10 dark:text-slate-300"
+                  : "bg-slate-500/6 text-slate-500 dark:bg-slate-200/10 dark:text-slate-300"
               )}>
                 {activeDialog === "submit" ? (unansweredCount > 0 ? "Submission Warning" : "Ready To Submit") : "Leave Protection"}
               </Badge>
@@ -2106,7 +2700,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 <>
                   <Button
                     type="button"
-                    className="rounded-xl bg-primary px-4 text-sm font-black text-primary-foreground hover:bg-primary/90"
+                    className="rounded-xl border border-border bg-muted/35 px-4 text-sm font-semibold text-foreground hover:bg-muted/55 dark:border-slate-700 dark:bg-slate-800/75 dark:text-slate-100 dark:hover:bg-slate-800"
                     onClick={() => setActiveDialog(null)}
                   >
                     Go back & finish
@@ -2288,10 +2882,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               onClick={handleSubmit}
               disabled={isSubmitted || isSubmitting}
               className={cn(
-                "h-8 rounded-xl px-3 text-[11px] font-black uppercase tracking-[0.16em]",
+                "h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.12em]",
                 theme === "dark"
-                  ? "bg-primary text-slate-950 hover:bg-primary/90"
-                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+                  ? "border border-slate-400 bg-slate-300 text-slate-950 hover:bg-slate-200"
+                  : "border border-border bg-muted/45 text-slate-700 hover:bg-muted/70"
               )}
             >
               {isSubmitted ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <SendHorizontal className="mr-1.5 h-3.5 w-3.5" />}
@@ -2306,8 +2900,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         style={layoutStyle}
         className="relative mx-auto flex max-w-[1800px] flex-col lg:h-[calc(100vh-68px-64px)] lg:flex-row"
       >
-        <section className="border-b border-border/70 bg-card/40 lg:w-[var(--reading-pane)] lg:flex-none lg:border-b-0 lg:border-r lg:border-border/80">
+        <section
+          className={cn(
+            "border-b border-border/70 lg:w-[var(--reading-pane)] lg:flex-none lg:border-b-0 lg:border-r lg:border-border/80",
+            theme === "light" ? "bg-[#FBFCFD]" : "bg-card/40"
+          )}
+        >
           <div
+            ref={readingPaneRef}
             className="h-full overflow-y-auto px-5 py-4 [scrollbar-width:none] lg:px-8 lg:py-5 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarGutter: "stable" }}
           >
@@ -2323,14 +2923,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             </div>
 
             <article className="space-y-5">
-              {examData.paragraphs.map((paragraph, paragraphIndex) => {
+              {currentParagraphs.map((paragraph, paragraphIndex) => {
                 const paragraphStyle = parsePassageBlockStyle(paragraph.text);
+                const passageBlockKey = `passage-${sectionKeyForParagraph(paragraph)}-${paragraph.paragraphKey}`;
 
                 return (
                   <div key={`${paragraph.label ?? paragraphIndex}`} className="px-1 py-1">
                     {paragraph.sectionPreviewLabel ? (
                       <div className="mb-3 space-y-1">
-                        <p className="text-lg font-bold text-foreground">
+                        <p className="text-lg font-semibold text-foreground">
                           {renderFormattedText(paragraph.sectionPreviewLabel, `section-label-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
                         </p>
                         {paragraph.sectionIntro ? (
@@ -2339,24 +2940,19 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                           </p>
                         ) : null}
                         {paragraph.sectionTitle ? (
-                          <h2 className="pt-1 text-center text-2xl font-black tracking-tight text-foreground">
+                          <h2 className="pt-1 text-center text-2xl font-semibold tracking-tight text-foreground">
                             {renderFormattedText(paragraph.sectionTitle, `section-title-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
                           </h2>
                         ) : null}
                       </div>
                     ) : null}
-                    {paragraph.label ? (
-                      <div className="mb-2 flex h-7 w-7 items-center justify-center rounded border bg-muted/40 text-sm font-bold text-primary">
-                        {paragraph.label}
-                      </div>
-                    ) : null}
                     {renderMatchingHeadingDropArea(paragraph)}
                     <p
                       ref={(node) => {
-                        textBlockRefs.current[`passage-${paragraphIndex}`] = node;
+                        textBlockRefs.current[passageBlockKey] = node;
                       }}
                       data-highlight-text
-                      onMouseUp={(event) => handleTextBlockMouseUp(`passage-${paragraphIndex}`, event)}
+                      onMouseUp={(event) => handleTextBlockMouseUp(passageBlockKey, event)}
                       className={cn(
                         "select-text font-sans text-foreground",
                         paragraphStyle.center && "text-center",
@@ -2368,7 +2964,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         lineHeight: 1.5,
                       }}
                     >
-                      {renderHighlightedText(`passage-${paragraphIndex}`, paragraphStyle.text)}
+                      {paragraph.label ? (
+                        <span className="mr-3 inline-flex min-w-9 items-center justify-center rounded-md border border-border/70 bg-muted/30 px-2.5 py-1 align-[0.08em] text-sm font-black leading-none text-foreground">
+                          {paragraph.label}
+                        </span>
+                      ) : null}
+                      {renderHighlightedText(passageBlockKey, paragraphStyle.text)}
                     </p>
                   </div>
                 );
@@ -2377,33 +2978,46 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           </div>
         </section>
 
-        <section className="bg-muted/15 lg:w-[var(--question-pane)] lg:flex-none">
+        <section
+          className={cn(
+            "lg:w-[var(--question-pane)] lg:flex-none",
+            theme === "light" ? "bg-[#FBFCFD]" : "bg-muted/15"
+          )}
+        >
           <div
             ref={questionPaneRef}
             className="h-full overflow-y-auto px-4 py-5 [scrollbar-width:none] lg:px-6 lg:py-6 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarGutter: "stable" }}
           >
-            <div className="space-y-5">
-              {examData.questionGroups.map((group) => (
-                <div key={group.id} className="rounded-[1.6rem] border border-border/80 bg-card shadow-sm">
-                  <div className="border-b border-border/70 px-5 py-4">
+            <div className="space-y-8">
+              {currentQuestionGroups.map((group) => (
+                <div key={group.id} className="rounded-none border-0 bg-transparent p-0 shadow-none">
+                  <div className="px-0 py-0">
+                    {(() => {
+                      const groupSlots = group.questions.flatMap((question) => questionDisplaySlots(question));
+                      const startLabel = groupSlots[0] ?? String(group.questions[0]?.number ?? group.title);
+                      const endLabel = groupSlots[groupSlots.length - 1] ?? String(group.questions[group.questions.length - 1]?.number ?? group.title);
+                      return (
                     <h3 className="text-base font-black tracking-tight text-foreground">
-                      Questions {group.questions[0]?.number ?? group.title} - {group.questions[group.questions.length - 1]?.number ?? group.title}
+                      Questions {startLabel} - {endLabel}
                     </h3>
+                      );
+                    })()}
                     <p
                       ref={(node) => {
                         textBlockRefs.current[`group-instruction-${group.id}`] = node;
                       }}
                       data-highlight-text
                       onMouseUp={(event) => handleTextBlockMouseUp(`group-instruction-${group.id}`, event)}
-                      className="mt-3 select-text text-sm font-medium leading-6 text-slate-700 dark:text-slate-300/90"
+                      className="mt-2 select-text text-sm font-medium leading-6 text-foreground"
                       style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                     >
                       {renderHighlightedText(`group-instruction-${group.id}`, group.instruction)}
                     </p>
                   </div>
 
-                  <div className="space-y-4 px-4 py-4 lg:px-5">
+                  <div className="space-y-4 px-0 py-2">
+                    {renderDiagramBlock(group)}
                     {renderOptionBank(group)}
 
                     {usesBracketCompletionLayout(group.type) && group.questionBlock?.trim()
@@ -2412,51 +3026,47 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         ? group.questions.map((question) => {
                           const isBinaryQuestion = isTfng(question.type) || isYnng(question.type);
                           const isMatchingInformationQuestion = question.type.includes("matching_information");
+                          const inlineQuestionLabel = question.label ?? String(question.number);
                           return (
                           <div
                             key={question.id}
                             id={question.id}
                             onClick={() => setActiveQuestionId(question.id)}
                             className={cn(
-                              "px-0 py-2 transition",
+                              "px-0 transition",
+                              isMatchingInformationQuestion ? "py-0.5" : "py-2",
                               activeQuestionId === question.id && ""
                             )}
                           >
-                            <div className={cn("mb-2.5 flex items-start gap-3", isBinaryQuestion && "mb-1.5", isMatchingInformationQuestion && "items-center")}>
-                              {isBinaryQuestion ? (
-                                <div className="pt-0.5 text-[11px] font-black tracking-[0.12em] text-slate-700 dark:text-slate-200/75">
-                                  {question.label ?? question.number}
-                                </div>
-                              ) : (
-                                <div className="flex h-8 min-w-[44px] shrink-0 items-center justify-center rounded-lg bg-primary px-2 text-[11px] font-black leading-none text-primary-foreground whitespace-nowrap">
-                                  {question.label ?? question.number}
-                                </div>
-                              )}
-                              <div className={cn("space-y-1", isMatchingInformationQuestion && "flex flex-1 flex-wrap items-center gap-3 space-y-0")}>
+                            <div className={cn("mb-2.5 flex items-start gap-3", isBinaryQuestion && "mb-1.5", isMatchingInformationQuestion && "mb-0.5 gap-2 items-center")}>
+                              <div className={cn("min-w-0 flex-1 space-y-1", isMatchingInformationQuestion && "flex flex-1 flex-wrap items-center gap-2 space-y-0", isMcqMultiple(question.type) && "space-y-0")}>
                                 <p
                                   ref={(node) => {
                                     textBlockRefs.current[`question-prompt-${question.id}`] = node;
                                   }}
                                   data-highlight-text
                                   onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
-                                  className={cn("select-text font-sans text-foreground", isMatchingInformationQuestion && "min-w-[220px] flex-1")}
+                                  className={cn("select-text font-sans text-foreground", isMatchingInformationQuestion && "min-w-[160px] flex-1")}
                                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                                 >
+                                  <span className="mr-3 inline-block whitespace-nowrap text-[16px] font-bold tracking-tight text-foreground">
+                                    {inlineQuestionLabel}
+                                  </span>
                                   {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
                                 </p>
                                 {isMatchingInformationQuestion ? renderQuestionControl(question, group) : null}
-                                {question.instruction && !isBinaryQuestion && !isMatchingInformationQuestion ? (
+                                {question.instruction && !group.instruction?.trim() && !isBinaryQuestion && !isMatching(question.type) ? (
                                   <p
                                     ref={(node) => {
                                       textBlockRefs.current[`question-instruction-${question.id}`] = node;
                                     }}
                                     data-highlight-text
                                     onMouseUp={(event) => handleTextBlockMouseUp(`question-instruction-${question.id}`, event)}
-                                    className="select-text text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-300/85"
+                                    className="select-text text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
                                   >
                                     {renderHighlightedText(`question-instruction-${question.id}`, question.instruction)}
                                   </p>
-                                ) : null}
+                                  ) : null}
                               </div>
                             </div>
 
@@ -2493,57 +3103,171 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         </div>
       </main>
 
-      <footer className="sticky bottom-0 z-30 h-[52px] border-t border-border/80 bg-background/95 backdrop-blur-xl">
-        <div className="mx-auto flex h-full max-w-[1800px] items-center px-4 lg:px-6">
-          <div className="flex w-full items-center justify-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex shrink-0 items-center gap-1.5 pr-1">
-              <span
-                className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-full border",
-                  answeredCount === totalQuestions
-                    ? "border-emerald-500/45 text-emerald-500"
-                    : "border-primary/35 text-primary"
-                )}
-              >
-                {answeredCount === totalQuestions ? <Check className="h-3.5 w-3.5" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
-              </span>
-              <span className="text-[14px] font-semibold tracking-tight text-foreground">{examData.partLabel}</span>
-              <span className="text-[13px] font-medium text-muted-foreground">{answeredCount} of {totalQuestions}</span>
-            </div>
+      <footer className="sticky bottom-0 z-30 border-t border-border/80 bg-background/95 backdrop-blur-xl">
+        <div className="mx-auto max-w-[1800px] px-4 py-2 lg:px-6">
+          <div className="flex w-full flex-col gap-2">
+            <div className="flex items-center justify-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {previewSections.length > 1 ? (
+                <div className="flex w-full items-stretch gap-0">
+                  {previewSections.map((section, index) => {
+                    const sectionAnsweredCount = section.questions.reduce(
+                      (count, question) => count + answeredQuestionWeight(question, answers[question.id]),
+                      0
+                    );
+                    const sectionTotalQuestions = section.questions.reduce(
+                      (count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1),
+                      0
+                    );
+                    const active = section.id === currentSection?.id;
+                    const completed = sectionAnsweredCount === sectionTotalQuestions;
 
-            <div className="flex min-w-max items-center gap-0.5">
-            {allQuestions.map((question) => {
-              const answered = Boolean(answers[question.id]?.trim());
-              const active = activeQuestionId === question.id;
+                    return (
+                      <div
+                        key={section.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => selectSection(section.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            selectSection(section.id);
+                          }
+                        }}
+                        className={cn(
+                          "min-w-0 cursor-pointer px-3 py-2 transition",
+                          active ? "flex-[2.2]" : "flex-1",
+                          active
+                            ? completed
+                              ? "bg-emerald-500/10 text-foreground"
+                              : "bg-card text-foreground"
+                            : completed
+                              ? "bg-emerald-500/8 text-foreground hover:bg-emerald-500/12"
+                              : "bg-card/55 text-foreground hover:bg-muted/40"
+                        )}
+                      >
+                        <div className={cn("flex items-center gap-3", active && showPassageQuestionNav ? "justify-between" : "justify-center")}>
+                          <div className="flex min-w-0 shrink-0 items-center gap-2 text-left">
+                            <span
+                              className={cn(
+                                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition",
+                                completed
+                                  ? "border-emerald-500/45 bg-emerald-500/10 text-emerald-500"
+                                  : "border-transparent bg-transparent text-transparent"
+                              )}
+                            >
+                              {completed ? <Check className="h-3.5 w-3.5" /> : null}
+                            </span>
+                            <span className="text-[14px] font-semibold text-foreground whitespace-nowrap">
+                              {section.label ?? `Passage ${index + 1}`}
+                            </span>
+                            <span className="text-[12px] text-muted-foreground whitespace-nowrap">
+                              {sectionAnsweredCount} of {sectionTotalQuestions}
+                            </span>
+                          </div>
 
-              return (
-                <button
-                  key={question.id}
-                  type="button"
-                  onClick={() => navigateToQuestion(question.id)}
-                  className={cn(
-                    "flex h-8 min-w-[42px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-1 py-0.5 transition",
-                    active
-                      ? "border-primary/45 bg-card text-primary shadow-sm"
-                      : answered
-                        ? "border-transparent bg-transparent text-foreground"
-                        : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/35"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "h-1 w-3.5 rounded-full transition",
-                      active
-                        ? "bg-primary"
-                        : answered
-                          ? "bg-primary/55"
-                          : "bg-border"
-                    )}
-                  />
-                  <span className="text-[10px] font-semibold leading-none whitespace-nowrap">{question.label ?? question.number}</span>
-                </button>
-              );
-            })}
+                        {active && showPassageQuestionNav ? (
+                          <div className="flex min-w-0 flex-1 items-center justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                            <div className="flex min-w-max items-center gap-1">
+                            {section.questions.map((question) => {
+                              const answered = isQuestionFullyAnswered(question, answers[question.id]);
+                              const questionActive = activeQuestionId === question.id;
+                              const navLabel = question.label ?? String(question.number);
+                              const isRangeLabel = String(navLabel).includes("-");
+
+                              return (
+                                <button
+                                  key={question.id}
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigateToQuestion(question.id);
+                                  }}
+                                  className={cn(
+                                    "flex h-7 shrink-0 flex-col items-center justify-center gap-0 rounded-md border px-0.5 py-0 transition",
+                                    isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
+                                    questionActive
+                                      ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
+                                      : answered
+                                        ? "border-transparent bg-transparent text-foreground"
+                                        : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/35"
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      "-mt-0.5 mb-0.5 h-1 rounded-full transition",
+                                      isRangeLabel ? "w-8" : "w-3.5",
+                                      answered ? "bg-emerald-500" : "bg-transparent"
+                                    )}
+                                  />
+                                  <span className="text-[12px] font-bold leading-none whitespace-nowrap text-current">{navLabel}</span>
+                                </button>
+                              );
+                            })}
+                            </div>
+                          </div>
+                        ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex w-full items-center justify-center gap-3">
+                  <div className="flex shrink-0 items-center gap-1.5 pr-1">
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 items-center justify-center rounded-full border",
+                        currentAnsweredCount === currentTotalQuestions
+                          ? "border-emerald-500/45 text-emerald-500"
+                          : "border-primary/35 text-primary"
+                      )}
+                    >
+                      {currentAnsweredCount === currentTotalQuestions ? <Check className="h-3.5 w-3.5" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+                    </span>
+                    <span className="whitespace-nowrap text-[14px] font-semibold tracking-tight text-foreground">{currentSection?.label ?? examData.partLabel}</span>
+                    <span className="whitespace-nowrap text-[13px] font-medium text-muted-foreground">{currentAnsweredCount} of {currentTotalQuestions}</span>
+                  </div>
+
+                  <div className="flex min-w-0 max-w-full items-center justify-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex min-w-max items-center gap-px">
+                      {currentQuestions.map((question) => {
+                        const answered = isQuestionFullyAnswered(question, answers[question.id]);
+                        const active = activeQuestionId === question.id;
+                        const navLabel = question.label ?? String(question.number);
+                        const isRangeLabel = String(navLabel).includes("-");
+
+                        return (
+                          <button
+                            key={question.id}
+                            type="button"
+                            onClick={() => navigateToQuestion(question.id)}
+                            className={cn(
+                              "flex h-6 shrink-0 flex-col items-center justify-center gap-0 rounded-md border px-0.5 py-0 transition",
+                              isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
+                              active
+                                ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
+                                : answered
+                                  ? "border-transparent bg-transparent text-foreground"
+                                  : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/35"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "-mt-1.5 mb-0.5 h-1 rounded-full transition",
+                                isRangeLabel ? "w-8" : "w-3.5",
+                                answered
+                                  ? "bg-emerald-500"
+                                  : "bg-transparent"
+                              )}
+                            />
+                            <span className="text-[12px] font-bold leading-none whitespace-nowrap text-current">{navLabel}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

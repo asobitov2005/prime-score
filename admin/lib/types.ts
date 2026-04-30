@@ -17,9 +17,9 @@ export type TestFormat = "full" | "passage_1" | "passage_2" | "passage_3" | "par
 
 export type SubscriptionStatus = "active" | "expired" | "paused";
 
-export type PaymentStatus = "pending" | "completed" | "failed" | "refunded";
+export type PaymentStatus = "paused" | "pending" | "matched" | "completed" | "expired" | "canceled" | "review" | "failed" | "refunded";
 
-export type PaymentMethod = "payme" | "click" | "uzum" | "manual";
+export type PaymentMethod = "payme" | "click" | "uzum" | "manual" | "card_transfer";
 
 export type WizardStepId = "metadata" | "content" | "questions" | "review";
 
@@ -54,6 +54,7 @@ export interface AdminTestSummary {
   sourceDetail: string;
   accessType: TestAccessType;
   status: TestStatus;
+  reviewStatus: "needs_review" | "approved" | "rejected";
   updatedAt: string;
   questions: number;
   version: number;
@@ -74,9 +75,12 @@ export interface AdminPlanSummary {
   id: string;
   name: string;
   durationDays: number;
-  price: string;
-  discount: string;
-  status: "active" | "draft";
+  price: number;
+  badgeLabel: string;
+  perks: string[];
+  displayOrder: number;
+  isActive: boolean;
+  isFeatured: boolean;
 }
 
 export interface AdminPromoCodeSummary {
@@ -90,12 +94,38 @@ export interface AdminPromoCodeSummary {
 
 export interface AdminPaymentSummary {
   id: string;
+  invoiceCode: string;
   user: string;
   plan: string;
   method: PaymentMethod;
   status: PaymentStatus;
   amount: string;
+  card: string;
+  expiresAt: string | null;
+  statusReason: string | null;
   updatedAt: string;
+}
+
+export interface AdminPaymentCardSummary {
+  id: string;
+  label: string;
+  cardNumber: string;
+  cardType: string;
+  holderName: string | null;
+  isActive: boolean;
+  priority: number;
+  botSource: string;
+}
+
+export interface AdminPaymentSettingsSummary {
+  id: string;
+  telegramApiId: string | null;
+  telegramApiHash: string | null;
+  phoneNumber: string | null;
+  activeBot: string;
+  supportContact: string | null;
+  isEnabled: boolean;
+  pollFallbackEnabled: boolean;
 }
 
 export interface AdminAuditEntry {
@@ -191,6 +221,8 @@ export interface AdminTestDraftQuestionGroup {
   questionBlock?: string;
   answerBlock?: string;
   secondaryBlock?: string; // Used for Headings, Features, etc.
+  diagramTitle?: string;
+  diagramImageUrl?: string;
   questions: AdminTestDraftQuestion[];
 }
 
@@ -215,4 +247,96 @@ export interface AdminTestDraftState {
   questions: AdminTestDraftQuestion[]; // Keep for backward compatibility or direct access if needed, but we'll prefer questionGroups
   review: AdminTestDraftReview;
   decisions: AdminEditorDecisionFlags;
+}
+
+export type AdminAiThreadStatus = "idle" | "queued" | "running" | "completed" | "failed" | "archived";
+export type AdminAiJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type AdminAiMessageRole = "system" | "user" | "assistant" | "tool";
+export type AdminAiMessageStatus = "pending" | "streaming" | "completed" | "failed";
+export type AdminAiTraceStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type AdminAiWorkspaceScopeType = "test" | "plan" | "user" | "analytics" | "general";
+
+export interface AdminAiWorkspaceScope {
+  type: AdminAiWorkspaceScopeType;
+  id?: string;
+  label: string;
+  description?: string;
+}
+
+export interface AdminAiThreadSummary {
+  id: string;
+  title: string;
+  summary: string;
+  status: AdminAiThreadStatus;
+  updatedAt: string;
+  createdAt: string;
+  messageCount: number;
+  lastMessagePreview: string;
+  activeJobId?: string | null;
+  scope: AdminAiWorkspaceScope;
+}
+
+export interface AdminAiMessage {
+  id: string;
+  role: AdminAiMessageRole;
+  content: string;
+  createdAt: string;
+  status: AdminAiMessageStatus;
+  authorLabel: string;
+  jobId?: string | null;
+  toolName?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface AdminAiToolTrace {
+  id: string;
+  label: string;
+  toolName: string;
+  status: AdminAiTraceStatus;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+  inputSummary?: string | null;
+  outputSummary?: string | null;
+}
+
+export interface AdminAiJobProgress {
+  completedSteps: number;
+  totalSteps: number;
+  label: string;
+}
+
+export interface AdminAiJob {
+  id: string;
+  title: string;
+  status: AdminAiJobStatus;
+  kind: "chat" | "analysis" | "generation" | "review";
+  summary: string;
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  model?: string | null;
+  errorMessage?: string | null;
+  progress?: AdminAiJobProgress | null;
+  traces: AdminAiToolTrace[];
+}
+
+export interface AdminAiThreadDetail extends AdminAiThreadSummary {
+  messages: AdminAiMessage[];
+  jobs: AdminAiJob[];
+}
+
+export interface AdminAiCreateThreadInput {
+  title?: string;
+  scope?: Partial<AdminAiWorkspaceScope>;
+}
+
+export interface AdminAiUpdateThreadInput {
+  title?: string;
+  status?: Extract<AdminAiThreadStatus, "idle" | "archived">;
+}
+
+export interface AdminAiSendMessageInput {
+  content: string;
+  scope?: Partial<AdminAiWorkspaceScope>;
 }

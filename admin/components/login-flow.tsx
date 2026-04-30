@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AdminAuthResponse, setAdminSessionCookies } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
@@ -20,17 +20,22 @@ export function LoginFlow() {
     setIsSubmitting(true);
     setMessage("");
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
     try {
       const response = await fetch(`${ADMIN_PUBLIC_API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ login, password })
+        body: JSON.stringify({ login, password }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
-        setMessage("Noto'g'ri login yoki parol kiritildi.");
+        const payload = await response.json().catch(() => null);
+        setMessage(payload?.detail ?? "Invalid login or password.");
         return;
       }
 
@@ -38,85 +43,100 @@ export function LoginFlow() {
       setAdminSessionCookies(payload);
       router.replace("/dashboard");
       router.refresh();
-    } catch {
-      setMessage("Serverga ulanishda xatolik yuz berdi.");
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        setMessage("Admin server is not responding.");
+        return;
+      }
+      setMessage("Unable to connect to the admin server.");
     } finally {
+      window.clearTimeout(timeoutId);
       setIsSubmitting(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center p-4 lg:p-8">
-      <div className="w-full max-w-md space-y-8">
-        
-        <div className="flex flex-col items-center space-y-4 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            PrimeScore himoyalangan tizim
+    <div className="mx-auto w-full max-w-[460px]">
+      <div className="mb-6 flex items-center justify-between gap-4 px-1">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <ShieldCheck className="h-5 w-5" />
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            Boshqaruv Paneli
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Tizimga kirish uchun admin ma'lumotlarini kiriting
-          </p>
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">PrimeScore Admin</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Sign in</h1>
+          </div>
         </div>
+        <Badge tone="neutral" className="px-3 py-1 text-[11px] uppercase tracking-[0.18em]">
+          Secure
+        </Badge>
+      </div>
 
-        <Card className="border border-border shadow-xl shadow-black/5">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-xl">Avtorizatsiya</CardTitle>
-            <CardDescription>
-              Login sifatida admin yoki email ishlating
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <Label htmlFor="login">Login yoki email</Label>
-                <Input
-                  id="login"
-                  value={login}
-                  onChange={(event) => setLogin(event.target.value)}
-                  placeholder="admin"
-                  autoComplete="username"
-                  className="bg-background"
-                />
+      <Card className="overflow-hidden rounded-[28px] border border-border/70 bg-card/88 shadow-[0_30px_90px_rgba(0,0,0,0.34)]">
+        <div className="h-px w-full bg-[linear-gradient(90deg,transparent,rgba(255,140,46,0.6),transparent)]" />
+        <CardHeader className="space-y-2 pb-6 pt-7">
+          <CardTitle className="text-[2rem] tracking-tight">Control panel access</CardTitle>
+          <CardDescription className="text-sm leading-7">
+            Enter your admin login details to continue.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <div className="space-y-2.5">
+              <Label htmlFor="login" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Login or email
+              </Label>
+              <Input
+                id="login"
+                value={login}
+                onChange={(event) => setLogin(event.target.value)}
+                placeholder="admin"
+                autoComplete="username"
+                autoFocus
+                className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
+              />
+            </div>
+
+            <div className="space-y-2.5">
+              <Label htmlFor="password" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
+              />
+            </div>
+
+            {message ? (
+              <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-medium text-danger">
+                {message}
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="password">Parol</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  className="bg-background"
-                />
-              </div>
+            ) : null}
 
-              {message && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm font-medium text-destructive">
-                  {message}
-                </div>
-              )}
+            <Button
+              type="submit"
+              disabled={isSubmitting || !login.trim() || !password.trim()}
+              className="group h-12 w-full rounded-xl text-sm font-semibold tracking-[0.02em]"
+            >
+              {isSubmitting ? "Signing in..." : "Enter admin panel"}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-              <Button 
-                type="submit" 
-                disabled={isSubmitting || !login.trim() || !password.trim()} 
-                className="mt-4 w-full group"
-              >
-                {isSubmitting ? "Kuzatilmoqda..." : "Tizimga kirish"}
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-        
-        <p className="text-center text-xs text-muted-foreground">
-          PrimeScore &copy; {new Date().getFullYear()} Barcha huquqlar himoyalangan.
-        </p>
+      <div className="mt-4 flex items-center justify-between gap-4 px-1 text-xs text-muted-foreground">
+        <div className="inline-flex items-center gap-2">
+          <LockKeyhole className="h-4 w-4 text-primary" />
+          Restricted access
+        </div>
+        <p>PrimeScore © {new Date().getFullYear()}</p>
       </div>
     </div>
   );

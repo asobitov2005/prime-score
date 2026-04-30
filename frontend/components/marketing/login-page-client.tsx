@@ -7,6 +7,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
+import { buildUserDisplayName } from "@/lib/user-name";
 import { useAuthStore } from "@/store/auth-store";
 import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
 
@@ -34,9 +36,11 @@ export function LoginPageClient() {
     setIsLoading(true);
     setErrorMsg("");
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api";
-      const apiUrl = baseUrl.startsWith("/") ? `http://127.0.0.1:8000${baseUrl}` : baseUrl;
+      const apiUrl = getFrontendClientApiBaseUrl();
 
       const response = await fetch(`${apiUrl}/auth/verify-code`, {
         method: "POST",
@@ -45,11 +49,12 @@ export function LoginPageClient() {
           telegram_id: 0,
           code,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Noto'g'ri kod kiritildi yoki server xatosi.");
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.detail || "Noto'g'ri kod kiritildi yoki server xatosi.");
       }
 
       const data = await response.json();
@@ -58,18 +63,25 @@ export function LoginPageClient() {
       setSession({
         userId: userData.id,
         sessionId: data.session_id,
-        name: userData.first_name,
-        phoneNumber: userData.username,
+        accessToken: data.access_token ?? null,
+        refreshToken: data.refresh_token ?? null,
+        name: buildUserDisplayName(userData.first_name, userData.last_name),
+        phoneNumber: userData.username ?? null,
         isPremium: Boolean(userData.is_premium),
         premiumUntil: userData.premium_until ?? null,
       });
 
       setStep("done");
-      setTimeout(() => router.push("/dashboard"), 1500);
+      setTimeout(() => router.replace("/dashboard"), 1500);
     } catch (error: unknown) {
       console.error("Login verification error:", error);
-      setErrorMsg(error instanceof Error ? error.message : "Noto'g'ri kod kiritildi.");
+      if (error instanceof Error && error.name === "AbortError") {
+        setErrorMsg("PrimeScore server is not responding.");
+      } else {
+        setErrorMsg(error instanceof Error ? error.message : "Noto'g'ri kod kiritildi.");
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setIsLoading(false);
     }
   };

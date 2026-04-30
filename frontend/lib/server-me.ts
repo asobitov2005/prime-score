@@ -1,4 +1,4 @@
-import { getAttemptsByType } from "@/lib/mock-data";
+import { requestServerUserApi } from "@/lib/server-user-auth";
 import type {
   AttemptRow,
   DashboardAnalytics,
@@ -11,23 +11,6 @@ import type {
   DashboardStat,
   TestType
 } from "@/lib/types";
-
-const baseUrl = (
-  process.env.API_INTERNAL_BASE_URL
-  ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
-
-const debugHeaders: Record<string, string> = {
-  "Content-Type": "application/json",
-  "X-Debug-User-Id": process.env.PRIMESCORE_DEBUG_USER_ID ?? "33333333-3333-3333-3333-333333333333",
-  "X-Debug-First-Name": process.env.PRIMESCORE_DEBUG_USER_FIRST_NAME ?? "Azizbek",
-  "X-Debug-Last-Name": process.env.PRIMESCORE_DEBUG_USER_LAST_NAME ?? "Prime",
-  "X-Debug-Username": process.env.PRIMESCORE_DEBUG_USER_USERNAME ?? "azizbek",
-  "X-Debug-Role": process.env.PRIMESCORE_DEBUG_USER_ROLE ?? "user",
-  "X-Debug-Is-Premium": "true",
-  "X-Debug-Show-On-Leaderboard": "true"
-};
 
 type BackendMeStats = {
   attempts_total: number;
@@ -128,16 +111,7 @@ type BackendDashboardAnalytics = {
 };
 
 async function requestBackend<T>(path: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store",
-    headers: debugHeaders
-  });
-
-  if (!response.ok) {
-    throw new Error(`Profile backend request failed for ${path}`);
-  }
-
-  return (await response.json()) as T;
+  return requestServerUserApi<T>(path);
 }
 
 function formatDate(value: string): string {
@@ -181,9 +155,9 @@ function normalizeAttemptSource(source: string | null | undefined, title: string
     return "Cambridge Official";
   }
   if (normalized.includes("real_exam") || normalized.includes("real exam")) {
-    return "Real Exam Material";
+    return "Recent Exam Papers";
   }
-  return "Custom Practice";
+  return "Exam Practice Tests";
 }
 
 function isSubmittedBackendAttempt(attempt: BackendMeAttempt): boolean {
@@ -325,7 +299,7 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
       { label: "Attempts", value: "0", detail: "Backend profile stats unavailable." },
       { label: "Average band", value: "N/A", detail: "Complete a full attempt to see averages." },
       { label: "Best Reading", value: "N/A", detail: "Reading band will appear after scoring." },
-      { label: "Sessions", value: "2", detail: "Debug session cap remains enabled." }
+      { label: "Sessions", value: "0", detail: "No active user session data is available." }
     ];
   }
 }
@@ -379,7 +353,7 @@ export async function getUserAttempts(): Promise<AttemptRow[]> {
       })
       .map(mapBackendAttempt);
   } catch {
-    return getAttemptsByType();
+    return [];
   }
 }
 
@@ -388,6 +362,6 @@ export async function getSubmittedAttempts(): Promise<AttemptRow[]> {
     const attempts = await requestBackend<BackendMeAttempt[]>("/me/attempts");
     return attempts.filter(isSubmittedBackendAttempt).map(mapBackendAttempt);
   } catch {
-    return getAttemptsByType().filter((attempt) => attempt.status === "completed" || attempt.status === "submitted");
+    return [];
   }
 }

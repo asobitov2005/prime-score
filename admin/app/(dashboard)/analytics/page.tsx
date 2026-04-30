@@ -123,7 +123,7 @@ export default async function AnalyticsPage() {
                     <Target size={14} /> Actionable Insight
                   </p>
                   <p className="text-sm font-medium text-foreground leading-relaxed italic">
-                    "Users are struggling most with <strong>Matching Headings</strong>. Consider adding a specialized video guide or more practice materials for this family."
+                    &ldquo;Users are struggling most with <strong>Matching Headings</strong>. Consider adding a specialized video guide or more practice materials for this family.&rdquo;
                   </p>
                </div>
             </CardContent>

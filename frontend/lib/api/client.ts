@@ -2,7 +2,14 @@ import type {
   AuthRequestCodeBody,
   AuthSessionListResponse,
   DashboardAnalyticsResponse,
+  MeProfileRead,
+  MeProfileUpdateBody,
   AuthSessionStatusResponse,
+  RedeemResponse,
+  CreatePaymentBody,
+  CreatePaymentResponse,
+  CancelPaymentResponse,
+  PaymentRecordResponse,
   AuthVerifyCodeBody,
   LeaderboardQuery,
   RedeemBody,
@@ -11,7 +18,9 @@ import type {
   SubscribeBody,
   TestListQuery
 } from "@/lib/api/types";
-import { getAttemptsByType, getLeaderboardByType, getPlans, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
+import { FRONTEND_API_TIMEOUT_MS, getFrontendClientApiBaseUrl, getFrontendServerApiBaseUrl } from "@/lib/api-base";
+import { getAttemptsByType, getLeaderboardByType, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
+import { useAuthStore } from "@/store/auth-store";
 import type { AccessType, AttemptRow, LeaderboardEntry, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
 
 export class ApiError extends Error {
@@ -28,58 +37,174 @@ export interface ApiClientConfig {
   fetchImpl?: typeof fetch;
 }
 
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export function createApiClient(config: ApiClientConfig = {}) {
-  let baseUrl = config.baseUrl ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
-  if (baseUrl.startsWith("/")) {
-     baseUrl = `http://127.0.0.1:8000${baseUrl}`;
+  let baseUrl = config.baseUrl ?? getFrontendClientApiBaseUrl();
+  if (baseUrl.startsWith("/") && typeof window === "undefined") {
+    baseUrl = getFrontendServerApiBaseUrl();
   }
   const fetchImpl = config.fetchImpl ?? fetch;
 
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      ...init,
+  async function tryRefreshAccessToken(): Promise<string | null> {
+    const { refreshToken, setTokens, clearSession } = useAuthStore.getState();
+    if (!refreshToken) {
+      return null;
+    }
+
+    const response = await fetchImpl(`${baseUrl}/auth/refresh`, {
+      method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {})
-      }
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ refresh_token: refreshToken })
     });
 
     if (!response.ok) {
-      throw new ApiError(`Request failed for ${path}`, response.status);
+      clearSession();
+      return null;
+    }
+
+    const payload = await response.json() as { access_token: string; refresh_token?: string | null };
+    setTokens({
+      accessToken: payload.access_token,
+      refreshToken: payload.refresh_token ?? refreshToken,
+    });
+    return payload.access_token;
+  }
+
+  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+    const performRequest = async (accessTokenOverride?: string | null) => {
+      const authToken = accessTokenOverride ?? useAuthStore.getState().accessToken;
+      return fetchImpl(`${baseUrl}${path}`, {
+        ...init,
+        signal: init?.signal ?? controller?.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...(init?.headers ?? {})
+        }
+      });
+    };
+
+    const controller = init?.signal ? null : new AbortController();
+    const timeoutId = controller
+      ? setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS)
+      : null;
+
+    let response: Response;
+    try {
+      response = await performRequest();
+    } catch (error) {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ApiError("PrimeScore server is not responding.", 504);
+      }
+      throw error;
+    }
+
+    if (
+      response.status === 401 &&
+      !path.startsWith("/auth/refresh") &&
+      !path.startsWith("/auth/request-code") &&
+      !path.startsWith("/auth/verify-code")
+    ) {
+      try {
+        const nextAccessToken = await tryRefreshAccessToken();
+        if (nextAccessToken) {
+          response = await performRequest(nextAccessToken);
+        }
+      } catch {}
+    }
+
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      if (
+        response.status === 401 &&
+        !path.startsWith("/auth/refresh") &&
+        !path.startsWith("/auth/request-code") &&
+        !path.startsWith("/auth/verify-code")
+      ) {
+        useAuthStore.getState().clearSession();
+      }
+
+      let message = `Request failed for ${path}`;
+
+      try {
+        const payload = (await response.json()) as { detail?: string; message?: string };
+        message = payload.detail ?? payload.message ?? message;
+      } catch {
+        try {
+          const text = await response.text();
+          if (text.trim()) {
+            message = text.trim();
+          }
+        } catch {}
+      }
+
+      throw new ApiError(message, response.status);
     }
 
     return (await response.json()) as T;
   }
 
   return {
-    requestCode: (body: AuthRequestCodeBody) => request<{ ok: true }>("/auth/request-code", { method: "POST", body: JSON.stringify(body) }),
-    verifyCode: (body: AuthVerifyCodeBody) => request<{ accessToken: string; refreshToken: string }>("/auth/verify-code", { method: "POST", body: JSON.stringify(body) }),
-    refresh: (refreshToken: string) => request<{ accessToken: string }>("/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) }),
-    logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
-    listSessions: () => request<AuthSessionListResponse>("/auth/sessions", { method: "GET" }).catch(() => ({
-      items: [
-        {
-          id: "1",
-          user_id: "debug-user",
-          device_info: { type: "Desktop", browser: "Chrome" },
-          ip_address: "127.0.0.1",
-          is_active: true,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          last_used_at: new Date().toISOString()
-        },
-        {
-          id: "2",
-          user_id: "debug-user",
-          device_info: { type: "Mobile", browser: "Safari" },
-          ip_address: "192.168.1.1",
-          is_active: true,
-          expires_at: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
-          last_used_at: new Date(Date.now() - 86400000).toISOString()
-        }
-      ]
-    })),
+    requestCode: (body: AuthRequestCodeBody) => request<{ ok: true }>("/auth/request-code", {
+      method: "POST",
+      body: JSON.stringify({ telegram_id: body.telegramId })
+    }),
+    verifyCode: (body: AuthVerifyCodeBody) => request<{
+      session_id: string;
+      access_token: string;
+      refresh_token: string;
+      access_expires_in_seconds: number;
+      refresh_expires_in_seconds: number;
+      user: {
+        id: string;
+        first_name: string;
+        last_name?: string | null;
+        username?: string | null;
+        is_premium: boolean;
+        premium_until?: string | null;
+        telegram_id?: number | null;
+      };
+    }>("/auth/verify-code", {
+      method: "POST",
+      body: JSON.stringify({
+        telegram_id: body.telegramId,
+        code: body.code,
+      })
+    }),
+    refresh: (refreshToken: string) => request<{ access_token: string; refresh_token: string }>("/auth/refresh", { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) }),
+    logout: (payload?: { sessionId?: string | null; refreshToken?: string | null }) =>
+      request<{ message: string }>("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: payload?.sessionId ?? null,
+          refresh_token: payload?.refreshToken ?? null,
+        })
+      }),
+    listSessions: () => request<AuthSessionListResponse>("/auth/sessions", { method: "GET" }),
     getSessionStatus: (sessionId: string) => request<AuthSessionStatusResponse>(`/auth/sessions/${sessionId}/status`, { method: "GET" }),
-    revokeSession: (sessionId: string) => request<{ ok: true }>(`/auth/sessions/${sessionId}`, { method: "DELETE" }),
+    revokeSession: (sessionId: string) => request<{ message: string }>(`/auth/sessions/${sessionId}`, { method: "DELETE" }),
+    updateMe: (body: MeProfileUpdateBody) => request<MeProfileRead>("/me", {
+      method: "PATCH",
+      body: JSON.stringify(body)
+    }),
+    listNotifications: () => request<NotificationItem[]>("/me/notifications", { method: "GET" }),
+    markAllNotificationsRead: () => request<{ message: string }>("/me/notifications/read-all", { method: "PATCH" }),
     listTests: (query: TestListQuery = {}) => request<{ data: TestCatalogItem[] }>("/tests", { method: "GET" }).catch(() => ({
       data: filterTests(query)
     })),
@@ -115,9 +240,22 @@ export function createApiClient(config: ApiClientConfig = {}) {
     getActivity: () => request<unknown>("/me/activity"),
     getAttempts: () => request<{ data: AttemptRow[] }>("/me/attempts").catch(() => ({ data: getAttemptsByType() })),
     getFavorites: () => request<{ data: TestCatalogItem[] }>("/me/favorites").catch(() => ({ data: getTestsByType() })),
-    getPlans: () => request<{ data: SubscriptionPlan[] }>("/plans").catch(() => ({ data: getPlans() })),
+    getPlans: () => request<{ data: SubscriptionPlan[] }>("/plans").catch(() => ({ data: [] })),
     subscribe: (body: SubscribeBody) => request<{ paymentUrl?: string }>("/subscribe", { method: "POST", body: JSON.stringify(body) }),
-    redeem: (body: RedeemBody) => request<{ ok: true }>("/redeem", { method: "POST", body: JSON.stringify(body) }),
+    redeem: (body: RedeemBody, headers?: HeadersInit) => request<RedeemResponse>("/me/redeem-code", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body)
+    }),
+    listPayments: () => request<PaymentRecordResponse[]>("/me/payments", { method: "GET" }),
+    createPayment: (body: CreatePaymentBody) => request<CreatePaymentResponse>("/me/payments", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
+    cancelPayment: (paymentId: string) => request<CancelPaymentResponse>(`/me/payments/${paymentId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({})
+    }),
     getLeaderboard: (query: LeaderboardQuery = {}) => request<{ data: LeaderboardEntry[] }>("/leaderboard").catch(() => ({
       data: filterLeaderboard(query)
     })),

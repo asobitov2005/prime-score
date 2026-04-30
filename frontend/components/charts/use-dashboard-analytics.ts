@@ -70,22 +70,6 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
   };
 }
 
-function buildDebugHeaders(args: { userId: string; name: string; isPremium: boolean }): HeadersInit {
-  const parts = args.name.trim().split(/\s+/).filter(Boolean);
-  const firstName = parts[0] ?? "PrimeScore";
-  const lastName = parts.slice(1).join(" ") || "User";
-
-  return {
-    "X-Debug-User-Id": args.userId,
-    "X-Debug-First-Name": firstName,
-    "X-Debug-Last-Name": lastName,
-    "X-Debug-Username": firstName.toLowerCase(),
-    "X-Debug-Role": "user",
-    "X-Debug-Is-Premium": String(args.isPremium),
-    "X-Debug-Show-On-Leaderboard": "true"
-  };
-}
-
 export function getAverageBand(analytics: DashboardAnalytics, type: TestType): number | null {
   const values = analytics.progressSeries
     .map((point) => (type === "reading" ? point.reading : point.listening))
@@ -101,24 +85,17 @@ export function getAverageBand(analytics: DashboardAnalytics, type: TestType): n
 
 export function useDashboardAnalytics(initialAnalytics: DashboardAnalytics, filter: DashboardAnalyticsFilter = "all") {
   const api = useMemo(() => createApiClient(), []);
-  const { userId, name, isPremium } = useAuthStore();
+  const { userId, accessToken } = useAuthStore();
 
   return useQuery({
-    queryKey: ["dashboard-analytics", userId, name, isPremium, filter],
-    enabled: Boolean(userId),
+    queryKey: ["dashboard-analytics", userId, filter],
+    enabled: Boolean(userId && accessToken),
     queryFn: async () => {
-      if (!userId) {
+      if (!userId || !accessToken) {
         return initialAnalytics;
       }
 
-      const response = await api.getDashboardAnalytics(
-        buildDebugHeaders({
-          userId,
-          name,
-          isPremium
-        }),
-        filter === "all" ? undefined : filter
-      );
+      const response = await api.getDashboardAnalytics(undefined, filter === "all" ? undefined : filter);
 
       return mapAnalyticsResponse(response);
     },

@@ -5,9 +5,7 @@ import type {
   DashboardStat,
   LeaderboardEntry,
   ListeningPart,
-  PlanDuration,
   ReadingPassage,
-  SubscriptionPlan,
   TestCatalogItem,
   TestQuestion,
   TestQuestionGroup,
@@ -562,6 +560,7 @@ export const mockTests: TestCatalogItem[] = [
     accessType: "public",
     status: "published",
     source: "Cambridge Official",
+    sourceDetail: "Cambridge Official",
     questionCount: 40,
     estimatedMinutes: 60,
     isPremiumLocked: false,
@@ -578,6 +577,7 @@ export const mockTests: TestCatalogItem[] = [
     accessType: "premium",
     status: "published",
     source: "Cambridge Official",
+    sourceDetail: "Cambridge Official",
     questionCount: 40,
     estimatedMinutes: 30,
     isPremiumLocked: true,
@@ -594,6 +594,7 @@ export const mockTests: TestCatalogItem[] = [
     accessType: "premium",
     status: "published",
     source: "Cambridge Official",
+    sourceDetail: "Cambridge Official",
     questionCount: 40,
     estimatedMinutes: 60,
     isPremiumLocked: true,
@@ -610,6 +611,7 @@ export const mockTests: TestCatalogItem[] = [
     accessType: "public",
     status: "published",
     source: "Cambridge Official",
+    sourceDetail: "Cambridge Official",
     questionCount: 40,
     estimatedMinutes: 30,
     isPremiumLocked: false,
@@ -665,7 +667,7 @@ export const mockAttempts: AttemptRow[] = [
     testTitle: "Reading: Green Energy Policy",
     type: "reading",
     testFormat: "full",
-    source: "Custom Practice",
+    source: "Exam Practice Tests",
     mode: "practice",
     date: "2026-04-12",
     lastSavedAt: "12 Apr 2026, 21:07",
@@ -689,13 +691,6 @@ export const mockLeaderboard: LeaderboardEntry[] = [
   { rank: 9, name: "David Chen", type: "combined", band: "7.0", attempts: 35, readingAttempts: 17, listeningAttempts: 18, totalTime: "22h 15m", qualified: true },
   { rank: 10, name: "Fatima S.", type: "reading", band: "7.0", attempts: 27, readingAttempts: 20, listeningAttempts: 7, totalTime: "16h 50m", qualified: true },
   { rank: 42, name: "You", type: "reading", band: "6.5", attempts: 23, readingAttempts: 15, listeningAttempts: 8, totalTime: "14h 32m", qualified: true, isCurrentUser: true }
-];
-
-export const mockPlans: SubscriptionPlan[] = [
-  { id: "p30", durationDays: 30, title: "30 Days", price: "$4.90", discountLabel: "Intro price", perks: ["All premium tests", "Explanations", "Leaderboard access"] },
-  { id: "p90", durationDays: 90, title: "90 Days", price: "$11.90", discountLabel: "Best value", perks: ["Stacking support", "Priority updates", "Saved history"] },
-  { id: "p180", durationDays: 180, title: "180 Days", price: "$19.90", discountLabel: "Popular", perks: ["Gift code ready", "Promo code support", "Notifications"] },
-  { id: "p365", durationDays: 365, title: "365 Days", price: "$34.90", discountLabel: "Annual", perks: ["Maximum value", "Best long-term access", "All future premium tests"] }
 ];
 
 export const mockProgressSeries = [
@@ -770,14 +765,6 @@ export function getLeaderboardByType(type?: string): LeaderboardEntry[] {
   }
 
   return mockLeaderboard.filter((entry) => entry.type === type || entry.type === "combined" || entry.isCurrentUser);
-}
-
-export function getPlans(): SubscriptionPlan[] {
-  return mockPlans;
-}
-
-export function getPlanDurationLabel(days: PlanDuration): string {
-  return `${days} days`;
 }
 
 export function getAttemptModeLabel(mode: AttemptMode): string {

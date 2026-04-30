@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { DatabaseZap, Lock, TrendingUp } from "lucide-react";
+import { ChevronDown, DatabaseZap, Lock, TrendingUp } from "lucide-react";
 import {
   CartesianGrid,
   Legend,
@@ -416,6 +416,8 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
   const [showSamplePreview, setShowSamplePreview] = useState(false);
   const [analysisFilter, setAnalysisFilter] = useState<TestType>("reading");
   const [comparisonFilter, setComparisonFilter] = useState<TestType>("reading");
+  const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const isPremium = useAuthStore((state) => state.isPremium);
 
   const overallQuery = useDashboardAnalytics(initialAnalytics, "all");
@@ -449,7 +451,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
     <section className="space-y-6">
       <div className="px-1 space-y-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">Performance Analytics</h2>
+          <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">Performance Analytics</h2>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -484,7 +486,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
             <div className="rounded-2xl border border-primary/20 bg-primary/[0.07] px-3 py-3 dark:border-border/40 dark:bg-background/70">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-primary">Total</p>
-                <p className="text-xl font-black tracking-tight text-foreground md:text-[22px]">
+                <p className="text-xl font-semibold tracking-tight text-foreground md:text-[22px]">
                   {formatStudyTime(overallAnalytics.performanceSummary.studyTime.totalTimeSec)}
                 </p>
               </div>
@@ -514,7 +516,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className={cn("text-[10px] font-black uppercase tracking-[0.16em]", item.accent)}>{item.label}</p>
-                    <p className="text-lg font-black tracking-tight text-foreground">{item.value}</p>
+                    <p className="text-lg font-semibold tracking-tight text-foreground">{item.value}</p>
                   </div>
                 </div>
               ))}
@@ -548,16 +550,16 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               !isPremium && "select-none blur-[3px] opacity-75"
             )}
           >
-            <div className="rounded-2xl border border-blue-200/80 bg-blue-50/85 p-3.5 dark:border-border/40 dark:bg-background/70">
+            <div className="rounded-2xl border border-blue-200/80 bg-blue-50/85 p-3 dark:border-border/40 dark:bg-background/70">
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Reading</p>
-              <div className="mt-2.5 grid grid-cols-4 gap-2">
+              <div className="mt-2 grid grid-cols-4 gap-2">
                 {([
                   { label: "Full", value: overallAnalytics.performanceSummary.reading.fullCount },
                   { label: "Passage 1", value: overallAnalytics.performanceSummary.reading.section1Count },
                   { label: "Passage 2", value: overallAnalytics.performanceSummary.reading.section2Count },
                   { label: "Passage 3", value: overallAnalytics.performanceSummary.reading.section3Count }
                 ]).map((item) => (
-                  <div key={item.label} className="rounded-xl border border-blue-100/90 bg-white/75 px-2.5 py-2 text-center shadow-sm dark:border-white/5 dark:bg-muted/40 dark:shadow-none">
+                  <div key={item.label} className="rounded-xl border border-blue-100/90 bg-white/75 px-2.5 py-1.5 text-center shadow-sm dark:border-white/5 dark:bg-muted/40 dark:shadow-none">
                     <p className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
                     <p className="mt-1 text-lg font-black tracking-tight text-foreground">{item.value}</p>
                   </div>
@@ -565,9 +567,9 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               </div>
             </div>
 
-            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/85 p-3.5 dark:border-border/40 dark:bg-background/70">
+            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/85 p-3 dark:border-border/40 dark:bg-background/70">
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">Listening</p>
-              <div className="mt-2.5 grid grid-cols-5 gap-2">
+              <div className="mt-2 grid grid-cols-5 gap-2">
                 {([
                   { label: "Full", value: overallAnalytics.performanceSummary.listening.fullCount },
                   { label: "Part 1", value: overallAnalytics.performanceSummary.listening.section1Count },
@@ -575,7 +577,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                   { label: "Part 3", value: overallAnalytics.performanceSummary.listening.section3Count },
                   { label: "Part 4", value: overallAnalytics.performanceSummary.listening.section4Count }
                 ]).map((item) => (
-                  <div key={item.label} className="rounded-xl border border-emerald-100/90 bg-white/75 px-2 py-2 text-center shadow-sm dark:border-white/5 dark:bg-muted/40 dark:shadow-none">
+                  <div key={item.label} className="rounded-xl border border-emerald-100/90 bg-white/75 px-2 py-1.5 text-center shadow-sm dark:border-white/5 dark:bg-muted/40 dark:shadow-none">
                     <p className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
                     <p className="mt-1 text-lg font-black tracking-tight text-foreground">{item.value}</p>
                   </div>
@@ -605,14 +607,19 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Progress Graph</p>
-              <CardTitle className="mt-1 text-lg md:text-xl font-black tracking-tight">Band score over time</CardTitle>
+              <CardTitle className="mt-1 text-lg md:text-xl font-semibold tracking-tight">Band score over time</CardTitle>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
               <div className="rounded-2xl border border-border/50 bg-background/60 p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day average</p>
               <div className="mt-2 flex items-end gap-2">
                 <TrendingUp className="h-5 w-5 text-primary" />
-                <p className="text-2xl font-black tracking-tight text-foreground">{lastTenDayAverage.reading?.toFixed(1) ?? "N/A"}</p>
+                <p className={cn(
+                  "text-2xl tracking-tight text-foreground",
+                  lastTenDayAverage.reading === null ? "font-semibold" : "font-black"
+                )}>
+                  {lastTenDayAverage.reading?.toFixed(1) ?? "N/A"}
+                </p>
               </div>
               <p className="mt-1 text-xs font-medium text-muted-foreground">Reading</p>
               </div>
@@ -620,7 +627,12 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day average</p>
               <div className="mt-2 flex items-end gap-2">
                 <TrendingUp className="h-5 w-5 text-emerald-600" />
-                <p className="text-2xl font-black tracking-tight text-foreground">{lastTenDayAverage.listening?.toFixed(1) ?? "N/A"}</p>
+                <p className={cn(
+                  "text-2xl tracking-tight text-foreground",
+                  lastTenDayAverage.listening === null ? "font-semibold" : "font-black"
+                )}>
+                  {lastTenDayAverage.listening?.toFixed(1) ?? "N/A"}
+                </p>
               </div>
               <p className="mt-1 text-xs font-medium text-muted-foreground">Listening</p>
               </div>
@@ -653,10 +665,13 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                         background: "rgba(15, 23, 42, 0.96)",
                         color: "#fff"
                       }}
-                      formatter={(value: number | string | null | undefined, name: string) => [
-                        value === null || value === undefined ? "N/A" : `${Number(value).toFixed(1)} band`,
-                        name === "reading" ? "Reading" : "Listening"
-                      ]}
+                      formatter={(value, name) => {
+                        const normalizedValue = Array.isArray(value) ? value[0] : value;
+                        return [
+                          normalizedValue === null || normalizedValue === undefined ? "N/A" : `${Number(normalizedValue).toFixed(1)} band`,
+                          name === "reading" ? "Reading" : "Listening"
+                        ];
+                      }}
                       labelFormatter={(value: string) => `Date: ${value}`}
                     />
                     <Legend />
@@ -689,14 +704,30 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
 
       <Card className="relative overflow-hidden rounded-3xl border-primary/15 bg-gradient-to-br from-primary/[0.05] via-card to-card shadow-[0_24px_80px_-48px_rgba(37,99,235,0.45)]">
         <CardHeader className="space-y-4 border-b border-primary/10 bg-gradient-to-r from-primary/[0.08] via-card/95 to-card/85 px-4 py-4 md:px-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Question Type Analysis</p>
-              <CardTitle className="mt-1 text-lg md:text-xl font-black tracking-tight">Worked, correct, accuracy, and errors across every question type</CardTitle>
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Question Type Analysis</p>
+                <CardTitle className="mt-1 text-base md:text-lg font-semibold tracking-tight">Worked, correct, accuracy, and errors across every question type</CardTitle>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAnalysisOpen((current) => !current)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                aria-expanded={isAnalysisOpen}
+                aria-label={isAnalysisOpen ? "Collapse question type analysis" : "Expand question type analysis"}
+              >
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", isAnalysisOpen && "rotate-180")} />
+              </button>
             </div>
-            <SectionFilter value={analysisFilter} onChange={setAnalysisFilter} />
+            {isAnalysisOpen ? (
+              <div className="flex justify-end">
+                <SectionFilter value={analysisFilter} onChange={setAnalysisFilter} />
+              </div>
+            ) : null}
           </div>
         </CardHeader>
+        {isAnalysisOpen ? (
         <CardContent className={cn("p-0", !isPremium && "select-none blur-[3px] opacity-75")}>
           {analysisAnalytics.questionTypeAnalysis.length === 0 ? (
             <div className="p-4 md:p-6">
@@ -736,7 +767,8 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
             </div>
           )}
         </CardContent>
-        {!isPremium ? (
+        ) : null}
+        {!isPremium && isAnalysisOpen ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center px-5">
             <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg backdrop-blur-sm">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400">
@@ -752,15 +784,31 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
         ) : null}
       </Card>
 
-      <Card className="relative overflow-hidden rounded-3xl border-border/40 shadow-sm">
-        <CardHeader className="space-y-4 border-b border-border/40 bg-card/60 px-4 py-4 md:px-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Question-type comparison</p>
-              <CardTitle className="mt-1 text-lg md:text-xl font-black tracking-tight">Last four tests compared side by side</CardTitle>
+      <Card className="relative overflow-hidden rounded-3xl border-primary/15 bg-gradient-to-br from-primary/[0.05] via-card to-card shadow-[0_24px_80px_-48px_rgba(37,99,235,0.45)]">
+        <CardHeader className="space-y-4 border-b border-primary/10 bg-gradient-to-r from-primary/[0.08] via-card/95 to-card/85 px-4 py-4 md:px-6">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Question-type comparison</p>
+                <CardTitle className="mt-1 text-base md:text-lg font-semibold tracking-tight">Last four tests compared side by side</CardTitle>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsComparisonOpen((current) => !current)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                aria-expanded={isComparisonOpen}
+                aria-label={isComparisonOpen ? "Collapse question type comparison" : "Expand question type comparison"}
+              >
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", isComparisonOpen && "rotate-180")} />
+              </button>
             </div>
-            <SectionFilter value={comparisonFilter} onChange={setComparisonFilter} />
+            {isComparisonOpen ? (
+              <div className="flex justify-end">
+                <SectionFilter value={comparisonFilter} onChange={setComparisonFilter} />
+              </div>
+            ) : null}
           </div>
+          {isComparisonOpen ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {comparisonAnalytics.comparison.tests.map((test, index) => (
               <div
@@ -778,7 +826,9 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               </div>
             ))}
           </div>
+          ) : null}
         </CardHeader>
+        {isComparisonOpen ? (
         <CardContent className={cn("space-y-4 p-4 md:p-6", !isPremium && "select-none blur-[3px] opacity-75")}>
           {comparisonTests.length === 0 ? (
             <EmptyState message="Take at least two completed tests in the same module to compare changes across question types." />
@@ -839,7 +889,8 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
             </>
           )}
         </CardContent>
-        {!isPremium ? (
+        ) : null}
+        {!isPremium && isComparisonOpen ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center px-5">
             <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg backdrop-blur-sm">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400">

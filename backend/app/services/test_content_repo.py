@@ -21,13 +21,19 @@ from app.models.enums import TestStatus as ModelTestStatus
 from app.models.enums import TestType as ModelTestType
 from app.models.attempt import Attempt, UserAnswer
 from app.models.test import AnswerVariant, Question, QuestionGroup, Test, TestSection
+from app.services.admin_example_reading_seed import (
+    ADMIN_EXAMPLE_READING_TEST_ID,
+    build_admin_example_reading_draft,
+)
 from app.services.fixtures import (
     TEST_CATALOG_FIXTURES,
     get_question_fixture,
     get_test_questions,
     get_test_sections,
 )
-from app.services.scoring import listening_exam_seconds
+from app.services.object_storage import normalize_storage_asset_path
+from app.services.scoring import listening_exam_seconds, mc_multiple_question_weight
+from app.services.test_source import normalize_test_source_detail
 
 
 def _model_test_type(value: TestType) -> ModelTestType:
@@ -42,7 +48,113 @@ def _model_test_status(value: TestStatus) -> ModelTestStatus:
     return ModelTestStatus(value.value)
 
 
+_EXAM_PRACTICE_TITLE_RE = re.compile(r"^Exam Practice Test (\d+)$", re.IGNORECASE)
+_EXAM_PRACTICE_PLACEHOLDER_RE = re.compile(r"^Exam Practice Test$", re.IGNORECASE)
+_CUSTOM_TEST_SUFFIX_RE = re.compile(r"^(?P<base>.+?)\s+-\s+Test\s+(?P<number>\d+)$", re.IGNORECASE)
+
+
+def _is_exam_practice_auto_title(value: str | None) -> bool:
+    if not value:
+        return False
+    return _EXAM_PRACTICE_TITLE_RE.fullmatch(value.strip()) is not None
+
+
+def _is_exam_practice_placeholder_title(value: str | None) -> bool:
+    if not value:
+        return False
+    stripped = value.strip()
+    return _EXAM_PRACTICE_PLACEHOLDER_RE.fullmatch(stripped) is not None or _is_exam_practice_auto_title(stripped)
+
+
+def _extract_custom_test_number(value: str | None) -> int | None:
+    if not value:
+        return None
+    stripped = value.strip()
+    exam_practice_match = _EXAM_PRACTICE_TITLE_RE.fullmatch(stripped)
+    if exam_practice_match:
+        return int(exam_practice_match.group(1))
+    custom_suffix_match = _CUSTOM_TEST_SUFFIX_RE.fullmatch(stripped)
+    if custom_suffix_match:
+        return int(custom_suffix_match.group("number"))
+    return None
+
+
+def _strip_custom_test_suffix(value: str | None) -> str:
+    if not value:
+        return ""
+    stripped = value.strip()
+    custom_suffix_match = _CUSTOM_TEST_SUFFIX_RE.fullmatch(stripped)
+    if custom_suffix_match:
+        return custom_suffix_match.group("base").strip()
+    return stripped
+
+
+async def _build_next_exam_practice_title(session: AsyncSession) -> str:
+    titles = list(
+        (
+            await session.scalars(
+                select(Test.title).where(Test.source == ModelTestSource.CUSTOM)
+            )
+        ).all()
+    )
+    max_number = 0
+    for title in titles:
+        number = _extract_custom_test_number(str(title or "").strip())
+        if number is not None:
+            max_number = max(max_number, number)
+    return f"Exam Practice Test {max_number + 1}"
+
+
+async def _resolve_admin_test_title(
+    session: AsyncSession,
+    *,
+    metadata: dict[str, object],
+    existing_test: Test | None = None,
+) -> str:
+    explicit_title = str(metadata.get("title") or "").strip()
+    source = ModelTestSource(str(metadata["source"]))
+    if source != ModelTestSource.CUSTOM:
+        return explicit_title
+
+    if explicit_title and not _is_exam_practice_placeholder_title(explicit_title):
+        explicit_base_title = _strip_custom_test_suffix(explicit_title)
+        if existing_test is not None and existing_test.source == ModelTestSource.CUSTOM:
+            existing_number = _extract_custom_test_number(existing_test.title)
+            if existing_number is not None:
+                return f"{explicit_base_title} - Test {existing_number}"
+        next_number = _extract_custom_test_number(await _build_next_exam_practice_title(session))
+        if next_number is not None:
+            return f"{explicit_base_title} - Test {next_number}"
+        return explicit_base_title
+
+    existing_title = ""
+    if existing_test is not None and existing_test.source == ModelTestSource.CUSTOM:
+        existing_title = str(existing_test.title or "").strip()
+
+    if existing_title:
+        return existing_title
+
+    return await _build_next_exam_practice_title(session)
+
+
 def _serialize_catalog_item(test: Test) -> dict[str, object]:
+    def _clean_section_title(value: str | None) -> str | None:
+        if not value:
+            return None
+        cleaned = re.sub(r"^(Passage|Part)\s+\d+\s*[:.-]?\s*", "", value, flags=re.IGNORECASE).strip()
+        return cleaned or value.strip()
+
+    section_title: str | None = None
+    if hasattr(test, "format") and test.format and test.format.value != "full":
+        format_match = re.search(r"_(\d+)$", test.format.value)
+        section_number = int(format_match.group(1)) if format_match else None
+        if section_number is not None:
+            matching_section = next((section for section in test.sections if section.position == section_number), None)
+            if matching_section and matching_section.title:
+                section_title = _clean_section_title(matching_section.title)
+        if section_title is None and len(test.sections) == 1:
+            section_title = _clean_section_title(test.sections[0].title)
+
     return {
         "id": test.id,
         "title": test.title,
@@ -54,8 +166,20 @@ def _serialize_catalog_item(test: Test) -> dict[str, object]:
         "source_detail": test.source_detail,
         "description": test.description,
         "exam_time_limit_min": int((test.exam_time_limit_seconds or 0) / 60),
-        "total_questions": test.total_questions,
+        "total_questions": sum(
+            mc_multiple_question_weight(
+                question_label=str(question.question_metadata.get("label") or question.number),
+                accepted_answers=[answer.value for answer in question.answer_variants],
+            )
+            if group.question_type.value.endswith("mc_multiple")
+            else 1
+            for section in test.sections
+            for group in section.question_groups
+            for question in group.questions
+        ) or test.total_questions,
+        "section_title": section_title,
         "version": test.version,
+        "review_status": str(getattr(test, "review_status", "needs_review") or "needs_review"),
         "section_count": len(test.sections),
         "created_at": test.created_at,
         "updated_at": test.updated_at,
@@ -79,6 +203,8 @@ def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: s
             "question_block": str(group.shared_content.get("question_block") or ""),
             "answer_block": str(group.shared_content.get("answer_block") or ""),
             "secondary_block": str(group.shared_content.get("secondary_block") or ""),
+            "diagram_title": str(group.shared_content.get("diagram_title") or ""),
+            "diagram_image_url": normalize_storage_asset_path(group.shared_content.get("diagram_image_url")),
         },
         "questions": [
             {
@@ -139,7 +265,16 @@ def _serialize_snapshot_from_test(
         for section in selected_sections
         for group in sorted(section.question_groups, key=lambda item: (item.question_start, item.question_end))
     ]
-    total_questions = sum(len(group.questions) for group in selected_groups)
+    total_questions = sum(
+        mc_multiple_question_weight(
+            question_label=str(question.question_metadata.get("label") or question.number),
+            accepted_answers=[answer.value for answer in question.answer_variants],
+        )
+        if group.question_type.value.endswith("mc_multiple")
+        else 1
+        for group in selected_groups
+        for question in group.questions
+    )
     audio_duration_seconds = None
     if test.type.value == TestType.listening.value:
         audio_duration_seconds = sum(section.audio_duration_seconds or 0 for section in selected_sections)
@@ -197,7 +332,16 @@ def _serialize_snapshot_from_test(
                     if _extract_paragraph_text(item).strip()
                 ],
                 "show_labels": bool(section.content.get("showLabels", False)),
-                "question_count": sum(len(group.questions) for group in section.question_groups),
+                "question_count": sum(
+                    mc_multiple_question_weight(
+                        question_label=str(question.question_metadata.get("label") or question.number),
+                        accepted_answers=[answer.value for answer in question.answer_variants],
+                    )
+                    if group.question_type.value.endswith("mc_multiple")
+                    else 1
+                    for group in section.question_groups
+                    for question in group.questions
+                ),
                 "audio_duration_seconds": section.audio_duration_seconds,
                 "question_groups": [
                     _serialize_group(group, section_id=section.id, section_title=section.title)
@@ -252,6 +396,7 @@ async def ensure_fixture_tests_seeded(session: AsyncSession) -> None:
             total_questions=int(fixture["total_questions"]),
             version=int(fixture["version"]),
             payments_paused=True,
+            review_status="approved",
         )
         session.add(test)
 
@@ -319,6 +464,18 @@ async def ensure_fixture_tests_seeded(session: AsyncSession) -> None:
                     )
 
     await session.commit()
+
+
+async def ensure_admin_example_tests_seeded(session: AsyncSession) -> None:
+    existing = await session.get(Test, ADMIN_EXAMPLE_READING_TEST_ID)
+    if existing is not None:
+        return
+
+    await save_test_draft_to_db(
+        session,
+        draft=build_admin_example_reading_draft(),
+        test_id=ADMIN_EXAMPLE_READING_TEST_ID,
+    )
 
 
 async def ensure_test_admins_seeded(session: AsyncSession) -> None:
@@ -414,6 +571,14 @@ async def list_tests_from_db(
         query = query.where(Test.source == ModelTestSource(source))
     result = await session.scalars(query)
     tests = result.unique().all()
+    if source == ModelTestSource.CUSTOM.value:
+        tests.sort(
+            key=lambda test: (
+                _extract_custom_test_number(test.title) or -1,
+                test.created_at,
+            ),
+            reverse=True,
+        )
     return [_serialize_catalog_item(test) for test in tests]
 
 
@@ -565,8 +730,20 @@ async def save_test_draft_to_db(
 
     raw_question_groups = draft.get("question_groups", draft.get("questionGroups", []))
     question_groups = list(raw_question_groups) if isinstance(raw_question_groups, list) else []
+
+    weighted_total_questions = sum(
+        mc_multiple_question_weight(
+            question_label=str(question.get("label") or ""),
+            accepted_answers=[str(answer) for answer in question.get("accepted_answers", [])],
+        )
+        if "mc_multiple" in str(group.get("type_id", ""))
+        else 1
+        for group in question_groups
+        for question in group.get("questions", [])
+    ) or 1
     
     test = await _load_full_test_for_write(session, test_id) if test_id is not None else None
+    existing_test_for_title = test
     next_version = 1
     preserve_existing_version = False
     if test is not None:
@@ -580,39 +757,44 @@ async def save_test_draft_to_db(
             next_version = int(test.version) + 1
             test = None
 
+    source_detail = normalize_test_source_detail(metadata["source"], metadata.get("source_detail"))
+    resolved_title = await _resolve_admin_test_title(session, metadata=metadata, existing_test=existing_test_for_title)
+
     if test is None:
         test = Test(
             id=uuid4() if preserve_existing_version else (test_id or uuid4()),
-            title=str(metadata["title"]),
+            title=resolved_title,
             type=ModelTestType(str(metadata["type"])),
             format=ModelTestFormat(str(metadata.get("format", "full"))),
             access_type=ModelAccessType(str(metadata["access_type"])),
             status=ModelTestStatus.DRAFT,
             source=ModelTestSource(str(metadata["source"])),
-            source_detail=str(metadata.get("source_detail") or ""),
-            description=f"{metadata['title']} draft created from admin builder.",
+            source_detail=source_detail,
+            description=f"{resolved_title} draft created from admin builder.",
             exam_time_limit_seconds=(
                 1800 if str(metadata["type"]) == TestType.listening.value else _reading_time_limit_seconds(str(metadata["time_limit_label"]))
             ),
-            total_questions=sum(len(group.get("questions", [])) for group in question_groups) or 1,
+            total_questions=weighted_total_questions,
             version=next_version,
             payments_paused=True,
+            review_status="needs_review",
         )
         session.add(test)
         await session.flush()
     else:
-        test.title = str(metadata["title"])
+        test.title = resolved_title
         test.type = ModelTestType(str(metadata["type"]))
         test.format = ModelTestFormat(str(metadata.get("format", "full")))
         test.access_type = ModelAccessType(str(metadata["access_type"]))
         test.source = ModelTestSource(str(metadata["source"]))
-        test.source_detail = str(metadata.get("source_detail") or "")
-        test.description = f"{metadata['title']} draft updated from admin builder."
+        test.source_detail = source_detail
+        test.description = f"{resolved_title} draft updated from admin builder."
         test.exam_time_limit_seconds = (
             1800 if str(metadata["type"]) == TestType.listening.value else _reading_time_limit_seconds(str(metadata["time_limit_label"]))
         )
-        test.total_questions = sum(len(group.get("questions", [])) for group in question_groups) or 1
+        test.total_questions = weighted_total_questions
         test.status = ModelTestStatus.DRAFT
+        test.review_status = "needs_review"
 
         for section in test.sections:
             for group in section.question_groups:
@@ -677,6 +859,8 @@ async def save_test_draft_to_db(
                 "question_block": str(group.get("question_block") or ""),
                 "answer_block": str(group.get("answer_block") or ""),
                 "secondary_block": str(group.get("secondary_block") or ""),
+                "diagram_title": str(group.get("diagram_title") or ""),
+                "diagram_image_url": normalize_storage_asset_path(group.get("diagram_image_url")),
             },
             shared_options=list(group.get("shared_options", [])),
         )
@@ -741,6 +925,17 @@ async def quick_fix_published_test_in_db(
     raw_question_groups = draft.get("question_groups", draft.get("questionGroups", []))
     question_groups = list(raw_question_groups) if isinstance(raw_question_groups, list) else []
 
+    weighted_total_questions = sum(
+        mc_multiple_question_weight(
+            question_label=str(question.get("label") or ""),
+            accepted_answers=[str(answer) for answer in question.get("accepted_answers", [])],
+        )
+        if "mc_multiple" in str(group.get("type_id", ""))
+        else 1
+        for group in question_groups
+        for question in group.get("questions", [])
+    ) or 1
+
     test = await _load_full_test_for_write(session, test_id)
     if test is None:
         return None
@@ -757,7 +952,6 @@ async def quick_fix_published_test_in_db(
     if (
         requested_type != test.type.value
         or requested_format != test.format.value
-        or requested_time_limit_seconds != int(test.exam_time_limit_seconds or 0)
     ):
         raise ValueError("quick_fix_requires_new_version")
 
@@ -794,12 +988,14 @@ async def quick_fix_published_test_in_db(
     if len(payload_question_ids) != len(existing_question_by_id) or set(payload_question_ids) != set(existing_question_by_id):
         raise ValueError("quick_fix_requires_new_version")
 
-    test.title = str(metadata["title"])
+    resolved_title = await _resolve_admin_test_title(session, metadata=metadata, existing_test=test)
+    test.title = resolved_title
     test.access_type = ModelAccessType(str(metadata["access_type"]))
     test.source = ModelTestSource(str(metadata["source"]))
-    test.source_detail = str(metadata.get("source_detail") or "")
-    test.description = f"{metadata['title']} quick fixed from admin builder."
-    test.total_questions = sum(len(group.get("questions", [])) for group in question_groups) or 1
+    test.source_detail = normalize_test_source_detail(metadata["source"], metadata.get("source_detail"))
+    test.description = f"{resolved_title} quick fixed from admin builder."
+    test.total_questions = weighted_total_questions
+    test.exam_time_limit_seconds = requested_time_limit_seconds
 
     for index, section_payload in enumerate(sections, start=1):
         section_id = str(section_payload.get("id") or "")
@@ -854,6 +1050,8 @@ async def quick_fix_published_test_in_db(
             "question_block": str(group_payload.get("question_block") or ""),
             "answer_block": str(group_payload.get("answer_block") or ""),
             "secondary_block": str(group_payload.get("secondary_block") or ""),
+            "diagram_title": str(group_payload.get("diagram_title") or ""),
+            "diagram_image_url": normalize_storage_asset_path(group_payload.get("diagram_image_url")),
         }
         group_model.shared_options = list(group_payload.get("shared_options", []))
 
@@ -932,6 +1130,7 @@ async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[st
     test_type = test.type.value if hasattr(test.type, "value") else str(test.type)
     test_title = test.title
     body = f'"{test_title}" ({test_type}) test has been published. Try it now!'
+    test.review_status = "approved"
 
     await notify_all_users(
         session,
@@ -1013,6 +1212,8 @@ async def build_admin_draft_state_from_db(
                     group.shared_content.get("secondary_block")
                     or "\n".join(str(option) for option in group.shared_options)
                 ),
+                "diagram_title": str(group.shared_content.get("diagram_title") or ""),
+                "diagram_image_url": normalize_storage_asset_path(group.shared_content.get("diagram_image_url")),
                 "questions": group_questions
             })
 

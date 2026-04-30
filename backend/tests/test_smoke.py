@@ -43,7 +43,8 @@ async def test_health_and_catalog(app):
         plans = await client.get("/api/plans")
         assert plans.status_code == 200
         assert len(plans.json()) >= 1
-        assert plans.json()[0]["duration_days"] in {30, 90, 180, 365}
+        assert plans.json()[0]["duration_days"] in {30, 60, 90}
+        assert isinstance(plans.json()[0]["perks"], list)
 
         tests = await client.get("/api/tests")
         assert tests.status_code == 200
@@ -67,6 +68,10 @@ async def test_me_and_admin_routes(app):
         dashboard = await client.get("/api/admin/dashboard", headers=admin_headers)
         assert dashboard.status_code == 200
         assert "tests_total" in dashboard.json()
+
+        admin_plans = await client.get("/api/admin/plans", headers=admin_headers)
+        assert admin_plans.status_code == 200
+        assert all("perks" in item for item in admin_plans.json())
 
         draft = await client.get(f"/api/admin/tests/{READING_TEST_ID}/draft", headers=admin_headers)
         assert draft.status_code == 200

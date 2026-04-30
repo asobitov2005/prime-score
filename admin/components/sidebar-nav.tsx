@@ -33,7 +33,7 @@ export function SidebarNav({
             collapsed ? "justify-center" : "gap-2"
           )}
         >
-          <div className={cn(collapsed ? "h-11" : "h-20 md:h-28")}>
+          <div className={cn(collapsed ? "h-10" : "h-16 md:h-24")}>
             <img src="/logo.svg" alt="PrimeScore Admin" className="h-full w-auto object-contain" />
           </div>
           {!collapsed ? (

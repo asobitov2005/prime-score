@@ -1,9 +1,8 @@
+import { useAuthStore } from "@/store/auth-store";
 import { mockReviews, type ReviewItem } from "@/lib/mock-data";
+import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
 
-const baseUrl = (
-  process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
+const baseUrl = getFrontendClientApiBaseUrl();
 
 type BackendPublicReview = {
   id: string;
@@ -58,19 +57,6 @@ function mapReview(payload: BackendPublicReview): ReviewItem {
   };
 }
 
-function splitName(name: string): { firstName: string; lastName: string } {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    return { firstName: "PrimeScore", lastName: "Student" };
-  }
-
-  const parts = trimmed.split(/\s+/);
-  return {
-    firstName: parts[0] ?? "PrimeScore",
-    lastName: parts.slice(1).join(" "),
-  };
-}
-
 export async function listPublicReviews(): Promise<ReviewItem[]> {
   try {
     const response = await fetch(`${baseUrl}/reviews`, {
@@ -93,22 +79,16 @@ export async function submitPublicReview(
   },
   session: ReviewSession,
 ): Promise<{ id: string; is_visible: boolean; message: string }> {
-  if (!session.userId) {
+  const accessToken = useAuthStore.getState().accessToken;
+  if (!session.userId || !accessToken) {
     throw new Error("Authentication is required.");
   }
 
-  const { firstName, lastName } = splitName(session.name);
   const response = await fetch(`${baseUrl}/reviews`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Debug-User-Id": session.userId,
-      "X-Debug-First-Name": firstName,
-      "X-Debug-Last-Name": lastName,
-      "X-Debug-Username": session.phoneNumber ?? "",
-      "X-Debug-Role": "user",
-      "X-Debug-Is-Premium": String(session.isPremium),
-      "X-Debug-Show-On-Leaderboard": "true",
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
       band: payload.band.trim(),

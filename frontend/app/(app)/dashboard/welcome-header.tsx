@@ -6,7 +6,7 @@ import { Layout, Crown, Sparkles } from "lucide-react";
 
 export function WelcomeHeader() {
   const { name, isPremium } = useAuthStore();
-  const firstName = name ? name.split(" ")[0] : "Candidate";
+  const displayName = name?.trim() || "Candidate";
   
   return (
     <Card className="overflow-hidden bg-background border border-border/50 relative rounded-2xl shadow-sm">
@@ -16,7 +16,7 @@ export function WelcomeHeader() {
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Welcome back, {firstName}</CardTitle>
+              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Welcome back, {displayName}</CardTitle>
               {isPremium && (
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-primary">
                   <Crown className="h-3.5 w-3.5" />

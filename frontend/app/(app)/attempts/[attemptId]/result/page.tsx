@@ -61,6 +61,32 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
           items={result.question_type_breakdown}
         />
       </div>
+
+      {result.diagram_groups.length > 0 ? (
+        <div className="space-y-4">
+          {result.diagram_groups.map((diagram) => (
+            <Card key={diagram.group_id}>
+              <CardHeader>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="secondary">Q{diagram.question_start}-{diagram.question_end}</Badge>
+                  <Badge tone="outline">{diagram.section_title}</Badge>
+                </div>
+                <CardTitle className="text-lg">{diagram.diagram_title ?? diagram.group_title}</CardTitle>
+                <CardDescription>{diagram.group_title}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/15 p-3">
+                  <img
+                    src={diagram.diagram_image_url}
+                    alt={diagram.diagram_title ?? diagram.group_title}
+                    className="max-h-[420px] w-full object-contain"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

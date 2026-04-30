@@ -256,7 +256,7 @@ export default async function DashboardPage() {
            <CardContent className="p-5 space-y-3">
              <p className="text-sm font-medium text-foreground flex items-start gap-2">
                <span className="text-emerald-500 font-bold mt-0.5">↑</span> 
-               Signup to 1st Test activation is strong (78%). Consider adding a small reward to push the "1st to 2nd" metric higher.
+               Signup to 1st Test activation is strong (78%). Consider adding a small reward to push the &ldquo;1st to 2nd&rdquo; metric higher.
              </p>
              <p className="text-sm font-medium text-foreground flex items-start gap-2">
                <span className="text-primary font-bold mt-0.5">!</span> 

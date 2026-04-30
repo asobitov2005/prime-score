@@ -3,6 +3,7 @@ import re
 
 TRAILING_PUNCTUATION = ".,;:!?"
 OPTION_LETTER_PATTERN = re.compile(r"^[a-z]$")
+QUESTION_RANGE_PATTERN = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
 
 
 def normalize_answer(value: str) -> str:
@@ -37,6 +38,29 @@ def is_answer_correct(user_value: str, accepted_answers: list[str]) -> bool:
     return any(normalize_answer(answer) == normalized_user_value for answer in accepted_answers)
 
 
+def mc_multiple_question_weight(
+    *,
+    question_label: str | None,
+    accepted_answers: list[str],
+) -> int:
+    label = str(question_label or "").strip()
+    range_match = QUESTION_RANGE_PATTERN.fullmatch(label)
+    if range_match:
+      start = int(range_match.group(1))
+      end = int(range_match.group(2))
+      if end >= start:
+          return max(1, end - start + 1)
+
+    normalized_accepted_answers = [normalize_answer(answer) for answer in accepted_answers]
+    option_letter_answers = [
+        answer for answer in normalized_accepted_answers
+        if OPTION_LETTER_PATTERN.fullmatch(answer)
+    ]
+    if len(option_letter_answers) >= 2:
+        return len(option_letter_answers)
+
+    return 1
+
+
 def listening_exam_seconds(audio_duration_seconds: int) -> int:
     return audio_duration_seconds + 120
-

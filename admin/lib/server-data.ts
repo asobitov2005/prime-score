@@ -1,11 +1,15 @@
 import { cookies } from "next/headers";
+import { getAdminServerApiBaseUrl } from "@/lib/admin-api-base";
 import { createEmptyDraft } from "@/lib/draft-template";
 import { ADMIN_ACCESS_COOKIE } from "@/lib/auth";
+import { normalizeAdminTestSourceDetail } from "@/lib/test-source";
 import type {
   AdminAnalyticsPoint,
   AdminIdentity,
   AdminAuditEntry,
   AdminDashboardKpi,
+  AdminPaymentCardSummary,
+  AdminPaymentSettingsSummary,
   AdminPaymentSummary,
   AdminPlanSummary,
   AdminPromoCodeSummary,
@@ -16,11 +20,7 @@ import type {
   TestType
 } from "@/lib/types";
 
-const baseUrl = (
-  process.env.ADMIN_API_INTERNAL_BASE_URL
-  ?? process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api/admin"
-).replace(/\/$/, "");
+const baseUrl = getAdminServerApiBaseUrl();
 
 type BackendAdminTest = {
   id: string;
@@ -31,6 +31,7 @@ type BackendAdminTest = {
   source_detail: string;
   access_type: "public" | "premium";
   status: "draft" | "published" | "archived";
+  review_status?: "needs_review" | "approved" | "rejected";
   updated_at?: string | null;
   total_questions: number;
   version: number;
@@ -135,7 +136,9 @@ async function requestAdmin<T>(path: string): Promise<T> {
   if (!response.ok) {
     const text = await response.text().catch(() => "no body");
     console.error(`Admin API request failed for ${path} with status ${response.status}: ${text}`);
-    throw new Error(`Admin API request failed for ${path}`);
+    const error = new Error(`Admin API request failed for ${path}`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
 
   return (await response.json()) as T;
@@ -175,9 +178,10 @@ function mapAdminTest(test: BackendAdminTest): AdminTestSummary {
     type: test.test_type,
     format: test.format ?? "full",
     source: test.source,
-    sourceDetail: test.source_detail,
+    sourceDetail: normalizeAdminTestSourceDetail(test.source, test.source_detail),
     accessType: test.access_type,
     status: test.status,
+    reviewStatus: test.review_status ?? "needs_review",
     updatedAt: test.updated_at ?? new Date().toISOString(),
     questions: test.total_questions,
     version: test.version
@@ -191,7 +195,7 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
       type: draft.metadata.type,
       format: draft.metadata.format ?? "full",
       source: draft.metadata.source,
-      sourceDetail: draft.metadata.source_detail,
+      sourceDetail: normalizeAdminTestSourceDetail(draft.metadata.source, draft.metadata.source_detail),
       accessType: draft.metadata.access_type,
       status: draft.metadata.status,
       version: draft.metadata.version,
@@ -262,13 +266,20 @@ export async function getAdminTests(): Promise<AdminTestSummary[]> {
   }
 }
 
-export async function getAdminTestDraft(testId?: string, type: TestType = "reading"): Promise<AdminTestDraftState> {
+export async function getAdminTestDraft(testId?: string, type: TestType = "reading"): Promise<AdminTestDraftState | null> {
   if (!testId) {
     return createEmptyDraft(type);
   }
 
-  const draft = await requestAdmin<BackendAdminDraft>(`/tests/${testId}/draft`);
-  return mapAdminDraft(draft);
+  try {
+    const draft = await requestAdmin<BackendAdminDraft>(`/tests/${testId}/draft`);
+    return mapAdminDraft(draft);
+  } catch (error) {
+    if ((error as { status?: number } | null)?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 type BackendDashboard = {
@@ -297,7 +308,11 @@ type BackendPlan = {
   id: string;
   name: string;
   duration_days: number;
-  price: number;
+  price: number | string;
+  badge_label?: string | null;
+  perks?: string[];
+  display_order?: number;
+  is_featured?: boolean;
   is_active?: boolean;
 };
 
@@ -319,6 +334,43 @@ type BackendAudit = {
   entity_id: string;
   meta: Record<string, unknown>;
   created_at: string;
+};
+
+type BackendPayment = {
+  id: string;
+  invoice_code: string;
+  user_name?: string | null;
+  user_username?: string | null;
+  plan_name: string;
+  method: "card_transfer" | "manual" | "payme" | "click" | "uzum";
+  status: "paused" | "pending" | "matched" | "completed" | "expired" | "canceled" | "review" | "failed" | "refunded";
+  amount: number | string;
+  card_number?: string | null;
+  expires_at?: string | null;
+  status_reason?: string | null;
+  updated_at?: string | null;
+};
+
+type BackendPaymentCard = {
+  id: string;
+  label: string;
+  card_number: string;
+  card_type: string;
+  holder_name?: string | null;
+  is_active: boolean;
+  priority: number;
+  bot_source: string;
+};
+
+type BackendPaymentSettings = {
+  id: string;
+  telegram_api_id?: string | null;
+  telegram_api_hash?: string | null;
+  phone_number?: string | null;
+  active_bot: string;
+  support_contact?: string | null;
+  is_enabled: boolean;
+  poll_fallback_enabled: boolean;
 };
 
 export async function getAdminDashboardKpis(): Promise<AdminDashboardKpi[]> {
@@ -360,12 +412,72 @@ export async function getAdminPlans(): Promise<AdminPlanSummary[]> {
       id: item.id,
       name: item.name,
       durationDays: item.duration_days,
-      price: `${item.price} UZS`,
-      discount: "0%",
-      status: item.is_active === false ? "draft" : "active"
+      price: typeof item.price === "number" ? item.price : Number(String(item.price).replace(/[^\d.-]/g, "")),
+      badgeLabel: (item.badge_label ?? "").trim(),
+      perks: Array.isArray(item.perks) ? item.perks.map((perk) => String(perk ?? "").trim()).filter(Boolean) : [],
+      displayOrder: item.display_order ?? 0,
+      isActive: item.is_active !== false,
+      isFeatured: item.is_featured === true
     }));
   } catch {
     return [];
+  }
+}
+
+export async function getAdminPayments(): Promise<AdminPaymentSummary[]> {
+  try {
+    const payments = await requestAdmin<BackendPayment[]>("/payments");
+    return payments.map((item) => ({
+      id: item.id,
+      invoiceCode: item.invoice_code,
+      user: item.user_name ?? (item.user_username ? `@${item.user_username}` : "Unknown user"),
+      plan: item.plan_name,
+      method: item.method,
+      status: item.status,
+      amount: typeof item.amount === "number" ? item.amount.toLocaleString("en-US") : String(item.amount),
+      card: item.card_number ?? "-",
+      expiresAt: item.expires_at ?? null,
+      statusReason: item.status_reason ?? null,
+      updatedAt: item.updated_at ?? new Date().toISOString(),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getAdminPaymentCards(): Promise<AdminPaymentCardSummary[]> {
+  try {
+    const cards = await requestAdmin<BackendPaymentCard[]>("/payment-cards");
+    return cards.map((item) => ({
+      id: item.id,
+      label: item.label,
+      cardNumber: item.card_number,
+      cardType: item.card_type,
+      holderName: item.holder_name ?? null,
+      isActive: item.is_active,
+      priority: item.priority,
+      botSource: item.bot_source,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getAdminPaymentSettings(): Promise<AdminPaymentSettingsSummary | null> {
+  try {
+    const item = await requestAdmin<BackendPaymentSettings>("/payment-settings");
+    return {
+      id: item.id,
+      telegramApiId: item.telegram_api_id ?? null,
+      telegramApiHash: item.telegram_api_hash ?? null,
+      phoneNumber: item.phone_number ?? null,
+      activeBot: item.active_bot,
+      supportContact: item.support_contact ?? null,
+      isEnabled: item.is_enabled,
+      pollFallbackEnabled: item.poll_fallback_enabled,
+    };
+  } catch {
+    return null;
   }
 }
 

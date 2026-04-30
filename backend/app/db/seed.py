@@ -7,7 +7,10 @@ from app.schemas.common import DebugPrincipal
 from app.db.session import get_session_maker
 from app.models import admin, attempt, commerce, notification, ops, review, test, user  # noqa: F401
 from app.services.attempt_repo import ensure_debug_user
-from app.services.test_content_repo import ensure_fixture_tests_seeded, ensure_test_admins_seeded
+from app.services.test_content_repo import (
+    ensure_fixture_tests_seeded,
+    ensure_test_admins_seeded,
+)
 
 
 TEST_USER = DebugPrincipal(

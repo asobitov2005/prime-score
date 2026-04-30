@@ -18,6 +18,19 @@ class MeProfileUpdateRequest(BaseModel):
     show_on_leaderboard: bool | None = None
 
 
+class MeRedeemCodeRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=50)
+
+
+class MeRedeemCodeResponse(BaseModel):
+    message: str
+    code: str
+    plan_name: str
+    duration_days: int
+    is_premium: bool
+    premium_until: datetime
+
+
 class MeProfileRead(DebugPrincipal):
     premium_until: datetime | None = None
     last_active_at: datetime | None = None

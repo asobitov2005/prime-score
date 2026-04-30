@@ -56,6 +56,76 @@ export interface RedeemBody {
   code: string;
 }
 
+export interface RedeemResponse {
+  message: string;
+  code: string;
+  plan_name: string;
+  duration_days: number;
+  is_premium: boolean;
+  premium_until: string;
+}
+
+export interface CreatePaymentBody {
+  plan_id: string;
+}
+
+export interface PaymentRecordResponse {
+  id: string;
+  invoice_code: string;
+  plan_id?: string | null;
+  plan_name: string;
+  duration_days?: number | null;
+  method: "card_transfer" | "manual" | "payme" | "click" | "uzum";
+  status: "pending" | "matched" | "completed" | "expired" | "canceled" | "review" | "failed";
+  base_amount: string | number;
+  compare_at_amount: string | number;
+  amount: string | number;
+  discount_amount: string | number;
+  currency: string;
+  card_label?: string | null;
+  card_number?: string | null;
+  wheel_options?: Array<string | number>;
+  expires_at?: string | null;
+  matched_at?: string | null;
+  paid_at?: string | null;
+  archived_at?: string | null;
+  granted_until?: string | null;
+  status_reason?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface CreatePaymentResponse {
+  message: string;
+  payment: PaymentRecordResponse;
+}
+
+export interface CancelPaymentResponse {
+  message: string;
+  payment: PaymentRecordResponse;
+}
+
+export interface MeProfileUpdateBody {
+  first_name?: string | null;
+  last_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+  show_on_leaderboard?: boolean;
+}
+
+export interface MeProfileRead {
+  id: string;
+  first_name: string;
+  last_name?: string | null;
+  username?: string | null;
+  role: string;
+  is_premium: boolean;
+  premium_until?: string | null;
+  show_on_leaderboard: boolean;
+  telegram_id?: number | null;
+  last_active_at?: string | null;
+}
+
 export interface AuthSessionRead {
   id: string;
   user_id: string;

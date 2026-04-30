@@ -2,12 +2,12 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
 import { PRIME_NAVIGATION_START_EVENT } from "@/lib/navigation-transition";
 
-const MIN_VISIBLE_MS = 560;
+const SHOW_DELAY_MS = 140;
+const MIN_VISIBLE_MS = 220;
 const MAX_VISIBLE_MS = 10_000;
-const FADE_OUT_MS = 220;
+const FADE_OUT_MS = 180;
 
 export function NavigationTransitionOverlay() {
   const pathname = usePathname();
@@ -22,7 +22,8 @@ export function NavigationTransitionOverlay() {
 
   const currentHrefRef = useRef(currentHref);
   const targetHrefRef = useRef<string | null>(null);
-  const startedAtRef = useRef(0);
+  const visibleAtRef = useRef(0);
+  const showTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
   const failSafeTimerRef = useRef<number | null>(null);
 
@@ -31,6 +32,11 @@ export function NavigationTransitionOverlay() {
   }, [currentHref]);
 
   const clearTimers = () => {
+    if (showTimerRef.current !== null) {
+      window.clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
+
     if (hideTimerRef.current !== null) {
       window.clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
@@ -43,7 +49,13 @@ export function NavigationTransitionOverlay() {
   };
 
   const finishNavigation = () => {
-    const elapsed = Date.now() - startedAtRef.current;
+    if (!isMounted) {
+      clearTimers();
+      targetHrefRef.current = null;
+      return;
+    }
+
+    const elapsed = Date.now() - visibleAtRef.current;
     const delay = Math.max(0, MIN_VISIBLE_MS - elapsed);
 
     if (hideTimerRef.current !== null) {
@@ -67,9 +79,19 @@ export function NavigationTransitionOverlay() {
 
     clearTimers();
     targetHrefRef.current = nextHref;
-    startedAtRef.current = Date.now();
-    setIsMounted(true);
-    setIsVisible(true);
+    visibleAtRef.current = 0;
+    setIsMounted(false);
+    setIsVisible(false);
+
+    showTimerRef.current = window.setTimeout(() => {
+      if (targetHrefRef.current !== nextHref) {
+        return;
+      }
+
+      visibleAtRef.current = Date.now();
+      setIsMounted(true);
+      setIsVisible(true);
+    }, SHOW_DELAY_MS);
 
     failSafeTimerRef.current = window.setTimeout(() => {
       setIsVisible(false);
@@ -163,11 +185,13 @@ export function NavigationTransitionOverlay() {
   }
 
   return (
-    <AppLoadingPlaceholder
-      mode="overlay"
-      title="Opening your next page"
-      description="PrimeScore is stitching the current screen into the next one so the transition feels instant."
-      className={isVisible ? "opacity-100 transition-opacity duration-300" : "opacity-0 transition-opacity duration-200"}
-    />
+    <div
+      aria-hidden
+      className={isVisible ? "pointer-events-none fixed inset-x-0 top-0 z-[120] opacity-100 transition-opacity duration-200" : "pointer-events-none fixed inset-x-0 top-0 z-[120] opacity-0 transition-opacity duration-150"}
+    >
+      <div className="relative h-[3px] w-full overflow-hidden bg-primary/10">
+        <div className="absolute inset-y-0 left-0 w-[36%] rounded-r-full bg-gradient-to-r from-primary/65 via-primary to-orange-300 shadow-[0_0_18px_rgba(255,145,0,0.5)] [animation:prime-route-progress_1.05s_ease-in-out_infinite]" />
+      </div>
+    </div>
   );
 }

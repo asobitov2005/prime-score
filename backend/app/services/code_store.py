@@ -7,6 +7,7 @@ import redis.asyncio as aioredis
 
 from app.core.config import get_settings
 from app.core.security import generate_login_code
+from app.services.user_names import resolve_login_name_parts
 
 _CODE_TTL = 180      # 3 minutes
 _CONTACT_TTL = 3600  # 1 hour (cleared when user never taps Login)
@@ -22,30 +23,57 @@ class CodeStore:
 
     # ── contacts (phone + name per telegram user) ─────────────────────────
 
-    async def save_contact(self, *, telegram_id: int, phone: str, name: str) -> None:
-        payload = json.dumps({"telegram_id": telegram_id, "phone": phone, "name": name})
+    async def save_contact(
+        self,
+        *,
+        telegram_id: int,
+        phone: str,
+        first_name: str,
+        last_name: str | None = None,
+    ) -> None:
+        payload = json.dumps(
+            {
+                "telegram_id": telegram_id,
+                "phone": phone,
+                "first_name": first_name,
+                "last_name": last_name,
+            }
+        )
         await self._r.set(f"{_CONTACT_PFX}{telegram_id}", payload, ex=_CONTACT_TTL)
 
     async def get_contact(self, telegram_id: int) -> dict | None:
         raw = await self._r.get(f"{_CONTACT_PFX}{telegram_id}")
-        return json.loads(raw) if raw else None
+        return self._normalize_identity_payload(json.loads(raw)) if raw else None
 
     async def delete_contact(self, telegram_id: int) -> None:
         await self._r.delete(f"{_CONTACT_PFX}{telegram_id}")
 
     # ── login codes ───────────────────────────────────────────────────────
 
-    async def create_code(self, *, telegram_id: int, phone: str, name: str) -> str:
+    async def create_code(
+        self,
+        *,
+        telegram_id: int,
+        phone: str,
+        first_name: str,
+        last_name: str | None = None,
+    ) -> str:
         code = generate_login_code()
         payload = json.dumps(
-            {"telegram_id": telegram_id, "phone": phone, "name": name, "used": False}
+            {
+                "telegram_id": telegram_id,
+                "phone": phone,
+                "first_name": first_name,
+                "last_name": last_name,
+                "used": False,
+            }
         )
         await self._r.set(f"{_CODE_PFX}{code}", payload, ex=_CODE_TTL)
         return code
 
     async def get_code(self, code: str) -> dict | None:
         raw = await self._r.get(f"{_CODE_PFX}{code}")
-        return json.loads(raw) if raw else None
+        return self._normalize_identity_payload(json.loads(raw)) if raw else None
 
     async def mark_used(self, code: str) -> bool:
         """Return True when code existed and was successfully marked as used."""
@@ -61,6 +89,14 @@ class CodeStore:
 
     async def delete_code(self, code: str) -> None:
         await self._r.delete(f"{_CODE_PFX}{code}")
+
+    @staticmethod
+    def _normalize_identity_payload(payload: dict) -> dict:
+        normalized = dict(payload)
+        first_name, last_name = resolve_login_name_parts(normalized)
+        normalized["first_name"] = first_name
+        normalized["last_name"] = last_name
+        return normalized
 
 
 @lru_cache(maxsize=1)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +14,15 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 
+def _get_httpx():
+    try:
+        import httpx  # type: ignore
+        return httpx
+    except ModuleNotFoundError:
+        logger.warning("httpx is not installed; Telegram notifications are disabled.")
+        return None
+
+
 async def send_telegram_message(
     chat_id: int,
     text: str,
@@ -23,6 +31,9 @@ async def send_telegram_message(
     settings = get_settings()
     token = settings.telegram_bot_token
     if not token or token == "change-me":
+        return False
+    httpx = _get_httpx()
+    if httpx is None:
         return False
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload: dict = {

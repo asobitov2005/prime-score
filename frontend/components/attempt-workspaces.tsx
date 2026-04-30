@@ -5,10 +5,13 @@ import { Pause, Play, SkipForward, Volume2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
+import { getMatchingOptionViewModel, shouldAutoLetterMatchingOptions } from "@/lib/matching-option-format";
 import { QuestionRenderer } from "@/components/question-renderer";
 import { useUIStore } from "@/store/ui-store";
 import type { AttemptWorkspaceMeta, ListeningPart, ReadingPassage, TestSectionSummary } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { Howl } from "howler";
 
 interface ReadingAttemptWorkspaceProps {
@@ -34,6 +37,7 @@ interface ListeningAttemptWorkspaceProps {
 }
 
 export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, passage, sections, meta, initialAnswers }: ReadingAttemptWorkspaceProps) {
+  const apiBaseUrl = getFrontendClientApiBaseUrl();
   const router = useRouter();
   const { activeAttemptTab, setActiveAttemptTab } = useUIStore();
   const visibleTab = activeAttemptTab === "transcript" ? "passage" : activeAttemptTab;
@@ -108,7 +112,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, {
+      fetch(`${apiBaseUrl}/attempts/${attemptId}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
@@ -119,7 +123,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
         })
         .catch(() => setIsSubmitting(false));
     }
-  }, [timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
+  }, [apiBaseUrl, timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
 
   async function persistAnswer(questionId: string, value: string) {
     setAnswers((current) => ({ ...current, [questionId]: value }));
@@ -252,6 +256,8 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
           {passage.questionGroups.map((group) => {
             const groupQuestions = passage.questions.filter(q => q.number >= group.questionStart && q.number <= group.questionEnd);
             const isMatching = group.type.includes("matching") || group.type.includes("wordbank");
+            const groupInstructions = (group as { instructions?: string }).instructions ?? group.title;
+            const groupOptions = (group as { options?: string[] }).options ?? [];
             
             return (
               <Card key={group.id} className="overflow-hidden border-border/50 shadow-md">
@@ -260,19 +266,39 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
                     Questions {group.questionStart}-{group.questionEnd}
                   </div>
                   <p className="text-base md:text-[17px] font-medium leading-relaxed text-foreground whitespace-pre-wrap">
-                    {group.instructions || group.title}
+                    {groupInstructions}
                   </p>
                 </div>
+
+                {group.type.includes("diagram") && group.diagramImageUrl ? (
+                  <div className="bg-background p-6 border-b border-border/40">
+                    {group.diagramTitle ? (
+                      <p className="mb-4 text-center text-[17px] font-bold tracking-tight text-foreground">
+                        {group.diagramTitle}
+                      </p>
+                    ) : null}
+                    <div className="overflow-hidden rounded-2xl border border-border/60 bg-muted/10 p-3">
+                      <img
+                        src={group.diagramImageUrl}
+                        alt={group.diagramTitle || group.title}
+                        className="max-h-[340px] w-full object-contain"
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 
-                {isMatching && group.options && group.options.length > 0 && (
+                {isMatching && groupOptions.length > 0 && (
                   <div className="bg-background p-6 border-b border-border/40">
                     <div className="rounded-xl border border-border/60 bg-muted/10 p-5 shadow-inner">
-                      <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-4 text-center">List of Options / Headings</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-4 text-center">List of Options / Headings</p>
                       <div className="flex flex-col gap-2.5 max-w-3xl mx-auto">
-                        {group.options.map((opt, i) => {
-                          const match = opt.match(/^([a-zA-Zivx]+\.)\s*(.*)$/);
-                          const prefix = match ? match[1] : `${i + 1}.`;
-                          const text = match ? match[2] : opt;
+                        {groupOptions.map((opt: string, i: number) => {
+                          const optionView = getMatchingOptionViewModel(opt, i, group.type);
+                          const isAutoLettered = shouldAutoLetterMatchingOptions(group.type);
+                          const prefix = optionView.hasExplicitPrefix || isAutoLettered
+                            ? `${optionView.value}.`
+                            : optionView.value;
+                          const text = optionView.text || optionView.label;
                           
                           return (
                             <div key={i} className="flex text-sm md:text-[15px] font-medium p-2.5 rounded-xl hover:bg-muted/50 transition-colors bg-background/50 border border-border/30">
@@ -301,7 +327,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
                         question={question}
                         compact
                         value={answers[question.id] ?? ""}
-                        onValueChange={(value) => void persistAnswer(question.id, value)}
+                        onValueChange={(value: string) => void persistAnswer(question.id, value)}
                       />
                     </div>
                   ))}
@@ -326,6 +352,7 @@ export function ListeningAttemptWorkspace({
   meta,
   initialAnswers
 }: ListeningAttemptWorkspaceProps) {
+  const apiBaseUrl = getFrontendClientApiBaseUrl();
   const router = useRouter();
   const { activeAttemptTab, setActiveAttemptTab } = useUIStore();
   const [activeSegment, setActiveSegment] = useState(part.segments[0]?.id ?? "");
@@ -402,7 +429,7 @@ export function ListeningAttemptWorkspace({
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api"}/attempts/${attemptId}/submit`, {
+      fetch(`${apiBaseUrl}/attempts/${attemptId}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
@@ -413,7 +440,7 @@ export function ListeningAttemptWorkspace({
         })
         .catch(() => setIsSubmitting(false));
     }
-  }, [timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
+  }, [apiBaseUrl, timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
 
   useEffect(() => {
     const audioUrl = (part as any).audioUrl || (part as any).audioAssetKey || "/dummy.mp3";
@@ -628,7 +655,7 @@ export function ListeningAttemptWorkspace({
                 question={question}
                 compact
                 value={answers[question.id] ?? ""}
-                onValueChange={(value) => void persistAnswer(question.id, value)}
+                onValueChange={(value: string) => void persistAnswer(question.id, value)}
               />
             ))}
           </div>

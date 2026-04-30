@@ -6,6 +6,24 @@ class AdminRole(StrEnum):
     ADMIN = "admin"
 
 
+class AdminAiThreadStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class AdminAiMessageRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
+class AdminAiJobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELED = "canceled"
+
+
 class AccessType(StrEnum):
     PUBLIC = "public"
     PREMIUM = "premium"

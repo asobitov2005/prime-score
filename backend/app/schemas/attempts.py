@@ -105,6 +105,17 @@ class AttemptResultRead(BaseModel):
     completed_at: datetime | None = None
     section_breakdown: list[AttemptBreakdownItemRead] = []
     question_type_breakdown: list[AttemptBreakdownItemRead] = []
+    diagram_groups: list["AttemptDiagramGroupRead"] = []
+
+
+class AttemptDiagramGroupRead(BaseModel):
+    group_id: UUID
+    section_title: str
+    group_title: str
+    question_start: int
+    question_end: int
+    diagram_title: str | None = None
+    diagram_image_url: str
 
 
 class AttemptReviewItemRead(BaseModel):
@@ -114,6 +125,7 @@ class AttemptReviewItemRead(BaseModel):
     section_title: str
     group_title: str
     question_type: str
+    options: list[str] = []
     answer_value: str | None = None
     is_correct: bool | None = None
     correct_answers: list[str] = []
@@ -125,4 +137,5 @@ class AttemptReviewRead(BaseModel):
     test_title: str | None = None
     test_type: TestType | None = None
     can_show_explanations: bool = False
+    diagram_groups: list[AttemptDiagramGroupRead] = []
     items: list[AttemptReviewItemRead] = []

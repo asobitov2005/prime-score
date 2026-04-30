@@ -1,21 +1,5 @@
+import { requestServerUserApi } from "@/lib/server-user-auth";
 import type { AttemptMode, QuestionType, TestScope, TestType } from "@/lib/types";
-
-const baseUrl = (
-  process.env.API_INTERNAL_BASE_URL
-  ?? process.env.NEXT_PUBLIC_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api"
-).replace(/\/$/, "");
-
-const debugHeaders: Record<string, string> = {
-  "Content-Type": "application/json",
-  "X-Debug-User-Id": process.env.PRIMESCORE_DEBUG_USER_ID ?? "33333333-3333-3333-3333-333333333333",
-  "X-Debug-First-Name": process.env.PRIMESCORE_DEBUG_USER_FIRST_NAME ?? "Azizbek",
-  "X-Debug-Last-Name": process.env.PRIMESCORE_DEBUG_USER_LAST_NAME ?? "Prime",
-  "X-Debug-Username": process.env.PRIMESCORE_DEBUG_USER_USERNAME ?? "azizbek",
-  "X-Debug-Role": process.env.PRIMESCORE_DEBUG_USER_ROLE ?? "user",
-  "X-Debug-Is-Premium": "true",
-  "X-Debug-Show-On-Leaderboard": "true"
-};
 
 export type BackendAttemptTextHighlight = {
   id: string;
@@ -46,6 +30,7 @@ export type BackendAttemptSnapshot = {
   test_id: string;
   title: string;
   test_type: TestType;
+  format?: string | null;
   scope: TestScope;
   mode: AttemptMode;
   section_id?: string | null;
@@ -75,6 +60,8 @@ export type BackendAttemptSnapshot = {
         question_block?: string;
         answer_block?: string;
         secondary_block?: string;
+        diagram_title?: string;
+        diagram_image_url?: string;
       };
       questions: Array<{
         question_id: string;
@@ -134,6 +121,15 @@ export type BackendAttemptResult = {
     correct: number;
     total: number;
   }>;
+  diagram_groups: Array<{
+    group_id: string;
+    section_title: string;
+    group_title: string;
+    question_start: number;
+    question_end: number;
+    diagram_title?: string | null;
+    diagram_image_url: string;
+  }>;
 };
 
 export type BackendAttemptReview = {
@@ -141,6 +137,15 @@ export type BackendAttemptReview = {
   test_title?: string | null;
   test_type?: TestType | null;
   can_show_explanations: boolean;
+  diagram_groups: Array<{
+    group_id: string;
+    section_title: string;
+    group_title: string;
+    question_start: number;
+    question_end: number;
+    diagram_title?: string | null;
+    diagram_image_url: string;
+  }>;
   items: Array<{
     question_id: string;
     question_number: number;
@@ -148,6 +153,7 @@ export type BackendAttemptReview = {
     section_title: string;
     group_title: string;
     question_type: string;
+    options: string[];
     answer_value?: string | null;
     is_correct?: boolean | null;
     correct_answers: string[];
@@ -156,20 +162,7 @@ export type BackendAttemptReview = {
 };
 
 async function requestBackend<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers: {
-      ...debugHeaders,
-      ...(init?.headers ?? {})
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Attempt backend request failed for ${path}`);
-  }
-
-  return (await response.json()) as T;
+  return requestServerUserApi<T>(path, init);
 }
 
 export async function startBackendAttempt(payload: StartAttemptPayload): Promise<{

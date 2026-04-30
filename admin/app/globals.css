@@ -54,6 +54,36 @@
       radial-gradient(circle at bottom right, hsl(var(--foreground) / 0.04), transparent 28%);
   }
 
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    -webkit-box-shadow: 0 0 0 1000px hsl(var(--secondary)) inset;
+    box-shadow: 0 0 0 1000px hsl(var(--secondary)) inset;
+    caret-color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+    transition: background-color 9999s ease-in-out 0s;
+  }
+
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    color-scheme: dark;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(0.88) opacity(0.78);
+  }
+
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;

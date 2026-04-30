@@ -3,7 +3,7 @@ export type TestScope = "full" | "section";
 export type AttemptMode = "practice" | "exam";
 export type AccessType = "public" | "premium";
 export type TestStatus = "draft" | "published" | "archived";
-export type PlanDuration = 30 | 90 | 180 | 365;
+export type PlanDuration = number;
 export type LeaderboardPeriod = "week" | "month" | "all_time";
 
 export type ReadingQuestionType =
@@ -52,6 +52,7 @@ export interface TestCatalogItem {
   id: string;
   slug: string;
   title: string;
+  sectionTitle?: string;
   type: TestType;
   format: "full" | "passage_1" | "passage_2" | "passage_3" | "part_1" | "part_2" | "part_3" | "part_4";
   accessType: AccessType;
@@ -97,6 +98,8 @@ export interface TestQuestionGroup {
   type: QuestionType;
   questionStart: number;
   questionEnd: number;
+  diagramTitle?: string;
+  diagramImageUrl?: string;
   questions: TestQuestion[];
 }
 
@@ -248,11 +251,46 @@ export interface LeaderboardEntry {
 
 export interface SubscriptionPlan {
   id: string;
-  durationDays: PlanDuration;
+  durationDays: number;
   title: string;
   price: string;
   discountLabel: string;
   perks: string[];
+}
+
+export type UserPaymentStatus =
+  | "pending"
+  | "matched"
+  | "completed"
+  | "expired"
+  | "canceled"
+  | "review"
+  | "failed";
+
+export interface UserPaymentRecord {
+  id: string;
+  invoiceCode: string;
+  planId: string | null;
+  planName: string;
+  durationDays: number | null;
+  method: "card_transfer" | "manual" | "payme" | "click" | "uzum";
+  status: UserPaymentStatus;
+  baseAmount: string;
+  compareAtAmount: string;
+  amount: string;
+  discountAmount: string;
+  currency: string;
+  cardLabel: string | null;
+  cardNumber: string | null;
+  wheelOptions: string[];
+  expiresAt: string | null;
+  matchedAt: string | null;
+  paidAt: string | null;
+  archivedAt: string | null;
+  grantedUntil: string | null;
+  statusReason: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface AttemptWorkspaceMeta {

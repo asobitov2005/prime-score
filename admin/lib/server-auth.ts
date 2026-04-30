@@ -2,28 +2,27 @@ import { cookies } from "next/headers";
 import type { AdminIdentity } from "@/lib/types";
 import { ADMIN_ACCESS_COOKIE } from "@/lib/auth";
 
-const adminApiBaseUrl = (
-  process.env.ADMIN_API_INTERNAL_BASE_URL
-  ?? process.env.NEXT_PUBLIC_ADMIN_API_BASE_URL
-  ?? "http://127.0.0.1:8000/api/admin"
-).replace(/\/$/, "");
-
-type BackendAdminIdentity = {
-  id: string;
-  username: string;
-  email: string;
-  role: "super_admin" | "admin";
-  is_active: boolean;
+type AdminJwtPayload = {
+  sub?: string;
+  scope?: string;
+  role?: "super_admin" | "admin";
+  exp?: number;
+  username?: string;
+  email?: string;
 };
 
-function mapAdminIdentity(payload: BackendAdminIdentity): AdminIdentity {
-  return {
-    id: payload.id,
-    username: payload.username,
-    email: payload.email,
-    role: payload.role,
-    isActive: payload.is_active,
-  };
+function decodeJwtPayload(token: string): AdminJwtPayload | null {
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return null;
+  }
+
+  try {
+    const payload = Buffer.from(parts[1], "base64url").toString("utf-8");
+    return JSON.parse(payload) as AdminJwtPayload;
+  } catch {
+    return null;
+  }
 }
 
 export async function getAuthenticatedAdmin(): Promise<AdminIdentity | null> {
@@ -32,16 +31,20 @@ export async function getAuthenticatedAdmin(): Promise<AdminIdentity | null> {
     return null;
   }
 
-  const response = await fetch(`${adminApiBaseUrl}/auth/me`, {
-    cache: "no-store",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
+  const payload = decodeJwtPayload(token);
+  if (!payload || payload.scope !== "admin" || !payload.sub) {
     return null;
   }
 
-  return mapAdminIdentity((await response.json()) as BackendAdminIdentity);
+  if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
+    return null;
+  }
+
+  return {
+    id: payload.sub,
+    username: payload.username ?? "admin",
+    email: payload.email ?? "admin@primescore.local",
+    role: payload.role === "super_admin" ? "super_admin" : "admin",
+    isActive: true,
+  };
 }

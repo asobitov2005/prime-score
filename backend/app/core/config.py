@@ -19,6 +19,16 @@ class Settings(BaseSettings):
         default_factory=lambda: ["*"]
     )
     payment_paused: bool = True
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3-flash-preview"
+    gemini_thinking_level: str = "HIGH"
+    gemini_max_tool_loops: int = 80
+    minio_endpoint: str = "127.0.0.1:9200"
+    minio_access_key: str = "minio"
+    minio_secret_key: str = "minio123"
+    minio_secure: bool = False
+    minio_bucket_test_assets: str = "test-assets"
+    minio_public_base_url: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
