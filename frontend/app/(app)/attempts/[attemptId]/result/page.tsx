@@ -25,7 +25,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
   const sourceLabel = getTestSourceDetail(result.source, result.source_detail);
   const completedLabel = formatCompletedAt(result.completed_at);
   const correctCount = Math.max(0, result.raw_score ?? 0);
-  const answeredCount = Math.max(0, result.answers_count ?? 0);
+  const answeredCount = Math.max(0, result.answered_slots_count ?? result.answers_count ?? 0);
   const totalQuestions = Math.max(0, result.total_questions ?? 0);
   const incorrectCount = Math.max(0, answeredCount - correctCount);
   const notAnsweredCount = Math.max(0, totalQuestions - answeredCount);

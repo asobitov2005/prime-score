@@ -29,6 +29,7 @@ from app.schemas.attempts import (
 from app.schemas.tests import TestSnapshotRead
 from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, save_progress_in_db, submit_attempt_in_db
 from app.services.object_storage import normalize_storage_asset_path
+from app.services.scoring import mc_multiple_question_weight
 from app.services.runtime_store import get_attempt, save_answer, save_progress, submit_attempt
 
 router = APIRouter()
@@ -38,6 +39,36 @@ def _count_answered_values(answers: dict[str, str] | None) -> int:
     if not answers:
         return 0
     return sum(1 for value in answers.values() if str(value or "").strip())
+
+
+def _count_answered_slots(snapshot: dict[str, object], answers: dict[str, str] | None) -> int:
+    if not answers:
+        return 0
+
+    answered_slots = 0
+    for question in snapshot.get("questions", []):
+        if not isinstance(question, dict):
+            continue
+        question_id = str(question.get("question_id") or "").strip()
+        if not question_id:
+            continue
+        answer_value = str(answers.get(question_id) or "").strip()
+        if not answer_value:
+            continue
+
+        question_type = str(question.get("question_type") or "")
+        if "mc_multiple" in question_type:
+            slot_weight = mc_multiple_question_weight(
+                question_label=str(question.get("label") or question.get("question_number") or ""),
+                accepted_answers=[],
+            )
+            selected_count = len([part for part in answer_value.split(",") if part.strip()])
+            answered_slots += min(slot_weight, max(1, selected_count))
+            continue
+
+        answered_slots += 1
+
+    return answered_slots
 
 
 def _normalize_attempt_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
@@ -297,6 +328,7 @@ async def get_result(
 ) -> AttemptResultRead:
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
     snapshot = attempt.test_snapshot
+    answered_slots_count = _count_answered_slots(snapshot, attempt.answers)
     diagram_groups = _extract_diagram_groups(snapshot)
     return AttemptResultRead(
         attempt_id=attempt.attempt_id,
@@ -310,6 +342,7 @@ async def get_result(
         raw_score=attempt.raw_score,
         band_score=attempt.band_score,
         answers_count=_count_answered_values(attempt.answers),
+        answered_slots_count=answered_slots_count,
         total_questions=attempt.total_questions,
         time_spent_sec=attempt.time_spent_sec,
         score_status=str(attempt.metadata.get("score_status", "queued")),
