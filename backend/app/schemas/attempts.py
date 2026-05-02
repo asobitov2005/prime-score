@@ -103,6 +103,7 @@ class AttemptResultRead(BaseModel):
     raw_score: int | None = None
     band_score: Decimal | None = None
     answers_count: int = 0
+    answered_slots_count: int = 0
     total_questions: int = 0
     time_spent_sec: int = 0
     score_status: str = "queued"

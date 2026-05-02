@@ -113,6 +113,7 @@ export type BackendAttemptResult = {
   raw_score?: number | null;
   band_score?: number | string | null;
   answers_count: number;
+  answered_slots_count?: number;
   total_questions: number;
   time_spent_sec?: number;
   score_status: string;
