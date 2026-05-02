@@ -120,6 +120,10 @@ class AttemptRuntime:
     question_type_breakdown: list[dict[str, object]] = field(default_factory=list)
 
 
+def _count_answered_values(answers: dict[str, str]) -> int:
+    return sum(1 for value in answers.values() if str(value or "").strip())
+
+
 class RuntimeStoreBackend(Protocol):
     def save_attempt(self, attempt: AttemptRuntime) -> None: ...
 
@@ -410,7 +414,7 @@ def save_answer(attempt_id: UUID, question_id: UUID, value: str | None) -> tuple
     attempt.answer_numbers[str(question_id)] = question_number
     attempt.metadata["last_answered_question_id"] = str(question_id)
     attempt.metadata["last_answered_question_number"] = question_number
-    attempt.metadata["answers_count"] = len(attempt.answers)
+    attempt.metadata["answers_count"] = _count_answered_values(attempt.answers)
     attempt.metadata["score_status"] = "draft"
     attempt.updated_at = datetime.now(timezone.utc)
     _backend().save_attempt(attempt)
@@ -566,7 +570,7 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
         if TestScope(str(attempt.test_snapshot["scope"])) == TestScope.full
         else None
     )
-    attempt.metadata["answers_count"] = len(attempt.answers)
+    attempt.metadata["answers_count"] = _count_answered_values(attempt.answers)
     attempt.metadata["score_status"] = "ready"
     _backend().save_attempt(attempt)
     return attempt

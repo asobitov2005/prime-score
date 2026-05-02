@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, CreditCard, Loader2, RefreshCcw, Wallet } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2, Clock3, CreditCard, Loader2, RefreshCcw, Wallet, Zap } from "lucide-react";
 
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,9 @@ import type { MarketingPlan } from "@/lib/server-plans";
 import type { UserPaymentRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
+import { usePaymentSSE, type PaymentSSEEvent } from "@/lib/use-payment-sse";
+
+/* ────── Helpers ────── */
 
 function formatAmount(value: string | number): string {
   const numeric = typeof value === "number" ? value : Number(value);
@@ -65,11 +68,11 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
-function formatTimeLeft(value: string | null): string {
-  if (!value) {
+function computeTimeLeft(expiresAt: string | null): string {
+  if (!expiresAt) {
     return "Expired";
   }
-  const diff = new Date(value).getTime() - Date.now();
+  const diff = new Date(expiresAt).getTime() - Date.now();
   if (diff <= 0) {
     return "Expired";
   }
@@ -92,6 +95,142 @@ function statusTone(status: UserPaymentRecord["status"]): "default" | "secondary
   return "outline";
 }
 
+/* ────── Real-time countdown hook ────── */
+
+function useCountdown(expiresAt: string | null): string {
+  const [timeLeft, setTimeLeft] = useState(() => computeTimeLeft(expiresAt));
+
+  useEffect(() => {
+    if (!expiresAt) {
+      setTimeLeft("Expired");
+      return;
+    }
+
+    // Immediately compute
+    setTimeLeft(computeTimeLeft(expiresAt));
+
+    const intervalId = window.setInterval(() => {
+      const next = computeTimeLeft(expiresAt);
+      setTimeLeft(next);
+      if (next === "Expired") {
+        window.clearInterval(intervalId);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [expiresAt]);
+
+  return timeLeft;
+}
+
+/* ────── SSE event notification banner ────── */
+
+type EventNotification = {
+  id: number;
+  type: "matched" | "completed" | "expired";
+  message: string;
+};
+
+function EventNotificationBanner({ notification, onDismiss }: { notification: EventNotification; onDismiss: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 6000);
+    return () => clearTimeout(timer);
+  }, [onDismiss]);
+
+  const config = {
+    matched: {
+      icon: Zap,
+      bg: "border-blue-200 bg-blue-50 text-blue-800",
+      iconColor: "text-blue-600",
+    },
+    completed: {
+      icon: CheckCircle2,
+      bg: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      iconColor: "text-emerald-600",
+    },
+    expired: {
+      icon: Clock3,
+      bg: "border-amber-200 bg-amber-50 text-amber-800",
+      iconColor: "text-amber-600",
+    },
+  }[notification.type];
+
+  const Icon = config.icon;
+
+  return (
+    <div className={cn(
+      "flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium animate-in fade-in slide-in-from-top-2 duration-300",
+      config.bg,
+    )}>
+      <Icon className={cn("h-5 w-5 shrink-0", config.iconColor)} />
+      <span className="flex-1">{notification.message}</span>
+      <button type="button" onClick={onDismiss} className="shrink-0 text-xs opacity-60 hover:opacity-100">
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
+/* ────── Active Invoice Card ────── */
+
+function ActiveInvoiceCard({
+  payment,
+  onCancel,
+}: {
+  payment: UserPaymentRecord;
+  onCancel: () => void;
+}) {
+  const countdown = useCountdown(payment.expiresAt);
+  const isExpired = countdown === "Expired";
+
+  return (
+    <Card className="rounded-[1.2rem] border-primary/20 bg-primary/5">
+      <CardContent className="grid gap-4 p-4 md:grid-cols-[1.4fr_1fr_auto] md:items-center">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Badge tone={statusTone(payment.status)}>{payment.status}</Badge>
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              {payment.planName}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <p className="text-2xl font-semibold tracking-tight text-foreground">{payment.amount}</p>
+            <p className="text-sm text-muted-foreground">
+              Card: <span className="font-semibold text-foreground">{payment.cardNumber ?? "-"}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Invoice code: <span className="font-semibold text-foreground">{payment.invoiceCode}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Clock3 className={cn("h-4 w-4", isExpired ? "text-red-500" : "text-primary")} />
+            <span className={cn(isExpired && "font-semibold text-red-600")}>
+              {isExpired ? "Invoice expired" : `Expires in ${countdown}`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-primary" />
+            <span>{payment.statusReason ?? "Pay the exact shown amount."}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <span>Exact amount is required or auto-detection may fail.</span>
+          </div>
+        </div>
+
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isExpired}>
+          Cancel invoice
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ────── Main Component ────── */
+
 export function SubscriptionWorkspace({
   plans,
   initialPayments,
@@ -101,6 +240,7 @@ export function SubscriptionWorkspace({
 }) {
   const api = useMemo(() => createApiClient(), []);
   const syncSession = useAuthStore((state) => state.syncSession);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [payments, setPayments] = useState<UserPaymentRecord[]>(initialPayments);
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -108,13 +248,19 @@ export function SubscriptionWorkspace({
   const [wheelOpen, setWheelOpen] = useState(false);
   const [wheelPayment, setWheelPayment] = useState<UserPaymentRecord | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [notifications, setNotifications] = useState<EventNotification[]>([]);
+  const notifIdRef = useRef(0);
 
   const activePayment = useMemo(
     () => payments.find((item) => item.status === "pending" || item.status === "matched") ?? null,
     [payments],
   );
 
-  async function refreshPayments() {
+  const hasActiveInvoice = activePayment !== null;
+
+  /* ── Data refresh (used as fallback and for initial load after SSE events) ── */
+
+  const refreshPayments = useCallback(async () => {
     setRefreshing(true);
     try {
       const items = await api.listPayments();
@@ -130,14 +276,57 @@ export function SubscriptionWorkspace({
     } finally {
       setRefreshing(false);
     }
-  }
+  }, [api, syncSession]);
+
+  /* ── SSE real-time events ── */
+
+  const addNotification = useCallback((type: EventNotification["type"], message: string) => {
+    notifIdRef.current += 1;
+    const id = notifIdRef.current;
+    setNotifications((prev) => [...prev.slice(-2), { id, type, message }]);
+  }, []);
+
+  const handleSSEEvent = useCallback(
+    (event: PaymentSSEEvent) => {
+      if (event.type === "connected") {
+        return;
+      }
+
+      if (event.type === "payment_matched") {
+        addNotification("matched", `To'lov aniqlandi! Invoice ${event.invoiceCode} tekshirilmoqda...`);
+        void refreshPayments();
+      }
+
+      if (event.type === "payment_completed") {
+        addNotification("completed", `Premium faollashtirildi! ${event.planName ?? "Plan"} — ${event.grantedUntil ? new Date(event.grantedUntil).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : ""} gacha.`);
+        syncSession({ isPremium: true, premiumUntil: event.grantedUntil ?? null });
+        void refreshPayments();
+      }
+
+      if (event.type === "payment_expired") {
+        addNotification("expired", `Invoice ${event.invoiceCode} muddati tugadi.`);
+        void refreshPayments();
+      }
+    },
+    [addNotification, refreshPayments, syncSession],
+  );
+
+  usePaymentSSE({
+    onEvent: handleSSEEvent,
+    enabled: isAuthenticated && hasActiveInvoice,
+  });
+
+  /* ── Fallback polling (only when SSE not active or no active invoice) ── */
 
   useEffect(() => {
+    // Light polling as fallback — 60s instead of 20s since SSE handles real-time
     const intervalId = window.setInterval(() => {
       void refreshPayments();
-    }, 20000);
+    }, 60000);
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [refreshPayments]);
+
+  /* ── Wheel animation ── */
 
   useEffect(() => {
     if (!wheelOpen || !wheelPayment || wheelPayment.wheelOptions.length === 0) {
@@ -158,6 +347,8 @@ export function SubscriptionWorkspace({
 
     return () => window.clearInterval(intervalId);
   }, [wheelOpen, wheelPayment]);
+
+  /* ── Actions ── */
 
   async function handleChoosePlan(plan: MarketingPlan) {
     setBusyPlanId(plan.id);
@@ -189,6 +380,10 @@ export function SubscriptionWorkspace({
     }
   }
 
+  function dismissNotification(id: number) {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }
+
   return (
     <div className="space-y-4">
       <PricingPlanGrid
@@ -201,6 +396,19 @@ export function SubscriptionWorkspace({
         onChoosePlan={handleChoosePlan}
         paymentBusyPlanId={busyPlanId}
       />
+
+      {/* SSE event notifications */}
+      {notifications.length > 0 ? (
+        <div className="space-y-2">
+          {notifications.map((notif) => (
+            <EventNotificationBanner
+              key={notif.id}
+              notification={notif}
+              onDismiss={() => dismissNotification(notif.id)}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <Card className="rounded-[1.4rem] border-border/50">
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 border-b border-border/50">
@@ -223,46 +431,10 @@ export function SubscriptionWorkspace({
           ) : null}
 
           {activePayment ? (
-            <Card className="rounded-[1.2rem] border-primary/20 bg-primary/5">
-              <CardContent className="grid gap-4 p-4 md:grid-cols-[1.4fr_1fr_auto] md:items-center">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge tone={statusTone(activePayment.status)}>{activePayment.status}</Badge>
-                    <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      {activePayment.planName}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-semibold tracking-tight text-foreground">{activePayment.amount}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Card: <span className="font-semibold text-foreground">{activePayment.cardNumber ?? "-"}</span>
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Invoice code: <span className="font-semibold text-foreground">{activePayment.invoiceCode}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Clock3 className="h-4 w-4 text-primary" />
-                    <span>Expires in {formatTimeLeft(activePayment.expiresAt)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Wallet className="h-4 w-4 text-primary" />
-                    <span>{activePayment.statusReason ?? "Pay the exact shown amount."}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <span>Exact amount is required or auto-detection may fail.</span>
-                  </div>
-                </div>
-
-                <Button type="button" variant="outline" onClick={() => void handleCancelPayment(activePayment.id)}>
-                  Cancel invoice
-                </Button>
-              </CardContent>
-            </Card>
+            <ActiveInvoiceCard
+              payment={activePayment}
+              onCancel={() => void handleCancelPayment(activePayment.id)}
+            />
           ) : (
             <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
               No active invoice right now. Choose a plan above to generate one.
@@ -305,49 +477,70 @@ export function SubscriptionWorkspace({
         className="max-w-2xl"
       >
         {wheelPayment ? (
-          <div className="space-y-5">
-            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-              <div className="grid gap-2 md:grid-cols-3">
-                {wheelPayment.wheelOptions.map((option, index) => (
-                  <div
-                    key={`${wheelPayment.id}-${option}-${index}`}
-                    className={cn(
-                      "rounded-xl border px-3 py-3 text-center text-sm font-semibold transition-all",
-                      index === highlightIndex
-                        ? "border-primary bg-primary text-primary-foreground shadow-lg"
-                        : "border-border/60 bg-background text-foreground",
-                    )}
-                  >
-                    {option}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-border/60 bg-background p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Final amount</p>
-                <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{wheelPayment.amount}</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Discount from current plan price: {wheelPayment.discountAmount}
-                </p>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-background p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Payment details</p>
-                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                  <p className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> {wheelPayment.cardNumber ?? "-"}</p>
-                  <p>Invoice: {wheelPayment.invoiceCode}</p>
-                  <p>Expires in {formatTimeLeft(wheelPayment.expiresAt)}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-              Exact {wheelPayment.amount} amountini tashlang. Kam yoki ko‘p to‘lov qilinsa auto-detection ishlamasligi mumkin.
-            </div>
-          </div>
+          <WheelDialogContent
+            wheelPayment={wheelPayment}
+            highlightIndex={highlightIndex}
+          />
         ) : null}
       </Dialog>
+    </div>
+  );
+}
+
+/* ────── Wheel Dialog Content (with live countdown) ────── */
+
+function WheelDialogContent({
+  wheelPayment,
+  highlightIndex,
+}: {
+  wheelPayment: UserPaymentRecord;
+  highlightIndex: number;
+}) {
+  const countdown = useCountdown(wheelPayment.expiresAt);
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+        <div className="grid gap-2 md:grid-cols-3">
+          {wheelPayment.wheelOptions.map((option, index) => (
+            <div
+              key={`${wheelPayment.id}-${option}-${index}`}
+              className={cn(
+                "rounded-xl border px-3 py-3 text-center text-sm font-semibold transition-all",
+                index === highlightIndex
+                  ? "border-primary bg-primary text-primary-foreground shadow-lg"
+                  : "border-border/60 bg-background text-foreground",
+              )}
+            >
+              {option}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-border/60 bg-background p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Final amount</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{wheelPayment.amount}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Discount from current plan price: {wheelPayment.discountAmount}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border/60 bg-background p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Payment details</p>
+          <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> {wheelPayment.cardNumber ?? "-"}</p>
+            <p>Invoice: {wheelPayment.invoiceCode}</p>
+            <p className={cn(countdown === "Expired" && "font-semibold text-red-600")}>
+              {countdown === "Expired" ? "Invoice expired" : `Expires in ${countdown}`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+        Exact {wheelPayment.amount} amountini tashlang. Kam yoki ko&apos;p to&apos;lov qilinsa auto-detection ishlamasligi mumkin.
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { adminApi } from "@/lib/api";
 import type { AdminPaymentCardSummary, AdminPaymentSettingsSummary, AdminPaymentSummary, PaymentStatus } from "@/lib/types";
@@ -9,6 +10,8 @@ import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitl
 
 type PaymentManagerProps = {
   initialPayments: AdminPaymentSummary[];
+  totalPayments: number;
+  currentPage: number;
   initialCards: AdminPaymentCardSummary[];
   initialSettings: AdminPaymentSettingsSummary | null;
 };
@@ -120,7 +123,8 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
-export function PaymentsManager({ initialPayments, initialCards, initialSettings }: PaymentManagerProps) {
+export function PaymentsManager({ initialPayments, totalPayments, currentPage, initialCards, initialSettings }: PaymentManagerProps) {
+  const router = useRouter();
   const [payments, setPayments] = useState(initialPayments);
   const [cards, setCards] = useState(initialCards);
   const [settings, setSettings] = useState(initialSettings);
@@ -681,6 +685,32 @@ export function PaymentsManager({ initialPayments, initialCards, initialSettings
                 </div>
               );
             })
+          )}
+          
+          {totalPayments > 20 && (
+            <div className="flex items-center justify-between border-t border-border pt-4">
+              <span className="text-sm text-muted-foreground">
+                Showing {payments.length} of {totalPayments} records
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => router.push(`?page=${currentPage - 1}`)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage * 20 >= totalPayments}
+                  onClick={() => router.push(`?page=${currentPage + 1}`)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

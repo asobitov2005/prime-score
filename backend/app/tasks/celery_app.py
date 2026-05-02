@@ -26,6 +26,7 @@ celery_app.conf.update(
         "primescore.send_telegram_notification": {"queue": "notifications"},
         "primescore.process_audio_upload": {"queue": "heavy"},
         "primescore.cleanup_abandoned_attempts": {"queue": "default"},
+        "primescore.expire_stale_invoices": {"queue": "default"},
     },
     beat_schedule={
         "refresh-leaderboard-hourly": {
@@ -39,6 +40,10 @@ celery_app.conf.update(
         "cleanup-abandoned-attempts-nightly": {
             "task": "primescore.cleanup_abandoned_attempts",
             "schedule": 60 * 60 * 24,
+        },
+        "expire-stale-invoices": {
+            "task": "primescore.expire_stale_invoices",
+            "schedule": 30,
         },
     },
     timezone=settings.timezone,

@@ -85,6 +85,8 @@ class TestSnapshotRead(BaseModel):
     title: str
     test_type: TestType
     format: str | None = "full"
+    source: TestSource | None = None
+    source_detail: str | None = None
     access_type: AccessType
     status: TestStatus
     version: int

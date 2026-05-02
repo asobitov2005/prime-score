@@ -50,3 +50,22 @@ def process_audio_upload(audio_id: str) -> dict[str, Any]:
 @celery_app.task(name="primescore.cleanup_abandoned_attempts")
 def cleanup_abandoned_attempts() -> dict[str, Any]:
     return {"status": "ok", "cleaned": True}
+
+
+@celery_app.task(name="primescore.expire_stale_invoices")
+def expire_stale_invoices() -> dict[str, Any]:
+    """Expire pending payment invoices past their 10-minute TTL."""
+    import asyncio
+    from app.db.session import get_session_maker
+    from app.services.payment_service import expire_stale_payments
+
+    async def _run() -> int:
+        session_maker = get_session_maker()
+        async with session_maker() as session:
+            count = await expire_stale_payments(session)
+            if count:
+                await session.commit()
+            return count
+
+    expired_count = asyncio.run(_run())
+    return {"status": "ok", "expired": expired_count}

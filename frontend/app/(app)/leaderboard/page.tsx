@@ -1,62 +1,211 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Medal, Minus, Trophy, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Trophy, Medal, TrendingUp, Minus } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { mockLeaderboard } from "@/lib/mock-data";
+import { createApiClient } from "@/lib/api/client";
+import type { LeaderboardEntry, LeaderboardResponseData, TestType } from "@/lib/types";
+import { useAuthStore } from "@/store/auth-store";
 
-type TypeFilter = "combined" | "reading" | "listening";
+type TypeFilter = "combined" | TestType;
+
+function ordinalSuffix(value: number): string {
+  const remainder100 = value % 100;
+  if (remainder100 >= 11 && remainder100 <= 13) {
+    return "th";
+  }
+
+  const remainder10 = value % 10;
+  if (remainder10 === 1) return "st";
+  if (remainder10 === 2) return "nd";
+  if (remainder10 === 3) return "rd";
+  return "th";
+}
+
+function formatPercentile(value: number): string {
+  const rounded = Math.max(1, Math.min(99, Math.round(value)));
+  return `${rounded}${ordinalSuffix(rounded)}`;
+}
+
+function formatLastActive(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+  }).format(parsed);
+}
+
+function topRankIcon(rank: number) {
+  if (rank === 1) {
+    return <Trophy className="h-5 w-5 text-amber-500 drop-shadow-sm" />;
+  }
+  if (rank === 2) {
+    return <Medal className="h-5 w-5 text-slate-400 drop-shadow-sm" />;
+  }
+  if (rank === 3) {
+    return <Medal className="h-5 w-5 text-orange-600/80 drop-shadow-sm" />;
+  }
+  return null;
+}
+
+function entryInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "?";
+}
+
+function EntryRow({
+  entry,
+  isCurrentUser = false,
+}: {
+  entry: LeaderboardEntry;
+  isCurrentUser?: boolean;
+}) {
+  const trophyIcon = topRankIcon(entry.rank);
+  const percentileTone =
+    entry.percentile >= 90
+      ? "text-emerald-600 dark:text-emerald-400"
+      : entry.percentile >= 70
+        ? "text-sky-600 dark:text-sky-400"
+        : entry.percentile >= 50
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-rose-600 dark:text-rose-400";
+
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-[44px_minmax(0,1.2fr)_92px_78px] gap-3 px-4 py-4 transition-colors md:grid-cols-[56px_minmax(0,1.8fr)_112px_96px_108px_108px_72px_92px_86px] md:px-6",
+        isCurrentUser ? "bg-primary/[0.04]" : "hover:bg-muted/25",
+      )}
+    >
+      <div className="flex items-center justify-center">
+        {trophyIcon ? (
+          trophyIcon
+        ) : (
+          <span className={cn("text-sm font-bold", isCurrentUser ? "text-primary" : "text-muted-foreground")}>
+            {entry.rank}
+          </span>
+        )}
+      </div>
+
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+            isCurrentUser ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground",
+          )}
+        >
+          {isCurrentUser ? "You" : entryInitials(entry.name)}
+        </div>
+        <div className="min-w-0">
+          <p className={cn("truncate text-sm font-bold md:text-base", isCurrentUser ? "text-primary" : "text-foreground")}>
+            {isCurrentUser ? "Your Ranking" : entry.name}
+          </p>
+          <p className="mt-0.5 truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground md:hidden">
+            {entry.attempts} tests
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-end justify-center md:items-center">
+        <p className={cn("text-lg font-black tracking-tight md:text-xl", percentileTone)}>
+          {formatPercentile(entry.percentile)}
+        </p>
+        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">percentile</p>
+      </div>
+
+      <div className="flex items-center justify-end md:justify-center">
+        <span className="inline-flex items-center rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-mono text-xs font-bold tracking-tight text-foreground">
+          {entry.estimatedBand ?? "—"}
+        </span>
+      </div>
+
+      <div className="hidden items-center justify-center md:flex">
+        <span className="font-semibold text-foreground">{entry.readingScore ?? "—"}</span>
+      </div>
+
+      <div className="hidden items-center justify-center md:flex">
+        <span className="font-semibold text-foreground">{entry.listeningScore ?? "—"}</span>
+      </div>
+
+      <div className="hidden items-center justify-center md:flex">
+        <span className="font-semibold text-foreground">{entry.attempts}</span>
+      </div>
+
+      <div className="hidden items-center justify-center md:flex">
+        <span className="font-semibold text-foreground">
+          {entry.avgAccuracy !== null && entry.avgAccuracy !== undefined ? `${Math.round(entry.avgAccuracy)}%` : "—"}
+        </span>
+      </div>
+
+      <div className="hidden items-center justify-end md:flex">
+        <span className="text-sm font-semibold text-muted-foreground">{formatLastActive(entry.lastActiveAt)}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function LeaderboardPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("combined");
+  const api = useMemo(() => createApiClient(), []);
+  const { userId, accessToken } = useAuthStore();
 
-  // Mock filtering logic
-  const filteredData = [...mockLeaderboard]
-    .filter(entry => typeFilter === "combined" || entry.type === typeFilter || entry.isCurrentUser)
-    .sort((a, b) => a.rank - b.rank);
+  const query = useQuery<LeaderboardResponseData>({
+    queryKey: ["leaderboard", userId, typeFilter],
+    queryFn: () => api.getLeaderboard({ type: typeFilter, period: "all_time" }),
+    staleTime: 60_000,
+    enabled: Boolean(accessToken || userId),
+  });
 
-  const top10 = filteredData.filter(e => e.rank <= 10 && !e.isCurrentUser);
-  const currentUser = filteredData.find(e => e.isCurrentUser);
+  const top10 = query.data?.items.slice(0, 10) ?? [];
+  const currentUser = query.data?.currentUser ?? null;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in duration-500">
-      
-      {/* Header Card — scrolls away */}
-      <Card className="overflow-hidden bg-background border border-border/50 relative rounded-2xl shadow-sm">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-        <CardHeader className="space-y-1 relative z-10 p-5 lg:px-6 bg-muted/5">
+    <div className="mx-auto max-w-7xl space-y-6 pb-12 animate-in fade-in duration-500">
+      <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-background shadow-sm">
+        <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-sky-500/40 via-violet-500/70 to-emerald-500/40" />
+        <div className="relative z-10 space-y-1 bg-muted/5 p-5 lg:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
-              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Leaderboard</CardTitle>
-              <CardDescription className="text-muted-foreground text-sm font-medium">
-                Compare your IELTS band scores with other candidates globally.
-              </CardDescription>
+              <h1 className="text-xl font-bold tracking-tight text-foreground md:text-2xl">Leaderboard</h1>
+              <p className="text-sm font-medium text-muted-foreground">
+                Ranked by percentile using weighted Listening and Reading Z-scores for fair comparison.
+              </p>
             </div>
-            <div className="hidden md:flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+            <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary md:flex">
               <Trophy className="h-5 w-5" />
             </div>
           </div>
-        </CardHeader>
-      </Card>
+        </div>
+      </div>
 
-      {/* Sticky Filter — sticks at navbar level */}
-      <div className="sticky top-16 md:top-20 z-40 bg-background/95 backdrop-blur-md pb-4">
-        <div className="bg-muted/40 p-1.5 rounded-[1.25rem] flex items-center overflow-x-auto no-scrollbar border border-border/50 shadow-inner w-full md:w-max">
+      <div className="sticky top-16 z-40 bg-background/95 pb-4 backdrop-blur-md md:top-20">
+        <div className="flex w-full items-center overflow-x-auto rounded-[1.25rem] border border-border/50 bg-muted/40 p-1.5 shadow-inner no-scrollbar md:w-max">
           {[
             { id: "combined", label: "Overall" },
             { id: "reading", label: "Reading" },
-            { id: "listening", label: "Listening" }
-          ].map(tab => (
+            { id: "listening", label: "Listening" },
+          ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setTypeFilter(tab.id as TypeFilter)}
               className={cn(
-                "flex-1 sm:flex-none px-5 py-2.5 text-[14px] font-black rounded-xl transition-all whitespace-nowrap",
+                "flex-1 whitespace-nowrap rounded-xl px-5 py-2.5 text-[14px] font-black transition-all sm:flex-none",
                 typeFilter === tab.id
-                  ? "bg-primary text-primary-foreground shadow-[0_4px_14px_-2px_rgba(var(--primary),0.4)] scale-[1.02]"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  ? "scale-[1.02] bg-primary text-primary-foreground shadow-[0_4px_14px_-2px_rgba(var(--primary),0.4)]"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
             >
               {tab.label}
@@ -65,161 +214,56 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* Main Table Card */}
-      <div>
-        <Card className="border-border/50 shadow-lg shadow-black/5 bg-card/50 backdrop-blur-xl rounded-3xl overflow-hidden">
-          
-          {/* Table Header */}
-          <div className="grid grid-cols-[40px_1.5fr_1fr_1fr_60px] md:grid-cols-[60px_2fr_1fr_1fr_80px] items-center gap-4 p-4 md:px-8 border-b border-border/50 bg-muted/20 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-            <div className="text-center">Rank</div>
-            <div>Candidate</div>
-            <div className="hidden sm:block text-center">Practice Breakdown</div>
-            <div className="hidden sm:block text-right pr-4">Total Time</div>
-            <div className="text-right">Band</div>
-          </div>
+      <div className="overflow-hidden rounded-3xl border border-border/50 bg-card/50 shadow-lg shadow-black/5 backdrop-blur-xl">
+        <div className="grid grid-cols-[44px_minmax(0,1.2fr)_92px_78px] gap-3 border-b border-border/50 bg-muted/20 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground md:grid-cols-[56px_minmax(0,1.8fr)_112px_96px_108px_108px_72px_92px_86px] md:px-6">
+          <div className="text-center">Rank</div>
+          <div>Candidate</div>
+          <div className="text-right md:text-center">Percentile</div>
+          <div className="text-right md:text-center">Band</div>
+          <div className="hidden text-center md:block">Reading</div>
+          <div className="hidden text-center md:block">Listening</div>
+          <div className="hidden text-center md:block">Tests</div>
+          <div className="hidden text-center md:block">Avg Acc</div>
+          <div className="hidden text-right md:block">Last Active</div>
+        </div>
 
-          {/* Top 10 List */}
+        <div className="p-0">
           <div className="divide-y divide-border/40">
-            {top10.length > 0 ? top10.map((entry) => {
-              const isFirst = entry.rank === 1;
-              const isSecond = entry.rank === 2;
-              const isThird = entry.rank === 3;
-
-              return (
-                <div
-                  key={`${entry.rank}-${entry.name}`}
-                  className="grid grid-cols-[40px_1fr_60px] sm:grid-cols-[40px_1.5fr_1fr_1fr_60px] md:grid-cols-[60px_2fr_1fr_1fr_80px] items-center gap-4 p-4 md:px-8 hover:bg-muted/30 transition-colors group"
-                >
-                  {/* Rank Column */}
-                  <div className="flex justify-center">
-                    {isFirst ? (
-                      <Trophy className="h-5 w-5 text-amber-500 drop-shadow-sm" />
-                    ) : isSecond ? (
-                      <Medal className="h-5 w-5 text-slate-400 drop-shadow-sm" />
-                    ) : isThird ? (
-                      <Medal className="h-5 w-5 text-orange-600/80 drop-shadow-sm" />
-                    ) : (
-                      <span className="font-bold text-base text-muted-foreground group-hover:text-foreground transition-colors">
-                        {entry.rank}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Candidate Column */}
-                  <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                    <div className={cn(
-                      "h-9 w-9 md:h-10 md:w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0",
-                      isFirst ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/20" :
-                      isSecond ? "bg-slate-500/10 text-slate-600 dark:text-slate-400 ring-1 ring-slate-500/20" :
-                      isThird ? "bg-orange-500/10 text-orange-600 dark:text-orange-500 ring-1 ring-orange-500/20" :
-                      "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors"
-                    )}>
-                      {entry.name.charAt(0)}
-                    </div>
-                    <div className="truncate">
-                      <p className="font-bold text-sm md:text-base text-foreground truncate">{entry.name}</p>
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5 truncate sm:hidden">
-                        {entry.attempts} tests
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Breakdown Column */}
-                  <div className="hidden sm:flex flex-col items-center justify-center">
-                    <div className="flex items-center gap-2 text-[11px] font-medium">
-                      <span className="text-blue-500 font-bold">{entry.readingAttempts} R</span>
-                      <span className="w-1 h-1 rounded-full bg-border" />
-                      <span className="text-emerald-500 font-bold">{entry.listeningAttempts} L</span>
-                    </div>
-                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                      {entry.attempts} Total
-                    </p>
-                  </div>
-
-                  {/* Time Column */}
-                  <div className="hidden sm:flex justify-end pr-4">
-                    <Badge variant="outline" className="bg-muted/50 border-border/50 text-muted-foreground font-mono font-bold tracking-tight">
-                      {entry.totalTime}
-                    </Badge>
-                  </div>
-
-                  {/* Score Column */}
-                  <div className="text-right flex flex-col items-end">
-                    <p className={cn(
-                      "text-lg md:text-xl font-black tracking-tight",
-                      isFirst ? "text-amber-500" :
-                      isSecond ? "text-slate-500 dark:text-slate-300" :
-                      isThird ? "text-orange-600 dark:text-orange-400" :
-                      "text-foreground"
-                    )}>
-                      {entry.band}
-                    </p>
-                  </div>
-                </div>
-              );
-            }) : (
+            {query.isLoading ? (
               <div className="p-12 text-center text-sm font-bold text-muted-foreground">
-                No ranking data available for this filter.
+                Loading leaderboard...
+              </div>
+            ) : query.isError ? (
+              <div className="p-12 text-center text-sm font-bold text-muted-foreground">
+                Unable to load live leaderboard right now.
+              </div>
+            ) : top10.length > 0 ? (
+              top10.map((entry) => <EntryRow key={`${entry.rank}-${entry.userId}`} entry={entry} />)
+            ) : (
+              <div className="p-12 text-center text-sm font-bold text-muted-foreground">
+                No ranking data available yet.
               </div>
             )}
           </div>
 
-          {/* Current User Row */}
-          {currentUser && (
-            <div className="border-t-2 border-primary/20 bg-primary/[0.03] relative overflow-hidden">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
-              
-              {currentUser.rank > 10 && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-background border border-border/50 text-muted-foreground px-2 py-0.5 rounded-full z-10 shadow-sm">
+          {currentUser ? (
+            <div className="relative overflow-hidden border-t-2 border-primary/20 bg-primary/[0.03]">
+              <div className="absolute bottom-0 left-0 top-0 w-1 bg-primary" />
+              {currentUser.rank > 10 ? (
+                <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border/50 bg-background px-2 py-0.5 text-muted-foreground shadow-sm">
                   <Minus className="h-4 w-4" />
                 </div>
-              )}
-
-              <div className="grid grid-cols-[40px_1fr_60px] sm:grid-cols-[40px_1.5fr_1fr_1fr_60px] md:grid-cols-[60px_2fr_1fr_1fr_80px] items-center gap-4 p-4 md:px-8 mt-2">
-                <div className="flex flex-col items-center">
-                  <span className="font-black text-primary text-base md:text-lg">{currentUser.rank}</span>
-                  <TrendingUp className="h-3 w-3 text-emerald-500 mt-1" />
-                </div>
-
-                <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                  <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
-                    You
-                  </div>
-                  <div className="truncate">
-                    <p className="font-bold text-sm md:text-base text-primary truncate">Your Ranking</p>
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5 truncate sm:hidden">
-                      {currentUser.attempts} tests
-                    </p>
-                  </div>
-                </div>
-
-                {/* Breakdown Column */}
-                <div className="hidden sm:flex flex-col items-center justify-center">
-                  <div className="flex items-center gap-2 text-[11px] font-medium">
-                    <span className="text-blue-500 font-bold">{currentUser.readingAttempts} R</span>
-                    <span className="w-1 h-1 rounded-full bg-border" />
-                    <span className="text-emerald-500 font-bold">{currentUser.listeningAttempts} L</span>
-                  </div>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                    {currentUser.attempts} Total
-                  </p>
-                </div>
-
-                {/* Time Column */}
-                <div className="hidden sm:flex justify-end pr-4">
-                  <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary font-mono font-bold tracking-tight">
-                    {currentUser.totalTime}
-                  </Badge>
-                </div>
-
-                <div className="text-right flex flex-col items-end">
-                  <p className="text-xl md:text-2xl font-black tracking-tight text-primary drop-shadow-sm">{currentUser.band}</p>
-                  <p className="text-[9px] font-bold text-primary/60 uppercase tracking-widest mt-0.5">Current</p>
-                </div>
+              ) : null}
+              <div className="mt-2">
+                <EntryRow entry={currentUser} isCurrentUser />
+              </div>
+              <div className="flex items-center justify-center gap-1.5 pb-3 text-[10px] font-bold uppercase tracking-widest text-primary/70">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                Current
               </div>
             </div>
-          )}
-        </Card>
+          ) : null}
+        </div>
       </div>
     </div>
   );

@@ -49,8 +49,13 @@ class AttemptStatus(StrEnum):
 class PaymentStatus(StrEnum):
     PAUSED = "paused"
     PENDING = "pending"
+    MATCHED = "matched"
     COMPLETED = "completed"
+    EXPIRED = "expired"
+    CANCELED = "canceled"
+    REVIEW = "review"
     FAILED = "failed"
+    REFUNDED = "refunded"
 
 
 class ReviewSource(StrEnum):

@@ -469,6 +469,38 @@ function parseBraceBoldText(text: string) {
   return { plainText, boldRanges, bulletLineIndexes };
 }
 
+function parseBinaryInstructionLayout(text: string) {
+  const lines = text.split("\n");
+  const prefixLines: string[] = [];
+  const optionRows: Array<{ label: string; detail: string }> = [];
+  let sawOptionRow = false;
+
+  for (const line of lines) {
+    const match = line.match(/^\{([^}]+)\}(?:\t+|\s{2,})(.+)$/);
+    if (match) {
+      sawOptionRow = true;
+      optionRows.push({
+        label: match[1]?.trim() ?? "",
+        detail: match[2]?.trim() ?? "",
+      });
+      continue;
+    }
+
+    if (!sawOptionRow) {
+      prefixLines.push(line);
+    }
+  }
+
+  if (optionRows.length < 2) {
+    return null;
+  }
+
+  return {
+    prefix: prefixLines.join("\n").trimEnd(),
+    optionRows,
+  };
+}
+
 
 function toggleMultiValue(current: string | undefined, next: string, maxValues = 2) {
   const existing = (current ?? "")
@@ -592,6 +624,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   );
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCalculatingResults, setIsCalculatingResults] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeDialog, setActiveDialog] = useState<PreviewDialog>(null);
   const [activeQuestionId, setActiveQuestionId] = useState(initialQuestionId);
@@ -1258,8 +1291,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       }
       clearAttemptBackup();
       allowLeaveRef.current = true;
+      setIsCalculatingResults(true);
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
       router.push(`/attempts/${examData.attemptId}/result`);
     } catch {
+      setIsCalculatingResults(false);
       setIsSubmitted(false);
       setIsSubmitting(false);
     }
@@ -1893,6 +1929,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     return renderHighlightedText(keyPrefix, text);
   }
 
+  function renderInstructionText(blockKey: string, text: string) {
+    const binaryLayout = parseBinaryInstructionLayout(text);
+    if (!binaryLayout) {
+      return renderHighlightedText(blockKey, text);
+    }
+
+    return (
+      <div className="space-y-2">
+        {binaryLayout.prefix ? (
+          <div className="whitespace-pre-wrap">
+            {renderHighlightedText(`${blockKey}-prefix`, binaryLayout.prefix)}
+          </div>
+        ) : null}
+        <div className="grid gap-y-1">
+          {binaryLayout.optionRows.map((row, index) => (
+            <div key={`${blockKey}-row-${row.label}-${index}`} className="grid grid-cols-[5.5rem_1fr] items-start gap-x-1">
+              <strong className="font-bold text-foreground">{row.label}</strong>
+              <span>{row.detail}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
@@ -2470,6 +2531,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     if (isMatching(question.type)) {
       const isMatchingInformation = question.type.includes("matching_information");
+      const isMatchingFeatures = question.type.includes("matching_features");
+      const isInlineMatching = isMatchingInformation || isMatchingFeatures;
       const sectionKey = group.sectionId ?? group.sectionLabel ?? "section";
       const matchingInformationOptions = matchingInformationParagraphOptions.get(sectionKey) ?? [];
       const matchingOptions = typedQuestionOptionLines(group, question, matchingInformationOptions);
@@ -2480,14 +2543,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       );
 
       return (
-        <div className={isMatchingInformation ? "min-w-[92px] max-w-[126px] flex-none" : "pl-12"}>
-          <div className={cn("relative", isMatchingInformation ? "max-w-[126px]" : "max-w-sm")}>
+        <div className={cn(
+          isMatchingInformation
+            ? "min-w-[92px] max-w-[126px] flex-none"
+            : isMatchingFeatures
+              ? "min-w-[150px] max-w-[210px] flex-none"
+              : "pl-12"
+        )}>
+          <div className={cn(
+            "relative",
+            isMatchingInformation
+              ? "max-w-[126px]"
+              : isMatchingFeatures
+                ? "max-w-[210px]"
+                : "max-w-sm"
+          )}>
             <select
               value={normalizedMatchingValue}
               onChange={(event) => persistAnswer(question.id, event.target.value)}
               className={cn(
                 "flex w-full appearance-none items-center rounded-xl border border-border bg-card text-sm font-semibold text-foreground shadow-none outline-none transition",
-                isMatchingInformation ? "h-8 px-3 pr-8" : "h-9 px-4 pr-10",
+                isMatchingInformation
+                  ? "h-8 px-3 pr-8"
+                  : isMatchingFeatures
+                    ? "h-8 px-3 pr-8"
+                    : "h-9 px-4 pr-10",
                 theme === "light"
                   ? "focus:border-[#2f436f]"
                   : "focus:border-primary/45"
@@ -2509,7 +2589,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 );
               })}
             </select>
-            <ChevronDown className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground", isMatchingInformation ? "right-2 h-3.5 w-3.5" : "right-3 h-4 w-4")} />
+            <ChevronDown className={cn(
+              "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
+              isInlineMatching ? "right-2 h-3.5 w-3.5" : "right-3 h-4 w-4"
+            )} />
           </div>
         </div>
       );
@@ -2653,6 +2736,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           >
             <Eraser className="h-4 w-4" />
           </button>
+        </div>
+      ) : null}
+
+      {isCalculatingResults ? (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xs rounded-[1.5rem] border border-border/80 bg-card px-6 py-5 text-center shadow-[0_40px_120px_-30px_rgba(15,23,42,0.55)]">
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-border border-t-foreground/80" />
+            <p className="text-sm font-semibold text-foreground">Calculating your results…</p>
+          </div>
         </div>
       ) : null}
 
@@ -3003,17 +3095,17 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     </h3>
                       );
                     })()}
-                    <p
+                    <div
                       ref={(node) => {
                         textBlockRefs.current[`group-instruction-${group.id}`] = node;
                       }}
                       data-highlight-text
                       onMouseUp={(event) => handleTextBlockMouseUp(`group-instruction-${group.id}`, event)}
-                      className="mt-2 select-text text-sm font-medium leading-6 text-foreground"
+                      className="mt-2 whitespace-pre-wrap select-text text-sm font-medium leading-6 text-foreground"
                       style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                     >
-                      {renderHighlightedText(`group-instruction-${group.id}`, group.instruction)}
-                    </p>
+                      {renderInstructionText(`group-instruction-${group.id}`, group.instruction)}
+                    </div>
                   </div>
 
                   <div className="space-y-4 px-0 py-2">
@@ -3026,6 +3118,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         ? group.questions.map((question) => {
                           const isBinaryQuestion = isTfng(question.type) || isYnng(question.type);
                           const isMatchingInformationQuestion = question.type.includes("matching_information");
+                          const isMatchingFeaturesQuestion = question.type.includes("matching_features");
+                          const isInlineMatchingQuestion = isMatchingInformationQuestion || isMatchingFeaturesQuestion;
                           const inlineQuestionLabel = question.label ?? String(question.number);
                           return (
                           <div
@@ -3034,27 +3128,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                             onClick={() => setActiveQuestionId(question.id)}
                             className={cn(
                               "px-0 transition",
-                              isMatchingInformationQuestion ? "py-0.5" : "py-2",
+                              isInlineMatchingQuestion ? "py-0" : "py-2",
                               activeQuestionId === question.id && ""
                             )}
                           >
-                            <div className={cn("mb-2.5 flex items-start gap-3", isBinaryQuestion && "mb-1.5", isMatchingInformationQuestion && "mb-0.5 gap-2 items-center")}>
-                              <div className={cn("min-w-0 flex-1 space-y-1", isMatchingInformationQuestion && "flex flex-1 flex-wrap items-center gap-2 space-y-0", isMcqMultiple(question.type) && "space-y-0")}>
+                            <div className={cn("mb-2.5 flex items-start gap-3", isBinaryQuestion && "mb-1.5", isInlineMatchingQuestion && "mb-0 gap-1.5 items-start")}>
+                              <div className={cn("min-w-0 flex-1 space-y-1", isInlineMatchingQuestion && "flex flex-1 flex-wrap items-start gap-1.5 space-y-0", isMcqMultiple(question.type) && "space-y-0")}>
                                 <p
                                   ref={(node) => {
                                     textBlockRefs.current[`question-prompt-${question.id}`] = node;
                                   }}
                                   data-highlight-text
                                   onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
-                                  className={cn("select-text font-sans text-foreground", isMatchingInformationQuestion && "min-w-[160px] flex-1")}
-                                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
+                                  className={cn(
+                                    "select-text font-sans text-foreground",
+                                    isMatchingInformationQuestion && "min-w-[160px] flex-1",
+                                    isMatchingFeaturesQuestion && "min-w-[180px] flex-1"
+                                  )}
+                                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: isInlineMatchingQuestion ? 1.35 : 1.5 }}
                                 >
                                   <span className="mr-3 inline-block whitespace-nowrap text-[16px] font-bold tracking-tight text-foreground">
                                     {inlineQuestionLabel}
                                   </span>
                                   {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
                                 </p>
-                                {isMatchingInformationQuestion ? renderQuestionControl(question, group) : null}
+                                {isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
                                 {question.instruction && !group.instruction?.trim() && !isBinaryQuestion && !isMatching(question.type) ? (
                                   <p
                                     ref={(node) => {
@@ -3070,7 +3168,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                               </div>
                             </div>
 
-                            {!isMatchingInformationQuestion ? renderQuestionControl(question, group) : null}
+                            {!isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
                           </div>
                         );
                         })
@@ -3106,7 +3204,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       <footer className="sticky bottom-0 z-30 border-t border-border/80 bg-background/95 backdrop-blur-xl">
         <div className="mx-auto max-w-[1800px] px-4 py-2 lg:px-6">
           <div className="flex w-full flex-col gap-2">
-            <div className="flex items-center justify-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex min-h-[2.25rem] items-center justify-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {previewSections.length > 1 ? (
                 <div className="flex w-full items-stretch gap-0">
                   {previewSections.map((section, index) => {
@@ -3183,7 +3281,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                                     navigateToQuestion(question.id);
                                   }}
                                   className={cn(
-                                    "flex h-7 shrink-0 flex-col items-center justify-center gap-0 rounded-md border px-0.5 py-0 transition",
+                                    "flex h-7 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-0 transition",
                                     isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
                                     questionActive
                                       ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
@@ -3194,7 +3292,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                                 >
                                   <span
                                     className={cn(
-                                      "-mt-0.5 mb-0.5 h-1 rounded-full transition",
+                                      "mb-0.5 h-1 rounded-full transition",
                                       isRangeLabel ? "w-8" : "w-3.5",
                                       answered ? "bg-emerald-500" : "bg-transparent"
                                     )}
@@ -3212,7 +3310,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   })}
                 </div>
               ) : (
-                <div className="flex w-full items-center justify-center gap-3">
+                <div className="flex min-h-[2.25rem] w-full items-center justify-center gap-3">
                   <div className="flex shrink-0 items-center gap-1.5 pr-1">
                     <span
                       className={cn(
@@ -3242,7 +3340,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                             type="button"
                             onClick={() => navigateToQuestion(question.id)}
                             className={cn(
-                              "flex h-6 shrink-0 flex-col items-center justify-center gap-0 rounded-md border px-0.5 py-0 transition",
+                              "flex h-7 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-0 transition",
                               isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
                               active
                                 ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
@@ -3253,7 +3351,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                           >
                             <span
                               className={cn(
-                                "-mt-1.5 mb-0.5 h-1 rounded-full transition",
+                                "mb-0.5 h-1 rounded-full transition",
                                 isRangeLabel ? "w-8" : "w-3.5",
                                 answered
                                   ? "bg-emerald-500"

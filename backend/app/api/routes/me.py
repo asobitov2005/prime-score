@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +54,7 @@ from app.services.payment_service import (
 )
 from app.services.runtime_store import iter_user_attempts
 from app.services.user_names import normalize_user_name_parts
+from app.services.payment_events import payment_event_bus
 
 router = APIRouter()
 
@@ -540,6 +542,7 @@ async def list_my_payments(
                 Payment.status.in_(("pending", "matched", "completed", "expired", "canceled", "review", "failed")),
             )
             .order_by(Payment.created_at.desc())
+            .limit(20)
         )
     ).all()
     return [_serialize_me_payment(payment, plan) for payment, plan in rows]
@@ -606,6 +609,79 @@ async def cancel_my_payment(
     return MePaymentCancelResponse(
         message="Payment invoice canceled.",
         payment=_serialize_me_payment(payment, plan),
+    )
+
+
+@router.get("/payments/stream")
+async def stream_payment_events(
+    request: Request,
+    token: str | None = Query(default=None),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    session: AsyncSession = Depends(get_db_session),
+) -> StreamingResponse:
+    """SSE endpoint for real-time payment status updates.
+
+    Accepts auth via:
+    - Authorization: Bearer <token> header
+    - ?token=<token> query param (for EventSource which can't set headers)
+
+    Events:
+    - payment_matched: detector found a matching transfer
+    - payment_completed: premium granted successfully
+    - payment_expired: invoice TTL exceeded
+    - heartbeat: keep-alive every 15s
+    """
+    import asyncio
+    from app.core.security import decode_token as _decode_token
+    from jose import JWTError
+
+    # Resolve user from token query param or Authorization header
+    raw_token = token
+    if not raw_token and authorization:
+        _scheme, _, _tok = authorization.partition(" ")
+        if _scheme.lower() == "bearer" and _tok:
+            raw_token = _tok
+
+    if not raw_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required for SSE stream.")
+
+    try:
+        payload = _decode_token(raw_token)
+        user_id = UUID(str(payload["sub"]))
+    except (JWTError, KeyError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token.") from exc
+
+    if payload.get("scope") == "admin":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token scope.")
+
+    queue = payment_event_bus.subscribe(user_id)
+
+    async def event_generator():
+        try:
+            # Send initial connection event
+            yield "event: connected\ndata: {}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    if message is None:
+                        break
+                    yield message
+                except asyncio.TimeoutError:
+                    # Send heartbeat to keep connection alive
+                    yield ": heartbeat\n\n"
+        finally:
+            payment_event_bus.unsubscribe(user_id, queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

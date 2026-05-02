@@ -146,3 +146,10 @@ class AdminPaymentUpdateRequest(BaseModel):
         PaymentStatus.failed,
     ]
     status_reason: str | None = Field(default=None, max_length=255)
+
+
+class AdminPaymentListResponse(BaseModel):
+    items: list[AdminPaymentRead]
+    total: int
+    page: int
+    page_size: int

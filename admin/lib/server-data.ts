@@ -424,24 +424,28 @@ export async function getAdminPlans(): Promise<AdminPlanSummary[]> {
   }
 }
 
-export async function getAdminPayments(): Promise<AdminPaymentSummary[]> {
+export async function getAdminPayments(page: number = 1, limit: number = 20): Promise<{ items: AdminPaymentSummary[], total: number, page: number }> {
   try {
-    const payments = await requestAdmin<BackendPayment[]>("/payments");
-    return payments.map((item) => ({
-      id: item.id,
-      invoiceCode: item.invoice_code,
-      user: item.user_name ?? (item.user_username ? `@${item.user_username}` : "Unknown user"),
-      plan: item.plan_name,
-      method: item.method,
-      status: item.status,
-      amount: typeof item.amount === "number" ? item.amount.toLocaleString("en-US") : String(item.amount),
-      card: item.card_number ?? "-",
-      expiresAt: item.expires_at ?? null,
-      statusReason: item.status_reason ?? null,
-      updatedAt: item.updated_at ?? new Date().toISOString(),
-    }));
+    const response = await requestAdmin<{ items: BackendPayment[], total: number, page: number }>(`/payments?page=${page}&limit=${limit}`);
+    return {
+      items: response.items.map((item) => ({
+        id: item.id,
+        invoiceCode: item.invoice_code,
+        user: item.user_name ?? (item.user_username ? `@${item.user_username}` : "Unknown user"),
+        plan: item.plan_name,
+        method: item.method,
+        status: item.status,
+        amount: typeof item.amount === "number" ? item.amount.toLocaleString("en-US") : String(item.amount),
+        card: item.card_number ?? "-",
+        expiresAt: item.expires_at ?? null,
+        statusReason: item.status_reason ?? null,
+        updatedAt: item.updated_at ?? new Date().toISOString(),
+      })),
+      total: response.total,
+      page: response.page,
+    };
   } catch {
-    return [];
+    return { items: [], total: 0, page: 1 };
   }
 }
 

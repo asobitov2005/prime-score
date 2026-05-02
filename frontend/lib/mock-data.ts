@@ -4,13 +4,15 @@ import type {
   AttemptWorkspaceMeta,
   DashboardStat,
   LeaderboardEntry,
+  LeaderboardResponseData,
   ListeningPart,
   ReadingPassage,
   TestCatalogItem,
   TestQuestion,
   TestQuestionGroup,
   TestScope,
-  TestSectionSummary
+  TestSectionSummary,
+  TestType
 } from "@/lib/types";
 
 
@@ -680,17 +682,17 @@ export const mockAttempts: AttemptRow[] = [
 ];
 
 export const mockLeaderboard: LeaderboardEntry[] = [
-  { rank: 1, name: "Ali T.", type: "reading", band: "8.5", attempts: 45, readingAttempts: 30, listeningAttempts: 15, totalTime: "28h 15m", qualified: true },
-  { rank: 2, name: "Maria K.", type: "listening", band: "8.0", attempts: 38, readingAttempts: 18, listeningAttempts: 20, totalTime: "24h 00m", qualified: true },
-  { rank: 3, name: "John D.", type: "combined", band: "8.0", attempts: 52, readingAttempts: 26, listeningAttempts: 26, totalTime: "32h 45m", qualified: true },
-  { rank: 4, name: "Sarah L.", type: "reading", band: "7.5", attempts: 31, readingAttempts: 21, listeningAttempts: 10, totalTime: "19h 30m", qualified: true },
-  { rank: 5, name: "Michael R.", type: "listening", band: "7.5", attempts: 28, readingAttempts: 10, listeningAttempts: 18, totalTime: "17h 20m", qualified: true },
-  { rank: 6, name: "Elena V.", type: "combined", band: "7.5", attempts: 40, readingAttempts: 20, listeningAttempts: 20, totalTime: "25h 10m", qualified: true },
-  { rank: 7, name: "Ahmad M.", type: "reading", band: "7.0", attempts: 19, readingAttempts: 15, listeningAttempts: 4, totalTime: "12h 05m", qualified: true },
-  { rank: 8, name: "Jessica W.", type: "listening", band: "7.0", attempts: 22, readingAttempts: 8, listeningAttempts: 14, totalTime: "14h 40m", qualified: true },
-  { rank: 9, name: "David Chen", type: "combined", band: "7.0", attempts: 35, readingAttempts: 17, listeningAttempts: 18, totalTime: "22h 15m", qualified: true },
-  { rank: 10, name: "Fatima S.", type: "reading", band: "7.0", attempts: 27, readingAttempts: 20, listeningAttempts: 7, totalTime: "16h 50m", qualified: true },
-  { rank: 42, name: "You", type: "reading", band: "6.5", attempts: 23, readingAttempts: 15, listeningAttempts: 8, totalTime: "14h 32m", qualified: true, isCurrentUser: true }
+  { rank: 1, userId: "lb-1", name: "Ali T.", type: "combined", percentile: 98, estimatedBand: "8.5", readingScore: "34.0/40", listeningScore: "36.0/40", attempts: 45, totalTime: "28h 15m", avgAccuracy: 87, lastActiveAt: "2026-05-01T10:00:00Z", qualified: true },
+  { rank: 2, userId: "lb-2", name: "Maria K.", type: "combined", percentile: 95, estimatedBand: "8.0", readingScore: "32.0/40", listeningScore: "35.0/40", attempts: 38, totalTime: "24h 00m", avgAccuracy: 84, lastActiveAt: "2026-04-30T10:00:00Z", qualified: true },
+  { rank: 3, userId: "lb-3", name: "John D.", type: "combined", percentile: 92, estimatedBand: "8.0", readingScore: "31.0/40", listeningScore: "34.0/40", attempts: 52, totalTime: "32h 45m", avgAccuracy: 82, lastActiveAt: "2026-04-29T10:00:00Z", qualified: true },
+  { rank: 4, userId: "lb-4", name: "Sarah L.", type: "combined", percentile: 88, estimatedBand: "7.5", readingScore: "30.0/40", listeningScore: "32.0/40", attempts: 31, totalTime: "19h 30m", avgAccuracy: 78, lastActiveAt: "2026-04-28T10:00:00Z", qualified: true },
+  { rank: 5, userId: "lb-5", name: "Michael R.", type: "combined", percentile: 84, estimatedBand: "7.5", readingScore: "29.0/40", listeningScore: "31.0/40", attempts: 28, totalTime: "17h 20m", avgAccuracy: 75, lastActiveAt: "2026-04-27T10:00:00Z", qualified: true },
+  { rank: 6, userId: "lb-6", name: "Elena V.", type: "combined", percentile: 78, estimatedBand: "7.0", readingScore: "28.0/40", listeningScore: "30.0/40", attempts: 40, totalTime: "25h 10m", avgAccuracy: 73, lastActiveAt: "2026-04-26T10:00:00Z", qualified: true },
+  { rank: 7, userId: "lb-7", name: "Ahmad M.", type: "combined", percentile: 70, estimatedBand: "6.5", readingScore: "27.0/40", listeningScore: "28.0/40", attempts: 19, totalTime: "12h 05m", avgAccuracy: 69, lastActiveAt: "2026-04-25T10:00:00Z", qualified: true },
+  { rank: 8, userId: "lb-8", name: "Jessica W.", type: "combined", percentile: 64, estimatedBand: "6.5", readingScore: "26.0/40", listeningScore: "27.0/40", attempts: 22, totalTime: "14h 40m", avgAccuracy: 66, lastActiveAt: "2026-04-24T10:00:00Z", qualified: true },
+  { rank: 9, userId: "lb-9", name: "David Chen", type: "combined", percentile: 57, estimatedBand: "6.0", readingScore: "24.0/40", listeningScore: "26.0/40", attempts: 35, totalTime: "22h 15m", avgAccuracy: 62, lastActiveAt: "2026-04-23T10:00:00Z", qualified: true },
+  { rank: 10, userId: "lb-10", name: "Fatima S.", type: "combined", percentile: 49, estimatedBand: "5.5", readingScore: "22.0/40", listeningScore: "24.0/40", attempts: 27, totalTime: "16h 50m", avgAccuracy: 58, lastActiveAt: "2026-04-22T10:00:00Z", qualified: true },
+  { rank: 42, userId: "lb-you", name: "You", type: "combined", percentile: 31, estimatedBand: "5.0", readingScore: "18.0/40", listeningScore: "21.0/40", attempts: 23, totalTime: "14h 32m", avgAccuracy: 47, lastActiveAt: "2026-05-01T10:00:00Z", qualified: true, isCurrentUser: true }
 ];
 
 export const mockProgressSeries = [
@@ -759,12 +761,19 @@ export function getAttemptsByType(type?: string): AttemptRow[] {
   return mockAttempts.filter((attempt) => attempt.type === type);
 }
 
-export function getLeaderboardByType(type?: string): LeaderboardEntry[] {
-  if (!type || type === "combined") {
-    return mockLeaderboard;
-  }
+export function getLeaderboardByType(type?: string): LeaderboardResponseData {
+  const selectedType = (type as TestType | "combined" | undefined) ?? "combined";
+  const items = mockLeaderboard
+    .filter((entry) => !entry.isCurrentUser)
+    .map((entry) => ({ ...entry, type: selectedType }));
+  const currentUserBase = mockLeaderboard.find((entry) => entry.isCurrentUser) ?? null;
 
-  return mockLeaderboard.filter((entry) => entry.type === type || entry.type === "combined" || entry.isCurrentUser);
+  return {
+    type: selectedType,
+    period: "all_time",
+    items,
+    currentUser: currentUserBase ? { ...currentUserBase, type: selectedType } : null,
+  };
 }
 
 export function getAttemptModeLabel(mode: AttemptMode): string {

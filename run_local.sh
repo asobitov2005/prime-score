@@ -33,15 +33,15 @@ echo "[start] Launching services..."
   > backend/backend_log.txt 2>&1 &
 PID_API=$!
 
-(cd backend && .venv/bin/python -m app.bot.main) \
+(cd backend && .venv/bin/watchfiles --filter python '.venv/bin/python -m app.bot.main' app) \
   > backend/bot_log.txt 2>&1 &
 PID_BOT=$!
 
-(cd frontend && npm run dev -- -p 3100) \
+(cd frontend && npm run dev -- -H 0.0.0.0 -p 3100) \
   > frontend/frontend_log.txt 2>&1 &
 PID_FE=$!
 
-(cd admin && npm run dev -- -p 3101) \
+(cd admin && npm run dev -- -H 0.0.0.0 -p 3101) \
   > admin/admin_log.txt 2>&1 &
 PID_ADM=$!
 

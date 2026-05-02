@@ -31,6 +31,8 @@ export type BackendAttemptSnapshot = {
   title: string;
   test_type: TestType;
   format?: string | null;
+  source?: string | null;
+  source_detail?: string | null;
   scope: TestScope;
   mode: AttemptMode;
   section_id?: string | null;
@@ -104,11 +106,15 @@ export type BackendAttemptResult = {
   status: string;
   test_id: string;
   test_type: TestType;
+  test_format?: string | null;
+  source?: string | null;
+  source_detail?: string | null;
   test_title?: string | null;
   raw_score?: number | null;
   band_score?: number | string | null;
   answers_count: number;
   total_questions: number;
+  time_spent_sec?: number;
   score_status: string;
   completed_at?: string | null;
   section_breakdown: Array<{

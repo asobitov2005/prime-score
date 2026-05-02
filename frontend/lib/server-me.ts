@@ -304,6 +304,20 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   }
 }
 
+export async function getLeaderboardRank(type: "combined" | TestType = "combined"): Promise<number | null> {
+  try {
+    const payload = await requestBackend<{
+      current_user?: {
+        rank: number;
+      } | null;
+    }>(`/leaderboard?type=${encodeURIComponent(type)}&period=all_time`);
+    const rank = payload.current_user?.rank ?? null;
+    return typeof rank === "number" && rank > 0 ? rank : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
   try {
     const analytics = await requestBackend<BackendDashboardAnalytics>("/me/analytics");

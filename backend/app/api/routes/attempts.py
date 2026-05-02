@@ -34,6 +34,12 @@ from app.services.runtime_store import get_attempt, save_answer, save_progress, 
 router = APIRouter()
 
 
+def _count_answered_values(answers: dict[str, str] | None) -> int:
+    if not answers:
+        return 0
+    return sum(1 for value in answers.values() if str(value or "").strip())
+
+
 def _normalize_attempt_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
     normalized_snapshot = dict(snapshot)
     normalized_sections: list[dict[str, object]] = []
@@ -137,7 +143,7 @@ async def get_attempt_view(
         completed_at=attempt.completed_at,
         time_spent_sec=attempt.time_spent_sec,
         total_questions=attempt.total_questions,
-        answers_count=len(attempt.answers),
+        answers_count=_count_answered_values(attempt.answers),
         raw_score=attempt.raw_score,
         band_score=attempt.band_score,
         score_status=str(attempt.metadata.get("score_status", "queued")),
@@ -273,7 +279,7 @@ async def submit_attempt_view(
         completed_at=attempt.completed_at,
         time_spent_sec=attempt.time_spent_sec,
         total_questions=attempt.total_questions,
-        answers_count=len(attempt.answers),
+        answers_count=_count_answered_values(attempt.answers),
         raw_score=attempt.raw_score,
         band_score=attempt.band_score,
         score_status=str(attempt.metadata.get("score_status", "queued")),
@@ -297,11 +303,15 @@ async def get_result(
         status=attempt.status,
         test_id=attempt.test_id,
         test_type=snapshot.get("test_type", TestType.reading),
+        test_format=str(snapshot.get("format") or "full"),
+        source=snapshot.get("source"),
+        source_detail=(str(snapshot.get("source_detail")) if snapshot.get("source_detail") is not None else None),
         test_title=str(snapshot.get("title")),
         raw_score=attempt.raw_score,
         band_score=attempt.band_score,
-        answers_count=len(attempt.answers),
+        answers_count=_count_answered_values(attempt.answers),
         total_questions=attempt.total_questions,
+        time_spent_sec=attempt.time_spent_sec,
         score_status=str(attempt.metadata.get("score_status", "queued")),
         completed_at=attempt.completed_at,
         section_breakdown=[

@@ -19,9 +19,9 @@ import type {
   TestListQuery
 } from "@/lib/api/types";
 import { FRONTEND_API_TIMEOUT_MS, getFrontendClientApiBaseUrl, getFrontendServerApiBaseUrl } from "@/lib/api-base";
-import { getAttemptsByType, getLeaderboardByType, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
+import { getAttemptsByType, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
 import { useAuthStore } from "@/store/auth-store";
-import type { AccessType, AttemptRow, LeaderboardEntry, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
+import type { AccessType, AttemptRow, LeaderboardEntry, LeaderboardResponseData, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
 
 export class ApiError extends Error {
   status: number;
@@ -44,6 +44,57 @@ interface NotificationItem {
   body: string;
   is_read: boolean;
   created_at: string;
+}
+
+type BackendLeaderboardEntry = {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  test_type: TestType | "combined";
+  percentile: number;
+  estimated_band_score?: number | null;
+  reading_score?: number | null;
+  listening_score?: number | null;
+  total_tests_attempted: number;
+  avg_accuracy?: number | null;
+  total_time_sec: number;
+  last_active_at?: string | null;
+  is_current_user?: boolean;
+};
+
+type BackendLeaderboardResponse = {
+  test_type: TestType | "combined";
+  period: "week" | "month" | "all_time";
+  items: BackendLeaderboardEntry[];
+  current_user?: BackendLeaderboardEntry | null;
+};
+
+function formatLeaderboardDuration(totalSeconds: number | null | undefined): string {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds ?? 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function mapBackendLeaderboardEntry(entry: BackendLeaderboardEntry): LeaderboardEntry {
+  return {
+    rank: entry.rank,
+    userId: entry.user_id,
+    name: entry.display_name,
+    type: entry.test_type,
+    percentile: entry.percentile,
+    estimatedBand: entry.estimated_band_score !== null && entry.estimated_band_score !== undefined
+      ? entry.estimated_band_score.toFixed(1)
+      : null,
+    readingScore: entry.reading_score !== null && entry.reading_score !== undefined ? `${entry.reading_score.toFixed(1)}/40` : null,
+    listeningScore: entry.listening_score !== null && entry.listening_score !== undefined ? `${entry.listening_score.toFixed(1)}/40` : null,
+    attempts: entry.total_tests_attempted,
+    totalTime: formatLeaderboardDuration(entry.total_time_sec),
+    avgAccuracy: entry.avg_accuracy ?? null,
+    lastActiveAt: entry.last_active_at ?? null,
+    qualified: true,
+    isCurrentUser: entry.is_current_user ?? false,
+  };
 }
 
 export function createApiClient(config: ApiClientConfig = {}) {
@@ -256,9 +307,16 @@ export function createApiClient(config: ApiClientConfig = {}) {
       method: "POST",
       body: JSON.stringify({})
     }),
-    getLeaderboard: (query: LeaderboardQuery = {}) => request<{ data: LeaderboardEntry[] }>("/leaderboard").catch(() => ({
-      data: filterLeaderboard(query)
-    })),
+    getLeaderboard: (query: LeaderboardQuery = {}) =>
+      request<BackendLeaderboardResponse>(
+        `/leaderboard?type=${encodeURIComponent(query.type ?? "combined")}&period=${encodeURIComponent(query.period ?? "all_time")}`
+      )
+        .then<LeaderboardResponseData>((payload) => ({
+          type: payload.test_type,
+          period: payload.period,
+          items: payload.items.map(mapBackendLeaderboardEntry),
+          currentUser: payload.current_user ? mapBackendLeaderboardEntry(payload.current_user) : null,
+        })),
     getTestCatalog: (type?: string, access?: AccessType) => {
       const tests = type ? getTestsByType(type) : getTestsByType();
       return access ? tests.filter((test) => test.accessType === access) : tests;
@@ -269,8 +327,4 @@ export function createApiClient(config: ApiClientConfig = {}) {
 function filterTests(query: TestListQuery): TestCatalogItem[] {
   const byType = query.type ? getTestsByType(query.type) : getTestsByType();
   return query.access ? byType.filter((test) => test.accessType === query.access) : byType;
-}
-
-function filterLeaderboard(query: LeaderboardQuery): LeaderboardEntry[] {
-  return getLeaderboardByType(query.type ?? "combined");
 }

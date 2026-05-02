@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import logging
 import re
 from uuid import UUID, uuid4
 
@@ -34,6 +35,8 @@ from app.services.fixtures import (
 from app.services.object_storage import normalize_storage_asset_path
 from app.services.scoring import listening_exam_seconds, mc_multiple_question_weight
 from app.services.test_source import normalize_test_source_detail
+
+logger = logging.getLogger(__name__)
 
 
 def _model_test_type(value: TestType) -> ModelTestType:
@@ -77,6 +80,27 @@ def _extract_custom_test_number(value: str | None) -> int | None:
     if custom_suffix_match:
         return int(custom_suffix_match.group("number"))
     return None
+
+
+def _is_quick_fix_format_compatible(
+    *,
+    test_type: str,
+    current_format: str,
+    requested_format: str,
+    section_count: int,
+) -> bool:
+    if requested_format == current_format:
+        return True
+
+    if section_count != 1:
+        return False
+
+    allowed_formats = (
+        {"full", "passage_1", "passage_2", "passage_3"}
+        if test_type == TestType.reading.value
+        else {"full", "part_1", "part_2", "part_3", "part_4"}
+    )
+    return current_format in allowed_formats and requested_format in allowed_formats
 
 
 def _strip_custom_test_suffix(value: str | None) -> str:
@@ -302,6 +326,8 @@ def _serialize_snapshot_from_test(
         "title": test.title,
         "test_type": test.type.value,
         "format": test.format.value if hasattr(test, "format") and test.format else "full",
+        "source": test.source.value if hasattr(test, "source") and test.source else None,
+        "source_detail": test.source_detail,
         "access_type": test.access_type.value,
         "status": test.status.value,
         "version": test.version,
@@ -949,13 +975,18 @@ async def quick_fix_published_test_in_db(
         if requested_type == TestType.listening.value
         else _reading_time_limit_seconds(str(metadata["time_limit_label"]))
     )
-    if (
-        requested_type != test.type.value
-        or requested_format != test.format.value
-    ):
+    if requested_type != test.type.value:
         raise ValueError("quick_fix_requires_new_version")
 
     existing_sections = sorted(test.sections, key=lambda item: item.position)
+    if not _is_quick_fix_format_compatible(
+        test_type=requested_type,
+        current_format=test.format.value,
+        requested_format=requested_format,
+        section_count=len(existing_sections),
+    ):
+        raise ValueError("quick_fix_requires_new_version")
+
     if len(sections) != len(existing_sections):
         raise ValueError("quick_fix_requires_new_version")
 
@@ -990,6 +1021,7 @@ async def quick_fix_published_test_in_db(
 
     resolved_title = await _resolve_admin_test_title(session, metadata=metadata, existing_test=test)
     test.title = resolved_title
+    test.format = ModelTestFormat(requested_format)
     test.access_type = ModelAccessType(str(metadata["access_type"]))
     test.source = ModelTestSource(str(metadata["source"]))
     test.source_detail = normalize_test_source_detail(metadata["source"], metadata.get("source_detail"))
@@ -1004,14 +1036,9 @@ async def quick_fix_published_test_in_db(
             raise ValueError("quick_fix_requires_new_version")
 
         existing_media_kind = str(section_model.content.get("media_kind") or ("audio" if section_model.audio_duration_seconds else "text"))
-        existing_marker_count = int(section_model.content.get("marker_count") or 0)
         next_media_kind = str(section_payload["media_kind"])
         next_marker_count = int(section_payload["marker_count"])
-        if (
-            section_model.position != index
-            or existing_media_kind != next_media_kind
-            or existing_marker_count != next_marker_count
-        ):
+        if existing_media_kind != next_media_kind:
             raise ValueError("quick_fix_requires_new_version")
 
         section_model.title = str(section_payload["title"])
@@ -1107,6 +1134,9 @@ async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[st
     test = await session.get(Test, test_id)
     if test is None:
         return None
+    if test.status == ModelTestStatus.PUBLISHED:
+        refreshed = await _load_full_test_for_write(session, test_id)
+        return _serialize_admin_test(refreshed) if refreshed is not None else None
 
     existing_published_versions = (
         await session.scalars(
@@ -1132,17 +1162,22 @@ async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[st
     body = f'"{test_title}" ({test_type}) test has been published. Try it now!'
     test.review_status = "approved"
 
-    await notify_all_users(
-        session,
-        type=NotificationType.new_test,
-        title="New test available!",
-        body=body,
-        telegram_text=f"📝 <b>New test available!</b>\n\n{body}",
-        inline_keyboard=[[{"text": "🚀 Try Now", "url": f"https://primescore.uz/tests/{test_id}"}]],
-    )
-
     await session.commit()
     refreshed = await _load_full_test_for_write(session, test_id)
+
+    try:
+        await notify_all_users(
+            session,
+            type=NotificationType.new_test,
+            title="New test available!",
+            body=body,
+            telegram_text=f"📝 <b>New test available!</b>\n\n{body}",
+            inline_keyboard=[[{"text": "🚀 Try Now", "url": f"https://primescore.uz/tests/{test_id}"}]],
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        logger.exception("Failed to send publish notifications for test %s", test_id)
     return _serialize_admin_test(refreshed) if refreshed is not None else None
 
 

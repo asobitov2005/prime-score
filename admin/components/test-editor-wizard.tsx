@@ -7,7 +7,7 @@ import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitl
 import { createEmptyDraft } from "@/lib/draft-template";
 import { listeningQuestionTypes, readingQuestionTypes } from "@/lib/question-types";
 import { adminApi } from "@/lib/api";
-import { adminTestSourceOptions } from "@/lib/test-source";
+import { adminTestSourceOptions, normalizeAdminTestSourceDetail } from "@/lib/test-source";
 import type {
   AdminDraftChecklistStatus,
   AdminTestDraftContentSection,
@@ -31,20 +31,20 @@ const stepOrder: WizardStepId[] = ["metadata", "content", "questions", "review"]
 
 const defaultInstructions: Record<string, string> = {
   // Reading Instructions
-  "reading_true_false_not_given": "Do the following statements agree with the information given in the Reading Passage?\n\nIn boxes on your answer sheet, write:\n\nTRUE if the statement agrees with the information\nFALSE if the statement contradicts the information\nNOT GIVEN if there is no information on this",
-  "reading_yes_no_not_given": "Do the following statements agree with the claims of the writer in the Reading Passage?\n\nIn boxes on your answer sheet, write:\n\nYES if the statement agrees with the claims of the writer\nNO if the statement contradicts the claims of the writer\nNOT GIVEN if it is impossible to say what the writer thinks about this",
+  "reading_true_false_not_given": "Do the following statements agree with the information given in the Reading Passage?\n\nIn boxes on your answer sheet, write:\n\n{TRUE}\t\t\tif the statement agrees with the information\n{FALSE}\t\t\tif the statement contradicts the information\n{NOT GIVEN}\tif there is no information on this",
+  "reading_yes_no_not_given": "Do the following statements agree with the claims of the writer in the Reading Passage?\n\nIn boxes on your answer sheet, write:\n\n{YES}\t\t\tif the statement agrees with the claims of the writer\n{NO}\t\t\tif the statement contradicts the claims of the writer\n{NOT GIVEN}\tif it is impossible to say what the writer thinks about this",
   "reading_mc_single": "Choose the correct letter, A, B, C or D.\n\nWrite the correct letter in boxes on your answer sheet.",
   "reading_mc_multiple": "Choose TWO letters, A-E.\n\nWrite the correct letters in boxes on your answer sheet.",
   "reading_matching_headings": "Choose the correct heading for each paragraph from the list of headings below.\n\nWrite the correct number, i-ix, in boxes on your answer sheet.",
   "reading_matching_information": "Which paragraph contains the following information?\n\nWrite the correct letter, A-F, in boxes on your answer sheet.\n\nNB You may use any letter more than once.",
   "reading_matching_features": "Look at the following statements and the list of people below.\n\nMatch each statement with the correct person.\n\nWrite the correct letter, A-E, in boxes on your answer sheet.",
   "reading_matching_sentence_endings": "Complete each sentence with the correct ending, A-G, below.\n\nWrite the correct letter, A-G, in boxes on your answer sheet.",
-  "reading_sentence_completion": "Complete the sentences below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.\n\nWrite your answers in boxes on your answer sheet.",
+  "reading_sentence_completion": "Complete the sentences below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_summary_completion_wordbank": "Complete the summary using the list of words, A-G, below.\n\nWrite the correct letter, A-G, in boxes on your answer sheet.",
-  "reading_summary_completion_freetext": "Complete the summary below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.\n\nWrite your answers in boxes on your answer sheet.",
-  "reading_note_completion": "Complete the notes below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.\n\nWrite your answers in boxes on your answer sheet.",
-  "reading_diagram_labeling": "Label the diagram below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.\n\nWrite your answers in boxes on your answer sheet.",
-  "reading_short_answer": "Answer the questions below.\n\nChoose {NO MORE THAN TWO WORDS AND/OR A NUMBER} from the passage for each answer.\n\nWrite your answers in boxes on your answer sheet.",
+  "reading_summary_completion_freetext": "Complete the summary below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
+  "reading_note_completion": "Complete the notes below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
+  "reading_diagram_labeling": "Label the diagram below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
+  "reading_short_answer": "Answer the questions below.\n\nChoose {NO MORE THAN TWO WORDS AND/OR A NUMBER} from the passage for each answer.",
 
   // Listening Instructions
   "listening_form_completion": "Complete the form below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
@@ -1129,17 +1129,80 @@ function getNextExamPracticeTitleFromTests(tests: Array<{ source: string; title:
   return `Exam Practice Test ${maxNumber + 1}`;
 }
 
-function prepareDraftForSave(draft: AdminTestDraftState): AdminTestDraftState {
-  const normalizedDraft = normalizeBinaryDraftAnswers(draft);
-  const resolvedTitle = resolveDraftTitleForSave(normalizedDraft);
+function defaultTimeLimitLabelForType(type: AdminTestDraftState["metadata"]["type"]) {
+  return type === "listening" ? "Audio duration + 2 min" : "60 min exam";
+}
+
+function resolveDraftLogicalIndex(
+  draftType: AdminTestDraftState["metadata"]["type"],
+  format: AdminTestDraftState["metadata"]["format"],
+  uiIndex: number,
+) {
+  if (format === "full") {
+    return uiIndex;
+  }
+
+  const expectedPrefix = draftType === "listening" ? "part_" : "passage_";
+  if (!format.startsWith(expectedPrefix)) {
+    return uiIndex;
+  }
+
+  const suffix = Number.parseInt(format.split("_")[1] ?? "", 10);
+  if (!Number.isFinite(suffix) || suffix <= 0) {
+    return uiIndex;
+  }
+
+  return uiIndex === 0 ? suffix - 1 : uiIndex;
+}
+
+function isGenericSectionTitle(value: string) {
+  return /^(Reading Passage|Listening Part|Passage|Part)\s+\d+\s*$/i.test(value.trim());
+}
+
+function normalizeMetadataQuickFixes(draft: AdminTestDraftState): AdminTestDraftState {
+  const metadataTitle = resolveDraftTitleForSave(draft);
+  const normalizedSourceDetail = normalizeAdminTestSourceDetail(draft.metadata.source, draft.metadata.sourceDetail);
+  const normalizedTimeLimitLabel = draft.metadata.timeLimitLabel.trim() || defaultTimeLimitLabelForType(draft.metadata.type);
+  const sectionLabelPrefix = draft.metadata.type === "listening" ? "Part" : "Passage";
+  const sectionTitlePrefix = draft.metadata.type === "listening" ? "Listening Part" : "Reading Passage";
 
   return {
-    ...normalizedDraft,
+    ...draft,
     metadata: {
-      ...normalizedDraft.metadata,
-      title: resolvedTitle,
+      ...draft.metadata,
+      title: metadataTitle,
+      sourceDetail: normalizedSourceDetail,
+      timeLimitLabel: normalizedTimeLimitLabel,
     },
+    content: {
+      ...draft.content,
+      sections: draft.content.sections.map((section, index) => {
+        const logicalIndex = resolveDraftLogicalIndex(draft.metadata.type, draft.metadata.format, index);
+        const normalizedLabel = `${sectionLabelPrefix} ${logicalIndex + 1}`;
+        const trimmedTitle = section.title.trim();
+        const normalizedTitle = !trimmedTitle || isGenericSectionTitle(trimmedTitle)
+          ? `${sectionTitlePrefix} ${logicalIndex + 1}`
+          : trimmedTitle;
+
+        return {
+          ...section,
+          label: normalizedLabel,
+          title: normalizedTitle,
+          subtitle: section.subtitle.trim(),
+        };
+      }),
+    },
+    questionGroups: (draft.questionGroups ?? []).map((group) => ({
+      ...group,
+      title: group.title.trim() || `Questions ${group.questionStart}${group.questionEnd > group.questionStart ? `-${group.questionEnd}` : ""}`,
+      instructions: group.instructions.trim(),
+    })),
   };
+}
+
+function prepareDraftForSave(draft: AdminTestDraftState): AdminTestDraftState {
+  const normalizedDraft = normalizeBinaryDraftAnswers(draft);
+  return normalizeMetadataQuickFixes(normalizedDraft);
 }
 
 function parseBraceBoldText(text: string) {
@@ -1217,6 +1280,61 @@ function renderBraceBoldText(text: string, keyPrefix: string) {
       </span>
     );
   });
+}
+
+function parseBinaryInstructionLayout(text: string) {
+  const lines = text.split("\n");
+  const prefixLines: string[] = [];
+  const optionRows: Array<{ label: string; detail: string }> = [];
+  let sawOptionRow = false;
+
+  for (const line of lines) {
+    const match = line.match(/^\{([^}]+)\}(?:\t+|\s{2,})(.+)$/);
+    if (match) {
+      sawOptionRow = true;
+      optionRows.push({
+        label: match[1]?.trim() ?? "",
+        detail: match[2]?.trim() ?? "",
+      });
+      continue;
+    }
+
+    if (!sawOptionRow) {
+      prefixLines.push(line);
+    }
+  }
+
+  if (optionRows.length < 2) {
+    return null;
+  }
+
+  return {
+    prefix: prefixLines.join("\n").trimEnd(),
+    optionRows,
+  };
+}
+
+function renderInstructionPreviewText(text: string, keyPrefix: string) {
+  const binaryLayout = parseBinaryInstructionLayout(text);
+  if (!binaryLayout) {
+    return <>{renderBraceBoldText(text, keyPrefix)}</>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {binaryLayout.prefix ? (
+        <div className="whitespace-pre-wrap">{renderBraceBoldText(binaryLayout.prefix, `${keyPrefix}-prefix`)}</div>
+      ) : null}
+      <div className="grid gap-y-1">
+        {binaryLayout.optionRows.map((row, index) => (
+          <div key={`${keyPrefix}-row-${row.label}-${index}`} className="grid grid-cols-[5.5rem_1fr] items-start gap-x-1">
+            <strong className="font-bold text-foreground">{row.label}</strong>
+            <span>{row.detail}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 
@@ -1323,10 +1441,10 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
       };
 
       setResolvedTestId(saved.id);
-      setDraft((current) => ({
-        ...current,
+      setDraft(() => ({
+        ...currentDraftToSave,
         metadata: {
-          ...current.metadata,
+          ...currentDraftToSave.metadata,
           title: saved.title,
           status: saved.status,
           version: saved.version,
@@ -1371,11 +1489,12 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
 
     try {
       setSaveState("saving");
-      const saved = await adminApi.quickFixPublished(resolvedTestId, draft);
+      const currentDraftToSave = prepareDraftForSave(draft);
+      const saved = await adminApi.quickFixPublished(resolvedTestId, currentDraftToSave);
       const syncedDraft = {
-        ...draft,
+        ...currentDraftToSave,
         metadata: {
-          ...draft.metadata,
+          ...currentDraftToSave.metadata,
           title: saved.title,
           status: saved.status,
           version: saved.version,
@@ -1383,10 +1502,10 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
         },
       };
 
-      setDraft((current) => ({
-        ...current,
+      setDraft(() => ({
+        ...currentDraftToSave,
         metadata: {
-          ...current.metadata,
+          ...currentDraftToSave.metadata,
           title: saved.title,
           status: saved.status,
           version: saved.version,
@@ -3656,9 +3775,9 @@ function EditorPreviewSection({
                   </div>
                   <Badge tone="neutral">{totalQuestionSlots(group)} questions</Badge>
                 </div>
-                <p className={cn("mt-2.5 whitespace-pre-wrap font-medium text-muted-foreground", compact ? "text-[12px] leading-[1.35]" : "text-[13px] leading-[1.45]")}>
-                  {renderBraceBoldText(group.instructions, `${group.id}-instructions`)}
-                </p>
+                <div className={cn("mt-2.5 whitespace-pre-wrap font-medium text-muted-foreground", compact ? "text-[12px] leading-[1.35]" : "text-[13px] leading-[1.45]")}>
+                  {renderInstructionPreviewText(group.instructions, `${group.id}-instructions`)}
+                </div>
               </div>
 
               <div className={cn("space-y-3.5", compact ? "px-3 py-3 lg:px-3.5" : "px-3.5 py-3.5 lg:px-4")}>

@@ -238,15 +238,26 @@ export interface TestCardAttemptSummary {
 
 export interface LeaderboardEntry {
   rank: number;
+  userId: string;
   name: string;
   type: TestType | "combined";
-  band: string;
+  percentile: number;
+  estimatedBand: string | null;
+  readingScore: string | null;
+  listeningScore: string | null;
   attempts: number;
-  readingAttempts: number;
-  listeningAttempts: number;
   totalTime: string;
+  avgAccuracy: number | null;
+  lastActiveAt: string | null;
   qualified: boolean;
   isCurrentUser?: boolean;
+}
+
+export interface LeaderboardResponseData {
+  type: TestType | "combined";
+  period: LeaderboardPeriod;
+  items: LeaderboardEntry[];
+  currentUser: LeaderboardEntry | null;
 }
 
 export interface SubscriptionPlan {

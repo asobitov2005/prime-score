@@ -79,6 +79,10 @@ def _snapshot_group_shared_options(snapshot: dict[str, object]) -> dict[str, lis
     return group_options
 
 
+def _count_non_empty_answer_values(values: list[str] | tuple[str, ...]) -> int:
+    return sum(1 for value in values if str(value or "").strip())
+
+
 async def _db_answer_key(session: AsyncSession, question_ids: list[UUID]) -> dict[str, dict[str, object]]:
     if not question_ids:
         return {}
@@ -384,11 +388,15 @@ async def save_answer_in_db(
 
     question_number = int(snapshot_question["question_number"]) if snapshot_question is not None else int(get_question_fixture(attempt.test_id, question_id)["question_number"])
     await session.flush()
-    answers_count = int(
-        await session.scalar(
-            select(func.count()).select_from(UserAnswer).where(UserAnswer.attempt_id == attempt_id)
-        )
-        or 0
+    persisted_answers = list(
+        (
+            await session.scalars(
+                select(UserAnswer).where(UserAnswer.attempt_id == attempt_id)
+            )
+        ).all()
+    )
+    answers_count = _count_non_empty_answer_values(
+        [str(answer.value.get("value") or "") for answer in persisted_answers]
     )
     metadata = dict(attempt.attempt_metadata or {})
     metadata["last_answered_question_id"] = str(question_id)
@@ -591,7 +599,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
     )
 
     metadata = dict(attempt.attempt_metadata or {})
-    metadata["answers_count"] = len(answer_map)
+    metadata["answers_count"] = _count_non_empty_answer_values(list(answer_map.values()))
     metadata["score_status"] = "ready"
     metadata["time_spent_sec"] = time_spent_sec
     metadata["scoring_items"] = freeze_test_snapshot(sorted(scoring_items, key=lambda item: item["question_number"]))

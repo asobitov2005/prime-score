@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.enums import AttemptStatus, TestMode, TestScope, TestType
+from app.core.enums import AttemptStatus, TestMode, TestScope, TestSource, TestType
 from app.schemas.tests import TestSnapshotRead
 
 
@@ -96,11 +96,15 @@ class AttemptResultRead(BaseModel):
     status: AttemptStatus
     test_id: UUID
     test_type: TestType
+    test_format: str = "full"
+    source: TestSource | None = None
+    source_detail: str | None = None
     test_title: str | None = None
     raw_score: int | None = None
     band_score: Decimal | None = None
     answers_count: int = 0
     total_questions: int = 0
+    time_spent_sec: int = 0
     score_status: str = "queued"
     completed_at: datetime | None = None
     section_breakdown: list[AttemptBreakdownItemRead] = []

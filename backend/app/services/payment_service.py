@@ -14,6 +14,7 @@ from app.core.enums import NotificationType
 from app.models.commerce import Payment, PaymentCard, PaymentSetting, Plan
 from app.models.user import User
 from app.services.notification_sender import create_and_send_notification
+from app.services.payment_events import payment_event_bus
 
 PENDING_PAYMENT_STATUSES = {"pending", "matched"}
 VISIBLE_PAYMENT_STATUSES = {"pending", "matched", "completed", "expired", "canceled", "review", "failed"}
@@ -88,6 +89,12 @@ async def expire_stale_payments(session: AsyncSession) -> int:
         payment.status = "expired"
         payment.status_reason = "Invoice expired after 10 minutes."
         payment.archived_at = now
+        if payment.user_id:
+            payment_event_bus.publish(payment.user_id, "payment_expired", {
+                "payment_id": str(payment.id),
+                "invoice_code": payment.invoice_code,
+                "status": "expired",
+            })
     return len(rows)
 
 
@@ -168,7 +175,12 @@ async def create_plan_payment(
         .order_by(Payment.created_at.desc())
     )
     if active_pending is not None:
-        return active_pending
+        if active_pending.plan_id == plan.id:
+            return active_pending
+        # Cancel the old pending invoice for a different plan
+        active_pending.status = "canceled"
+        active_pending.archived_at = _now()
+        active_pending.status_reason = "Replaced by a new invoice for a different plan."
 
     active_card = await get_active_payment_card(session)
     if active_card is None:
@@ -255,6 +267,14 @@ async def complete_payment(
             f"Active until <b>{premium_until.strftime('%d %b %Y')}</b>."
         ),
     )
+
+    payment_event_bus.publish(user.id, "payment_completed", {
+        "payment_id": str(payment.id),
+        "invoice_code": payment.invoice_code,
+        "status": "completed",
+        "plan_name": plan.name,
+        "granted_until": premium_until.isoformat(),
+    })
     return payment
 
 
@@ -284,6 +304,14 @@ async def mark_payment_detected(
     payment.detected_message_id = detected_message_id
     payment.detected_message_text = detected_message_text
     payment.status_reason = "Payment amount matched. Premium grant is in progress."
+
+    if payment.user_id:
+        payment_event_bus.publish(payment.user_id, "payment_matched", {
+            "payment_id": str(payment.id),
+            "invoice_code": payment.invoice_code,
+            "status": "matched",
+        })
+
     await complete_payment(
         session,
         payment=payment,

@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import List
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,6 +55,7 @@ from app.schemas.auth import AdminAuthLoginRequest, AdminAuthRefreshRequest, Adm
 from app.schemas.common import AdminPrincipal, MessageResponse
 from app.schemas.payments import (
     AdminPaymentRead,
+    AdminPaymentListResponse,
     AdminPaymentUpdateRequest,
     PaymentCardCreateRequest,
     PaymentCardRead,
@@ -1473,28 +1474,40 @@ async def update_gift_code(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update redeem code.") from exc
 
 
-@router.get("/payments", response_model=list[AdminPaymentRead])
+@router.get("/payments", response_model=AdminPaymentListResponse)
 async def list_payments(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
-) -> list[AdminPaymentRead]:
+) -> AdminPaymentListResponse:
     _ = current_admin
     expired_count = await expire_stale_payments(session)
     if expired_count:
         await session.commit()
 
+    total = await session.scalar(select(func.count()).select_from(Payment))
+
+    offset = (page - 1) * limit
     rows = (
         await session.execute(
             select(Payment, User, Plan)
             .outerjoin(User, Payment.user_id == User.id)
             .outerjoin(Plan, Payment.plan_id == Plan.id)
             .order_by(Payment.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
     ).all()
-    return [
-        _serialize_admin_payment(payment, user=user, plan=plan)
-        for payment, user, plan in rows
-    ]
+    return AdminPaymentListResponse(
+        items=[
+            _serialize_admin_payment(payment, user=user, plan=plan)
+            for payment, user, plan in rows
+        ],
+        total=total or 0,
+        page=page,
+        page_size=limit,
+    )
 
 
 @router.patch("/payments/{payment_id}", response_model=AdminPaymentRead)

@@ -899,9 +899,13 @@ export const adminApi = {
       body: JSON.stringify({ ids, access_type: accessType })
     });
   },
-  async listPayments(): Promise<AdminPaymentSummary[]> {
-    const response = await requestJson<BackendPayment[]>("/payments");
-    return response.map(mapAdminPayment);
+  async listPayments(page: number = 1, limit: number = 20): Promise<{ items: AdminPaymentSummary[], total: number, page: number }> {
+    const response = await requestJson<{ items: BackendPayment[], total: number, page: number }>(`/payments?page=${page}&limit=${limit}`);
+    return {
+      items: response.items.map(mapAdminPayment),
+      total: response.total,
+      page: response.page,
+    };
   },
   async updatePaymentStatus(
     paymentId: string,
