@@ -22,21 +22,26 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
+    default_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3100",
+        "http://localhost:3101",
+        "http://localhost:3200",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3100",
+        "http://127.0.0.1:3101",
+        "http://127.0.0.1:3200",
+    ]
+    extra_origins = [o for o in settings.cors_origins if o and o != "*"]
+    allow_all = "*" in settings.cors_origins
+    allowed_origins = ["*"] if allow_all else list({*default_origins, *extra_origins})
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:3100",
-            "http://localhost:3101",
-            "http://localhost:3200",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001",
-            "http://127.0.0.1:3100",
-            "http://127.0.0.1:3101",
-            "http://127.0.0.1:3200",
-        ],
-        allow_credentials=True,
+        allow_origins=allowed_origins,
+        allow_credentials=not allow_all,
         allow_methods=["*"],
         allow_headers=["*"],
     )

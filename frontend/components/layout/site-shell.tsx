@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
-import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, ArrowUp, Bell } from "lucide-react";
+import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -45,7 +45,7 @@ export function SiteShell({ children }: SiteShellProps) {
   const { isAuthenticated, name, phoneNumber, sessionId, refreshToken, clearSession, syncSession, hasHydrated } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
-  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isHeaderCompact, setIsHeaderCompact] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -76,11 +76,9 @@ export function SiteShell({ children }: SiteShellProps) {
     setMounted(true);
   }, []);
 
-  // Handle scroll to top visibility
   useEffect(() => {
     const handleScroll = () => {
       const nextScrollY = window.scrollY;
-      setShowScrollTop(window.scrollY > 400);
       setIsHeaderCompact((current) => {
         if (current) {
           return nextScrollY > 12;
@@ -92,10 +90,6 @@ export function SiteShell({ children }: SiteShellProps) {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
 
   // Load theme from localStorage on mount
   useEffect(() => {
@@ -179,6 +173,10 @@ export function SiteShell({ children }: SiteShellProps) {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
+
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [currentPath]);
 
   if (hideSiteChrome) {
     return (
@@ -280,21 +278,52 @@ export function SiteShell({ children }: SiteShellProps) {
             <NavLink href="/#about" label="About" />
           </nav>
 
-          <div className="flex items-center gap-3 relative">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+          <div className="flex items-center gap-2 sm:gap-3 relative">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={toggleTheme}
-              className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all active:scale-95"
+              className="hidden md:inline-flex h-10 w-10 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all active:scale-95"
               title="Toggle Light/Dark Mode"
             >
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMobileNavOpen((v) => !v);
+              }}
+              className="md:hidden relative h-10 w-10 rounded-xl border border-border/60 bg-muted/40 hover:bg-muted transition-all active:scale-95 flex items-center justify-center"
+              aria-label="Toggle navigation menu"
+              aria-expanded={isMobileNavOpen}
+            >
+              <span className="sr-only">Menu</span>
+              <span
+                className={cn(
+                  "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                  isMobileNavOpen ? "rotate-45 translate-y-0" : "-translate-y-[5px]"
+                )}
+              />
+              <span
+                className={cn(
+                  "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                  isMobileNavOpen ? "opacity-0" : "translate-y-0 opacity-100"
+                )}
+              />
+              <span
+                className={cn(
+                  "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                  isMobileNavOpen ? "-rotate-45 translate-y-0" : "translate-y-[5px]"
+                )}
+              />
+            </button>
             
             {!mounted || !hasHydrated ? (
-              <div className="h-11 w-24 bg-muted animate-pulse rounded-xl" />
+              <div className="hidden md:block h-11 w-24 bg-muted animate-pulse rounded-xl" />
             ) : isAuthenticated ? (
-              <>
+              <div className="hidden md:flex items-center gap-3">
               {/* Notification Bell */}
               <div className="relative notif-panel" onClick={(e) => e.stopPropagation()}>
                 <button
@@ -365,16 +394,16 @@ export function SiteShell({ children }: SiteShellProps) {
                         <p className="text-sm font-bold text-foreground tracking-tight">{phoneNumber || "No number"}</p>
                       </div>
                     </div>
-                    
-                    <Link 
-                      href="/settings" 
+
+                    <Link
+                      href="/settings"
                       onClick={() => setIsMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                     >
                        <Settings2 className="h-4 w-4" /> Settings
                     </Link>
-                    
-                    <button 
+
+                    <button
                       onClick={handleSignOut}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/10 transition-colors mt-1"
                     >
@@ -383,9 +412,9 @@ export function SiteShell({ children }: SiteShellProps) {
                   </div>
                 )}
               </div>
-              </>
+              </div>
             ) : (
-              <Button asChild size="lg" className="rounded-xl h-11 px-8 text-sm font-black shadow-lg shadow-primary/20 hover:shadow-xl transition-all hover:-translate-y-0.5 bg-primary text-background border-none">
+              <Button asChild size="lg" className="hidden md:inline-flex rounded-xl h-11 px-8 text-sm font-black shadow-lg shadow-primary/20 hover:shadow-xl transition-all hover:-translate-y-0.5 bg-primary text-background border-none">
                 <Link href="/login">Login</Link>
               </Button>
             )}
@@ -393,19 +422,106 @@ export function SiteShell({ children }: SiteShellProps) {
         </div>
       </header>
 
-      <main className="flex-1">{children}</main>
+      {isMobileNavOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-background/70 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setIsMobileNavOpen(false)}
+        >
+          <div
+            className={cn(
+              "absolute left-3 right-3 rounded-2xl border border-border bg-card shadow-2xl p-3 animate-in slide-in-from-top-4 duration-200",
+              isHeaderCompact ? "top-[4.5rem]" : "top-[5.5rem]"
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-1">
+              <p className="px-3 pt-1 pb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Practice</p>
+              <Link
+                href="/tests?type=reading"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                </div>
+                <span className="text-sm font-semibold text-foreground">Reading</span>
+              </Link>
+              <Link
+                href="/tests?type=listening"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                  <Headphones className="h-[18px] w-[18px]" />
+                </div>
+                <span className="text-sm font-semibold text-foreground">Listening</span>
+              </Link>
 
-      {/* Scroll to Top Button */}
-      <button
-        onClick={scrollToTop}
-        className={cn(
-          "fixed bottom-8 right-8 z-50 h-12 w-12 rounded-2xl bg-primary text-primary-foreground shadow-2xl transition-all duration-500 flex items-center justify-center hover:scale-110 active:scale-95",
-          showScrollTop ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
-        )}
-        aria-label="Scroll to top"
-      >
-        <ArrowUp className="h-6 w-6 stroke-[3]" />
-      </button>
+              <div className="h-px bg-border/50 my-2" />
+
+              <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Explore</p>
+              <Link href="/#features" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                Features
+              </Link>
+              <Link href="/pricing" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                Pricing
+              </Link>
+              <Link href="/#reviews" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                Reviews
+              </Link>
+              <Link href="/#about" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                About
+              </Link>
+
+              <div className="h-px bg-border/50 my-2" />
+
+              <button
+                onClick={() => {
+                  toggleTheme();
+                }}
+                className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <span>Appearance</span>
+                <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                  {theme === "dark" ? "Dark" : "Light"}
+                </span>
+              </button>
+
+              {mounted && hasHydrated && isAuthenticated ? (
+                <>
+                  <Link
+                    href="/settings"
+                    onClick={() => setIsMobileNavOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <Settings2 className="h-4 w-4" /> Settings
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setIsMobileNavOpen(false);
+                      handleSignOut();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" /> Sign Out
+                  </button>
+                </>
+              ) : mounted && hasHydrated ? (
+                <Link
+                  href="/login"
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="mt-1 flex items-center justify-center px-3 h-11 rounded-xl bg-primary text-background text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
+                >
+                  Login
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="flex-1">{children}</main>
 
       {currentPath === "/" && (
         <footer className="border-t border-border/40 bg-muted/30 shrink-0 py-10 mt-auto relative z-20">

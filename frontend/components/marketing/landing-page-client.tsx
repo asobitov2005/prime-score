@@ -66,7 +66,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
 
   return (
     <div className="relative mx-auto max-w-[1600px] overflow-hidden">
-      <div className="w-full px-8 pt-12 pb-0 sm:px-12 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-[0.9] md:scale-[0.85] xl:scale-[0.9] transition-transform">
+      <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none animate-in fade-in duration-1000" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none animate-in fade-in duration-1000 delay-500" />
 
@@ -108,10 +108,10 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
 
               <p className="text-base sm:text-lg font-medium text-muted-foreground/90 max-w-xl leading-relaxed animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300 ease-out fill-mode-both">
                 Experience the most authentic computer-delivered IELTS simulation.
-                Track your band score, review detailed analytics, and study with focus.
+                <span className="hidden sm:inline"> Track your band score, review detailed analytics, and study with focus.</span>
               </p>
 
-              <div className="flex flex-wrap items-center gap-8 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-400 ease-out fill-mode-both">
+              <div className="flex flex-wrap items-center gap-6 sm:gap-8 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-400 ease-out fill-mode-both">
                 <div className="flex items-center gap-3">
                   <div className="flex -space-x-3">
                     {[
@@ -151,13 +151,13 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500 ease-out fill-mode-both">
+            <div className="flex flex-row items-center gap-3 pt-2 animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500 ease-out fill-mode-both">
               <MarketingAuthCta
-                guestLabel="Get Started for Free"
-                authLabel="Go to Dashboard"
-                className="w-full sm:w-auto h-14 px-10 text-base font-semibold shadow-xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background"
+                guestLabel="Get Started"
+                authLabel="Dashboard"
+                className="h-11 px-5 text-sm font-semibold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 rounded-xl bg-primary text-background"
               />
-              <Button asChild variant="outline" size="lg" className="w-full sm:w-auto h-14 px-10 text-base font-medium border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-2xl transition-all hover:scale-105">
+              <Button asChild variant="outline" className="h-11 px-5 text-sm font-medium border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-xl transition-all">
                 <Link href="#features">
                   View Features
                 </Link>
@@ -416,7 +416,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
               <MarketingAuthCta
                 guestLabel="Get Started for Free"
                 authLabel="Go to Dashboard"
-                className="h-14 px-10 text-base font-semibold shadow-2xl shadow-primary/20 transition-all hover:scale-105 hover:-translate-y-1 rounded-2xl bg-primary text-background"
+                className="h-11 px-6 text-sm sm:h-12 sm:px-8 sm:text-base font-semibold shadow-xl shadow-primary/20 transition-all hover:-translate-y-0.5 rounded-xl bg-primary text-background"
               />
             </div>
           </div>
