@@ -27,6 +27,8 @@ celery_app.conf.update(
         "primescore.process_audio_upload": {"queue": "heavy"},
         "primescore.cleanup_abandoned_attempts": {"queue": "default"},
         "primescore.expire_stale_invoices": {"queue": "default"},
+        "primescore.evaluate_writing_submission": {"queue": "writing"},
+        "primescore.generate_writing_task_image_summary": {"queue": "writing"},
     },
     beat_schedule={
         "refresh-leaderboard-hourly": {

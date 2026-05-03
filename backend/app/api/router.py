@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import admin, admin_ai, attempts, auth, leaderboard, me, plans, reviews, storage, tests
+from app.api.routes import admin, admin_ai, admin_writing, attempts, auth, leaderboard, me, plans, reviews, storage, tests, writing
 
 
 api_router = APIRouter()
@@ -14,3 +14,5 @@ api_router.include_router(leaderboard.router, prefix="/leaderboard", tags=["lead
 api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(admin_ai.router, prefix="/admin", tags=["admin-ai"])
+api_router.include_router(writing.router, prefix="/writing", tags=["writing"])
+api_router.include_router(admin_writing.router, prefix="/admin/writing", tags=["admin-writing"])
