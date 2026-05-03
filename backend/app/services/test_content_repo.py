@@ -27,6 +27,7 @@ from app.services.admin_example_reading_seed import (
     build_admin_example_reading_draft,
 )
 from app.services.fixtures import (
+    LISTENING_TEST_ID,
     TEST_CATALOG_FIXTURES,
     get_question_fixture,
     get_test_questions,
@@ -82,6 +83,14 @@ def _extract_custom_test_number(value: str | None) -> int | None:
     return None
 
 
+def _title_number_parts(value: str | None, *, limit: int = 4) -> tuple[int, ...]:
+    parts = [int(match) for match in re.findall(r"\d+", str(value or ""))]
+    trimmed = parts[:limit]
+    if len(trimmed) < limit:
+        trimmed.extend([-1] * (limit - len(trimmed)))
+    return tuple(trimmed)
+
+
 def _is_quick_fix_format_compatible(
     *,
     test_type: str,
@@ -113,11 +122,14 @@ def _strip_custom_test_suffix(value: str | None) -> str:
     return stripped
 
 
-async def _build_next_exam_practice_title(session: AsyncSession) -> str:
+async def _build_next_exam_practice_title(session: AsyncSession, *, test_type: ModelTestType) -> str:
     titles = list(
         (
             await session.scalars(
-                select(Test.title).where(Test.source == ModelTestSource.CUSTOM)
+                select(Test.title).where(
+                    Test.source == ModelTestSource.CUSTOM,
+                    Test.type == test_type,
+                )
             )
         ).all()
     )
@@ -137,6 +149,7 @@ async def _resolve_admin_test_title(
 ) -> str:
     explicit_title = str(metadata.get("title") or "").strip()
     source = ModelTestSource(str(metadata["source"]))
+    test_type = ModelTestType(str(metadata["type"]))
     if source != ModelTestSource.CUSTOM:
         return explicit_title
 
@@ -146,7 +159,7 @@ async def _resolve_admin_test_title(
             existing_number = _extract_custom_test_number(existing_test.title)
             if existing_number is not None:
                 return f"{explicit_base_title} - Test {existing_number}"
-        next_number = _extract_custom_test_number(await _build_next_exam_practice_title(session))
+        next_number = _extract_custom_test_number(await _build_next_exam_practice_title(session, test_type=test_type))
         if next_number is not None:
             return f"{explicit_base_title} - Test {next_number}"
         return explicit_base_title
@@ -158,7 +171,7 @@ async def _resolve_admin_test_title(
     if existing_title:
         return existing_title
 
-    return await _build_next_exam_practice_title(session)
+    return await _build_next_exam_practice_title(session, test_type=test_type)
 
 
 def _serialize_catalog_item(test: Test) -> dict[str, object]:
@@ -368,7 +381,13 @@ def _serialize_snapshot_from_test(
                     for group in section.question_groups
                     for question in group.questions
                 ),
+                "audio_url": normalize_storage_asset_path(section.content.get("audio_url")),
                 "audio_duration_seconds": section.audio_duration_seconds,
+                "transcript": str(section.transcript.get("text") or ""),
+                "transcript_segments": _normalize_transcript_segments(section.transcript.get("segments")),
+                "transcript_question_locations": _normalize_transcript_question_locations(
+                    section.transcript.get("question_locations")
+                ),
                 "question_groups": [
                     _serialize_group(group, section_id=section.id, section_title=section.title)
                     for group in sorted(section.question_groups, key=lambda item: (item.question_start, item.question_end))
@@ -596,15 +615,22 @@ async def list_tests_from_db(
     if source is not None and source != "":
         query = query.where(Test.source == ModelTestSource(source))
     result = await session.scalars(query)
-    tests = result.unique().all()
-    if source == ModelTestSource.CUSTOM.value:
-        tests.sort(
-            key=lambda test: (
-                _extract_custom_test_number(test.title) or -1,
-                test.created_at,
-            ),
-            reverse=True,
-        )
+    tests = [
+        test
+        for test in result.unique().all()
+        if test.id != LISTENING_TEST_ID
+    ]
+    tests.sort(
+        key=lambda test: (
+            test.source == ModelTestSource.CUSTOM,
+            (_extract_custom_test_number(test.title) or -1)
+            if test.source == ModelTestSource.CUSTOM
+            else -1,
+            *_title_number_parts(test.title),
+            test.created_at,
+        ),
+        reverse=True,
+    )
     return [_serialize_catalog_item(test) for test in tests]
 
 
@@ -612,7 +638,7 @@ async def get_test_from_db(session: AsyncSession, test_id: UUID) -> dict[str, ob
     
     query = _tests_query().where(Test.id == test_id)
     test = (await session.scalars(query)).unique().first()
-    if test is None:
+    if test is None or test.id == LISTENING_TEST_ID:
         return None
     return _serialize_catalog_item(test)
 
@@ -638,6 +664,55 @@ def _extract_paragraph_label(prompt: str) -> str | None:
         suffix = cleaned[10:].strip()
         return suffix[:1].upper() if suffix else None
     return cleaned[:1].upper()
+
+
+def _normalize_transcript_segments(raw_segments: object) -> list[dict[str, object]]:
+    normalized: list[dict[str, object]] = []
+    if not isinstance(raw_segments, list):
+        return normalized
+    for index, raw_segment in enumerate(raw_segments, start=1):
+        if not isinstance(raw_segment, dict):
+            continue
+        text = str(raw_segment.get("text") or "").strip()
+        if not text:
+            continue
+        start_sec = max(0, int(raw_segment.get("start_sec") or 0))
+        end_sec = max(start_sec, int(raw_segment.get("end_sec") or start_sec))
+        normalized.append(
+            {
+                "id": str(raw_segment.get("id") or f"segment-{index}"),
+                "start_sec": start_sec,
+                "end_sec": end_sec,
+                "text": text,
+            }
+        )
+    return normalized
+
+
+def _normalize_transcript_question_locations(raw_locations: object) -> list[dict[str, object]]:
+    normalized: list[dict[str, object]] = []
+    if not isinstance(raw_locations, list):
+        return normalized
+    for raw_location in raw_locations:
+        if not isinstance(raw_location, dict):
+            continue
+        question_label = str(raw_location.get("question_label") or "").strip()
+        if not question_label:
+            continue
+        start_sec = max(0, int(raw_location.get("start_sec") or 0))
+        end_sec = max(start_sec, int(raw_location.get("end_sec") or start_sec))
+        normalized.append(
+            {
+                "question_id": raw_location.get("question_id"),
+                "question_label": question_label,
+                "question_prompt": str(raw_location.get("question_prompt") or "").strip(),
+                "start_sec": start_sec,
+                "end_sec": end_sec,
+                "answer_text": str(raw_location.get("answer_text") or "").strip(),
+                "correct_answer": str(raw_location.get("correct_answer") or "").strip(),
+            }
+        )
+    return normalized
 
 
 def _rebuild_matching_headings_answer_block(group: QuestionGroup) -> str:
@@ -855,10 +930,21 @@ async def save_test_draft_to_db(
                 "paragraphs": section.get("paragraphs", []),
                 "showLabels": bool(section.get("showLabels", False)),
                 "media_kind": str(section["media_kind"]),
+                "audio_url": normalize_storage_asset_path(section.get("audio_url")),
                 "marker_count": int(section["marker_count"]),
             },
-            audio_duration_seconds=420 if str(section["media_kind"]) == "audio" else None,
-            transcript={},
+            audio_duration_seconds=(
+                int(section["audio_duration_seconds"])
+                if str(section["media_kind"]) == "audio" and section.get("audio_duration_seconds") is not None
+                else (420 if str(section["media_kind"]) == "audio" else None)
+            ),
+            transcript={
+                "text": str(section.get("transcript") or ""),
+                "segments": _normalize_transcript_segments(section.get("transcript_segments")),
+                "question_locations": _normalize_transcript_question_locations(
+                    section.get("transcript_question_locations")
+                ),
+            },
         )
         session.add(section_model)
         await session.flush()
@@ -1050,9 +1136,21 @@ async def quick_fix_published_test_in_db(
             "paragraphs": section_payload.get("paragraphs", []),
             "showLabels": bool(section_payload.get("showLabels", False)),
             "media_kind": next_media_kind,
+            "audio_url": normalize_storage_asset_path(section_payload.get("audio_url")),
             "marker_count": next_marker_count,
         }
-        section_model.audio_duration_seconds = 420 if next_media_kind == "audio" else None
+        section_model.audio_duration_seconds = (
+            int(section_payload.get("audio_duration_seconds"))
+            if next_media_kind == "audio" and section_payload.get("audio_duration_seconds") is not None
+            else (420 if next_media_kind == "audio" else None)
+        )
+        section_model.transcript = {
+            "text": str(section_payload.get("transcript") or ""),
+            "segments": _normalize_transcript_segments(section_payload.get("transcript_segments")),
+            "question_locations": _normalize_transcript_question_locations(
+                section_payload.get("transcript_question_locations")
+            ),
+        }
 
     for group_payload in question_groups:
         group_id = str(group_payload.get("id") or "")
@@ -1279,6 +1377,13 @@ async def build_admin_draft_state_from_db(
                     "paragraphs": list(section.content.get("paragraphs", [])),
                     "showLabels": bool(section.content.get("showLabels", False)),
                     "media_kind": "audio" if str(test.type.value) == ModelTestType.LISTENING.value else "text",
+                    "audio_url": normalize_storage_asset_path(section.content.get("audio_url")),
+                    "audio_duration_seconds": section.audio_duration_seconds,
+                    "transcript": str(section.transcript.get("text") or ""),
+                    "transcript_segments": _normalize_transcript_segments(section.transcript.get("segments")),
+                    "transcript_question_locations": _normalize_transcript_question_locations(
+                        section.transcript.get("question_locations")
+                    ),
                     "marker_count": sum(len(group.questions) for group in section.question_groups),
                 }
                 for section in ordered_sections

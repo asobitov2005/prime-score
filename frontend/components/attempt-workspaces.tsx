@@ -510,10 +510,9 @@ export function ListeningAttemptWorkspace({
               <Badge tone="outline">{attemptId.slice(0, 8)}</Badge>
             </div>
             <h1 className=" text-2xl font-semibold">{testTitle}</h1>
-            <p className="text-sm text-muted-foreground">Sticky audio card with review-friendly transcript segment placeholders.</p>
+            <p className="text-sm text-muted-foreground">Split-screen listening layout with sticky audio controls and transcript/question toggles.</p>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <Badge tone="outline">Audio + 2 min</Badge>
             <Badge tone="outline">{meta.timeLimitSeconds ? formatDuration(mode === "exam" ? timeLeft : meta.timeLimitSeconds) : "Untimed"}</Badge>
             <Badge tone="outline">{meta.currentSectionTitle}</Badge>
             <Badge tone="outline">{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : "Autosave ready"}</Badge>
@@ -541,24 +540,41 @@ export function ListeningAttemptWorkspace({
         </div>
       </Card>
 
-      <Card className="sticky top-4 z-20 p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Audio player</p>
-            <h2 className=" text-xl font-semibold">{part.title}</h2>
-            <p className="text-sm text-muted-foreground">Timer target: {formatDuration(mode === "exam" ? timeLeft : meta.timeLimitSeconds)}. Seek is allowed in practice; exam scaffolding keeps the control visible but locked later.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => howlRef.current?.pause()} disabled={!isPlaying}>
-              <Pause className="h-4 w-4" />
-              Pause
-            </Button>
-            <Button size="sm" onClick={() => howlRef.current?.play()} disabled={isPlaying}>
-              <Play className="h-4 w-4" />
-              Play
-            </Button>
+      <Card className="sticky top-4 z-20 overflow-hidden">
+        <div className="border-b border-border/70 px-5 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Audio</p>
+              <h2 className=" text-xl font-semibold">{part.title}</h2>
+            </div>
+            <div className="flex gap-2 lg:hidden">
+              <Button variant={activeAttemptTab === "transcript" ? "default" : "outline"} size="sm" onClick={() => setActiveAttemptTab("transcript")}>
+                Transcript
+              </Button>
+              <Button variant={activeAttemptTab === "questions" ? "default" : "outline"} size="sm" onClick={() => setActiveAttemptTab("questions")}>
+                Questions
+              </Button>
+            </div>
           </div>
         </div>
+        <div className="grid gap-4 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {mode === "exam"
+                ? `Time remaining: ${formatDuration(timeLeft)}`
+                : `Listening timer target: ${formatDuration(meta.timeLimitSeconds)}`}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => howlRef.current?.pause()} disabled={!isPlaying}>
+                <Pause className="h-4 w-4" />
+                Pause
+              </Button>
+              <Button size="sm" onClick={() => howlRef.current?.play()} disabled={isPlaying}>
+                <Play className="h-4 w-4" />
+                Play
+              </Button>
+            </div>
+          </div>
         <div 
           className={`mt-4 h-2 rounded-full bg-muted overflow-hidden relative ${mode === "practice" ? "cursor-pointer" : ""}`}
           onClick={(e) => {
@@ -574,7 +590,8 @@ export function ListeningAttemptWorkspace({
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Volume2 className="h-4 w-4" />
-          <span>Transcript segment shortcuts and waveform controls are ready for Howler.js integration.</span>
+          <span>{mode === "practice" ? "Seek is available in practice mode." : "Audio controls stay visible during exam mode."}</span>
+        </div>
         </div>
       </Card>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Notice, ProgressBar, SectionHeader, Select, Textarea } from "@/components/ui";
@@ -56,11 +56,43 @@ const defaultInstructions: Record<string, string> = {
   "listening_short_answer": "Answer the questions below.\n\nWrite {NO MORE THAN THREE WORDS AND/OR A NUMBER} for each answer."
 };
 
+const INLINE_BLANK_PLACEHOLDER = "........................";
+
+function formatTranscriptTimestamp(totalSeconds: number) {
+  const minutes = Math.floor(Math.max(0, totalSeconds) / 60);
+  const seconds = Math.max(0, totalSeconds) % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function buildTranscriptTextFromSegments(
+  segments: NonNullable<AdminTestDraftContentSection["transcriptSegments"]> | undefined
+) {
+  return (segments ?? [])
+    .map((segment) => segment.text.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 function splitNonEmptyLines(text: string) {
   return text
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function normalizeInlineBlankPlaceholders(text: string) {
+  return text.replace(/_{3,}/g, INLINE_BLANK_PLACEHOLDER);
+}
+
+function stripGeneratedListeningIntroFromContent(text: string) {
+  return text
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !/^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(trimmed);
+    })
+    .join("\n")
+    .trim();
 }
 
 function extractMatchingOptionValue(option: string) {
@@ -79,6 +111,31 @@ function createDraftId(prefix: string) {
     return `${prefix}-${cryptoApi.randomUUID()}`;
   }
   return `${prefix}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function getAudioFileDurationSeconds(file: File) {
+  return new Promise<number | null>((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      audio.removeAttribute("src");
+      audio.load();
+    };
+
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      const duration = Number.isFinite(audio.duration) ? Math.max(0, Math.round(audio.duration)) : null;
+      cleanup();
+      resolve(duration);
+    };
+    audio.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+    audio.src = objectUrl;
+  });
 }
 
 function alphabetLabelFromIndex(index: number) {
@@ -799,8 +856,39 @@ function collectGroupIssues(
   return [...new Set(issues)];
 }
 
-function normalizeQuestionGroups(groups: AdminTestDraftQuestionGroup[]) {
-  let nextQuestionStart = 1;
+function getQuestionStartOffset(
+  draftType: AdminTestDraftState["metadata"]["type"],
+  format: AdminTestDraftState["metadata"]["format"],
+) {
+  if (format === "full") {
+    return 1;
+  }
+
+  const expectedPrefix = draftType === "listening" ? "part_" : "passage_";
+  if (!format.startsWith(expectedPrefix)) {
+    return 1;
+  }
+
+  const sectionNumber = Number.parseInt(format.split("_")[1] ?? "", 10);
+  if (!Number.isFinite(sectionNumber) || sectionNumber <= 1) {
+    return 1;
+  }
+
+  if (draftType === "listening") {
+    return (sectionNumber - 1) * 10 + 1;
+  }
+
+  if (sectionNumber === 2) return 14;
+  if (sectionNumber === 3) return 27;
+  return 1;
+}
+
+function normalizeQuestionGroups(
+  groups: AdminTestDraftQuestionGroup[],
+  draftType: AdminTestDraftState["metadata"]["type"] = "reading",
+  format: AdminTestDraftState["metadata"]["format"] = "full",
+) {
+  let nextQuestionStart = getQuestionStartOffset(draftType, format);
 
   return groups.map((group) => {
     let cursor = nextQuestionStart;
@@ -1115,10 +1203,16 @@ function extractExamPracticeNumber(value: string) {
   return null;
 }
 
-function getNextExamPracticeTitleFromTests(tests: Array<{ source: string; title: string }>) {
+function getNextExamPracticeTitleFromTests(
+  tests: Array<{ source: string; title: string; type?: string }>,
+  type: AdminTestDraftState["metadata"]["type"],
+) {
   let maxNumber = 0;
   for (const test of tests) {
     if (String(test.source).trim().toLowerCase() !== "custom") {
+      continue;
+    }
+    if (String(test.type ?? "").trim().toLowerCase() && String(test.type ?? "").trim().toLowerCase() !== type) {
       continue;
     }
     const number = extractExamPracticeNumber(test.title);
@@ -1159,6 +1253,27 @@ function isGenericSectionTitle(value: string) {
   return /^(Reading Passage|Listening Part|Passage|Part)\s+\d+\s*$/i.test(value.trim());
 }
 
+function isGenericListeningIntroTitle(value: string) {
+  return /^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(value.trim());
+}
+
+function shouldRenderSectionTitle(
+  draftType: AdminTestDraftState["metadata"]["type"],
+  title: string,
+) {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    return false;
+  }
+  if (
+    draftType === "listening"
+    && (isGenericSectionTitle(trimmedTitle) || isGenericListeningIntroTitle(trimmedTitle))
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function normalizeMetadataQuickFixes(draft: AdminTestDraftState): AdminTestDraftState {
   const metadataTitle = resolveDraftTitleForSave(draft);
   const normalizedSourceDetail = normalizeAdminTestSourceDetail(draft.metadata.source, draft.metadata.sourceDetail);
@@ -1180,22 +1295,38 @@ function normalizeMetadataQuickFixes(draft: AdminTestDraftState): AdminTestDraft
         const logicalIndex = resolveDraftLogicalIndex(draft.metadata.type, draft.metadata.format, index);
         const normalizedLabel = `${sectionLabelPrefix} ${logicalIndex + 1}`;
         const trimmedTitle = section.title.trim();
-        const normalizedTitle = !trimmedTitle || isGenericSectionTitle(trimmedTitle)
-          ? `${sectionTitlePrefix} ${logicalIndex + 1}`
-          : trimmedTitle;
+        const normalizedTitle = draft.metadata.type === "listening"
+          ? ((isGenericSectionTitle(trimmedTitle) || isGenericListeningIntroTitle(trimmedTitle)) ? "" : trimmedTitle)
+          : (!trimmedTitle || isGenericSectionTitle(trimmedTitle)
+              ? `${sectionTitlePrefix} ${logicalIndex + 1}`
+              : trimmedTitle);
 
         return {
           ...section,
           label: normalizedLabel,
           title: normalizedTitle,
+          content: draft.metadata.type === "listening"
+            ? stripGeneratedListeningIntroFromContent(section.content)
+            : section.content,
           subtitle: section.subtitle.trim(),
         };
       }),
     },
     questionGroups: (draft.questionGroups ?? []).map((group) => ({
       ...group,
-      title: group.title.trim() || `Questions ${group.questionStart}${group.questionEnd > group.questionStart ? `-${group.questionEnd}` : ""}`,
-      instructions: group.instructions.trim(),
+      title: group.typeId.includes("summary_completion")
+        ? normalizeInlineBlankPlaceholders(group.title.trim())
+        : normalizeInlineBlankPlaceholders(group.title.trim()) || `Questions ${group.questionStart}${group.questionEnd > group.questionStart ? `-${group.questionEnd}` : ""}`,
+      instructions: normalizeInlineBlankPlaceholders(group.instructions.trim()),
+      questionBlock: group.questionBlock !== undefined ? normalizeInlineBlankPlaceholders(group.questionBlock) : group.questionBlock,
+      answerBlock: group.answerBlock !== undefined ? normalizeInlineBlankPlaceholders(group.answerBlock) : group.answerBlock,
+      secondaryBlock: group.secondaryBlock !== undefined ? normalizeInlineBlankPlaceholders(group.secondaryBlock) : group.secondaryBlock,
+      questions: group.questions.map((question) => ({
+        ...question,
+        prompt: normalizeInlineBlankPlaceholders(question.prompt),
+        explanation: normalizeInlineBlankPlaceholders(question.explanation),
+        variants: question.variants.map((variant) => normalizeInlineBlankPlaceholders(variant)),
+      })),
     })),
   };
 }
@@ -1254,9 +1385,10 @@ function renderBraceBoldInlineText(text: string, keyPrefix: string) {
 }
 
 function renderBraceBoldText(text: string, keyPrefix: string) {
-  const lines = text.split("\n");
+  const normalizedText = normalizeInlineBlankPlaceholders(text);
+  const lines = normalizedText.split("\n");
   if (lines.length === 1 && !/^\s*\*/.test(lines[0] ?? "")) {
-    return renderBraceBoldInlineText(text, keyPrefix);
+    return renderBraceBoldInlineText(normalizedText, keyPrefix);
   }
 
   return lines.map((rawLine, index) => {
@@ -1704,7 +1836,7 @@ function MetadataPanel({
 
     try {
       const tests = await adminApi.listTests();
-      const nextTitle = getNextExamPracticeTitleFromTests(tests);
+      const nextTitle = getNextExamPracticeTitleFromTests(tests, draft.metadata.type);
       setDraft((current) => ({
         ...current,
         metadata: {
@@ -1808,6 +1940,9 @@ function ContentPanel({
   const pathname = usePathname();
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [deleteConfirmSectionId, setDeleteConfirmSectionId] = useState<string | null>(null);
+  const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
+  const [uploadingSectionId, setUploadingSectionId] = useState<string | null>(null);
+  const [transcribingSectionId, setTranscribingSectionId] = useState<string | null>(null);
   const [collapseStateReady, setCollapseStateReady] = useState(false);
   const collapseStorageKey = useMemo(() => "admin-content-sections:" + pathname, [pathname]);
 
@@ -1820,12 +1955,17 @@ function ContentPanel({
           {
             id: createDraftId("draft-section"),
             label: current.metadata.type === "listening" ? "Part " + (current.content.sections.length + 1) : "Passage " + (current.content.sections.length + 1),
-            title: current.metadata.type === "listening" ? "Listening Part " + (current.content.sections.length + 1) : "Reading Passage " + (current.content.sections.length + 1),
+            title: current.metadata.type === "listening" ? "" : "Reading Passage " + (current.content.sections.length + 1),
             subtitle: "",
             content: "",
             paragraphs: [],
             showLabels: false,
             mediaKind: current.metadata.type === "listening" ? "audio" : "text",
+            audioUrl: "",
+            audioDurationSeconds: current.metadata.type === "listening" ? 0 : null,
+            transcript: "",
+            transcriptSegments: [],
+            transcriptQuestionLocations: [],
             markerCount: 0
           }
         ]
@@ -1854,6 +1994,104 @@ function ContentPanel({
         sections: current.content.sections.map((s) => s.id === sectionId ? { ...s, ...updates } : s)
       }
     }));
+  };
+
+  const getSectionTranscriptQuestionPayload = (sectionId: string) =>
+    (draft.questionGroups ?? [])
+      .filter((group) => group.sectionId === sectionId)
+      .flatMap((group) =>
+        group.questions.flatMap((question) => {
+          const labelMatch = question.label.match(/(\d+)\s*-\s*(\d+)/);
+          if (labelMatch) {
+            const start = Number(labelMatch[1]);
+            const end = Number(labelMatch[2]);
+            const labels = Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => String(start + index));
+            if (labels.length > 1 && question.acceptedAnswers.length >= labels.length) {
+              return labels.map((label, index) => ({
+                questionId: `${question.id}:${label}`,
+                questionLabel: label,
+                questionPrompt: question.prompt,
+                acceptedAnswers: [question.acceptedAnswers[index] ?? ""].filter(Boolean),
+              }));
+            }
+          }
+
+          return [{
+            questionId: question.id,
+            questionLabel: question.label,
+            questionPrompt: question.prompt,
+            acceptedAnswers: question.acceptedAnswers,
+          }];
+        })
+      );
+
+  const regenerateTranscript = async (section: AdminTestDraftContentSection, audioMeta?: { filename?: string; contentType?: string }) => {
+    if (!section.audioUrl) return;
+    setTranscribingSectionId(section.id);
+    try {
+      const transcriptPayload = await adminApi.generateListeningTranscript({
+        audioUrl: section.audioUrl,
+        audioFilename: audioMeta?.filename,
+        audioContentType: audioMeta?.contentType,
+        sectionLabel: section.label,
+        sectionTitle: section.title,
+        transcript: section.transcript,
+        transcriptSegments: section.transcriptSegments,
+        questions: getSectionTranscriptQuestionPayload(section.id),
+      });
+      const transcriptText = transcriptPayload.transcript.trim() || buildTranscriptTextFromSegments(transcriptPayload.transcriptSegments);
+      updateSection(section.id, {
+        mediaKind: "audio",
+        transcript: transcriptText,
+        transcriptSegments: transcriptPayload.transcriptSegments,
+        transcriptQuestionLocations: transcriptPayload.transcriptQuestionLocations,
+      });
+    } finally {
+      setTranscribingSectionId((current) => (current === section.id ? null : current));
+    }
+  };
+
+  const handleAudioUpload = async (sectionId: string, file?: File | null) => {
+    if (!file) return;
+    setUploadingSectionId(sectionId);
+    try {
+      const [asset, duration] = await Promise.all([
+        adminApi.uploadAudio(file),
+        getAudioFileDurationSeconds(file),
+      ]);
+      const updatedSection = draft.content.sections.find((item) => item.id === sectionId);
+      updateSection(sectionId, {
+        audioUrl: asset.publicUrl,
+        audioDurationSeconds: duration,
+        mediaKind: "audio",
+        transcript: "",
+        transcriptSegments: [],
+        transcriptQuestionLocations: [],
+      });
+      await regenerateTranscript(
+        {
+          ...(updatedSection ?? {
+            id: sectionId,
+            label: "Part",
+            title: "",
+            subtitle: "",
+            content: "",
+            mediaKind: "audio",
+            markerCount: 0,
+          }),
+          audioUrl: asset.publicUrl,
+          audioDurationSeconds: duration,
+          mediaKind: "audio",
+          transcript: "",
+          transcriptSegments: [],
+          transcriptQuestionLocations: [],
+        },
+        { filename: asset.filename, contentType: asset.contentType }
+      );
+    } finally {
+      setUploadingSectionId((current) => (current === sectionId ? null : current));
+      setDraggingSectionId((current) => (current === sectionId ? null : current));
+    }
   };
 
   useEffect(() => {
@@ -1953,7 +2191,7 @@ function ContentPanel({
                         {sectionLabel}
                       </div>
                       <h3 className={cn("font-black tracking-tight text-foreground", isSectionCollapsed ? "text-base" : "text-lg")}>
-                        {section.title.trim() || "Untitled section"}
+                        {shouldRenderSectionTitle(draft.metadata.type, section.title) ? section.title.trim() : "Untitled section"}
                       </h3>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -2011,7 +2249,7 @@ function ContentPanel({
                   <EditableField label="Section Title">
                     <Input
                       className="h-11 bg-background font-bold"
-                      placeholder="Enter Passage Title (e.g. The Giant Squid)"
+                      placeholder={draft.metadata.type === "listening" ? "Optional section title" : "Enter Passage Title (e.g. The Giant Squid)"}
                       value={section.title}
                       onChange={(e) => updateSection(section.id, { title: e.target.value })}
                     />
@@ -2030,32 +2268,155 @@ function ContentPanel({
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-tighter text-muted-foreground">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/><path d="M9 12h6"/><path d="M8 17h8"/><path d="M12 12v10"/><path d="M12 22l-3-3"/><path d="M12 22l3-3"/></svg>
-                        Writing Zone
-                      </h4>
-                      <Button
-                        type="button"
-                        variant={section.showLabels ? "solid" : "outline"}
-                        size="sm"
-                        className="h-8 text-xs font-bold"
-                        onClick={() => updateSection(section.id, { showLabels: !section.showLabels })}
-                      >
-                        {section.showLabels ? "Labels: ON (A, B, C)" : "Labels: OFF"}
-                      </Button>
-                    </div>
-                    <div className="relative">
-                      <Textarea
-                        className="min-h-[450px] resize-y border-2 p-6 font-serif text-base leading-relaxed shadow-inner transition-all focus-visible:border-primary"
-                        value={section.content}
-                        onChange={(e) => updateSection(section.id, { content: e.target.value, paragraphs: [] })}
-                        placeholder="Type or paste the passage text here. Use a blank line (double Enter) to separate paragraphs."
-                      />
-                      <div className="pointer-events-none absolute bottom-4 right-4 opacity-20">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      </div>
-                    </div>
+                    {draft.metadata.type === "listening" ? (
+                      <>
+                        <EditableField label="Audio URL">
+                          <Input
+                            className="h-11 bg-background font-medium"
+                            placeholder="Uploaded audio URL appears here"
+                            value={section.audioUrl || ""}
+                            onChange={(e) => updateSection(section.id, {
+                              audioUrl: e.target.value,
+                              mediaKind: "audio",
+                              transcript: "",
+                              transcriptSegments: [],
+                              transcriptQuestionLocations: [],
+                            })}
+                          />
+                        </EditableField>
+
+                        <div
+                          className={cn(
+                            "rounded-xl border border-dashed p-4 transition-colors",
+                            draggingSectionId === section.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border/70 bg-muted/20",
+                          )}
+                          onDragOver={(event: ReactDragEvent<HTMLDivElement>) => {
+                            event.preventDefault();
+                            if (event.dataTransfer.types.includes("Files")) {
+                              event.dataTransfer.dropEffect = "copy";
+                              setDraggingSectionId(section.id);
+                            }
+                          }}
+                          onDragLeave={(event: ReactDragEvent<HTMLDivElement>) => {
+                            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                              setDraggingSectionId((current) => (current === section.id ? null : current));
+                            }
+                          }}
+                          onDrop={(event: ReactDragEvent<HTMLDivElement>) => {
+                            event.preventDefault();
+                            const file = event.dataTransfer.files?.[0] ?? null;
+                            void handleAudioUpload(section.id, file);
+                          }}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">Audio Asset</p>
+                              <p className="text-xs text-muted-foreground">
+                                Drag and drop audio here. Transcript and timestamps will be generated automatically.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {section.audioUrl ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={transcribingSectionId === section.id}
+                                  onClick={() => void regenerateTranscript(section)}
+                                >
+                                  {transcribingSectionId === section.id ? "Generating..." : "Regenerate Transcript"}
+                                </Button>
+                              ) : null}
+                              <label className="inline-flex cursor-pointer items-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/40">
+                                {uploadingSectionId === section.id ? "Uploading..." : "Upload Audio"}
+                                <input
+                                  type="file"
+                                  accept="audio/*"
+                                  className="hidden"
+                                  onChange={(event) => void handleAudioUpload(section.id, event.target.files?.[0] ?? null)}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                          {section.audioDurationSeconds ? (
+                            <p className="mt-3 text-xs font-medium text-muted-foreground">
+                              Detected duration: {section.audioDurationSeconds}s
+                            </p>
+                          ) : null}
+                          {section.audioUrl ? (
+                            <audio className="mt-4 w-full" controls src={section.audioUrl} />
+                          ) : null}
+                        </div>
+
+                        <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">Generated Transcript</p>
+                              <p className="text-xs text-muted-foreground">
+                                Transcript input is automatic. Click regenerate after changing questions if you want fresh answer locations.
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+                              <span>{section.transcriptSegments?.length ?? 0} segments</span>
+                              <span>{section.transcriptQuestionLocations?.length ?? 0} answer anchors</span>
+                            </div>
+                          </div>
+                          {transcribingSectionId === section.id ? (
+                            <p className="mt-4 text-sm font-medium text-primary">Generating transcript with timestamps...</p>
+                          ) : section.transcriptSegments && section.transcriptSegments.length > 0 ? (
+                            <div className="mt-4 max-h-[320px] space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-background/90 p-3">
+                              {section.transcriptSegments.map((segment) => (
+                                <div key={segment.id} className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-3 rounded-lg px-2 py-2">
+                                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                                    {formatTranscriptTimestamp(segment.startSec)}
+                                  </span>
+                                  <p className="text-sm leading-relaxed text-foreground">{segment.text}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : section.transcript?.trim() ? (
+                            <div className="mt-4 max-h-[320px] overflow-y-auto rounded-xl border border-border/60 bg-background/90 p-4">
+                              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{section.transcript.trim()}</p>
+                            </div>
+                          ) : (
+                            <p className="mt-4 text-sm text-muted-foreground">
+                              Upload audio to generate transcript, timestamps, and question answer anchors automatically.
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-tighter text-muted-foreground">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/><path d="M9 12h6"/><path d="M8 17h8"/><path d="M12 12v10"/><path d="M12 22l-3-3"/><path d="M12 22l3-3"/></svg>
+                            Writing Zone
+                          </h4>
+                          <Button
+                            type="button"
+                            variant={section.showLabels ? "solid" : "outline"}
+                            size="sm"
+                            className="h-8 text-xs font-bold"
+                            onClick={() => updateSection(section.id, { showLabels: !section.showLabels })}
+                          >
+                            {section.showLabels ? "Labels: ON (A, B, C)" : "Labels: OFF"}
+                          </Button>
+                        </div>
+                        <div className="relative">
+                          <Textarea
+                            className="min-h-[450px] resize-y border-2 p-6 font-serif text-base leading-relaxed shadow-inner transition-all focus-visible:border-primary"
+                            value={section.content}
+                            onChange={(e) => updateSection(section.id, { content: e.target.value, paragraphs: [] })}
+                            placeholder="Type or paste the passage text here. Use a blank line (double Enter) to separate paragraphs."
+                          />
+                          <div className="pointer-events-none absolute bottom-4 right-4 opacity-20">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               ) : null}
@@ -2084,6 +2445,7 @@ function ContentPanel({
               resolveLogicalIndex={resolveLogicalIndex}
               getIeltsIntroStr={getIeltsIntroStr}
               compact
+              showSectionIntro
             />
           </CardContent>
         </Card>
@@ -2281,7 +2643,9 @@ function QuestionsPanel({
           newGroup.id,
           targetSectionId,
           null,
-        )
+        ),
+        current.metadata.type,
+        current.metadata.format,
       )
     }));
   };
@@ -2296,7 +2660,9 @@ function QuestionsPanel({
           groupId,
           targetSectionId,
           beforeGroupId,
-        )
+        ),
+        current.metadata.type,
+        current.metadata.format,
       ),
     }));
   };
@@ -2476,14 +2842,14 @@ function QuestionsPanel({
         }
 
         return nextGroups;
-      })())
+      })(), current.metadata.type, current.metadata.format)
     }));
   };
 
   const removeGroup = (groupId: string) => {
     setDraft((current) => ({
       ...current,
-      questionGroups: normalizeQuestionGroups((current.questionGroups ?? []).filter((g) => g.id !== groupId))
+      questionGroups: normalizeQuestionGroups((current.questionGroups ?? []).filter((g) => g.id !== groupId), current.metadata.type, current.metadata.format)
     }));
   };
 
@@ -2496,7 +2862,7 @@ function QuestionsPanel({
           ...g,
           questions: g.questions.map((q) => q.id === questionId ? { ...q, ...updates } : q)
         };
-      }))
+      }), current.metadata.type, current.metadata.format)
     }));
   };
 
@@ -2509,7 +2875,7 @@ function QuestionsPanel({
           ...g,
           questions: g.questions.filter((q) => q.id !== questionId)
         };
-      }))
+      }), current.metadata.type, current.metadata.format)
     }));
   };
 
@@ -2552,6 +2918,19 @@ function QuestionsPanel({
     }
     return `You should spend about 20 minutes on Questions ${range}, which are based on Reading Passage ${index + 1} below.`;
   };
+
+  useEffect(() => {
+    setDraft((current) => {
+      const normalized = normalizeQuestionGroups(current.questionGroups ?? [], current.metadata.type, current.metadata.format);
+      if (JSON.stringify(normalized) === JSON.stringify(current.questionGroups ?? [])) {
+        return current;
+      }
+      return {
+        ...current,
+        questionGroups: normalized,
+      };
+    });
+  }, [draft.metadata.format, draft.metadata.type, setDraft]);
 
   const groupedQuestionGroups = useMemo(() => {
     const grouped: Array<{
@@ -3420,6 +3799,7 @@ function QuestionsPanel({
                 previewId="questions"
                 resolveLogicalIndex={resolveLogicalIndex}
                 getIeltsIntroStr={getIeltsIntroStr}
+                showSectionIntro
               />
             </CardContent>
           </Card>
@@ -3461,12 +3841,14 @@ function EditorUserPreview({
   resolveLogicalIndex,
   getIeltsIntroStr,
   compact = false,
+  showSectionIntro = true,
 }: {
   draft: AdminTestDraftState;
   previewId: string;
   resolveLogicalIndex: (uiIndex: number) => number;
   getIeltsIntroStr: (uiIndex: number) => string;
   compact?: boolean;
+  showSectionIntro?: boolean;
 }) {
   if (draft.content.sections.length === 0) {
     return (
@@ -3491,6 +3873,7 @@ function EditorUserPreview({
             intro={getIeltsIntroStr(idx)}
             groups={relatedGroups}
             compact={compact}
+            showSectionIntro={showSectionIntro}
           />
         );
       })}
@@ -3506,6 +3889,7 @@ function EditorPreviewSection({
   intro,
   groups,
   compact = false,
+  showSectionIntro = true,
 }: {
   previewId: string;
   draftType: AdminTestDraftState["metadata"]["type"];
@@ -3514,6 +3898,7 @@ function EditorPreviewSection({
   intro: string;
   groups: AdminTestDraftState["questionGroups"];
   compact?: boolean;
+  showSectionIntro?: boolean;
 }) {
   const formatPreviewGroupHeading = (group: AdminTestDraftState["questionGroups"][number]) => {
     if (isMultipleChoiceMultipleType(group.typeId)) {
@@ -3589,6 +3974,8 @@ function EditorPreviewSection({
     [groups, previewId, section.id]
   );
   const [activeQuestionId, setActiveQuestionId] = useState<string>(navQuestions[0]?.id ?? "");
+  const [showAnswerLocations, setShowAnswerLocations] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (navQuestions.length === 0) {
@@ -3605,6 +3992,100 @@ function EditorPreviewSection({
     setActiveQuestionId(questionId);
     const node = document.getElementById(target?.targetId ?? `${previewId}-${section.id}-${questionId}`);
     node?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function seekPreviewAudio(second: number) {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = Math.max(0, second);
+    void audioRef.current.play().catch(() => undefined);
+  }
+
+  function renderListeningTranscriptPreview() {
+    if (draftType !== "listening") {
+      return null;
+    }
+
+    const segments = section.transcriptSegments ?? [];
+    const locations = section.transcriptQuestionLocations ?? [];
+    const fallbackTranscript = section.transcript?.trim() || "";
+
+    return (
+      <div className={cn("space-y-4", compact ? "pt-1" : "pt-2")}>
+        {section.audioUrl ? (
+          <audio ref={audioRef} className="w-full" controls src={section.audioUrl} />
+        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/15 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Transcript Preview</p>
+            <p className="text-xs text-muted-foreground">Click any transcript row to jump the audio to that timestamp.</p>
+          </div>
+          {locations.length > 0 ? (
+            <Button
+              type="button"
+              variant={showAnswerLocations ? "solid" : "outline"}
+              size="sm"
+              onClick={() => setShowAnswerLocations((current) => !current)}
+            >
+              {showAnswerLocations ? "Hide Answer Locations" : "Show Answer Locations"}
+            </Button>
+          ) : null}
+        </div>
+        {segments.length > 0 ? (
+          <div className={cn("rounded-2xl border border-border/75 bg-background/90", compact ? "p-3" : "p-4")}>
+            <div className={cn("space-y-2 overflow-y-auto", compact ? "max-h-[320px]" : "max-h-[420px]")}>
+              {segments.map((segment) => {
+                const segmentLocations = locations.filter(
+                  (location) =>
+                    location.startSec <= segment.endSec
+                    && location.endSec >= segment.startSec
+                );
+                return (
+                  <button
+                    key={segment.id}
+                    type="button"
+                    onClick={() => seekPreviewAudio(segment.startSec)}
+                    className="w-full rounded-xl border border-transparent px-3 py-2 text-left transition hover:border-primary/30 hover:bg-primary/5"
+                  >
+                    <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-3">
+                      <span className="pt-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">
+                        {formatTranscriptTimestamp(segment.startSec)}
+                      </span>
+                      <div className="space-y-2">
+                        <p className={cn("text-foreground", compact ? "text-[13px] leading-[1.45]" : "text-[14px] leading-[1.55]")}>
+                          {segment.text}
+                        </p>
+                        {showAnswerLocations && segmentLocations.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {segmentLocations.map((location) => (
+                              <span
+                                key={`${segment.id}-${location.questionLabel}`}
+                                className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
+                              >
+                                {location.questionLabel}: {location.correctAnswer || location.answerText || "match"}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : fallbackTranscript ? (
+          <div className="rounded-xl border border-border/70 bg-background/90 px-4 py-4">
+            <p className={cn("whitespace-pre-wrap text-foreground", compact ? "text-[13px] leading-[1.45]" : "text-[14px] leading-[1.55]")}>
+              {fallbackTranscript}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border/70 bg-muted/10 px-4 py-5 text-sm text-muted-foreground">
+            Upload audio to generate transcript preview.
+          </div>
+        )}
+      </div>
+    );
   }
 
   function renderCompletionPreview(group: AdminTestDraftState["questionGroups"][number]) {
@@ -3700,12 +4181,14 @@ function EditorPreviewSection({
       <div className={cn("overflow-hidden border border-border/70 bg-background/55 shadow-sm", compact ? "space-y-4 rounded-[1.2rem] p-4" : "space-y-6 rounded-[1.5rem] p-5")}>
       <div className={cn(compact ? "space-y-1.5" : "space-y-2")}>
         <p className={cn("font-bold text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
-          {draftType === "reading" ? `Reading Passage ${logicalIndex + 1}` : `Listening Part ${logicalIndex + 1}`}
+          {draftType === "reading" ? `Reading Passage ${logicalIndex + 1}` : `Listening Section ${logicalIndex + 1}`}
         </p>
-        <p className={cn("border-l-2 border-primary/40 pl-3 py-0.5 font-medium italic text-muted-foreground", compact ? "text-[12px] leading-[1.45]" : "text-[13px] leading-[1.55]")}>
-          {renderBraceBoldText(intro, `${previewId}-${section.id}-intro`)}
-        </p>
-        {section.title ? (
+        {showSectionIntro ? (
+          <p className={cn("border-l-2 border-primary/40 pl-3 py-0.5 font-medium italic text-muted-foreground", compact ? "text-[12px] leading-[1.45]" : "text-[13px] leading-[1.55]")}>
+            {renderBraceBoldText(intro, `${previewId}-${section.id}-intro`)}
+          </p>
+        ) : null}
+        {shouldRenderSectionTitle(draftType, section.title) ? (
           <p className={cn("text-center font-black tracking-tight text-foreground", compact ? "pt-1 text-[19px]" : "pt-1.5 text-[22px]")}>
             {renderBraceBoldText(section.title, `${previewId}-${section.id}-title`)}
           </p>
@@ -3713,7 +4196,8 @@ function EditorPreviewSection({
       </div>
 
       <div className={cn(compact ? "space-y-4" : "space-y-5")}>
-        {paragraphs.length > 0 ? (
+        {draftType === "listening" ? renderListeningTranscriptPreview() : null}
+        {draftType !== "listening" && paragraphs.length > 0 ? (
           paragraphs.map((paragraph, paragraphIndex) => {
             const paragraphId = paragraph.label || `block-${paragraphIndex}`;
 
@@ -3752,11 +4236,7 @@ function EditorPreviewSection({
               </div>
             );
           })
-        ) : (
-          <div className="rounded-xl border border-dashed border-border bg-muted/15 py-10 text-center">
-            <p className="text-sm italic text-muted-foreground">Waiting for content input...</p>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {groups.length > 0 ? (

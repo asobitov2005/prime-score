@@ -36,14 +36,9 @@ export function HistoryRetakeButton({ testId, testType, mode }: HistoryRetakeBut
 
       const result = (await response.json()) as { attemptId: string };
       const resumeToken = Date.now();
-      if (testType === "reading") {
-        const href = `/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`;
-        emitNavigationStart(href);
-        router.push(href);
-        return;
-      }
-
-      const href = `/attempts/${result.attemptId}/${testType}?resume=${resumeToken}`;
+      const href = testType === "reading"
+        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`
+        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`;
       emitNavigationStart(href);
       router.push(href);
     } catch (error) {

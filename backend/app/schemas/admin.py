@@ -206,6 +206,11 @@ class AdminDraftContentSectionRead(BaseModel):
     paragraphs: list[dict[str, object]] = Field(default_factory=list)
     showLabels: bool = False
     media_kind: Literal["text", "audio"]
+    audio_url: str = ""
+    audio_duration_seconds: int | None = None
+    transcript: str = ""
+    transcript_segments: list[dict[str, object]] = Field(default_factory=list)
+    transcript_question_locations: list[dict[str, object]] = Field(default_factory=list)
     marker_count: int = 0
 
 
@@ -283,7 +288,53 @@ class AdminDraftContentSectionWrite(BaseModel):
     paragraphs: list[dict[str, object]] = Field(default_factory=list)
     showLabels: bool = False
     media_kind: Literal["text", "audio"]
+    audio_url: str = ""
+    audio_duration_seconds: int | None = None
+    transcript: str = ""
+    transcript_segments: list[dict[str, object]] = Field(default_factory=list)
+    transcript_question_locations: list[dict[str, object]] = Field(default_factory=list)
     marker_count: int = 0
+
+
+class AdminAudioTranscriptQuestionRequest(BaseModel):
+    question_id: str | None = None
+    question_label: str
+    question_prompt: str
+    accepted_answers: list[str] = Field(default_factory=list)
+
+
+class AdminAudioTranscriptRequest(BaseModel):
+    audio_url: str
+    audio_filename: str | None = None
+    audio_content_type: str | None = None
+    section_label: str | None = None
+    section_title: str | None = None
+    transcript: str | None = None
+    transcript_segments: list[AdminAudioTranscriptSegmentRead] = Field(default_factory=list)
+    questions: list[AdminAudioTranscriptQuestionRequest] = Field(default_factory=list)
+
+
+class AdminAudioTranscriptSegmentRead(BaseModel):
+    id: str
+    start_sec: int
+    end_sec: int
+    text: str
+
+
+class AdminAudioTranscriptQuestionLocationRead(BaseModel):
+    question_id: str | None = None
+    question_label: str
+    question_prompt: str
+    start_sec: int
+    end_sec: int
+    answer_text: str
+    correct_answer: str
+
+
+class AdminAudioTranscriptResponse(BaseModel):
+    transcript: str
+    transcript_segments: list[AdminAudioTranscriptSegmentRead] = Field(default_factory=list)
+    transcript_question_locations: list[AdminAudioTranscriptQuestionLocationRead] = Field(default_factory=list)
 
 
 class AdminDraftQuestionWrite(BaseModel):

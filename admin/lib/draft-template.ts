@@ -2,7 +2,7 @@ import type { AdminTestDraftState, TestType } from "@/lib/types";
 
 export function createEmptyDraft(type: TestType = "reading"): AdminTestDraftState {
   const sectionLabel = type === "listening" ? "Part 1" : "Passage 1";
-  const sectionTitle = type === "listening" ? "Listening Part 1" : "Reading Passage 1";
+  const sectionTitle = type === "listening" ? "" : "Reading Passage 1";
   const timeLimitLabel = type === "listening" ? "Audio duration + 2 min" : "60 min exam";
 
   return {
@@ -27,6 +27,11 @@ export function createEmptyDraft(type: TestType = "reading"): AdminTestDraftStat
           content: "",
           paragraphs: [],
           mediaKind: type === "listening" ? "audio" : "text",
+          audioUrl: "",
+          audioDurationSeconds: type === "listening" ? 0 : null,
+          transcript: "",
+          transcriptSegments: [],
+          transcriptQuestionLocations: [],
           markerCount: 0
         }
       ]

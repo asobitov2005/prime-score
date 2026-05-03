@@ -124,6 +124,23 @@ def _count_answered_values(answers: dict[str, str]) -> int:
     return sum(1 for value in answers.values() if str(value or "").strip())
 
 
+def _normalized_attempt_time_spent(
+    *,
+    saved_time_spent_sec: int | None,
+    elapsed_fallback_sec: int,
+    mode: TestMode | None,
+    time_limit_seconds: int | None,
+) -> int:
+    normalized = max(0, int(saved_time_spent_sec or 0))
+    if normalized <= 0:
+        normalized = max(0, int(elapsed_fallback_sec))
+
+    if mode == TestMode.exam and int(time_limit_seconds or 0) > 0:
+        normalized = min(normalized, int(time_limit_seconds or 0))
+
+    return normalized
+
+
 class RuntimeStoreBackend(Protocol):
     def save_attempt(self, attempt: AttemptRuntime) -> None: ...
 
@@ -499,7 +516,12 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
     now = datetime.now(timezone.utc)
     attempt.completed_at = now
     attempt.updated_at = now
-    attempt.time_spent_sec = max(0, int((now - attempt.started_at).total_seconds()))
+    attempt.time_spent_sec = _normalized_attempt_time_spent(
+        saved_time_spent_sec=attempt.time_spent_sec,
+        elapsed_fallback_sec=max(0, int((now - attempt.started_at).total_seconds())),
+        mode=attempt.mode,
+        time_limit_seconds=int(attempt.test_snapshot.get("time_limit_seconds", 0) or 0),
+    )
     attempt.status = AttemptStatus.completed
 
     snapshot_questions = list(attempt.test_snapshot.get("questions", []))

@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, ChevronDown, Eraser, Expand, GripVertical, Highlighter, Minus, Moon, MoveHorizontal, Plus, SendHorizontal, Shrink, SunMedium } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, Eraser, Expand, GripVertical, Highlighter, Lightbulb, Minus, Moon, MoveHorizontal, Plus, SendHorizontal, Shrink, SunMedium } from "lucide-react";
+import {
+  ListeningTranscriptPanel,
+  type ListeningTranscriptQuestionLocation as PreviewTranscriptQuestionLocation,
+  type ListeningTranscriptSegment as PreviewTranscriptSegment,
+} from "@/components/exam/listening-transcript-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +49,10 @@ interface PreviewParagraph {
   sectionIntro?: string;
   sectionTitle?: string;
   sectionLabel?: string;
+  sectionAudioUrl?: string;
+  sectionAudioDurationSeconds?: number;
+  sectionTranscriptSegments?: PreviewTranscriptSegment[];
+  sectionTranscriptQuestionLocations?: PreviewTranscriptQuestionLocation[];
 }
 
 interface PreviewQuestion {
@@ -65,11 +74,29 @@ interface PreviewGroup {
   sectionId?: string;
   sectionTitle?: string;
   sectionLabel?: string;
+  sectionAudioUrl?: string;
+  sectionAudioDurationSeconds?: number;
+  sectionTranscriptSegments?: PreviewTranscriptSegment[];
+  sectionTranscriptQuestionLocations?: PreviewTranscriptQuestionLocation[];
   questionBlock?: string;
   secondaryBlock?: string;
   diagramTitle?: string;
   diagramImageUrl?: string;
   sharedOptions?: string[];
+  questions: PreviewQuestion[];
+}
+
+interface PreviewSection {
+  id: string;
+  label: string;
+  title?: string;
+  previewLabel?: string;
+  audioUrl?: string;
+  audioDurationSeconds?: number;
+  transcriptSegments?: PreviewTranscriptSegment[];
+  transcriptQuestionLocations?: PreviewTranscriptQuestionLocation[];
+  paragraphs: PreviewParagraph[];
+  questionGroups: PreviewGroup[];
   questions: PreviewQuestion[];
 }
 
@@ -79,6 +106,7 @@ export interface ReadingExamPreviewData {
   title: string;
   subtitle: string;
   partLabel: string;
+  testType?: "reading" | "listening";
   timeLimitSeconds?: number;
   paragraphs: PreviewParagraph[];
   questionGroups: PreviewGroup[];
@@ -337,6 +365,10 @@ function splitOptionLines(block?: string) {
     .filter(Boolean);
 }
 
+function normalizeInlineBlankPlaceholders(text: string) {
+  return text.replace(/_{3,}/g, "........................");
+}
+
 function optionValue(option: unknown) {
   const safeOption = typeof option === "string" ? option : "";
   if (!safeOption) {
@@ -419,11 +451,12 @@ function parsePassageBlockStyle(rawText: string) {
   };
 }
 function parseBraceBoldText(text: string) {
+  const normalizedText = normalizeInlineBlankPlaceholders(text);
   const boldRanges: TextRange[] = [];
   const bulletLineIndexes = new Set<number>();
   let plainText = "";
 
-  text.split("\n").forEach((rawLine, lineIndex, lines) => {
+  normalizedText.split("\n").forEach((rawLine, lineIndex, lines) => {
     const isBulletLine = /^\s*\*/.test(rawLine);
     const line = rawLine.replace(/^\s*\*\s?/, "");
     if (isBulletLine) {
@@ -604,17 +637,19 @@ function findSectionIdForQuestion(
 export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: ReadingExamPreviewData }) {
   const router = useRouter();
   const isAttemptPreview = Boolean(data?.attemptId);
-  const candidateName = useAuthStore((state) => state.name) || "Guest Candidate";
+  const storedCandidateName = useAuthStore((state) => state.name);
   const accessToken = useAuthStore((state) => state.accessToken);
   const containerRef = useRef<HTMLElement | null>(null);
   const readingPaneRef = useRef<HTMLDivElement | null>(null);
   const questionPaneRef = useRef<HTMLDivElement | null>(null);
+  const listeningAudioRef = useRef<HTMLAudioElement | null>(null);
   const textBlockRefs = useRef<Record<string, HTMLElement | null>>({});
   const examData = data ?? DEFAULT_EXAM_DATA;
   const initialTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
   const initialQuestionId = examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "";
   const [answers, setAnswers] = useState<Record<string, string>>(examData.initialAnswers ?? {});
-  const [theme, setTheme] = useState<"light" | "dark">(() => getDocumentTheme());
+  const [hasMounted, setHasMounted] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [splitRatio, setSplitRatio] = useState(clampSplitRatio(examData.initialUiState?.splitRatio ?? 54));
   const [fontScale, setFontScale] = useState(clampFontScale(examData.initialUiState?.fontScale ?? 1));
   const [timeLeft, setTimeLeft] = useState(
@@ -676,16 +711,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   } | null>(null);
   const allQuestions = useMemo(() => examData.questionGroups.flatMap((group) => group.questions), [examData.questionGroups]);
   const previewSections = useMemo(() => {
-    const ordered: Array<{
-      id: string;
-      label: string;
-      title?: string;
-      previewLabel?: string;
-      paragraphs: PreviewParagraph[];
-      questionGroups: PreviewGroup[];
-      questions: PreviewQuestion[];
-    }> = [];
-    const byId = new Map<string, (typeof ordered)[number]>();
+    const ordered: PreviewSection[] = [];
+    const byId = new Map<string, PreviewSection>();
 
     const ensureSection = (id: string, fallbackLabel: string) => {
       const existing = byId.get(id);
@@ -698,6 +725,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         label: fallbackLabel,
         title: undefined as string | undefined,
         previewLabel: undefined as string | undefined,
+        audioUrl: undefined as string | undefined,
+        audioDurationSeconds: undefined as number | undefined,
+        transcriptSegments: undefined as PreviewTranscriptSegment[] | undefined,
+        transcriptQuestionLocations: undefined as PreviewTranscriptQuestionLocation[] | undefined,
         paragraphs: [] as PreviewParagraph[],
         questionGroups: [] as PreviewGroup[],
         questions: [] as PreviewQuestion[],
@@ -719,6 +750,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       if (paragraph.sectionPreviewLabel && !section.previewLabel) {
         section.previewLabel = paragraph.sectionPreviewLabel;
       }
+      if (paragraph.sectionAudioUrl && !section.audioUrl) {
+        section.audioUrl = paragraph.sectionAudioUrl;
+      }
+      if (paragraph.sectionAudioDurationSeconds && !section.audioDurationSeconds) {
+        section.audioDurationSeconds = paragraph.sectionAudioDurationSeconds;
+      }
+      if (paragraph.sectionTranscriptSegments && !section.transcriptSegments) {
+        section.transcriptSegments = paragraph.sectionTranscriptSegments;
+      }
+      if (paragraph.sectionTranscriptQuestionLocations && !section.transcriptQuestionLocations) {
+        section.transcriptQuestionLocations = paragraph.sectionTranscriptQuestionLocations;
+      }
       section.paragraphs.push(paragraph);
     });
 
@@ -730,6 +773,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       }
       if (group.sectionTitle && !section.title) {
         section.title = group.sectionTitle;
+      }
+      if (group.sectionAudioUrl && !section.audioUrl) {
+        section.audioUrl = group.sectionAudioUrl;
+      }
+      if (group.sectionAudioDurationSeconds && !section.audioDurationSeconds) {
+        section.audioDurationSeconds = group.sectionAudioDurationSeconds;
+      }
+      if (group.sectionTranscriptSegments && !section.transcriptSegments) {
+        section.transcriptSegments = group.sectionTranscriptSegments;
+      }
+      if (group.sectionTranscriptQuestionLocations && !section.transcriptQuestionLocations) {
+        section.transcriptQuestionLocations = group.sectionTranscriptQuestionLocations;
       }
       section.questionGroups.push(group);
       section.questions.push(...group.questions);
@@ -744,6 +799,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const currentParagraphs = currentSection?.paragraphs ?? examData.paragraphs;
   const currentQuestionGroups = currentSection?.questionGroups ?? examData.questionGroups;
   const currentQuestions = currentSection?.questions ?? allQuestions;
+  const isListeningPreview = examData.testType === "listening";
+  const currentTranscriptSegments = currentSection?.transcriptSegments ?? [];
+  const currentTranscriptQuestionLocations = currentSection?.transcriptQuestionLocations ?? [];
+  const candidateName = hasMounted ? (storedCandidateName || "Guest Candidate") : "Guest Candidate";
+  const [showListeningTranscript, setShowListeningTranscript] = useState(false);
+  const [showTranscriptAnswerLocations, setShowTranscriptAnswerLocations] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     const currentTheme = getDocumentTheme();
@@ -781,6 +846,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         ? Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - nextTimeSpentSeconds)
         : nextTimeSpentSeconds
     );
+    setShowListeningTranscript(false);
+    setShowTranscriptAnswerLocations(false);
     latestAnswersRef.current = nextAnswers;
     latestProgressRef.current = {
       timeSpentSec: nextTimeSpentSeconds,
@@ -3015,7 +3082,58 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             </div>
 
             <article className="space-y-5">
-              {currentParagraphs.map((paragraph, paragraphIndex) => {
+              {currentSection?.audioUrl ? (
+                <div className="rounded-[1.4rem] border border-border/75 bg-card/70 p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.55)]">
+                  {isListeningPreview && mode === "practice" ? (
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant={showListeningTranscript ? "solid" : "outline"}
+                        size="sm"
+                        className="h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                        onClick={() => setShowListeningTranscript((current) => !current)}
+                      >
+                        {showListeningTranscript ? "Hide Transcript" : "Open Transcript"}
+                      </Button>
+                      {currentTranscriptQuestionLocations.length > 0 ? (
+                        <Button
+                          type="button"
+                          variant={showTranscriptAnswerLocations ? "solid" : "outline"}
+                          size="sm"
+                          aria-label={showTranscriptAnswerLocations ? "Hide answer locations" : "Show answer locations"}
+                          title={showTranscriptAnswerLocations ? "Hide answer locations" : "Show answer locations"}
+                          className="h-8 w-8 rounded-xl p-0"
+                          disabled={!showListeningTranscript}
+                          onClick={() => setShowTranscriptAnswerLocations((current) => !current)}
+                        >
+                          <Lightbulb className={cn("h-4 w-4", showTranscriptAnswerLocations && "fill-current")} />
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <audio
+                    ref={listeningAudioRef}
+                    key={`${currentSection.id}-${currentSection.audioUrl}`}
+                    controls
+                    preload="metadata"
+                    controlsList="nodownload noplaybackrate"
+                    onContextMenu={(event) => event.preventDefault()}
+                    className="w-full"
+                    src={currentSection.audioUrl}
+                  />
+                </div>
+              ) : null}
+
+              {isListeningPreview && showListeningTranscript && currentTranscriptSegments.length > 0 ? (
+                <ListeningTranscriptPanel
+                  audioRef={listeningAudioRef}
+                  segments={currentTranscriptSegments}
+                  questionLocations={currentTranscriptQuestionLocations}
+                  showAnswerLocations={showTranscriptAnswerLocations}
+                />
+              ) : null}
+
+              {(!isListeningPreview || (showListeningTranscript && currentTranscriptSegments.length === 0)) && currentParagraphs.length > 0 ? currentParagraphs.map((paragraph, paragraphIndex) => {
                 const paragraphStyle = parsePassageBlockStyle(paragraph.text);
                 const passageBlockKey = `passage-${sectionKeyForParagraph(paragraph)}-${paragraph.paragraphKey}`;
 
@@ -3065,7 +3183,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     </p>
                   </div>
                 );
-              })}
+              }) : isListeningPreview ? (
+                <div className="rounded-[1.4rem] border border-dashed border-border/80 bg-card/30 px-5 py-6 text-center">
+                  <p className="text-[10px] font-black uppercase tracking-[0.26em] text-muted-foreground">
+                    Transcript
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">
+                    Transcript was not attached to this listening section.
+                  </p>
+                </div>
+              ) : null}
             </article>
           </div>
         </section>

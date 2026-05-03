@@ -176,16 +176,12 @@ function getHeatmapCellClass(value: number | null | undefined): string {
 }
 
 function formatStudyTime(totalSeconds: number): string {
-  if (totalSeconds <= 0) {
-    return "0m";
-  }
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.round((totalSeconds % 3600) / 60);
+  const normalizedSeconds = Math.max(0, totalSeconds);
+  const totalMinutes = Math.floor(normalizedSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   if (hours <= 0) {
     return `${minutes}m`;
-  }
-  if (minutes <= 0) {
-    return `${hours}h`;
   }
   return `${hours}h ${minutes}m`;
 }

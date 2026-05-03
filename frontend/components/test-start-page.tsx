@@ -28,7 +28,6 @@ export function TestStartPage({ test }: TestStartPageProps) {
 
   async function startAttempt() {
     const targetMode = isSectionMode ? "practice" : mode;
-    const destination = test.type === "reading" ? "reading" : "listening";
 
     try {
       setIsSubmitting(true);
@@ -51,13 +50,9 @@ export function TestStartPage({ test }: TestStartPageProps) {
 
       const result = (await response.json()) as { attemptId: string };
       const resumeToken = Date.now();
-      if (test.type === "reading") {
-        const href = `/exam-preview/reading?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`;
-        emitNavigationStart(href);
-        router.push(href);
-        return;
-      }
-      const href = `/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`;
+      const href = test.type === "reading"
+        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`
+        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`;
       emitNavigationStart(href);
       router.push(href);
     } finally {

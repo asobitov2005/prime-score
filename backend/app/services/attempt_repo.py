@@ -83,6 +83,23 @@ def _count_non_empty_answer_values(values: list[str] | tuple[str, ...]) -> int:
     return sum(1 for value in values if str(value or "").strip())
 
 
+def _normalized_attempt_time_spent(
+    *,
+    saved_time_spent_sec: int | None,
+    elapsed_fallback_sec: int,
+    mode: ModelAttemptMode | TestMode | None,
+    time_limit_seconds: int | None,
+) -> int:
+    normalized = max(0, int(saved_time_spent_sec or 0))
+    if normalized <= 0:
+        normalized = max(0, int(elapsed_fallback_sec))
+
+    if str(mode) in {ModelAttemptMode.EXAM.value, TestMode.exam.value} and int(time_limit_seconds or 0) > 0:
+        normalized = min(normalized, int(time_limit_seconds or 0))
+
+    return normalized
+
+
 async def _db_answer_key(session: AsyncSession, question_ids: list[UUID]) -> dict[str, dict[str, object]]:
     if not question_ids:
         return {}
@@ -167,7 +184,12 @@ def _to_runtime(
         started_at=attempt.created_at,
         completed_at=attempt.submitted_at,
         updated_at=attempt.updated_at or attempt.created_at,
-        time_spent_sec=int(metadata.get("time_spent_sec", 0)),
+        time_spent_sec=_normalized_attempt_time_spent(
+            saved_time_spent_sec=int(metadata.get("time_spent_sec", 0) or 0),
+            elapsed_fallback_sec=0,
+            mode=attempt.mode,
+            time_limit_seconds=attempt.time_limit_seconds,
+        ),
         raw_score=attempt.raw_score,
         total_questions=int(snapshot.get("total_questions", attempt.max_score or 0)),
         band_score=Decimal(str(attempt.band_score)) if attempt.band_score is not None else None,
@@ -516,7 +538,12 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
     db_answer_key = await _db_answer_key(session, [UUID(question_id) for question_id in snapshot_questions])
     snapshot_answer_key = _snapshot_answer_key(snapshot)
     now = datetime.now(timezone.utc)
-    time_spent_sec = max(0, int((now - attempt.created_at).total_seconds()))
+    time_spent_sec = _normalized_attempt_time_spent(
+        saved_time_spent_sec=int((attempt.attempt_metadata or {}).get("time_spent_sec", 0) or 0),
+        elapsed_fallback_sec=max(0, int((now - attempt.created_at).total_seconds())),
+        mode=attempt.mode,
+        time_limit_seconds=attempt.time_limit_seconds,
+    )
 
     scoring_items: list[dict[str, object]] = []
     section_counts: dict[str, dict[str, object]] = {}

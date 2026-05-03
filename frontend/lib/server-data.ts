@@ -121,6 +121,9 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
     const items = await requestApi<BackendTestCatalogItem[]>(`/tests${search.size ? `?${search.toString()}` : ""}`);
     return items.map(mapCatalogItem);
   } catch {
+    if (query.type === "listening") {
+      return [];
+    }
     let results = query.type ? getTestsByType(query.type) : getTestsByType();
     if (query.access) {
       results = results.filter((test) => test.accessType === query.access);
@@ -137,10 +140,15 @@ export async function getCatalogTestDetail(testId: string): Promise<TestCatalogI
     const item = await requestApi<BackendTestDetail>(`/tests/${testId}`);
     return mapTestDetail(item);
   } catch {
-    return getTestById(testId) ?? null;
+    const fallback = getTestById(testId) ?? null;
+    if (fallback?.type === "listening") {
+      return null;
+    }
+    return fallback;
   }
 }
 
 export function getFallbackTestsByAccess(access?: AccessType): TestCatalogItem[] {
-  return access ? getTestsByAccess(access) : getTestsByType();
+  const tests = access ? getTestsByAccess(access) : getTestsByType();
+  return tests.filter((test) => test.type !== "listening");
 }
