@@ -52,6 +52,39 @@ def cleanup_abandoned_attempts() -> dict[str, Any]:
     return {"status": "ok", "cleaned": True}
 
 
+@celery_app.task(
+    name="primescore.evaluate_writing_submission",
+    bind=True,
+    acks_late=True,
+    max_retries=2,
+    default_retry_delay=15,
+)
+def evaluate_writing_submission_task(self: Task[Any, Any], submission_id: str) -> dict[str, Any]:
+    import asyncio
+    from uuid import UUID
+
+    from app.services.writing_checker import grade_submission
+
+    asyncio.run(grade_submission(UUID(submission_id)))
+    return {"submission_id": submission_id, "status": "completed"}
+
+
+@celery_app.task(
+    name="primescore.generate_writing_task_image_summary",
+    bind=True,
+    acks_late=True,
+    max_retries=2,
+)
+def generate_writing_task_image_summary_task(self: Task[Any, Any], task_id: str) -> dict[str, Any]:
+    import asyncio
+    from uuid import UUID
+
+    from app.services.writing_image_summary import refresh_task_image_summary
+
+    asyncio.run(refresh_task_image_summary(UUID(task_id)))
+    return {"task_id": task_id, "status": "completed"}
+
+
 @celery_app.task(name="primescore.expire_stale_invoices")
 def expire_stale_invoices() -> dict[str, Any]:
     """Expire pending payment invoices past their 10-minute TTL."""

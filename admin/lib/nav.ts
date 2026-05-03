@@ -12,7 +12,8 @@ import {
   Headphones,
   MessageSquareText,
   Settings,
-  Sparkles
+  Sparkles,
+  PenSquare
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -53,6 +54,12 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/tests?type=listening",
         description: "Manage IELTS listening materials",
         icon: Headphones
+      },
+      {
+        label: "Writing",
+        href: "/writing",
+        description: "Manage IELTS writing tasks and submissions",
+        icon: PenSquare
       },
       {
         label: "AI Workspace",

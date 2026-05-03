@@ -108,6 +108,40 @@ class TestStatus(StrEnum):
 class TestType(StrEnum):
     READING = "reading"
     LISTENING = "listening"
+    WRITING = "writing"
+
+
+class WritingTaskType(StrEnum):
+    TASK_1 = "task_1"
+    TASK_2 = "task_2"
+
+
+class WritingTaskStatus(StrEnum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
+class WritingSubmissionStatus(StrEnum):
+    QUEUED = "queued"
+    GRADING = "grading"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class WritingDifficulty(StrEnum):
+    EASY = "easy"
+    MEDIUM = "medium"
+    HARD = "hard"
+
+
+class WritingErrorCategory(StrEnum):
+    SPELLING = "spelling"
+    GRAMMAR = "grammar"
+    LEXICAL = "lexical"
+    COHESION = "cohesion"
+    STYLE = "style"
+    PUNCTUATION = "punctuation"
 
 
 class TestFormat(StrEnum):
