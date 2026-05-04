@@ -23,6 +23,7 @@ from app.models.enums import (
 )
 from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
 from app.services.writing_anchors import ANCHORS, ANCHORS_VERSION, PROMPT_VERSION
+from app.services.writing_roast import generate_roast
 from app.services.writing_rubric import (
     IELTS_WRITING_RUBRIC_TEXT,
     calculate_overall_band,
@@ -473,6 +474,7 @@ def _build_payload(
         "inline_annotations": annotations,
         "improved_version": None,
         "rubric_reasoning": rubric_reasoning,
+        "roast_feedback": {},
         "model_version": model_version,
         "prompt_version": PROMPT_VERSION,
         "anchors_version": ANCHORS_VERSION,
@@ -563,6 +565,27 @@ def grade_essay_sync(
     payload["improved_version"] = improved_text
     payload["potential_band"] = potential_band
 
+    # Roast feedback: completely independent call, must NOT affect bands.
+    try:
+        roast = generate_roast(
+            essay_text=essay_text,
+            bands={
+                "task_achievement": payload["task_achievement_band"],
+                "coherence": payload["coherence_band"],
+                "lexical": payload["lexical_band"],
+                "grammar": payload["grammar_band"],
+                "overall": payload["overall_band"],
+            },
+            word_count=word_count,
+            word_minimum=word_minimum,
+            annotation_count=len(annotations),
+            overall_summary=payload["feedback"].get("overall_summary", ""),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Roast generation crashed; ignoring.")
+        roast = {}
+    payload["roast_feedback"] = roast or {}
+
     return payload
 
 
@@ -644,6 +667,7 @@ async def grade_submission(submission_id: UUID) -> None:
                 inline_annotations=payload["inline_annotations"],
                 improved_version=payload.get("improved_version"),
                 rubric_reasoning=payload.get("rubric_reasoning", {}),
+                roast_feedback=payload.get("roast_feedback", {}),
                 model_version=payload.get("model_version", ""),
                 prompt_version=payload.get("prompt_version", PROMPT_VERSION),
                 anchors_version=payload.get("anchors_version", ANCHORS_VERSION),
@@ -664,6 +688,7 @@ async def grade_submission(submission_id: UUID) -> None:
             evaluation.inline_annotations = payload["inline_annotations"]
             evaluation.improved_version = payload.get("improved_version")
             evaluation.rubric_reasoning = payload.get("rubric_reasoning", {})
+            evaluation.roast_feedback = payload.get("roast_feedback", {})
             evaluation.model_version = payload.get("model_version", "")
             evaluation.prompt_version = payload.get("prompt_version", PROMPT_VERSION)
             evaluation.anchors_version = payload.get("anchors_version", ANCHORS_VERSION)

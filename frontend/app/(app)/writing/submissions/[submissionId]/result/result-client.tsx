@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import type {
   WritingCriterionEvaluation,
   WritingInlineAnnotation,
+  WritingRoastFeedback,
   WritingSubmissionResult,
   WritingSubmissionStatus,
 } from "@/lib/server-writing";
@@ -52,43 +53,69 @@ const GRADING_STEPS = [
 
 const CATEGORY_STYLE: Record<
   string,
-  { label: string; underline: string; chip: string; dot: string }
+  {
+    label: string;
+    underline: string;
+    chip: string;
+    dot: string;
+    fill: string;
+    fillActive: string;
+    text: string;
+  }
 > = {
   spelling: {
     label: "Spelling",
     underline: "decoration-red-500",
     chip: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30",
     dot: "bg-red-500",
+    fill: "bg-red-500/15 hover:bg-red-500/25",
+    fillActive: "bg-red-500/35 ring-2 ring-red-500/60",
+    text: "text-red-700 dark:text-red-300",
   },
   grammar: {
     label: "Grammar",
-    underline: "decoration-amber-500",
-    chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30",
-    dot: "bg-amber-500",
+    underline: "decoration-orange-500",
+    chip: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30",
+    dot: "bg-orange-500",
+    fill: "bg-orange-500/15 hover:bg-orange-500/25",
+    fillActive: "bg-orange-500/35 ring-2 ring-orange-500/60",
+    text: "text-orange-700 dark:text-orange-300",
   },
   lexical: {
-    label: "Lexical",
-    underline: "decoration-blue-500",
-    chip: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30",
-    dot: "bg-blue-500",
+    label: "Word choice",
+    underline: "decoration-violet-500",
+    chip: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30",
+    dot: "bg-violet-500",
+    fill: "bg-violet-500/15 hover:bg-violet-500/25",
+    fillActive: "bg-violet-500/35 ring-2 ring-violet-500/60",
+    text: "text-violet-700 dark:text-violet-300",
   },
   cohesion: {
     label: "Cohesion",
-    underline: "decoration-purple-500",
-    chip: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30",
-    dot: "bg-purple-500",
+    underline: "decoration-sky-500",
+    chip: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30",
+    dot: "bg-sky-500",
+    fill: "bg-sky-500/15 hover:bg-sky-500/25",
+    fillActive: "bg-sky-500/35 ring-2 ring-sky-500/60",
+    text: "text-sky-700 dark:text-sky-300",
   },
   style: {
     label: "Style",
-    underline: "decoration-zinc-500",
-    chip: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/30",
-    dot: "bg-zinc-500",
+    underline: "decoration-amber-500",
+    chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    dot: "bg-amber-500",
+    fill: "bg-amber-500/15 hover:bg-amber-500/25",
+    fillActive: "bg-amber-500/35 ring-2 ring-amber-500/60",
+    text: "text-amber-700 dark:text-amber-300",
   },
   punctuation: {
     label: "Punctuation",
-    underline: "decoration-teal-500",
-    chip: "bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/30",
-    dot: "bg-teal-500",
+    underline: "decoration-pink-500",
+    chip: "bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/30",
+    dot: "bg-pink-500",
+    fill: "bg-pink-500/15 hover:bg-pink-500/25",
+    fillActive: "bg-pink-500/35 ring-2 ring-pink-500/60",
+    text: "text-pink-700 dark:text-pink-300",
   },
 };
 
@@ -129,35 +156,42 @@ function formatDuration(totalSeconds: number) {
   return `${m}m ${s}s`;
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br />");
-}
+type AnnotatedSegment =
+  | { kind: "text"; text: string }
+  | { kind: "mark"; text: string; index: number; category: string };
 
-function buildAnnotatedHtml(
+function buildAnnotatedSegments(
   essay: string,
   annotations: WritingInlineAnnotation[],
-): string {
-  if (!annotations.length) return escapeHtml(essay);
-  const sorted = [...annotations]
-    .filter((a) => a.offset >= 0 && a.length > 0 && a.offset + a.length <= essay.length)
-    .sort((a, b) => b.offset - a.offset);
-  let result = essay;
-  sorted.forEach((anno, idx) => {
-    const reverseIndex = sorted.length - 1 - idx;
-    const slice = result.slice(anno.offset, anno.offset + anno.length);
-    const style = categoryStyle(anno.category);
-    const replaced = `<mark data-anno-idx="${reverseIndex}" class="wr-anno bg-transparent underline decoration-wavy decoration-2 underline-offset-4 cursor-pointer ${style.underline} hover:bg-foreground/5 rounded px-0.5 transition-colors">${escapeHtml(slice)}</mark>`;
-    result = result.slice(0, anno.offset) + replaced + result.slice(anno.offset + anno.length);
-  });
-  return escapeHtml(result.split("<mark").join("\u0001MARK_OPEN\u0001").split("</mark>").join("\u0001MARK_CLOSE\u0001"))
-    .split("\u0001MARK_OPEN\u0001")
-    .join("<mark")
-    .split("\u0001MARK_CLOSE\u0001")
-    .join("</mark>");
+): AnnotatedSegment[] {
+  if (!annotations.length) return [{ kind: "text", text: essay }];
+  const indexed = annotations
+    .map((a, i) => ({ a, i }))
+    .filter(
+      ({ a }) =>
+        a.offset >= 0 && a.length > 0 && a.offset + a.length <= essay.length,
+    )
+    .sort((x, y) => x.a.offset - y.a.offset);
+
+  const segments: AnnotatedSegment[] = [];
+  let cursor = 0;
+  for (const { a, i } of indexed) {
+    if (a.offset < cursor) continue;
+    if (a.offset > cursor) {
+      segments.push({ kind: "text", text: essay.slice(cursor, a.offset) });
+    }
+    segments.push({
+      kind: "mark",
+      text: essay.slice(a.offset, a.offset + a.length),
+      index: i,
+      category: a.category,
+    });
+    cursor = a.offset + a.length;
+  }
+  if (cursor < essay.length) {
+    segments.push({ kind: "text", text: essay.slice(cursor) });
+  }
+  return segments;
 }
 
 function ScoreGauge({ band }: { band: number }) {
@@ -443,6 +477,94 @@ function FailedScreen({ message }: { message: string | null }) {
   );
 }
 
+function FeedbackPanel({
+  roast,
+  taBand,
+  ccBand,
+  lrBand,
+  graBand,
+}: {
+  roast: WritingRoastFeedback;
+  taBand: number;
+  ccBand: number;
+  lrBand: number;
+  graBand: number;
+}) {
+  const zingers: { label: string; tone: string; text: string; band: number }[] = [
+    { label: "Task Achievement", tone: "text-violet-600 dark:text-violet-400", text: roast.task_achievement_zinger, band: taBand },
+    { label: "Coherence & Cohesion", tone: "text-blue-600 dark:text-blue-400", text: roast.coherence_zinger, band: ccBand },
+    { label: "Lexical Resource", tone: "text-emerald-600 dark:text-emerald-400", text: roast.lexical_zinger, band: lrBand },
+    { label: "Grammar", tone: "text-amber-600 dark:text-amber-400", text: roast.grammar_zinger, band: graBand },
+  ].filter((z) => z.text);
+
+  return (
+    <Card className="rounded-3xl border-border/60 bg-gradient-to-br from-amber-500/5 via-card to-card mt-2">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Flame className="h-5 w-5 text-amber-500" />
+          <CardTitle className="text-lg">Feedback</CardTitle>
+          <Badge tone="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+            Honest take
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Straight talk, no sugar-coating. Bands are not affected by this section.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {roast.overall_roast ? (
+          <p className="text-sm text-foreground/90 leading-relaxed">{roast.overall_roast}</p>
+        ) : null}
+
+        {roast.one_liner ? (
+          <div className="rounded-2xl border-l-4 border-amber-500 bg-amber-500/5 px-4 py-3 italic text-sm text-foreground/90">
+            “{roast.one_liner}”
+          </div>
+        ) : null}
+
+        {zingers.length ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {zingers.map((z) => (
+              <div key={z.label} className="rounded-2xl border border-border/40 bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className={cn("text-[11px] font-semibold uppercase tracking-wider", z.tone)}>
+                    {z.label}
+                  </div>
+                  <div className="text-xs tabular-nums text-muted-foreground">Band {z.band.toFixed(1)}</div>
+                </div>
+                <p className="text-sm text-foreground/90 mt-1.5">{z.text}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {roast.savage_tips?.length ? (
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              What to actually fix
+            </div>
+            <ul className="space-y-1.5">
+              {roast.savage_tips.map((s, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <Flame className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-500" />
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {roast.pep_talk ? (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200 flex items-start gap-2">
+            <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>{roast.pep_talk}</span>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function WritingResultClient({
   submissionId,
   initialStatus,
@@ -516,30 +638,22 @@ export function WritingResultClient({
   }, [stage, submissionId]);
 
   const annotations = result?.inline_annotations ?? [];
-  const annotatedHtml = useMemo(
-    () => (result ? buildAnnotatedHtml(result.essay_text, annotations) : ""),
+  const segments = useMemo(
+    () => (result ? buildAnnotatedSegments(result.essay_text, annotations) : []),
     [result, annotations],
   );
 
   useEffect(() => {
+    if (activeAnnotation === null) return;
     const root = annotatedRef.current;
     if (!root) return;
-    const handler = (e: Event) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      const mark = target.closest("mark[data-anno-idx]") as HTMLElement | null;
-      if (mark) {
-        const idx = Number(mark.dataset.annoIdx);
-        if (Number.isFinite(idx)) {
-          setActiveAnnotation((prev) => (prev === idx ? null : idx));
-        }
-      } else {
-        setActiveAnnotation(null);
-      }
-    };
-    root.addEventListener("click", handler);
-    return () => root.removeEventListener("click", handler);
-  }, [annotatedHtml]);
+    const el = root.querySelector<HTMLElement>(
+      `mark[data-anno-idx="${activeAnnotation}"]`,
+    );
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeAnnotation]);
 
   if (stage === "failed") {
     return (
@@ -668,7 +782,7 @@ export function WritingResultClient({
             <div>
               <CardTitle className="text-lg">Your essay with annotations</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Click any underlined span to see suggested fixes and explanation.
+                Click any highlighted span — or any item in the list — to jump to it and see the fix.
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -696,11 +810,110 @@ export function WritingResultClient({
               </div>
             </div>
           ) : null}
-          <div
-            ref={annotatedRef}
-            className="rounded-2xl border border-border/40 bg-muted/20 p-5 leading-7 text-sm whitespace-pre-wrap"
-            dangerouslySetInnerHTML={{ __html: annotatedHtml }}
-          />
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div
+              ref={annotatedRef}
+              className="rounded-2xl border border-border/40 bg-muted/20 p-5 leading-8 text-[15px] whitespace-pre-wrap max-h-[560px] overflow-y-auto"
+            >
+              {segments.map((seg, i) => {
+                if (seg.kind === "text") {
+                  return <span key={`t-${i}`}>{seg.text}</span>;
+                }
+                const style = categoryStyle(seg.category);
+                const isActive = activeAnnotation === seg.index;
+                return (
+                  <mark
+                    key={`m-${seg.index}`}
+                    data-anno-idx={seg.index}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveAnnotation((prev) => (prev === seg.index ? null : seg.index));
+                    }}
+                    className={cn(
+                      "rounded-md px-0.5 mx-px cursor-pointer scroll-mt-24 transition-all duration-200",
+                      "underline decoration-wavy decoration-2 underline-offset-[5px]",
+                      style.underline,
+                      isActive ? style.fillActive : style.fill,
+                    )}
+                  >
+                    {seg.text}
+                  </mark>
+                );
+              })}
+            </div>
+
+            {errorCount > 0 ? (
+              <div className="rounded-2xl border border-border/40 bg-card/60 max-h-[560px] overflow-y-auto">
+                <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/40 bg-card/95 backdrop-blur px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span>Issues ({errorCount})</span>
+                  {activeAnnotation !== null ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveAnnotation(null)}
+                      className="text-foreground/70 hover:text-foreground normal-case tracking-normal"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                <ul className="divide-y divide-border/30">
+                  {annotations.map((a, i) => {
+                    const s = categoryStyle(a.category);
+                    const isActive = activeAnnotation === i;
+                    return (
+                      <li key={i}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveAnnotation((prev) => (prev === i ? null : i))
+                          }
+                          className={cn(
+                            "w-full text-left px-4 py-3 flex flex-col gap-1.5 transition-colors",
+                            isActive ? "bg-muted/60" : "hover:bg-muted/30",
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                s.chip,
+                              )}
+                            >
+                              <span className={cn("h-1.5 w-1.5 rounded-full", s.dot)} />
+                              {s.label}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              #{i + 1}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                            <span className={cn("font-medium line-through", s.text)}>
+                              {a.original}
+                            </span>
+                            {a.replacements?.[0] ? (
+                              <>
+                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300 font-medium">
+                                  {a.replacements[0]}
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                          {a.short_message ? (
+                            <div className="text-xs text-muted-foreground line-clamp-2">
+                              {a.short_message}
+                            </div>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+
           {activeAnno ? (
             <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center gap-2">
@@ -793,6 +1006,16 @@ export function WritingResultClient({
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {result.roast && (result.roast.overall_roast || result.roast.savage_tips?.length) ? (
+        <FeedbackPanel
+          roast={result.roast}
+          taBand={toBandNumber(result.task_achievement.band)}
+          ccBand={toBandNumber(result.coherence.band)}
+          lrBand={toBandNumber(result.lexical.band)}
+          graBand={toBandNumber(result.grammar.band)}
+        />
       ) : null}
 
       {(result.overall_summary || result.next_steps?.length) ? (

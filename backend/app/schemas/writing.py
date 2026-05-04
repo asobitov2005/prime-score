@@ -120,6 +120,17 @@ class WritingInlineAnnotation(BaseModel):
     explanation: str = ""
 
 
+class WritingRoastFeedback(BaseModel):
+    overall_roast: str = ""
+    one_liner: str = ""
+    task_achievement_zinger: str = ""
+    coherence_zinger: str = ""
+    lexical_zinger: str = ""
+    grammar_zinger: str = ""
+    savage_tips: list[str] = Field(default_factory=list)
+    pep_talk: str = ""
+
+
 class WritingEvaluationRead(BaseModel):
     submission_id: UUID
     task_id: UUID
@@ -142,6 +153,7 @@ class WritingEvaluationRead(BaseModel):
     improved_version: str | None = None
     overall_summary: str = ""
     next_steps: list[str] = Field(default_factory=list)
+    roast: WritingRoastFeedback | None = None
     cache_hit: bool = False
     model_version: str = ""
     prompt_version: str = "v1"
