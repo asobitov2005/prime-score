@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, Clock } from "lucide-react";
+import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, Clock, PenSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -207,6 +207,19 @@ export default async function DashboardPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/80 mt-0.5">Academic · 30 min</p>
                 </div>
                 <ArrowRight className="ml-auto h-5 w-5 text-emerald-500/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+              </Card>
+            </Link>
+
+            <Link href="/writing" className="block">
+              <Card className="bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
+                <div className="bg-violet-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
+                  <PenSquare className="h-5 w-5 text-violet-600 dark:text-violet-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-violet-950 dark:text-violet-100 text-sm">Start Writing Task</h3>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600/70 dark:text-violet-400/80 mt-0.5">AI Graded · Task 1 &amp; 2</p>
+                </div>
+                <ArrowRight className="ml-auto h-5 w-5 text-violet-500/50 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-1 transition-all" />
               </Card>
             </Link>
           </div>

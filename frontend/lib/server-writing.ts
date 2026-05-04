@@ -67,6 +67,17 @@ export interface WritingInlineAnnotation {
   explanation?: string | null;
 }
 
+export interface WritingRoastFeedback {
+  overall_roast: string;
+  one_liner: string;
+  task_achievement_zinger: string;
+  coherence_zinger: string;
+  lexical_zinger: string;
+  grammar_zinger: string;
+  savage_tips: string[];
+  pep_talk: string;
+}
+
 export interface WritingSubmissionResult {
   submission_id: string;
   task_id: string;
@@ -89,6 +100,7 @@ export interface WritingSubmissionResult {
   improved_version: string;
   overall_summary: string;
   next_steps: string[];
+  roast?: WritingRoastFeedback | null;
 }
 
 export interface WritingHistoryItem {

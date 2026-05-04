@@ -12,7 +12,6 @@ from uuid import UUID
 from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, Field, ValidationError
-from redis import Redis
 from sqlalchemy import select
 
 from app.core.config import get_settings
@@ -24,6 +23,7 @@ from app.models.enums import (
 )
 from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
 from app.services.writing_anchors import ANCHORS, ANCHORS_VERSION, PROMPT_VERSION
+from app.services.writing_roast import generate_roast
 from app.services.writing_rubric import (
     IELTS_WRITING_RUBRIC_TEXT,
     calculate_overall_band,
@@ -35,8 +35,6 @@ logger = logging.getLogger(__name__)
 
 _HTML_TAG_RE = re.compile(r"</?[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
-_CACHE_PREFIX = "wr:eval:v1:"
-_IMPROVED_CACHE_PREFIX = "wr:improved:v1:"
 _ALLOWED_SEVERITIES = {"error", "warning", "suggestion"}
 
 
@@ -92,11 +90,6 @@ def _build_gemini_client() -> genai.Client:
     if not (settings.gemini_api_key or "").strip():
         raise RuntimeError("GEMINI_API_KEY is not configured.")
     return genai.Client(api_key=settings.gemini_api_key)
-
-
-def _redis_client() -> Redis:
-    settings = get_settings()
-    return Redis.from_url(settings.redis_url, decode_responses=True)
 
 
 def _criterion_schema() -> genai_types.Schema:
@@ -481,11 +474,11 @@ def _build_payload(
         "inline_annotations": annotations,
         "improved_version": None,
         "rubric_reasoning": rubric_reasoning,
+        "roast_feedback": {},
         "model_version": model_version,
         "prompt_version": PROMPT_VERSION,
         "anchors_version": ANCHORS_VERSION,
         "latency_ms": latency_ms,
-        "cache_hit": False,
     }
 
 
@@ -496,21 +489,6 @@ def grade_essay_sync(
     word_count: int,
     essay_hash: str,
 ) -> dict[str, Any]:
-    redis_client = _redis_client()
-    cache_key = f"{_CACHE_PREFIX}{essay_hash}"
-    try:
-        cached = redis_client.get(cache_key)
-    except Exception:  # noqa: BLE001
-        logger.exception("Redis read failed for %s", cache_key)
-        cached = None
-    if cached:
-        try:
-            payload = json.loads(cached)
-            payload["cache_hit"] = True
-            return payload
-        except json.JSONDecodeError:
-            logger.warning("Discarding malformed cache entry %s", cache_key)
-
     settings = get_settings()
     client = _build_gemini_client()
     task_type_value = (
@@ -547,78 +525,66 @@ def grade_essay_sync(
         latency_ms=elapsed_ms,
     )
 
-    improved_cache_key = f"{_IMPROVED_CACHE_PREFIX}{essay_hash}"
     improved_text: str | None = None
     potential_band: float | None = None
     try:
-        improved_cached = redis_client.get(improved_cache_key)
-    except Exception:  # noqa: BLE001
-        improved_cached = None
-
-    if improved_cached:
-        try:
-            improved_payload = json.loads(improved_cached)
-            improved_text = improved_payload.get("improved_version")
-            potential_band = improved_payload.get("potential_band")
-        except json.JSONDecodeError:
-            improved_text = None
-
-    if improved_text is None:
-        try:
-            improved_text = _generate_improved_version(
-                client=client,
-                essay_text=essay_text,
-                annotations=annotations,
+        improved_text = _generate_improved_version(
+            client=client,
+            essay_text=essay_text,
+            annotations=annotations,
+        )
+        if improved_text and improved_text != essay_text:
+            regrade_prompt = _build_grading_prompt(
+                task_type=task_type_value,
+                task_prompt_text=_strip_html(task.prompt_html or ""),
+                image_summary=task.image_summary or "",
+                essay_text=improved_text,
             )
-            if improved_text and improved_text != essay_text:
-                regrade_prompt = _build_grading_prompt(
-                    task_type=task_type_value,
-                    task_prompt_text=_strip_html(task.prompt_html or ""),
-                    image_summary=task.image_summary or "",
-                    essay_text=improved_text,
-                )
-                improved_seed = _seed_from_hash(
-                    hashlib.sha256(improved_text.encode("utf-8")).hexdigest()
-                )
-                regrade = _call_grader(
-                    client=client,
-                    system_instruction=system_instruction,
-                    prompt=regrade_prompt,
-                    seed=improved_seed,
-                )
-                potential_band = calculate_overall_band(
-                    round_to_ielts_band(regrade.task_achievement.band),
-                    round_to_ielts_band(regrade.coherence.band),
-                    round_to_ielts_band(regrade.lexical.band),
-                    round_to_ielts_band(regrade.grammar.band),
-                )
-            else:
-                potential_band = payload["overall_band"]
-            try:
-                redis_client.setex(
-                    improved_cache_key,
-                    60 * 60 * 24 * 30,
-                    json.dumps(
-                        {
-                            "improved_version": improved_text,
-                            "potential_band": potential_band,
-                        }
-                    ),
-                )
-            except Exception:  # noqa: BLE001
-                logger.exception("Redis write failed for %s", improved_cache_key)
-        except Exception:  # noqa: BLE001
-            logger.exception("Improved version generation failed")
-            improved_text = None
-            potential_band = None
+            improved_seed = _seed_from_hash(
+                hashlib.sha256(improved_text.encode("utf-8")).hexdigest()
+            )
+            regrade = _call_grader(
+                client=client,
+                system_instruction=system_instruction,
+                prompt=regrade_prompt,
+                seed=improved_seed,
+            )
+            potential_band = calculate_overall_band(
+                round_to_ielts_band(regrade.task_achievement.band),
+                round_to_ielts_band(regrade.coherence.band),
+                round_to_ielts_band(regrade.lexical.band),
+                round_to_ielts_band(regrade.grammar.band),
+            )
+        else:
+            potential_band = payload["overall_band"]
+    except Exception:  # noqa: BLE001
+        logger.exception("Improved version generation failed")
+        improved_text = None
+        potential_band = None
 
     payload["improved_version"] = improved_text
     payload["potential_band"] = potential_band
 
+    # Roast feedback: completely independent call, must NOT affect bands.
     try:
-        redis_client.setex(cache_key, 60 * 60 * 24 * 30, json.dumps(payload))
+        roast = generate_roast(
+            essay_text=essay_text,
+            bands={
+                "task_achievement": payload["task_achievement_band"],
+                "coherence": payload["coherence_band"],
+                "lexical": payload["lexical_band"],
+                "grammar": payload["grammar_band"],
+                "overall": payload["overall_band"],
+            },
+            word_count=word_count,
+            word_minimum=word_minimum,
+            annotation_count=len(annotations),
+            overall_summary=payload["feedback"].get("overall_summary", ""),
+        )
     except Exception:  # noqa: BLE001
-        logger.exception("Redis write failed for %s", cache_key)
+        logger.exception("Roast generation crashed; ignoring.")
+        roast = {}
+    payload["roast_feedback"] = roast or {}
 
     return payload
 
@@ -701,11 +667,12 @@ async def grade_submission(submission_id: UUID) -> None:
                 inline_annotations=payload["inline_annotations"],
                 improved_version=payload.get("improved_version"),
                 rubric_reasoning=payload.get("rubric_reasoning", {}),
+                roast_feedback=payload.get("roast_feedback", {}),
                 model_version=payload.get("model_version", ""),
                 prompt_version=payload.get("prompt_version", PROMPT_VERSION),
                 anchors_version=payload.get("anchors_version", ANCHORS_VERSION),
                 latency_ms=payload.get("latency_ms", 0),
-                cache_hit=payload.get("cache_hit", False),
+                cache_hit=False,
                 graded_at=graded_at,
             )
             session.add(evaluation)
@@ -721,11 +688,12 @@ async def grade_submission(submission_id: UUID) -> None:
             evaluation.inline_annotations = payload["inline_annotations"]
             evaluation.improved_version = payload.get("improved_version")
             evaluation.rubric_reasoning = payload.get("rubric_reasoning", {})
+            evaluation.roast_feedback = payload.get("roast_feedback", {})
             evaluation.model_version = payload.get("model_version", "")
             evaluation.prompt_version = payload.get("prompt_version", PROMPT_VERSION)
             evaluation.anchors_version = payload.get("anchors_version", ANCHORS_VERSION)
             evaluation.latency_ms = payload.get("latency_ms", 0)
-            evaluation.cache_hit = payload.get("cache_hit", False)
+            evaluation.cache_hit = False
             evaluation.graded_at = graded_at
 
         submission_result = await session.execute(

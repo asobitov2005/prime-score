@@ -91,6 +91,7 @@ class WritingEvaluation(UUIDMixin, TimestampMixin, Base):
     inline_annotations: Mapped[list] = mapped_column(JSONB, default=list)
     improved_version: Mapped[str | None] = mapped_column(Text, nullable=True)
     rubric_reasoning: Mapped[dict] = mapped_column(JSONB, default=dict)
+    roast_feedback: Mapped[dict] = mapped_column(JSONB, default=dict)
     model_version: Mapped[str] = mapped_column(String(120), default="")
     prompt_version: Mapped[str] = mapped_column(String(32), default="v1")
     anchors_version: Mapped[str] = mapped_column(String(32), default="v1")

@@ -25,6 +25,7 @@ from app.schemas.writing import (
     WritingHistoryItem,
     WritingHistoryResponse,
     WritingInlineAnnotation,
+    WritingRoastFeedback,
     WritingSubmissionRead,
     WritingSubmitRequest,
     WritingTaskListItem,
@@ -213,6 +214,13 @@ async def get_submission_result(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
 
     feedback = evaluation.feedback or {}
+    roast_raw = evaluation.roast_feedback or {}
+    roast: WritingRoastFeedback | None = None
+    if isinstance(roast_raw, dict) and roast_raw:
+        try:
+            roast = WritingRoastFeedback.model_validate(roast_raw)
+        except Exception:
+            roast = None
     annotations_raw = evaluation.inline_annotations or []
     annotations: list[WritingInlineAnnotation] = []
     for item in annotations_raw:
@@ -246,6 +254,7 @@ async def get_submission_result(
         cache_hit=evaluation.cache_hit,
         model_version=evaluation.model_version,
         prompt_version=evaluation.prompt_version,
+        roast=roast,
     )
 
 
