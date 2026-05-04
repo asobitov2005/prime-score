@@ -4,7 +4,7 @@ import { absoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Login",
-  description: "Sign in to PrimeScore through Telegram to access IELTS Reading and Listening practice tests.",
+  description: "Sign in to PrimeScore through Telegram to access IELTS mock tests online, Writing feedback, and IELTS practice tools.",
   alternates: {
     canonical: absoluteUrl("/login"),
   },

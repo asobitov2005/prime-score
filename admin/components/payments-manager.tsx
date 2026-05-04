@@ -126,6 +126,8 @@ function formatDateTime(value: string | null): string {
 export function PaymentsManager({ initialPayments, totalPayments, currentPage, initialCards, initialSettings }: PaymentManagerProps) {
   const router = useRouter();
   const [payments, setPayments] = useState(initialPayments);
+  const [paymentsTotal, setPaymentsTotal] = useState(totalPayments);
+  const [paymentsPage, setPaymentsPage] = useState(currentPage);
   const [cards, setCards] = useState(initialCards);
   const [settings, setSettings] = useState(initialSettings);
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, PaymentDraft>>(() => createPaymentDrafts(initialPayments));
@@ -140,11 +142,13 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
 
   useEffect(() => {
     setPayments(initialPayments);
+    setPaymentsTotal(totalPayments);
+    setPaymentsPage(currentPage);
     setCards(initialCards);
     setSettings(initialSettings);
     setPaymentDrafts(createPaymentDrafts(initialPayments));
     setSettingsDraft(createSettingsDraft(initialSettings));
-  }, [initialCards, initialPayments, initialSettings]);
+  }, [currentPage, initialCards, initialPayments, initialSettings, totalPayments]);
 
   useEffect(() => {
     if (!notice) {
@@ -165,14 +169,16 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
     setRefreshing(true);
     try {
       const [nextPayments, nextCards, nextSettings] = await Promise.all([
-        adminApi.listPayments(),
+        adminApi.listPayments(paymentsPage, 20),
         adminApi.listPaymentCards(),
         adminApi.getPaymentSettings(),
       ]);
-      setPayments(nextPayments);
+      setPayments(nextPayments.items);
+      setPaymentsTotal(nextPayments.total);
+      setPaymentsPage(nextPayments.page);
       setCards(nextCards);
       setSettings(nextSettings);
-      setPaymentDrafts(createPaymentDrafts(nextPayments));
+      setPaymentDrafts(createPaymentDrafts(nextPayments.items));
       setSettingsDraft(createSettingsDraft(nextSettings));
     } catch (error) {
       setNotice({
@@ -687,25 +693,25 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
             })
           )}
           
-          {totalPayments > 20 && (
+          {paymentsTotal > 20 && (
             <div className="flex items-center justify-between border-t border-border pt-4">
               <span className="text-sm text-muted-foreground">
-                Showing {payments.length} of {totalPayments} records
+                Showing {payments.length} of {paymentsTotal} records
               </span>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage <= 1}
-                  onClick={() => router.push(`?page=${currentPage - 1}`)}
+                  disabled={paymentsPage <= 1}
+                  onClick={() => router.push(`?page=${paymentsPage - 1}`)}
                 >
                   Previous
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={currentPage * 20 >= totalPayments}
-                  onClick={() => router.push(`?page=${currentPage + 1}`)}
+                  disabled={paymentsPage * 20 >= paymentsTotal}
+                  onClick={() => router.push(`?page=${paymentsPage + 1}`)}
                 >
                   Next
                 </Button>

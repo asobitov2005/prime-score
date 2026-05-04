@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import (
     WritingDifficulty,
@@ -83,9 +84,21 @@ class AdminWritingTaskUpdateRequest(BaseModel):
 
 
 class WritingSubmitRequest(BaseModel):
-    task_id: UUID
+    task_id: UUID | None = None
+    task_type: WritingTaskType | None = None
+    topic: str | None = Field(default=None, min_length=1, max_length=5000)
     essay_text: str = Field(min_length=1, max_length=20000)
     time_spent_seconds: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def validate_submission_target(self) -> Self:
+        if self.task_id is not None:
+            return self
+        if self.task_type is None:
+            raise ValueError("task_type is required when task_id is not provided.")
+        if not (self.topic or "").strip():
+            raise ValueError("topic is required when task_id is not provided.")
+        return self
 
 
 class WritingSubmissionRead(BaseModel):

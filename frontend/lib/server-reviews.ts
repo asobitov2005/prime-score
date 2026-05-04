@@ -39,12 +39,20 @@ function formatRelativeDate(value: string): string {
   return formatter.format(Math.round(seconds / (60 * 60 * 24 * 30)), "month");
 }
 
+function sanitizePublicReviewText(value: string): string {
+  return value
+    .replace(/\s+in\s+(Uzbekistan|Tashkent)\b/gi, "")
+    .replace(/\b(Uzbekistan|Tashkent)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function mapReview(payload: BackendPublicReview): ReviewItem {
   return {
     id: payload.id,
     name: payload.name,
     band: payload.band,
-    text: payload.text,
+    text: sanitizePublicReviewText(payload.text),
     date: formatRelativeDate(payload.created_at),
   };
 }

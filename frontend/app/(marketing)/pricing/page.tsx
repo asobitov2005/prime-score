@@ -20,9 +20,9 @@ import {
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "PrimeScore Pricing for IELTS Reading and Listening Practice",
+  title: "PrimeScore Pricing for IELTS Mock Online Practice",
   description:
-    "Compare PrimeScore one-time pricing plans for IELTS Academic Reading and Listening practice, premium tests, and answer explanations.",
+    "Compare PrimeScore one-time pricing plans for IELTS mock online practice, Reading and Listening tests, Writing feedback, premium tests, and answer explanations.",
   keywords: pricingKeywords,
   alternates: {
     canonical: absoluteUrl("/pricing"),
@@ -30,9 +30,9 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: absoluteUrl("/pricing"),
-    title: "PrimeScore Pricing for IELTS Reading and Listening Practice",
+    title: "PrimeScore Pricing for IELTS Mock Online Practice",
     description:
-      "See PrimeScore pricing plans for IELTS Reading and Listening preparation, premium tests, and explanation access.",
+      "See PrimeScore pricing plans for IELTS mock online preparation, premium tests, Writing feedback, and explanation access.",
     images: [
       {
         url: absoluteUrl(defaultOgImage),
@@ -44,9 +44,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "PrimeScore Pricing for IELTS Reading and Listening Practice",
+    title: "PrimeScore Pricing for IELTS Mock Online Practice",
     description:
-      "Choose a PrimeScore plan for IELTS Reading and Listening practice, premium tests, and explanation access.",
+      "Choose a PrimeScore plan for IELTS mock online practice, premium tests, Writing feedback, and explanation access.",
     images: [absoluteUrl(defaultOgImage)],
   },
 };
@@ -104,7 +104,7 @@ export default async function PricingPage() {
                     </span>
                   </h1>
                   <p className="max-w-2xl text-base sm:text-lg font-medium leading-relaxed text-muted-foreground/90">
-                    Unlock full IELTS Reading and Listening tests, track
+                    Unlock full IELTS mock practice online, track
                     <br className="hidden sm:block" />
                     <span className="sm:ml-0"> your progress, and practice under real exam conditions.</span>
                   </p>
@@ -136,7 +136,7 @@ export default async function PricingPage() {
                     <h2 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">Free access stays useful</h2>
                   </div>
                   <p className="mt-2 text-sm md:text-[15px] font-medium leading-relaxed text-muted-foreground">
-                    Public Reading and Listening tests let new users start immediately without paying first.
+                    Public IELTS mock practice lets new users start immediately without paying first.
                   </p>
                 </div>
 

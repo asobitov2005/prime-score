@@ -830,5 +830,5 @@ export const mockReviews: ReviewItem[] = [
   { id: "r3", name: "Sardor M.", band: "7.0", text: "Audio player for listening tests is perfectly matched with the real IELTS test. Highly recommended.", date: "2 weeks ago" },
   { id: "r4", name: "Dilnoza R.", band: "8.5", text: "I loved the highlight feature in the answer review. It made understanding my mistakes so much easier.", date: "1 month ago" },
   { id: "r5", name: "Javohir O.", band: "7.0", text: "Very smooth interface and accurate scoring. Helped me overcome my time-management issues in Reading.", date: "1 month ago" },
-  { id: "r6", name: "Shahnoza A.", band: "7.5", text: "The best platform for CDI IELTS preparation in Uzbekistan. The Premium mock tests are very challenging.", date: "2 months ago" }
+  { id: "r6", name: "Shahnoza A.", band: "7.5", text: "The best platform for CDI IELTS preparation. The Premium mock tests are very challenging.", date: "2 months ago" }
 ];

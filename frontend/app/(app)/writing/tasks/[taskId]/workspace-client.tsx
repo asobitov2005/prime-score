@@ -7,8 +7,7 @@ import { AlertTriangle, ArrowLeft, Clock3, ImageIcon, Loader2, Send, Target } fr
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { submitWritingSubmission } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
@@ -21,7 +20,6 @@ interface WorkspaceTask {
   image_url: string | null;
   word_minimum: number;
   time_limit_seconds: number;
-  difficulty: string | null;
   source: string | null;
 }
 
@@ -43,7 +41,6 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
   const [secondsRemaining, setSecondsRemaining] = useState(task.time_limit_seconds);
   const [elapsed, setElapsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const lastSavedRef = useRef<number>(0);
@@ -123,41 +120,26 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
 
   return (
     <div className="flex flex-col gap-4 animate-in fade-in duration-500">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button asChild size="sm" variant="ghost" className="rounded-xl">
-            <Link href={`/writing/tasks?task_type=${task.task_type}`}>
-              <ArrowLeft className="h-4 w-4" />
-              Back to tasks
-            </Link>
-          </Button>
-          <Badge tone="outline" className="border-border/60 bg-muted/40 text-[10px] uppercase tracking-[0.18em]">
-            {task.task_type === "task_1" ? "Task 1" : "Task 2"}
-          </Badge>
-          {task.difficulty ? (
-            <Badge tone="outline" className="text-[10px] uppercase tracking-[0.18em]">
-              {task.difficulty}
-            </Badge>
-          ) : null}
-          {task.source ? (
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              {task.source}
-            </span>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button asChild size="sm" variant="ghost" className="rounded-xl">
+          <Link href={`/writing/tasks?task_type=${task.task_type}`}>
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Link>
+        </Button>
+        <Badge tone="outline" className="border-border/60 bg-muted/40 text-[10px] uppercase tracking-[0.18em]">
+          {task.task_type === "task_1" ? "Task 1" : "Task 2"}
+        </Badge>
       </div>
 
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{task.title}</h1>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* LEFT: Prompt + image */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.6fr)]">
         <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Prompt
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-5 p-5 lg:sticky lg:top-24">
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Question</div>
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">{task.title}</h1>
+            </div>
+
             {task.image_url ? (
               <div className="overflow-hidden rounded-2xl border border-border/60 bg-muted/20 p-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -186,44 +168,21 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
           </CardContent>
         </Card>
 
-        {/* RIGHT: Editor */}
-        <div className="flex flex-col gap-3">
-          <Card className="sticky top-24 rounded-3xl border-border/60 bg-card/80 shadow-sm backdrop-blur-md">
-            <CardContent className="flex flex-wrap items-center gap-3 p-4">
+        <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
+          <CardContent className="flex h-full min-h-[calc(100vh-9rem)] flex-col gap-4 p-4 lg:p-5">
+            <div className="flex flex-wrap items-center gap-3">
               <div className={cn("inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold", wordBgTone, wordTone)}>
                 <span>{wordCount}</span>
                 <span className="opacity-70">/ {task.word_minimum} words</span>
               </div>
-              <div className="ml-auto inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-bold text-foreground tabular-nums">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-bold text-foreground tabular-nums">
                 <Clock3 className="h-3.5 w-3.5" />
                 <span>{formatTime(secondsRemaining)}</span>
                 {isPaused ? (
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">paused</span>
                 ) : null}
               </div>
-            </CardContent>
-          </Card>
-
-          {timeUp ? (
-            <div className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>Time&apos;s up — you can still submit when you&apos;re ready.</span>
-            </div>
-          ) : null}
-
-          <Card className="flex flex-1 flex-col rounded-3xl border-border/60 bg-card/70 shadow-sm">
-            <CardContent className="flex flex-1 flex-col gap-3 p-4">
-              <Textarea
-                value={essay}
-                onChange={(event) => setEssay(event.target.value)}
-                placeholder="Start writing your essay here…"
-                className="min-h-[420px] flex-1 resize-y rounded-2xl border-border/60 bg-background/60 px-4 py-3 font-mono text-sm leading-7"
-              />
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                <span>Drafts autosave every 5 seconds.</span>
-                <span>{wordCount >= task.word_minimum ? "You\u2019ve hit the minimum word count." : `Aim for ${task.word_minimum}+ words.`}</span>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                 {!canSubmit ? (
                   <span className="text-xs text-amber-600 dark:text-amber-400">
                     Write at least {Math.ceil(task.word_minimum * 0.5)} words to submit.
@@ -231,50 +190,43 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
                 ) : null}
                 <Button
                   type="button"
-                  onClick={() => setConfirmOpen(true)}
+                  onClick={() => void handleSubmit()}
                   disabled={!canSubmit || isSubmitting}
                   className="h-11 rounded-xl px-5"
                 >
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Submit for grading
+                  Submit
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            </div>
 
-      <Dialog
-        open={confirmOpen}
-        onOpenChange={(open) => (!isSubmitting ? setConfirmOpen(open) : undefined)}
-        title="Submit your essay?"
-        description="Once submitted, the AI will grade your writing across all four IELTS criteria. You\u2019ll see a detailed result in about 20-40 seconds."
-      >
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm">
-            <div className="flex flex-wrap items-center gap-3 text-xs">
-              <span className="font-bold uppercase tracking-widest text-muted-foreground">Words</span>
-              <span className="font-semibold text-foreground">{wordCount}</span>
-              <span className="font-bold uppercase tracking-widest text-muted-foreground">Time spent</span>
-              <span className="font-semibold text-foreground tabular-nums">{formatTime(elapsed)}</span>
+            {timeUp ? (
+              <div className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Time&apos;s up — you can still submit when you&apos;re ready.</span>
+              </div>
+            ) : null}
+
+            <Textarea
+              value={essay}
+              onChange={(event) => setEssay(event.target.value)}
+              placeholder="Start writing your essay here…"
+              className="min-h-[520px] flex-1 resize-none rounded-2xl border-border/60 bg-background/60 px-5 py-4 font-mono text-sm leading-7 lg:min-h-0"
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span>Draft autosaves every 5 seconds.</span>
+              <span>{wordCount >= task.word_minimum ? "Minimum reached." : `Aim for ${task.word_minimum}+ words.`}</span>
             </div>
-          </div>
-          {submitError ? (
-            <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
-              {submitError}
-            </div>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={isSubmitting}>
-              Keep writing
-            </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Submit now
-            </Button>
-          </div>
-        </div>
-      </Dialog>
+
+            {submitError ? (
+              <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+                {submitError}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

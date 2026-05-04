@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -83,6 +84,45 @@ def _criterion_from_dict(payload: dict | None) -> WritingCriterionFeedback:
     )
 
 
+def _default_word_minimum(task_type: WritingTaskType) -> int:
+    return 150 if task_type == WritingTaskType.TASK_1 else 250
+
+
+def _default_time_limit_seconds(task_type: WritingTaskType) -> int:
+    return 20 * 60 if task_type == WritingTaskType.TASK_1 else 40 * 60
+
+
+def _build_custom_task(
+    *,
+    task_type: WritingTaskType,
+    topic: str,
+) -> WritingTask:
+    clean_topic = " ".join((topic or "").split())
+    title_topic = clean_topic[:120]
+    prompt_html = "".join(
+        f"<p>{html.escape(line)}</p>"
+        for line in clean_topic.splitlines()
+        if line.strip()
+    ) or f"<p>{html.escape(clean_topic)}</p>"
+    return WritingTask(
+        title=f"Custom topic: {title_topic}",
+        task_type=task_type,
+        prompt_html=prompt_html,
+        image_storage_path=None,
+        image_summary=None,
+        image_summary_status="not_required",
+        word_minimum=_default_word_minimum(task_type),
+        time_limit_seconds=_default_time_limit_seconds(task_type),
+        difficulty=WritingDifficulty.MEDIUM,
+        status=WritingTaskStatus.DRAFT,
+        source="user_custom",
+        description=clean_topic,
+        sample_band=None,
+        sample_answer=None,
+        created_by=None,
+    )
+
+
 @router.get("/tasks", response_model=WritingTaskListResponse)
 async def list_published_tasks(
     task_type: WritingTaskType | None = Query(default=None),
@@ -143,9 +183,18 @@ async def submit_writing(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> WritingSubmissionRead:
-    task = await session.get(WritingTask, payload.task_id)
-    if task is None or task.status != WritingTaskStatus.PUBLISHED:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
+    task: WritingTask | None
+    if payload.task_id is not None:
+        task = await session.get(WritingTask, payload.task_id)
+        if task is None or task.status != WritingTaskStatus.PUBLISHED:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
+    else:
+        task = _build_custom_task(
+            task_type=payload.task_type or WritingTaskType.TASK_2,
+            topic=(payload.topic or "").strip(),
+        )
+        session.add(task)
+        await session.flush()
 
     word_count = len(payload.essay_text.split())
 

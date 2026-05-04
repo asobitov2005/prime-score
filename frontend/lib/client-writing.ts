@@ -50,7 +50,9 @@ export function fetchWritingSubmissionResult(submissionId: string): Promise<Writ
 }
 
 export function submitWritingSubmission(payload: {
-  task_id: string;
+  task_id?: string;
+  task_type?: "task_1" | "task_2";
+  topic?: string;
   essay_text: string;
   time_spent_seconds: number;
 }): Promise<WritingSubmissionRecord> {

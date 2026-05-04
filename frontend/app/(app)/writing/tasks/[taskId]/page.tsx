@@ -27,7 +27,6 @@ export default async function WritingTaskDetailPage({ params }: WritingTaskDetai
         image_url: imageUrl,
         word_minimum: task.word_minimum,
         time_limit_seconds: task.time_limit_seconds,
-        difficulty: task.difficulty ?? null,
         source: task.source ?? null,
       }}
     />

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
-import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell } from "lucide-react";
+import { Suspense, useState, useEffect, type CSSProperties, type ReactNode } from "react";
+import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell, PenSquare, Mic2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,8 +29,8 @@ const highlights = [
     icon: Radar 
   },
   { 
-    title: "Reading + Listening", 
-    desc: "Practice both sections with exam-style question types.",
+    title: "All IELTS skills", 
+    desc: "Practice Reading, Listening, Writing, and Speaking preparation online.",
     icon: LayoutDashboard 
   },
   { 
@@ -181,7 +181,9 @@ export function SiteShell({ children }: SiteShellProps) {
   if (hideSiteChrome) {
     return (
       <>
-        <NavigationTransitionOverlay />
+        <Suspense fallback={null}>
+          <NavigationTransitionOverlay />
+        </Suspense>
         {children}
       </>
     );
@@ -194,7 +196,9 @@ export function SiteShell({ children }: SiteShellProps) {
         "--app-shell-sticky-top": isHeaderCompact ? "5.75rem" : "7.5rem",
       } as CSSProperties}
     >
-      <NavigationTransitionOverlay />
+      <Suspense fallback={null}>
+        <NavigationTransitionOverlay />
+      </Suspense>
 
       <header className={cn(
         "sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-sm transition-all duration-300 flex items-center shrink-0",
@@ -236,15 +240,15 @@ export function SiteShell({ children }: SiteShellProps) {
                   currentPath.startsWith("/tests") ? "text-primary bg-primary/5" : "text-muted-foreground/80 hover:text-foreground"
                 )}
               >
-                Practice Tests <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform duration-200", isMockTestsOpen && "rotate-180")} />
+                IELTS Mock <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform duration-200", isMockTestsOpen && "rotate-180")} />
               </button>
 
               <div className={cn(
-                "practice-tests-dropdown absolute top-full left-1/2 -translate-x-1/2 mt-1 w-[340px] rounded-2xl border border-border bg-card p-2 shadow-2xl transition-all duration-300 z-[60] flex gap-2",
+                "practice-tests-dropdown absolute top-full left-1/2 -translate-x-1/2 mt-1 w-[620px] rounded-2xl border border-border bg-card p-2 shadow-2xl transition-all duration-300 z-[60] grid grid-cols-2 gap-2",
                 isMockTestsOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
               )}>
                 <Link 
-                  href="/tests?type=reading" 
+                  href="/ielts-reading-mock-online" 
                   onClick={() => setIsMockTestsOpen(false)}
                   className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
@@ -257,7 +261,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   </div>
                 </Link>
                 <Link 
-                  href="/tests?type=listening" 
+                  href="/ielts-listening-mock-online" 
                   onClick={() => setIsMockTestsOpen(false)}
                   className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
@@ -269,10 +273,37 @@ export function SiteShell({ children }: SiteShellProps) {
                     <p className="text-[10px] font-medium text-muted-foreground/70 leading-none">Academic IELTS</p>
                   </div>
                 </Link>
+                <Link
+                  href="/ielts-writing-mock-online"
+                  onClick={() => setIsMockTestsOpen(false)}
+                  className="flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
+                >
+                  <div className="w-10 h-10 shrink-0 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
+                    <PenSquare className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-0.5 text-left">
+                    <p className="text-sm font-bold text-foreground">Writing</p>
+                    <p className="text-[10px] font-medium text-muted-foreground/70 leading-none">Task 1 + Task 2</p>
+                  </div>
+                </Link>
+                <Link
+                  href="/ielts-speaking-mock-online"
+                  onClick={() => setIsMockTestsOpen(false)}
+                  className="flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
+                >
+                  <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
+                    <Mic2 className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-0.5 text-left">
+                    <p className="text-sm font-bold text-foreground">Speaking</p>
+                    <p className="text-[10px] font-medium text-muted-foreground/70 leading-none">Mock online</p>
+                  </div>
+                </Link>
               </div>
             </div>
 
             <NavLink href="/#features" label="Features" />
+            <NavLink href="/ielts-mock-test-online" label="Mock Online" active={currentPath === "/ielts-mock-test-online"} />
             <NavLink href="/pricing" label="Pricing" />
             <NavLink href="/#reviews" label="Reviews" />
             <NavLink href="/#about" label="About" />
@@ -437,7 +468,7 @@ export function SiteShell({ children }: SiteShellProps) {
             <div className="flex flex-col gap-1">
               <p className="px-3 pt-1 pb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Practice</p>
               <Link
-                href="/tests?type=reading"
+                href="/ielts-reading-mock-online"
                 onClick={() => setIsMobileNavOpen(false)}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
               >
@@ -447,7 +478,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 <span className="text-sm font-semibold text-foreground">Reading</span>
               </Link>
               <Link
-                href="/tests?type=listening"
+                href="/ielts-listening-mock-online"
                 onClick={() => setIsMobileNavOpen(false)}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
               >
@@ -455,6 +486,26 @@ export function SiteShell({ children }: SiteShellProps) {
                   <Headphones className="h-[18px] w-[18px]" />
                 </div>
                 <span className="text-sm font-semibold text-foreground">Listening</span>
+              </Link>
+              <Link
+                href="/ielts-writing-mock-online"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
+                  <PenSquare className="h-[18px] w-[18px]" />
+                </div>
+                <span className="text-sm font-semibold text-foreground">Writing</span>
+              </Link>
+              <Link
+                href="/ielts-speaking-mock-online"
+                onClick={() => setIsMobileNavOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                  <Mic2 className="h-[18px] w-[18px]" />
+                </div>
+                <span className="text-sm font-semibold text-foreground">Speaking</span>
               </Link>
 
               <div className="h-px bg-border/50 my-2" />
@@ -465,6 +516,9 @@ export function SiteShell({ children }: SiteShellProps) {
               </Link>
               <Link href="/pricing" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
                 Pricing
+              </Link>
+              <Link href="/ielts-mock-test-online" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                IELTS Mock Online
               </Link>
               <Link href="/#reviews" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
                 Reviews
@@ -527,7 +581,7 @@ export function SiteShell({ children }: SiteShellProps) {
         <footer className="border-t border-border/40 bg-muted/30 shrink-0 py-10 mt-auto relative z-20">
           <div className="w-full mx-auto px-4 text-center">
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
-              © 2026 PrimeScore · IELTS Mock Test Platform
+              © 2026 PrimeScore · IELTS Mock Test Online Platform
             </p>
           </div>
         </footer>

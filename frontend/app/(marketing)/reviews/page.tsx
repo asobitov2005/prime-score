@@ -6,7 +6,7 @@ import { absoluteUrl, defaultOgImage } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "PrimeScore Student Reviews and IELTS Success Stories",
   description:
-    "Read student feedback about PrimeScore IELTS Reading and Listening practice, answer review, band score preparation, and computer-delivered exam experience.",
+    "Read student feedback about PrimeScore IELTS mock online practice, Reading, Listening, Writing feedback, band score preparation, and computer-delivered exam experience.",
   alternates: {
     canonical: absoluteUrl("/reviews"),
   },
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     url: absoluteUrl("/reviews"),
     title: "PrimeScore Student Reviews and IELTS Success Stories",
     description:
-      "See what IELTS learners say about PrimeScore practice tests, review flow, and exam-style Reading and Listening preparation.",
+      "See what IELTS learners say about PrimeScore mock tests, review flow, Writing feedback, and exam-style online IELTS preparation.",
     images: [
       {
         url: absoluteUrl(defaultOgImage),
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "PrimeScore Student Reviews and IELTS Success Stories",
     description:
-      "Read public feedback from IELTS learners using PrimeScore for Reading and Listening practice.",
+      "Read public feedback from IELTS learners using PrimeScore for IELTS mock online practice.",
     images: [absoluteUrl(defaultOgImage)],
   },
 };

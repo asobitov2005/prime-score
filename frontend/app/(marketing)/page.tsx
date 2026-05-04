@@ -15,9 +15,9 @@ import {
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Free IELTS Reading & Listening Practice Tests Online",
+  title: "Free IELTS Mock Tests Online | Reading, Listening, Writing & Speaking",
   description:
-    "Prepare for IELTS Academic with free Reading and Listening practice tests, computer-delivered mock exams, answer review, vocabulary-focused study, and band score improvement on PrimeScore.",
+    "Prepare for IELTS online with free mock tests, Reading and Listening practice, Writing feedback, Speaking mock preparation, answer review, and band score improvement on PrimeScore.",
   keywords: landingKeywords,
   alternates: {
     canonical: absoluteUrl("/"),
@@ -25,23 +25,23 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: absoluteUrl("/"),
-    title: "Free IELTS Reading & Listening Practice Tests Online | PrimeScore",
+    title: "Free IELTS Mock Tests Online | PrimeScore",
     description:
-      "Practice IELTS Reading and Listening online with free mock tests, vocabulary-rich review, and computer-delivered exam simulation on PrimeScore.",
+      "Practice IELTS mock tests online with Reading, Listening, Writing feedback, Speaking preparation, and computer-delivered exam simulation on PrimeScore.",
     images: [
       {
         url: absoluteUrl(defaultOgImage),
         width: 1088,
         height: 944,
-        alt: "PrimeScore IELTS Reading and Listening practice platform",
+        alt: "PrimeScore IELTS mock test online platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Free IELTS Reading & Listening Practice Tests Online | PrimeScore",
+    title: "Free IELTS Mock Tests Online | PrimeScore",
     description:
-      "Train for IELTS Academic with Reading and Listening mock tests, answer review, and computer-delivered practice on PrimeScore.",
+      "Train for IELTS Academic with online mock tests for Reading, Listening, Writing, and Speaking preparation on PrimeScore.",
     images: [absoluteUrl(defaultOgImage)],
   },
 };

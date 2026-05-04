@@ -20,6 +20,7 @@ import {
   type WritingHistoryItem,
 } from "@/lib/server-writing";
 import { cn } from "@/lib/utils";
+import { CustomWritingPanel } from "./custom-writing-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -40,9 +41,11 @@ export default async function WritingPage() {
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Writing</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Get IELTS-grade feedback in seconds. AI evaluates each criterion independently and gives you the same score every time.
+          Get IELTS-grade feedback in seconds. Paste your own topic and essay, or pick a ready-made prompt from the library.
         </p>
       </div>
+
+      <CustomWritingPanel />
 
       <div className="grid gap-4 md:grid-cols-2">
         <TaskQuickStartCard
@@ -92,7 +95,7 @@ export default async function WritingPage() {
             <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-6 py-10 text-center">
               <Sparkles className="mx-auto h-6 w-6 text-muted-foreground" />
               <p className="mt-2 text-sm font-semibold text-foreground">No submissions yet</p>
-              <p className="text-xs text-muted-foreground">Pick a task above to get your first AI evaluation.</p>
+              <p className="text-xs text-muted-foreground">Paste your own topic above or open the prompt library.</p>
             </div>
           ) : (
             <div className="divide-y divide-border/50 rounded-2xl border border-border/50 bg-background/40">

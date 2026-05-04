@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   listWritingTasks,
   resolveWritingAssetUrl,
-  type WritingDifficulty,
   type WritingTaskListItem,
   type WritingTaskType,
 } from "@/lib/server-writing";
@@ -17,7 +16,6 @@ export const dynamic = "force-dynamic";
 interface WritingTasksPageProps {
   searchParams: {
     task_type?: string;
-    difficulty?: string;
   };
 }
 
@@ -25,23 +23,10 @@ function asTaskType(value: string | undefined): WritingTaskType {
   return value === "task_2" ? "task_2" : "task_1";
 }
 
-function asDifficulty(value: string | undefined): WritingDifficulty | undefined {
-  if (value === "easy" || value === "medium" || value === "hard") return value;
-  return undefined;
-}
-
-const DIFFICULTY_OPTIONS: { id: "all" | WritingDifficulty; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "easy", label: "Easy" },
-  { id: "medium", label: "Medium" },
-  { id: "hard", label: "Hard" },
-];
-
 export default async function WritingTasksPage({ searchParams }: WritingTasksPageProps) {
   const taskType = asTaskType(searchParams.task_type);
-  const difficulty = asDifficulty(searchParams.difficulty);
 
-  const data = await listWritingTasks({ task_type: taskType, difficulty, page_size: 30 }).catch(() => ({
+  const data = await listWritingTasks({ task_type: taskType, page_size: 30 }).catch(() => ({
     items: [] as WritingTaskListItem[],
     total: 0,
   }));
@@ -57,7 +42,7 @@ export default async function WritingTasksPage({ searchParams }: WritingTasksPag
           Choose a {taskType === "task_1" ? "Task 1" : "Task 2"} prompt
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Pick any task — submit your essay and our AI evaluator will grade it across the four official IELTS criteria.
+          Pick any ready-made prompt, or go back and paste your own topic in the writing workspace.
         </p>
       </div>
 
@@ -66,36 +51,16 @@ export default async function WritingTasksPage({ searchParams }: WritingTasksPag
           <div className="inline-flex rounded-xl bg-muted/40 p-1 shadow-inner">
             <FilterChipLink
               active={taskType === "task_1"}
-              href={`/writing/tasks?task_type=task_1${difficulty ? `&difficulty=${difficulty}` : ""}`}
+              href="/writing/tasks?task_type=task_1"
             >
               Task 1
             </FilterChipLink>
             <FilterChipLink
               active={taskType === "task_2"}
-              href={`/writing/tasks?task_type=task_2${difficulty ? `&difficulty=${difficulty}` : ""}`}
+              href="/writing/tasks?task_type=task_2"
             >
               Task 2
             </FilterChipLink>
-          </div>
-
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Difficulty</span>
-            {DIFFICULTY_OPTIONS.map((option) => {
-              const isActive = option.id === "all" ? !difficulty : difficulty === option.id;
-              const params = new URLSearchParams();
-              params.set("task_type", taskType);
-              if (option.id !== "all") params.set("difficulty", option.id);
-              return (
-                <FilterChipLink
-                  key={option.id}
-                  active={isActive}
-                  href={`/writing/tasks?${params.toString()}`}
-                  variant="pill"
-                >
-                  {option.label}
-                </FilterChipLink>
-              );
-            })}
           </div>
         </CardContent>
       </Card>
@@ -104,7 +69,7 @@ export default async function WritingTasksPage({ searchParams }: WritingTasksPag
         <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
           <CardContent className="px-6 py-12 text-center">
             <p className="text-sm font-semibold text-foreground">No tasks match these filters yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">Try a different difficulty or switch task types.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Switch task type or use the custom topic form on the main writing page.</p>
           </CardContent>
         </Card>
       ) : (
@@ -186,11 +151,6 @@ function TaskCard({ task }: { task: WritingTaskListItem }) {
             <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em]">
               {task.task_type === "task_1" ? "Task 1" : "Task 2"}
             </Badge>
-            {task.difficulty ? (
-              <Badge tone={difficultyTone(task.difficulty)} className="text-[10px] uppercase tracking-[0.18em]">
-                {task.difficulty}
-              </Badge>
-            ) : null}
             {task.source ? (
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{task.source}</span>
             ) : null}
@@ -221,13 +181,6 @@ function TaskCard({ task }: { task: WritingTaskListItem }) {
       </Card>
     </Link>
   );
-}
-
-function difficultyTone(value: WritingDifficulty): "success" | "warning" | "danger" | "secondary" {
-  if (value === "easy") return "success";
-  if (value === "medium") return "warning";
-  if (value === "hard") return "danger";
-  return "secondary";
 }
 
 function stripHtml(html: string): string {

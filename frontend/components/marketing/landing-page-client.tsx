@@ -2,13 +2,44 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, BookOpenText, CheckCircle2, Headphones, ShieldCheck, Zap } from "lucide-react";
+import { ArrowRight, BookOpenText, CheckCircle2, Headphones, Mic2, PenSquare, ShieldCheck, Zap } from "lucide-react";
 import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
 import { Button } from "@/components/ui/button";
 import { mockTests, type ReviewItem } from "@/lib/mock-data";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
+
+const sectionPages = [
+  {
+    title: "IELTS Reading mock online",
+    desc: "Academic Reading passages, timing, and answer review.",
+    href: "/ielts-reading-mock-online",
+    icon: BookOpenText,
+    tone: "bg-orange-500/10 text-orange-500",
+  },
+  {
+    title: "IELTS Listening mock online",
+    desc: "Audio-based Listening practice and review flow.",
+    href: "/ielts-listening-mock-online",
+    icon: Headphones,
+    tone: "bg-blue-500/10 text-blue-500",
+  },
+  {
+    title: "IELTS Writing mock online",
+    desc: "Task 1 and Task 2 feedback for custom essays.",
+    href: "/ielts-writing-mock-online",
+    icon: PenSquare,
+    tone: "bg-violet-500/10 text-violet-500",
+  },
+  {
+    title: "IELTS Speaking mock online",
+    desc: "Dedicated Speaking preparation route for online learners.",
+    href: "/ielts-speaking-mock-online",
+    icon: Mic2,
+    tone: "bg-emerald-500/10 text-emerald-500",
+  },
+];
 
 const skills = ["Reading.", "Listening.", "Writing.", "Speaking."];
 
@@ -80,13 +111,13 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                   </span>
                   <span className="text-xs md:text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
-                    Free IELTS Mock Tests
+                    Free IELTS Mock Tests Online
                   </span>
                 </div>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 ease-out fill-mode-both flex flex-col">
-                <span>Master your</span>
+                <span>Master IELTS mock</span>
                 <span className="relative h-[1.15em] overflow-hidden inline-block w-full">
                   {skills.map((skill, index) => (
                     <span
@@ -107,8 +138,8 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
               </h1>
 
               <p className="text-base sm:text-lg font-medium text-muted-foreground/90 max-w-xl leading-relaxed animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300 ease-out fill-mode-both">
-                Experience the most authentic computer-delivered IELTS simulation.
-                <span className="hidden sm:inline"> Track your band score, review detailed analytics, and study with focus.</span>
+                Practice IELTS mock tests online from your own device.
+                <span className="hidden sm:inline"> Track your band score, review mistakes, and prepare each IELTS section with focus.</span>
               </p>
 
               <div className="flex flex-wrap items-center gap-6 sm:gap-8 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-400 ease-out fill-mode-both">
@@ -144,8 +175,8 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                     <BookOpenText className="h-5 w-5" />
                   </div>
                   <div className="flex flex-col -space-y-0.5">
-                    <span className="text-[13px] font-semibold text-foreground">120+ Full Tests</span>
-                    <p className="text-[10px] font-medium text-muted-foreground/70 tracking-tight">Authentic practice</p>
+                    <span className="text-[13px] font-semibold text-foreground">120+ IELTS mocks</span>
+                    <p className="text-[10px] font-medium text-muted-foreground/70 tracking-tight">Online practice</p>
                   </div>
                 </div>
               </div>
@@ -272,11 +303,11 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
 
         <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
           <div className="text-center space-y-4 mb-16">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
-              Everything you need to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Succeed.</span>
+              <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
+              IELTS mock online for every <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">section.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-lg max-w-2xl mx-auto">
-              We provide the tools, you provide the dedication.
+              Reading, Listening, Writing, and Speaking each get a clear practice path.
             </p>
           </div>
 
@@ -298,9 +329,9 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                 <BookOpenText className="h-6 w-6 text-blue-500" />
               </div>
               <div>
-                <h3 className="font-semibold text-base text-foreground mb-2">Reading & Listening</h3>
+                <h3 className="font-semibold text-base text-foreground mb-2">All IELTS skills</h3>
                 <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
-                  Practice both sections with authentic question types.
+                  Practice Reading, Listening, Writing, and Speaking from one online platform.
                 </p>
               </div>
             </div>
@@ -331,13 +362,58 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
           </div>
         </section>
 
+        <section className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+          <div className="max-w-3xl space-y-4 mb-10">
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground leading-[1.08]">
+              Online IELTS mock practice for every section.
+            </h2>
+            <p className="text-muted-foreground font-medium text-base md:text-lg leading-relaxed">
+              Start with a full mock, or focus on Reading, Listening, Writing feedback, or Speaking preparation.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {sectionPages.map((section) => {
+              const Icon = section.icon;
+              return (
+                <Link
+                  key={section.href}
+                  href={section.href}
+                  className="group rounded-[2rem] border border-border/50 bg-card/70 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+                >
+                  <div className={cn("mb-5 flex h-12 w-12 items-center justify-center rounded-2xl transition-transform group-hover:scale-110", section.tone)}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-base font-semibold leading-6 text-foreground">{section.title}</h3>
+                  <p className="mt-2 text-sm font-medium leading-6 text-muted-foreground">{section.desc}</p>
+                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-primary">
+                    Open page <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-muted-foreground">
+            {[
+              ["IELTS mock online", "/ielts-mock-test-online"],
+              ["IELTS mock online", "/ielts-mock-test-uzbekistan"],
+              ["Flexible mock practice", "/ielts-mock-test-tashkent"],
+            ].map(([label, href]) => (
+              <Link key={href} href={href} className="rounded-full border border-border/60 bg-background/60 px-3 py-1.5 hover:text-foreground">
+                {label}
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
           <div className="text-center space-y-4 mb-12">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Pricing that matches your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">exam timeline.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-lg max-w-3xl mx-auto leading-relaxed">
-              Start with free public tests, then move into premium when you want explanations, more premium sets, and a longer IELTS prep runway.
+              Start with free public tests, then move into premium when you want explanations, writing feedback, more premium sets, and a longer IELTS prep runway.
             </p>
           </div>
 
@@ -409,7 +485,7 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
             </h2>
             <p className="text-lg md:text-xl font-medium text-muted-foreground/90 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-150">
-              Experience strict test conditions, instant scoring, and focused practice.
+              Experience strict test conditions, instant scoring, writing feedback, and focused online practice.
             </p>
 
             <div className="pt-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
