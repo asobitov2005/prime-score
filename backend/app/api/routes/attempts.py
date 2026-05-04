@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.core.enums import TestType
+from app.core.enums import TestMode, TestScope, TestType
 from app.db.session import get_db_session
 from app.schemas.common import DebugPrincipal, MessageResponse
 from app.schemas.attempts import (
@@ -31,6 +31,7 @@ from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, sa
 from app.services.object_storage import normalize_storage_asset_path
 from app.services.scoring import mc_multiple_question_weight
 from app.services.runtime_store import get_attempt, save_answer, save_progress, submit_attempt
+from app.services.test_content_repo import build_test_snapshot_from_db
 
 router = APIRouter()
 
@@ -79,6 +80,17 @@ def _normalize_attempt_snapshot(snapshot: dict[str, object]) -> dict[str, object
         if not isinstance(raw_section, dict):
             continue
         normalized_section = dict(raw_section)
+        normalized_section["audio_url"] = normalize_storage_asset_path(raw_section.get("audio_url"))
+        normalized_section["transcript_segments"] = [
+            segment
+            for segment in raw_section.get("transcript_segments", [])
+            if isinstance(segment, dict)
+        ]
+        normalized_section["transcript_question_locations"] = [
+            location
+            for location in raw_section.get("transcript_question_locations", [])
+            if isinstance(location, dict)
+        ]
         normalized_groups: list[dict[str, object]] = []
         for raw_group in raw_section.get("question_groups", []):
             if not isinstance(raw_group, dict):
@@ -97,6 +109,53 @@ def _normalize_attempt_snapshot(snapshot: dict[str, object]) -> dict[str, object
 
     normalized_snapshot["sections"] = normalized_sections
     return normalized_snapshot
+
+
+def _hydrate_snapshot_media_from_live(
+    snapshot: dict[str, object],
+    live_snapshot: dict[str, object] | None,
+) -> dict[str, object]:
+    if not live_snapshot:
+        return snapshot
+
+    merged_snapshot = dict(snapshot)
+    merged_snapshot["audio_duration_seconds"] = (
+        snapshot.get("audio_duration_seconds")
+        if snapshot.get("audio_duration_seconds") is not None
+        else live_snapshot.get("audio_duration_seconds")
+    )
+
+    live_sections_by_id = {
+        str(section.get("section_id")): section
+        for section in live_snapshot.get("sections", [])
+        if isinstance(section, dict) and section.get("section_id")
+    }
+
+    merged_sections: list[dict[str, object]] = []
+    for raw_section in snapshot.get("sections", []):
+        if not isinstance(raw_section, dict):
+            continue
+
+        live_section = live_sections_by_id.get(str(raw_section.get("section_id")))
+        if live_section is None:
+            merged_sections.append(raw_section)
+            continue
+
+        merged_section = dict(raw_section)
+        if not str(merged_section.get("audio_url") or "").strip():
+            merged_section["audio_url"] = live_section.get("audio_url")
+        if merged_section.get("audio_duration_seconds") is None:
+            merged_section["audio_duration_seconds"] = live_section.get("audio_duration_seconds")
+        if not str(merged_section.get("transcript") or "").strip():
+            merged_section["transcript"] = live_section.get("transcript")
+        if not merged_section.get("transcript_segments"):
+            merged_section["transcript_segments"] = live_section.get("transcript_segments", [])
+        if not merged_section.get("transcript_question_locations"):
+            merged_section["transcript_question_locations"] = live_section.get("transcript_question_locations", [])
+        merged_sections.append(merged_section)
+
+    merged_snapshot["sections"] = merged_sections
+    return merged_snapshot
 
 
 def _extract_diagram_groups(snapshot: dict[str, object]) -> list[AttemptDiagramGroupRead]:
@@ -130,6 +189,26 @@ def _extract_diagram_groups(snapshot: dict[str, object]) -> list[AttemptDiagramG
     return diagram_groups
 
 
+def _extract_question_labels(snapshot: dict[str, object]) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for section in snapshot.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        for group in section.get("question_groups", []):
+            if not isinstance(group, dict):
+                continue
+            for question in group.get("questions", []):
+                if not isinstance(question, dict):
+                    continue
+                question_id = str(question.get("question_id") or "").strip()
+                if not question_id:
+                    continue
+                label = str(question.get("label") or "").strip()
+                if label:
+                    labels[question_id] = label
+    return labels
+
+
 async def _require_attempt_owner(
     attempt_id: UUID,
     current_user: DebugPrincipal,
@@ -160,6 +239,15 @@ async def get_attempt_view(
 ) -> AttemptRead:
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
     normalized_snapshot = _normalize_attempt_snapshot(attempt.test_snapshot)
+    if str(normalized_snapshot.get("test_type") or "") == TestType.listening.value:
+        live_snapshot = await build_test_snapshot_from_db(
+            session,
+            test_id=attempt.test_id,
+            scope=TestScope(attempt.scope.value),
+            mode=TestMode(attempt.mode.value),
+            section_id=attempt.section_id,
+        )
+        normalized_snapshot = _hydrate_snapshot_media_from_live(normalized_snapshot, live_snapshot)
     return AttemptRead(
         attempt_id=attempt.attempt_id,
         test_id=attempt.test_id,
@@ -371,10 +459,12 @@ async def get_review(
 ) -> AttemptReviewRead:
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
     diagram_groups = _extract_diagram_groups(attempt.test_snapshot)
+    question_labels = _extract_question_labels(attempt.test_snapshot)
     items = [
         AttemptReviewItemRead(
             question_id=item["question_id"],
             question_number=item["question_number"],
+            question_label=str(item.get("question_label") or question_labels.get(str(item["question_id"])) or ""),
             prompt=str(item["prompt"]),
             section_title=str(item["section_title"]),
             group_title=str(item["group_title"]),

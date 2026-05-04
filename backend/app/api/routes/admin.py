@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import List
 from uuid import UUID, uuid4
 
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -31,6 +32,8 @@ from app.core.enums import NotificationType
 from app.core.enums import ReviewSource
 from app.models.enums import ReviewSource as ModelReviewSource
 from app.schemas.admin import (
+    AdminAudioTranscriptRequest,
+    AdminAudioTranscriptResponse,
     AdminAuditLogRead,
     AdminContentCreateRequest,
     AdminTestDraftUpsertRequest,
@@ -72,7 +75,11 @@ from app.services.admin_auth import authenticate_admin, build_admin_principal, g
 from app.services.plan_catalog import (
     list_plans as list_catalog_plans,
 )
-from app.services.object_storage import upload_test_diagram_image
+from app.services.object_storage import upload_test_audio_asset, upload_test_diagram_image
+from app.services.gemini_audio_transcription import (
+    ListeningTranscriptQuestion,
+    transcribe_listening_audio_from_url,
+)
 from app.services.payment_service import (
     complete_payment,
     expire_stale_payments,
@@ -787,6 +794,76 @@ async def create_audio_upload_url(
         public_url="https://storage.example.invalid/audio/example.mp3",
         fields={"filename": payload.filename, "content_type": payload.content_type},
     )
+
+
+@router.post("/audio/upload", response_model=AdminUploadedAssetResponse)
+async def upload_audio_file(
+    file: UploadFile = File(...),
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+) -> AdminUploadedAssetResponse:
+    _ = current_admin
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("audio/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only audio files are allowed.")
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded audio is empty.")
+    if len(payload) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio size must be under 50 MB.")
+
+    try:
+        public_url = upload_test_audio_asset(
+            content=payload,
+            filename=file.filename or "audio-file",
+            content_type=file.content_type or "audio/mpeg",
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    return AdminUploadedAssetResponse(
+        public_url=public_url,
+        filename=file.filename or "audio-file",
+        content_type=file.content_type or "audio/mpeg",
+    )
+
+
+@router.post("/audio/transcribe", response_model=AdminAudioTranscriptResponse)
+async def transcribe_audio_file(
+    payload: AdminAudioTranscriptRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+) -> AdminAudioTranscriptResponse:
+    _ = current_admin
+    if not str(payload.audio_url or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="audio_url is required.")
+
+    try:
+        transcript_payload = await transcribe_listening_audio_from_url(
+            audio_url=str(payload.audio_url),
+            audio_filename=payload.audio_filename,
+            audio_content_type=payload.audio_content_type,
+            section_label=payload.section_label,
+            section_title=payload.section_title,
+            existing_transcript=payload.transcript,
+            existing_transcript_segments=[segment.model_dump() for segment in payload.transcript_segments],
+            questions=[
+                ListeningTranscriptQuestion(
+                    question_id=item.question_id,
+                    question_label=item.question_label,
+                    question_prompt=item.question_prompt,
+                    accepted_answers=list(item.accepted_answers),
+                )
+                for item in payload.questions
+            ],
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Audio file could not be fetched.") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Transcription failed.") from exc
+
+    return AdminAudioTranscriptResponse(**transcript_payload)
 
 
 @router.post("/images/upload-url", response_model=AdminUploadUrlResponse)

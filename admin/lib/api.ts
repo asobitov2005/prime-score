@@ -9,6 +9,8 @@ import type {
   AdminPaymentCardSummary,
   AdminPaymentSettingsSummary,
   AdminPaymentSummary,
+  AdminTranscriptQuestionLocation,
+  AdminTranscriptSegment,
   PaymentMethod,
   PaymentStatus,
   AdminTestDraftState,
@@ -20,6 +22,34 @@ import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { normalizeAdminTestSourceDetail } from "@/lib/test-source";
 
 const baseUrl = ADMIN_PUBLIC_API_BASE_URL;
+
+function sanitizeListeningSectionTitle(type: "reading" | "listening", title: string) {
+  const trimmedTitle = title.trim();
+  if (type !== "listening") {
+    return title;
+  }
+  if (/^(Reading Passage|Listening Part|Passage|Part)\s+\d+\s*$/i.test(trimmedTitle)) {
+    return "";
+  }
+  if (/^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(trimmedTitle)) {
+    return "";
+  }
+  return title;
+}
+
+function sanitizeListeningSectionContent(type: "reading" | "listening", content: string) {
+  if (type !== "listening") {
+    return content;
+  }
+  return content
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !/^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(trimmed);
+    })
+    .join("\n")
+    .trim();
+}
 
 function buildRequestHeaders(): Record<string, string> {
   const token = getClientAdminAccessToken();
@@ -77,8 +107,26 @@ type BackendAdminDraftPayload = {
     paragraphs: Array<{ id: string; label: string; text: string }>;
     showLabels: boolean;
     media_kind: "text" | "audio";
-    marker_count: number;
-  }>;
+      audio_url: string;
+      audio_duration_seconds?: number | null;
+      transcript: string;
+      transcript_segments?: Array<{
+        id?: string;
+        start_sec?: number;
+        end_sec?: number;
+        text?: string;
+      }>;
+      transcript_question_locations?: Array<{
+        question_id?: string | null;
+        question_label?: string;
+        question_prompt?: string;
+        start_sec?: number;
+        end_sec?: number;
+        answer_text?: string;
+        correct_answer?: string;
+      }>;
+      marker_count: number;
+    }>;
   question_groups: Array<{
     id?: string;
     section_id: string;
@@ -126,6 +174,24 @@ type BackendAdminDraft = {
       paragraphs?: Array<{ id: string; label: string; text: string }>;
       showLabels?: boolean;
       media_kind: "text" | "audio";
+      audio_url?: string;
+      audio_duration_seconds?: number | null;
+      transcript?: string;
+      transcript_segments?: Array<{
+        id?: string;
+        start_sec?: number;
+        end_sec?: number;
+        text?: string;
+      }>;
+      transcript_question_locations?: Array<{
+        question_id?: string | null;
+        question_label?: string;
+        question_prompt?: string;
+        start_sec?: number;
+        end_sec?: number;
+        answer_text?: string;
+        correct_answer?: string;
+      }>;
       marker_count: number;
     }>;
   };
@@ -284,6 +350,65 @@ type BackendPaymentCard = {
   priority: number;
   bot_source: string;
 };
+
+type BackendAdminAudioTranscriptResponse = {
+  transcript: string;
+  transcript_segments?: Array<{
+    id?: string;
+    start_sec?: number;
+    end_sec?: number;
+    text?: string;
+  }>;
+  transcript_question_locations?: Array<{
+    question_id?: string | null;
+    question_label?: string;
+    question_prompt?: string;
+    start_sec?: number;
+    end_sec?: number;
+    answer_text?: string;
+    correct_answer?: string;
+  }>;
+};
+
+function mapTranscriptSegments(
+  segments: Array<{ id?: string; start_sec?: number; end_sec?: number; text?: string }> | undefined | null
+): AdminTranscriptSegment[] {
+  return (segments ?? [])
+    .filter((segment) => typeof segment?.text === "string" && segment.text.trim().length > 0)
+    .map((segment, index) => ({
+      id: String(segment.id ?? `segment-${index + 1}`),
+      startSec: Math.max(0, Number(segment.start_sec ?? 0)),
+      endSec: Math.max(0, Number(segment.end_sec ?? segment.start_sec ?? 0)),
+      text: String(segment.text ?? "").trim(),
+    }));
+}
+
+function mapTranscriptQuestionLocations(
+  locations:
+    | Array<{
+        question_id?: string | null;
+        question_label?: string;
+        question_prompt?: string;
+        start_sec?: number;
+        end_sec?: number;
+        answer_text?: string;
+        correct_answer?: string;
+      }>
+    | undefined
+    | null
+): AdminTranscriptQuestionLocation[] {
+  return (locations ?? [])
+    .filter((location) => typeof location?.question_label === "string" && location.question_label.trim().length > 0)
+    .map((location) => ({
+      questionId: location.question_id ?? undefined,
+      questionLabel: String(location.question_label ?? "").trim(),
+      questionPrompt: String(location.question_prompt ?? "").trim(),
+      startSec: Math.max(0, Number(location.start_sec ?? 0)),
+      endSec: Math.max(0, Number(location.end_sec ?? location.start_sec ?? 0)),
+      answerText: String(location.answer_text ?? "").trim(),
+      correctAnswer: String(location.correct_answer ?? "").trim(),
+    }));
+}
 
 type BackendPaymentSettings = {
   id: string;
@@ -523,6 +648,24 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
         paragraphs: parsedParagraphs,
         showLabels: Boolean(section.showLabels),
         media_kind: section.mediaKind,
+        audio_url: section.audioUrl || "",
+        audio_duration_seconds: section.audioDurationSeconds ?? null,
+        transcript: section.transcript || "",
+        transcript_segments: (section.transcriptSegments ?? []).map((segment) => ({
+          id: segment.id,
+          start_sec: segment.startSec,
+          end_sec: segment.endSec,
+          text: segment.text,
+        })),
+        transcript_question_locations: (section.transcriptQuestionLocations ?? []).map((location) => ({
+          question_id: location.questionId,
+          question_label: location.questionLabel,
+          question_prompt: location.questionPrompt,
+          start_sec: location.startSec,
+          end_sec: location.endSec,
+          answer_text: location.answerText,
+          correct_answer: location.correctAnswer,
+        })),
         marker_count: section.markerCount
       };
     }),
@@ -586,12 +729,17 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
       sections: draft.content.sections.map((section) => ({
         id: section.id,
         label: section.label,
-        title: section.title,
+        title: sanitizeListeningSectionTitle(draft.metadata.type, section.title),
         subtitle: section.subtitle,
-        content: section.content,
+        content: sanitizeListeningSectionContent(draft.metadata.type, section.content),
         paragraphs: section.paragraphs,
         showLabels: section.showLabels,
         mediaKind: section.media_kind,
+        audioUrl: section.audio_url ?? "",
+        audioDurationSeconds: section.audio_duration_seconds ?? null,
+        transcript: section.transcript ?? "",
+        transcriptSegments: mapTranscriptSegments(section.transcript_segments),
+        transcriptQuestionLocations: mapTranscriptQuestionLocations(section.transcript_question_locations),
         markerCount: section.marker_count,
       })),
     },
@@ -794,6 +942,77 @@ export const adminApi = {
       publicUrl: payload.public_url,
       filename: payload.filename,
       contentType: payload.content_type,
+    };
+  },
+  async uploadAudio(file: File): Promise<{ publicUrl: string; filename: string; contentType: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${baseUrl}/audio/upload`, {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error(`Audio upload failed: ${response.status} ${response.statusText}`);
+    }
+    const payload = await response.json() as {
+      public_url: string;
+      filename: string;
+      content_type: string;
+    };
+    return {
+      publicUrl: payload.public_url,
+      filename: payload.filename,
+      contentType: payload.content_type,
+    };
+  },
+  async generateListeningTranscript(input: {
+    audioUrl: string;
+    audioFilename?: string;
+    audioContentType?: string;
+    sectionLabel?: string;
+    sectionTitle?: string;
+    transcript?: string;
+    transcriptSegments?: AdminTranscriptSegment[];
+    questions: Array<{
+      questionId?: string;
+      questionLabel: string;
+      questionPrompt: string;
+      acceptedAnswers: string[];
+    }>;
+  }): Promise<{
+    transcript: string;
+    transcriptSegments: AdminTranscriptSegment[];
+    transcriptQuestionLocations: AdminTranscriptQuestionLocation[];
+  }> {
+    const response = await requestJson<BackendAdminAudioTranscriptResponse>("/audio/transcribe", {
+      method: "POST",
+      body: JSON.stringify({
+        audio_url: input.audioUrl,
+        audio_filename: input.audioFilename,
+        audio_content_type: input.audioContentType,
+        section_label: input.sectionLabel,
+        section_title: input.sectionTitle,
+        transcript: input.transcript,
+        transcript_segments: (input.transcriptSegments ?? []).map((segment) => ({
+          id: segment.id,
+          start_sec: segment.startSec,
+          end_sec: segment.endSec,
+          text: segment.text,
+        })),
+        questions: input.questions.map((question) => ({
+          question_id: question.questionId,
+          question_label: question.questionLabel,
+          question_prompt: question.questionPrompt,
+          accepted_answers: question.acceptedAnswers,
+        })),
+      }),
+    });
+
+    return {
+      transcript: response.transcript ?? "",
+      transcriptSegments: mapTranscriptSegments(response.transcript_segments),
+      transcriptQuestionLocations: mapTranscriptQuestionLocations(response.transcript_question_locations),
     };
   },
   async listAiThreads(): Promise<AdminAiThreadSummary[]> {

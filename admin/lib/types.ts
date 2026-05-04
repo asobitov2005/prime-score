@@ -195,7 +195,29 @@ export interface AdminTestDraftContentSection {
   paragraphs?: { id: string; label: string; text: string }[];
   showLabels?: boolean; // Toggle for A, B, C labels
   mediaKind: "text" | "audio";
+  audioUrl?: string;
+  audioDurationSeconds?: number | null;
+  transcript?: string;
+  transcriptSegments?: AdminTranscriptSegment[];
+  transcriptQuestionLocations?: AdminTranscriptQuestionLocation[];
   markerCount: number;
+}
+
+export interface AdminTranscriptSegment {
+  id: string;
+  startSec: number;
+  endSec: number;
+  text: string;
+}
+
+export interface AdminTranscriptQuestionLocation {
+  questionId?: string;
+  questionLabel: string;
+  questionPrompt: string;
+  startSec: number;
+  endSec: number;
+  answerText: string;
+  correctAnswer: string;
 }
 
 export interface AdminTestDraftQuestion {

@@ -70,6 +70,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
   const activeFormat = searchParams?.format || "all";
   const activeSource = searchParams?.source || "";
   const searchQuery = searchParams?.q?.toLowerCase() || "";
+  const rawQuery = searchParams?.q || "";
 
   const [rawTests, userAttempts] = await Promise.all([
     getCatalogTests({ 
@@ -123,6 +124,31 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
         { id: "part_4", label: "Part 4" },
       ];
 
+  const buildTestsHref = ({
+    type = activeType,
+    format = activeFormat,
+    source = activeSource,
+    q = rawQuery,
+  }: {
+    type?: string;
+    format?: string;
+    source?: string;
+    q?: string;
+  }) => {
+    const params = new URLSearchParams();
+    params.set("type", type);
+    if (format && format !== "all") {
+      params.set("format", format);
+    }
+    if (source) {
+      params.set("source", source);
+    }
+    if (q) {
+      params.set("q", q);
+    }
+    return `/tests?${params.toString()}`;
+  };
+
   return (
     <div className="flex flex-col max-w-6xl mx-auto animate-in fade-in duration-500">
       <TestsRefreshOnMount />
@@ -150,7 +176,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Link href={`/tests?type=${type.id}`}>
+                  <Link href={buildTestsHref({ type: type.id, format: "all" })}>
                     <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "opacity-50")} />
                     {type.label}
                   </Link>
@@ -182,7 +208,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                       : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   )}
                 >
-                  <Link href={`/tests?type=${activeType}&format=${f.id}&source=${activeSource}`}>
+                  <Link href={buildTestsHref({ format: f.id })}>
                     {f.label}
                   </Link>
                 </Button>
@@ -193,7 +219,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
           <div className="flex w-full items-center justify-end gap-2 px-1 pb-1 sm:w-auto sm:pb-0">
             {hasFormatFilter && (
               <Button asChild variant="ghost" size="sm" className="h-10 px-4 text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
-                <Link href={`/tests?type=${activeType}`}>
+                <Link href={buildTestsHref({ format: "all" })}>
                   <X className="h-3.5 w-3.5 mr-2" />
                   Clear
                 </Link>

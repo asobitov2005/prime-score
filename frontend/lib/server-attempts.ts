@@ -7,6 +7,23 @@ export type BackendAttemptTextHighlight = {
   end: number;
 };
 
+export type BackendTranscriptSegment = {
+  id: string;
+  start_sec: number;
+  end_sec: number;
+  text: string;
+};
+
+export type BackendTranscriptQuestionLocation = {
+  question_id?: string | null;
+  question_label: string;
+  question_prompt: string;
+  start_sec: number;
+  end_sec: number;
+  answer_text: string;
+  correct_answer: string;
+};
+
 export type BackendAttemptUiState = {
   theme?: "light" | "dark" | null;
   split_ratio?: number | null;
@@ -44,6 +61,7 @@ export type BackendAttemptSnapshot = {
     title?: string | null;
     subtitle?: string | null;
     content?: string | null;
+    audio_url?: string | null;
     paragraphs?: Array<string | {
       id?: string;
       text?: string;
@@ -81,6 +99,11 @@ export type BackendAttemptSnapshot = {
         word_limit?: number | null;
       }>;
     }>;
+    transcript?: string | null;
+    transcript_segments?: BackendTranscriptSegment[];
+    transcript_question_locations?: BackendTranscriptQuestionLocation[];
+    intro?: string | null;
+    audio_duration_seconds?: number | null;
   }>;
 };
 
@@ -156,6 +179,7 @@ export type BackendAttemptReview = {
   items: Array<{
     question_id: string;
     question_number: number;
+    question_label?: string | null;
     prompt: string;
     section_title: string;
     group_title: string;

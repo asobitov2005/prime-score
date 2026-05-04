@@ -66,6 +66,24 @@ Band 4
   Presents some main ideas but these are difficult to identify and may be
   repetitive, irrelevant or not well supported.
 
+Band 3
+- Task 1: Fails to address the task, which may have been completely
+  misunderstood. Presents limited ideas which may be largely irrelevant/repetitive.
+- Task 2: Does not adequately address any part of the task. Does not express a
+  clear position. Presents few ideas, which are largely undeveloped or irrelevant.
+
+Band 2
+- Task 1: Answer is barely related to the task.
+- Task 2: Barely responds to the task. Does not express a position. May attempt
+  to present one or two ideas but there is no development.
+
+Band 1
+- Answer is completely unrelated to the task.
+
+Band 0
+- Does not attend, does not attempt the task in any way, or writes a totally
+  memorised response.
+
 ------------------------------------------------------------
 2. COHERENCE AND COHESION
 ------------------------------------------------------------
@@ -99,6 +117,19 @@ Band 4
   there is no clear progression in the response. Uses some basic cohesive
   devices but these may be inaccurate or repetitive. May not write in
   paragraphs or paragraphing may be inadequate.
+
+Band 3
+- Does not organise ideas logically. May use a very limited range of cohesive
+  devices, and those used may not indicate a logical relationship between ideas.
+
+Band 2
+- Has very little control of organisational features.
+
+Band 1
+- Fails to communicate any message.
+
+Band 0
+- Does not attempt the response / does not attend.
 
 ------------------------------------------------------------
 3. LEXICAL RESOURCE
@@ -135,6 +166,21 @@ Band 4
   inappropriate for the task. Has limited control of word formation and/or
   spelling; errors may cause strain for the reader.
 
+Band 3
+- Uses only a very limited range of words and expressions with very limited
+  control of word formation and/or spelling. Errors may severely distort the
+  message.
+
+Band 2
+- Uses an extremely limited range of vocabulary; essentially no control of word
+  formation and/or spelling.
+
+Band 1
+- Can only use a few isolated words.
+
+Band 0
+- Does not attempt the response / does not attend.
+
 ------------------------------------------------------------
 4. GRAMMATICAL RANGE AND ACCURACY
 ------------------------------------------------------------
@@ -165,6 +211,19 @@ Band 4
 - Uses only a very limited range of structures with only rare use of
   subordinate clauses. Some structures are accurate but errors predominate,
   and punctuation is often faulty.
+
+Band 3
+- Attempts sentence forms but errors in grammar and punctuation predominate
+  and distort the meaning.
+
+Band 2
+- Cannot use sentence forms except in memorised phrases.
+
+Band 1
+- Cannot use sentence forms at all.
+
+Band 0
+- Does not attempt the response / does not attend.
 
 ------------------------------------------------------------
 GRADING INSTRUCTIONS

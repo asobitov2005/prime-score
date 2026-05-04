@@ -119,6 +119,17 @@ function readingSectionQuestionOffset(sectionNumber: number) {
   return 0;
 }
 
+function resolveEffectiveReadingQuestionOffset(sectionNumber: number, sectionQuestionStart: number | null) {
+  const baseOffset = readingSectionQuestionOffset(sectionNumber);
+  if (baseOffset === 0) {
+    return 0;
+  }
+  if ((sectionQuestionStart ?? 0) > 1) {
+    return 0;
+  }
+  return baseOffset;
+}
+
 function offsetQuestionLabel(label: string | null | undefined, offset: number) {
   if (!label || offset === 0) {
     return label ?? undefined;
@@ -165,7 +176,9 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
       sectionIndex,
       sections.length,
     );
-    const sectionQuestionOffset = sections.length > 1 ? 0 : readingSectionQuestionOffset(resolvedSectionNumber);
+    const sectionQuestionOffset = sections.length > 1
+      ? 0
+      : resolveEffectiveReadingQuestionOffset(resolvedSectionNumber, sectionQuestionStart);
     const adjustedSectionQuestionStart = sectionQuestionStart === null ? null : sectionQuestionStart + sectionQuestionOffset;
     const adjustedSectionQuestionEnd = sectionQuestionEnd === null ? null : sectionQuestionEnd + sectionQuestionOffset;
     const resolvedSectionLabel = `Passage ${resolvedSectionNumber}`;

@@ -93,6 +93,36 @@ def upload_test_diagram_image(*, content: bytes, filename: str, content_type: st
     return build_storage_asset_path(bucket_name, object_name)
 
 
+def upload_test_audio_asset(*, content: bytes, filename: str, content_type: str) -> str:
+    settings = get_settings()
+    bucket_name = settings.minio_bucket_test_assets
+    client = _build_client()
+    try:
+        if not client.bucket_exists(bucket_name):
+            client.make_bucket(bucket_name)
+    except S3Error as exc:
+        raise RuntimeError(f"MinIO bucket error: {exc.code}") from exc
+
+    now = datetime.now(UTC)
+    suffix = _guess_suffix(content_type, filename)
+    object_name = (
+        f"audio-assets/{now:%Y/%m/%d}/"
+        f"{uuid4().hex}{suffix}"
+    )
+    try:
+        client.put_object(
+            bucket_name,
+            object_name,
+            BytesIO(content),
+            length=len(content),
+            content_type=content_type,
+        )
+    except S3Error as exc:
+        raise RuntimeError(f"MinIO upload error: {exc.code}") from exc
+
+    return build_storage_asset_path(bucket_name, object_name)
+
+
 def fetch_storage_object(*, bucket_name: str, object_name: str) -> tuple[bytes, str]:
     client = _build_client()
     try:

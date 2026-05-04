@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Minus, XCircle } from "lucide-react";
+import { AnswersOverviewCard } from "./answers-overview-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getLeaderboardRank } from "@/lib/server-me";
-import { getBackendAttemptResult } from "@/lib/server-attempts";
+import { getBackendAttemptResult, getBackendAttemptReview } from "@/lib/server-attempts";
 import { getTestSourceDetail } from "@/lib/test-source";
 
 interface AttemptResultPageProps {
@@ -19,6 +20,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
   if (!result) {
     notFound();
   }
+  const review = await getBackendAttemptReview(params.attemptId).catch(() => null);
   const leaderboardRank = await getLeaderboardRank(result.test_type).catch(() => null);
 
   const formatLabel = formatTestFormat(result.test_format);
@@ -84,18 +86,19 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <BreakdownCard
-          title="Section breakdown"
-          description="Correct answers by section."
-          items={result.section_breakdown}
-        />
+      <SectionBreakdownCard
+        items={result.section_breakdown}
+        testType={result.test_type}
+      />
+
+      <div className="grid gap-6">
         <BreakdownCard
           title="Question type breakdown"
-          description="Correct answers by question family."
           items={result.question_type_breakdown}
         />
       </div>
+
+      <AnswersOverviewCard items={review?.items ?? []} testFormat={result.test_format ?? "full"} />
 
       {result.diagram_groups.length > 0 ? (
         <div className="space-y-4">
@@ -528,30 +531,141 @@ function formatTimeTaken(value: number): string {
 
 function BreakdownCard({
   title,
-  description,
   items
 }: {
   title: string;
-  description: string;
   items: Array<{ label: string; correct: number; total: number }>;
 }) {
   return (
-    <Card>
+    <Card className="border-border/80">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {items.length > 0 ? items.map((item) => (
-          <div key={item.label} className="rounded-lg border border-border/60 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium">{item.label.replace(/_/g, " ")}</p>
-              <Badge tone={item.correct === item.total ? "success" : item.correct > 0 ? "warning" : "danger"}>
-                {item.correct}/{item.total}
-              </Badge>
-            </div>
+      <CardContent>
+        {items.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {items.map((item) => (
+              <div key={item.label} className="rounded-xl border border-border/80 bg-muted/[0.16] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium">{formatQuestionFamilyLabel(item.label)}</p>
+                  <Badge tone={item.correct === item.total ? "success" : item.correct > 0 ? "warning" : "danger"}>
+                    {item.correct}/{item.total}
+                  </Badge>
+                </div>
+              </div>
+            ))}
           </div>
-        )) : (
+        ) : (
+          <p className="text-sm text-muted-foreground">Breakdown will appear once the backend has finished scoring.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatQuestionFamilyLabel(value: string): string {
+  return value
+    .replace(/^(reading|listening)_/i, "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (lower === "mc") {
+        return "MC";
+      }
+      if (lower === "tfng") {
+        return "TFNG";
+      }
+      if (lower === "ynng") {
+        return "YNNG";
+      }
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+function getProgressTheme(progress: number) {
+  if (progress >= 80) {
+    return {
+      bar: "rgb(16 185 129)",
+      border: "rgba(16,185,129,0.26)",
+      cardBg: "rgba(16,185,129,0.06)",
+    };
+  }
+  if (progress >= 60) {
+    return {
+      bar: "rgb(59 130 246)",
+      border: "rgba(59,130,246,0.24)",
+      cardBg: "rgba(59,130,246,0.06)",
+    };
+  }
+  if (progress >= 40) {
+    return {
+      bar: "rgb(245 158 11)",
+      border: "rgba(245,158,11,0.24)",
+      cardBg: "rgba(245,158,11,0.06)",
+    };
+  }
+  return {
+    bar: "rgb(244 63 94)",
+    border: "rgba(244,63,94,0.24)",
+    cardBg: "rgba(244,63,94,0.06)",
+  };
+}
+
+function SectionBreakdownCard({
+  items,
+  testType,
+}: {
+  items: Array<{ label: string; correct: number; total: number }>;
+  testType: string;
+}) {
+  const sectionPrefix = testType === "listening" ? "Part" : "Passage";
+
+  return (
+    <Card className="border-border/80">
+      <CardHeader className="pb-1.5">
+        <CardTitle>Section breakdown</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {items.length > 0 ? (
+          <div className="grid gap-1.5 xl:grid-cols-3">
+            {items.map((item, index) => {
+              const progress = item.total > 0 ? Math.round((item.correct / item.total) * 100) : 0;
+              const progressTheme = getProgressTheme(progress);
+              return (
+                <div
+                  key={`${item.label}-${index}`}
+                  className="rounded-2xl border p-2"
+                  style={{
+                    borderColor: progressTheme.border,
+                    backgroundColor: progressTheme.cardBg,
+                  }}
+                >
+                  <div className="space-y-0.5">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold tracking-tight text-foreground">
+                        {sectionPrefix} {index + 1}
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-border/60">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${progress}%`, backgroundColor: progressTheme.bar }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
+                        <span>{item.correct}/{item.total} correct</span>
+                        <span>{progress}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
           <p className="text-sm text-muted-foreground">Breakdown will appear once the backend has finished scoring.</p>
         )}
       </CardContent>

@@ -126,6 +126,7 @@ class AttemptDiagramGroupRead(BaseModel):
 class AttemptReviewItemRead(BaseModel):
     question_id: UUID
     question_number: int
+    question_label: str | None = None
     prompt: str
     section_title: str
     group_title: str

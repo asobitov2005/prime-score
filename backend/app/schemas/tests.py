@@ -15,6 +15,23 @@ class TestParagraphSnapshotRead(BaseModel):
     label: str | None = None
 
 
+class TestTranscriptSegmentRead(BaseModel):
+    id: str
+    start_sec: int
+    end_sec: int
+    text: str
+
+
+class TestTranscriptQuestionLocationRead(BaseModel):
+    question_id: UUID | None = None
+    question_label: str
+    question_prompt: str
+    start_sec: int
+    end_sec: int
+    answer_text: str
+    correct_answer: str
+
+
 class TestSectionSnapshotRead(BaseModel):
     section_id: UUID
     section_number: int
@@ -23,10 +40,14 @@ class TestSectionSnapshotRead(BaseModel):
     subtitle: str | None = None
     intro: str | None = None
     content: str | None = None
+    audio_url: str | None = None
     paragraphs: list[str | TestParagraphSnapshotRead] = []
     show_labels: bool = False
     question_count: int = 0
     audio_duration_seconds: int | None = None
+    transcript: str | None = None
+    transcript_segments: list[TestTranscriptSegmentRead] = []
+    transcript_question_locations: list[TestTranscriptQuestionLocationRead] = []
     question_groups: list["TestQuestionGroupSnapshotRead"] = []
 
 

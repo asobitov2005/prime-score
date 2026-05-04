@@ -22,6 +22,34 @@ import type {
 
 const baseUrl = getAdminServerApiBaseUrl();
 
+function sanitizeListeningSectionTitle(type: TestType, title: string) {
+  const trimmedTitle = title.trim();
+  if (type !== "listening") {
+    return title;
+  }
+  if (/^(Reading Passage|Listening Part|Passage|Part)\s+\d+\s*$/i.test(trimmedTitle)) {
+    return "";
+  }
+  if (/^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(trimmedTitle)) {
+    return "";
+  }
+  return title;
+}
+
+function sanitizeListeningSectionContent(type: TestType, content: string) {
+  if (type !== "listening") {
+    return content;
+  }
+  return content
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !/^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(trimmed);
+    })
+    .join("\n")
+    .trim();
+}
+
 type BackendAdminTest = {
   id: string;
   title: string;
@@ -59,6 +87,24 @@ type BackendAdminDraft = {
       paragraphs?: Array<{ id: string; label: string; text: string }>;
       showLabels?: boolean;
       media_kind: "text" | "audio";
+      audio_url?: string;
+      audio_duration_seconds?: number | null;
+      transcript?: string;
+      transcript_segments?: Array<{
+        id?: string;
+        start_sec?: number;
+        end_sec?: number;
+        text?: string;
+      }>;
+      transcript_question_locations?: Array<{
+        question_id?: string | null;
+        question_label?: string;
+        question_prompt?: string;
+        start_sec?: number;
+        end_sec?: number;
+        answer_text?: string;
+        correct_answer?: string;
+      }>;
       marker_count: number;
     }>;
   };
@@ -205,12 +251,30 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
       sections: draft.content.sections.map((section) => ({
         id: section.id,
         label: section.label,
-        title: section.title,
+        title: sanitizeListeningSectionTitle(draft.metadata.type, section.title),
         subtitle: section.subtitle,
-        content: section.content,
+        content: sanitizeListeningSectionContent(draft.metadata.type, section.content),
         paragraphs: section.paragraphs,
         showLabels: section.showLabels,
         mediaKind: section.media_kind,
+        audioUrl: section.audio_url ?? "",
+        audioDurationSeconds: section.audio_duration_seconds ?? null,
+        transcript: section.transcript ?? "",
+        transcriptSegments: (section.transcript_segments ?? []).map((segment, index) => ({
+          id: String(segment.id ?? `segment-${index + 1}`),
+          startSec: Number(segment.start_sec ?? 0),
+          endSec: Number(segment.end_sec ?? segment.start_sec ?? 0),
+          text: String(segment.text ?? ""),
+        })),
+        transcriptQuestionLocations: (section.transcript_question_locations ?? []).map((location) => ({
+          questionId: location.question_id ?? undefined,
+          questionLabel: String(location.question_label ?? ""),
+          questionPrompt: String(location.question_prompt ?? ""),
+          startSec: Number(location.start_sec ?? 0),
+          endSec: Number(location.end_sec ?? location.start_sec ?? 0),
+          answerText: String(location.answer_text ?? ""),
+          correctAnswer: String(location.correct_answer ?? ""),
+        })),
         markerCount: section.marker_count
       }))
     },

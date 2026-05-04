@@ -43,13 +43,9 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
     const resumeToken = Date.now();
     setIsSubmitting(true);
     setOpen(false);
-    if (test.type === "reading") {
-      const href = `/exam-preview/reading?attemptId=${attempt.id}&mode=${attempt.mode}&resume=${resumeToken}`;
-      emitNavigationStart(href);
-      router.push(href);
-      return;
-    }
-    const href = `/attempts/${attempt.id}/${test.type}?resume=${resumeToken}`;
+    const href = test.type === "reading"
+      ? `/exam-preview/reading?attemptId=${attempt.id}&mode=${attempt.mode}&resume=${resumeToken}`
+      : `/exam-preview/listening?attemptId=${attempt.id}&mode=${attempt.mode}&resume=${resumeToken}`;
     emitNavigationStart(href);
     router.push(href);
   }
@@ -75,7 +71,6 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   }
 
   async function startTest(mode: "exam" | "practice") {
-    const destination = test.type === "reading" ? "reading" : "listening";
     const payload = {
       testId: test.id,
       scope: "full",
@@ -93,13 +88,9 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
       const result = (await response.json()) as { attemptId: string };
       const resumeToken = Date.now();
       setOpen(false);
-      if (test.type === "reading") {
-        const href = `/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`;
-        emitNavigationStart(href);
-        router.push(href);
-        return;
-      }
-      const href = `/attempts/${result.attemptId}/${destination}?resume=${resumeToken}`;
+      const href = test.type === "reading"
+        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`
+        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`;
       emitNavigationStart(href);
       router.push(href);
     } catch (err) {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, Clock } from "lucide-react";
+import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, Clock, PenSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +23,9 @@ function getInProgressTest(): InProgressTestCardState | null {
 
 export default async function DashboardPage() {
   const [attempts, analytics] = await Promise.all([getUserAttempts(), getDashboardAnalytics()]);
+  const recentAttempts = attempts
+    .filter((attempt) => attempt.status === "completed" || attempt.status === "submitted")
+    .slice(0, 3);
   
   const featuredTests = mockTests.slice(0, 3);
   
@@ -206,6 +209,19 @@ export default async function DashboardPage() {
                 <ArrowRight className="ml-auto h-5 w-5 text-emerald-500/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
               </Card>
             </Link>
+
+            <Link href="/writing" className="block">
+              <Card className="bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
+                <div className="bg-violet-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
+                  <PenSquare className="h-5 w-5 text-violet-600 dark:text-violet-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-violet-950 dark:text-violet-100 text-sm">Start Writing Task</h3>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600/70 dark:text-violet-400/80 mt-0.5">AI Graded · Task 1 &amp; 2</p>
+                </div>
+                <ArrowRight className="ml-auto h-5 w-5 text-violet-500/50 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-1 transition-all" />
+              </Card>
+            </Link>
           </div>
         </div>
       </div>
@@ -226,7 +242,7 @@ export default async function DashboardPage() {
           
           <Card className="border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">
             <div className="divide-y divide-border/40">
-              {attempts.slice(0, 4).map(attempt => (
+              {recentAttempts.map(attempt => (
                 <div key={attempt.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-4">
                      <div className={cn(
@@ -236,7 +252,7 @@ export default async function DashboardPage() {
                        {attempt.type === "reading" ? <BookOpenText className="h-6 w-6" /> : <Headphones className="h-6 w-6" />}
                      </div>
                      <div className="space-y-1">
-                       <h4 className="font-bold text-foreground text-[15px]">{attempt.testTitle}</h4>
+                       <h4 className="truncate font-bold text-foreground text-[15px]">{attempt.testTitle}</h4>
                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                          <span>{attempt.date}</span>
                          <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
@@ -244,16 +260,20 @@ export default async function DashboardPage() {
                        </p>
                      </div>
                   </div>
-                  <div className="flex items-center gap-6 sm:gap-8 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40 mt-2 sm:mt-0">
+                  <div className="flex items-center gap-4 sm:gap-5 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40 mt-2 sm:mt-0 sm:ml-auto">
                      <div className="text-right">
-                       <p className="font-black text-foreground text-lg">{attempt.score}</p>
+                       <p className="text-base font-semibold text-foreground">
+                         {attempt.totalQuestions && attempt.score !== "Pending"
+                           ? `${attempt.score}/${attempt.totalQuestions}`
+                           : attempt.score}
+                       </p>
                        <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Score</p>
                      </div>
-                     <div className="text-right border-l border-border/50 pl-6">
-                       <p className="font-black text-primary text-lg">{attempt.band ?? "-"}</p>
+                     <div className="text-right border-l border-border/50 pl-4">
+                       <p className="text-base font-semibold text-primary">{attempt.band ?? "-"}</p>
                        <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Band</p>
                      </div>
-                     <Button asChild variant="outline" size="sm" className="rounded-xl h-9 px-4 font-bold border-border/60 shadow-sm hover:bg-muted ml-2">
+                     <Button asChild variant="outline" size="sm" className="rounded-xl h-8 px-3 text-xs font-bold border-border/60 shadow-sm hover:bg-muted ml-2">
                        <Link href={`/attempts/${attempt.id}/result`}>Review</Link>
                      </Button>
                   </div>
