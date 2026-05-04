@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import http from "node:http";
+import https from "node:https";
 import { getAdminServerApiBaseUrl } from "@/lib/admin-api-base";
 import { createEmptyDraft } from "@/lib/draft-template";
 import { ADMIN_ACCESS_COOKIE } from "@/lib/auth";
@@ -21,6 +23,40 @@ import type {
 } from "@/lib/types";
 
 const baseUrl = getAdminServerApiBaseUrl();
+const ADMIN_REQUEST_TIMEOUT_MS = 60_000;
+const ADMIN_REQUEST_MAX_ATTEMPTS = 3;
+
+function requestJsonFromAdminApi(url: string, headers: Record<string, string>): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const transport = parsedUrl.protocol === "https:" ? https : http;
+    const request = transport.request(
+      parsedUrl,
+      {
+        method: "GET",
+        headers,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode ?? 500,
+            text: Buffer.concat(chunks).toString("utf8"),
+          });
+        });
+      }
+    );
+
+    request.setTimeout(ADMIN_REQUEST_TIMEOUT_MS, () => {
+      request.destroy(new Error(`Admin API request timed out after ${ADMIN_REQUEST_TIMEOUT_MS}ms`));
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
 
 function sanitizeListeningSectionTitle(type: TestType, title: string) {
   const trimmedTitle = title.trim();
@@ -95,6 +131,10 @@ type BackendAdminDraft = {
         start_sec?: number;
         end_sec?: number;
         text?: string;
+        confidence?: number;
+        drift_start_sec?: number;
+        drift_end_sec?: number;
+        needs_review?: boolean;
       }>;
       transcript_question_locations?: Array<{
         question_id?: string | null;
@@ -170,24 +210,39 @@ type BackendAdminDraft = {
 
 async function requestAdmin<T>(path: string): Promise<T> {
   const token = cookies().get(ADMIN_ACCESS_COOKIE)?.value;
-  const response = await fetch(`${baseUrl}${path}`, {
-    cache: "no-store",
-    headers: token
-      ? {
-          Authorization: `Bearer ${token}`
-        }
-      : {}
-  });
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const url = `${baseUrl}${path}`;
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "no body");
-    console.error(`Admin API request failed for ${path} with status ${response.status}: ${text}`);
-    const error = new Error(`Admin API request failed for ${path}`) as Error & { status?: number };
-    error.status = response.status;
-    throw error;
+  for (let attempt = 1; attempt <= ADMIN_REQUEST_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await requestJsonFromAdminApi(url, headers);
+      const text = response.text;
+
+      if (response.status < 200 || response.status >= 300) {
+        console.error(`Admin API request failed for ${path} with status ${response.status}: ${text}`);
+        const error = new Error(`Admin API request failed for ${path}`) as Error & { status?: number };
+        error.status = response.status;
+        throw error;
+      }
+
+      return JSON.parse(text) as T;
+    } catch (error) {
+      const status = typeof error === "object" && error !== null && "status" in error
+        ? Number((error as { status?: number }).status)
+        : undefined;
+      const isRetryableStatus = status == null || status >= 500;
+      const isLastAttempt = attempt === ADMIN_REQUEST_MAX_ATTEMPTS;
+      if (!isRetryableStatus || isLastAttempt) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, attempt * 400));
+    }
   }
 
-  return (await response.json()) as T;
+  throw new Error(`Admin API request failed for ${path}`);
 }
 
 type BackendAdminIdentity = {
@@ -265,6 +320,10 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
           startSec: Number(segment.start_sec ?? 0),
           endSec: Number(segment.end_sec ?? segment.start_sec ?? 0),
           text: String(segment.text ?? ""),
+          confidence: segment.confidence == null ? undefined : Number(segment.confidence),
+          driftStartSec: segment.drift_start_sec == null ? undefined : Number(segment.drift_start_sec),
+          driftEndSec: segment.drift_end_sec == null ? undefined : Number(segment.drift_end_sec),
+          needsReview: segment.needs_review == null ? undefined : Boolean(segment.needs_review),
         })),
         transcriptQuestionLocations: (section.transcript_question_locations ?? []).map((location) => ({
           questionId: location.question_id ?? undefined,

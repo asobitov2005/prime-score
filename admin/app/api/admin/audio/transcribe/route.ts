@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ detail: "Invalid JSON payload." }, { status: 400 });
   }
 
-  const { controller, timeoutId } = buildTimeoutSignal(5 * 60 * 1000);
+  const { controller, timeoutId } = buildTimeoutSignal(155 * 1000);
 
   try {
     const response = await fetch(`${resolveBackendAdminApiBaseUrl()}/audio/transcribe`, {
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const detail =
       error instanceof Error && error.name === "AbortError"
-        ? "Transcript generation timed out."
+        ? "Transcript generation exceeded 155 seconds."
         : "Transcript proxy request failed.";
     return NextResponse.json({ detail }, { status: 502 });
   } finally {

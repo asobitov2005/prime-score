@@ -55,7 +55,7 @@ function romanNumeralFromIndex(index: number) {
 }
 
 export function shouldAutoLetterMatchingOptions(typeId: string) {
-  return typeId.includes("matching_features");
+  return typeId.includes("matching_features") || typeId.includes("listening_matching");
 }
 
 export function shouldAutoRomanMatchingOptions(typeId: string) {

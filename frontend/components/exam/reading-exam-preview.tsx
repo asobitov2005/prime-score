@@ -8,11 +8,13 @@ import {
   type ListeningTranscriptQuestionLocation as PreviewTranscriptQuestionLocation,
   type ListeningTranscriptSegment as PreviewTranscriptSegment,
 } from "@/components/exam/listening-transcript-panel";
+import { ListeningWaveformPlayer } from "@/components/exam/listening-waveform-player";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
 import {
+  formatMatchingAnswerForReview,
   getMatchingOptionViewModel,
   normalizeMatchingAnswerValue,
   shouldAutoLetterMatchingOptions,
@@ -22,7 +24,7 @@ import { cn } from "@/lib/utils";
 import type { QuestionType } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
 
-type PreviewMode = "practice" | "exam";
+type PreviewMode = "practice" | "exam" | "review";
 type PreviewDialog = "submit" | "leave" | null;
 type TextHighlight = { id: string; start: number; end: number };
 type PreviewUiState = {
@@ -48,6 +50,7 @@ interface PreviewParagraph {
   sectionPreviewLabel?: string;
   sectionIntro?: string;
   sectionTitle?: string;
+  sectionSubtitle?: string;
   sectionLabel?: string;
   sectionAudioUrl?: string;
   sectionAudioDurationSeconds?: number;
@@ -73,6 +76,7 @@ interface PreviewGroup {
   type: QuestionType | "tfng" | "mcq" | "gap";
   sectionId?: string;
   sectionTitle?: string;
+  sectionSubtitle?: string;
   sectionLabel?: string;
   sectionAudioUrl?: string;
   sectionAudioDurationSeconds?: number;
@@ -90,6 +94,7 @@ interface PreviewSection {
   id: string;
   label: string;
   title?: string;
+  subtitle?: string;
   previewLabel?: string;
   audioUrl?: string;
   audioDurationSeconds?: number;
@@ -114,6 +119,13 @@ export interface ReadingExamPreviewData {
   initialTextHighlights?: Record<string, TextHighlight[]>;
   initialTimeSpentSeconds?: number;
   initialUiState?: PreviewUiState;
+  reviewItems?: Record<string, {
+    answerValue?: string | null;
+    isCorrect?: boolean | null;
+    correctAnswers: string[];
+    options?: string[];
+    questionType?: string;
+  }>;
 }
 
 const PASSAGE_PARAGRAPHS: PreviewParagraph[] = [
@@ -342,6 +354,10 @@ function isWordBankCompletion(type: PreviewQuestion["type"]) {
   return type.includes("summary_completion_wordbank");
 }
 
+function isPlanMapLabeling(type: PreviewQuestion["type"]) {
+  return type.includes("plan_map_labeling");
+}
+
 function paragraphLabelFromPrompt(prompt: string) {
   const match = prompt.trim().match(/paragraph\s+([a-z])/i);
   return match ? match[1].toUpperCase() : null;
@@ -349,7 +365,8 @@ function paragraphLabelFromPrompt(prompt: string) {
 
 function usesBracketCompletionLayout(type: PreviewGroup["type"]) {
   return (
-    type.includes("sentence_completion")
+    type.includes("form_completion")
+    || type.includes("sentence_completion")
     || type.includes("note_completion")
     || type.includes("table_completion")
     || type.includes("flowchart_completion")
@@ -406,9 +423,13 @@ function typedQuestionOptionLines(group: PreviewGroup, question: PreviewQuestion
       : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
   }
 
+  if (question.type.includes("plan_map_labeling")) {
+    return normalizeOptionList(group.sharedOptions ?? question.options ?? []);
+  }
+
   return group.secondaryBlock?.trim()
     ? splitOptionLines(group.secondaryBlock)
-    : normalizeOptionList(question.options ?? []);
+    : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
 }
 
 function typedOptionView(option: string, index: number, type: PreviewGroup["type"] | PreviewQuestion["type"]) {
@@ -611,6 +632,24 @@ function primaryQuestionDisplayLabel(question: PreviewQuestion) {
   return questionDisplaySlots(question)[0] ?? String(question.number);
 }
 
+function questionRangeLabelForGroup(group: PreviewGroup) {
+  const groupSlots = group.questions.flatMap((question) => questionDisplaySlots(question));
+  const startLabel = groupSlots[0] ?? String(group.questions[0]?.number ?? group.title);
+  const endLabel = groupSlots[groupSlots.length - 1] ?? String(group.questions[group.questions.length - 1]?.number ?? group.title);
+  return `Questions ${startLabel} - ${endLabel}`;
+}
+
+function shouldRenderCustomGroupTitle(group: PreviewGroup) {
+  const normalizedTitle = String(group.title ?? "").trim();
+  if (!normalizedTitle) {
+    return false;
+  }
+  if (/^Questions?\s+\d+/i.test(normalizedTitle)) {
+    return false;
+  }
+  return normalizedTitle !== questionRangeLabelForGroup(group);
+}
+
 function sectionKeyForParagraph(paragraph: PreviewParagraph) {
   return paragraph.sectionId ?? paragraph.sectionLabel ?? "section";
 }
@@ -671,7 +710,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [draggingHeading, setDraggingHeading] = useState<{ groupId: string; value: string; sourceQuestionId?: string } | null>(null);
   const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
   const [dragOverHeadingBankGroupId, setDragOverHeadingBankGroupId] = useState<string | null>(null);
-  const [draggingWordBank, setDraggingWordBank] = useState<{ groupId: string; value: string; sourceQuestionId?: string } | null>(null);
+  const [draggingWordBank, setDraggingWordBank] = useState<{
+    groupId: string;
+    value: string;
+    sourceQuestionId?: string;
+    previewLabel?: string;
+  } | null>(null);
   const [dragOverWordBankQuestionId, setDragOverWordBankQuestionId] = useState<string | null>(null);
   const [dragOverWordBankGroupId, setDragOverWordBankGroupId] = useState<string | null>(null);
   const [dragPreviewPosition, setDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
@@ -724,6 +768,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         id,
         label: fallbackLabel,
         title: undefined as string | undefined,
+        subtitle: undefined as string | undefined,
         previewLabel: undefined as string | undefined,
         audioUrl: undefined as string | undefined,
         audioDurationSeconds: undefined as number | undefined,
@@ -746,6 +791,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       }
       if (paragraph.sectionTitle && !section.title) {
         section.title = paragraph.sectionTitle;
+      }
+      if (paragraph.sectionSubtitle && !section.subtitle) {
+        section.subtitle = paragraph.sectionSubtitle;
       }
       if (paragraph.sectionPreviewLabel && !section.previewLabel) {
         section.previewLabel = paragraph.sectionPreviewLabel;
@@ -774,6 +822,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       if (group.sectionTitle && !section.title) {
         section.title = group.sectionTitle;
       }
+      if (group.sectionSubtitle && !section.subtitle) {
+        section.subtitle = group.sectionSubtitle;
+      }
       if (group.sectionAudioUrl && !section.audioUrl) {
         section.audioUrl = group.sectionAudioUrl;
       }
@@ -800,8 +851,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const currentQuestionGroups = currentSection?.questionGroups ?? examData.questionGroups;
   const currentQuestions = currentSection?.questions ?? allQuestions;
   const isListeningPreview = examData.testType === "listening";
+  const isReviewMode = mode === "review";
+  const isSinglePaneListeningMode = isListeningPreview && !isReviewMode;
   const currentTranscriptSegments = currentSection?.transcriptSegments ?? [];
   const currentTranscriptQuestionLocations = currentSection?.transcriptQuestionLocations ?? [];
+  const reviewItems = examData.reviewItems ?? {};
   const candidateName = hasMounted ? (storedCandidateName || "Guest Candidate") : "Guest Candidate";
   const [showListeningTranscript, setShowListeningTranscript] = useState(false);
   const [showTranscriptAnswerLocations, setShowTranscriptAnswerLocations] = useState(false);
@@ -886,11 +940,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       return () => window.clearInterval(timer);
     }
 
+    if (isReviewMode) {
+      return;
+    }
+
     const timer = window.setInterval(() => {
       setTimeLeft((current) => current + 1);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [isSubmitted, mode]);
+  }, [isReviewMode, isSubmitted, mode]);
 
   useEffect(() => {
     if (timeLeft === 0 && mode === "exam" && !isSubmitted) {
@@ -1060,7 +1118,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function writeAttemptBackup() {
-    if (!attemptBackupKey || typeof window === "undefined" || isSubmitted) {
+    if (!attemptBackupKey || typeof window === "undefined" || isSubmitted || isReviewMode) {
       return;
     }
 
@@ -1130,14 +1188,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }, [answers]);
 
   useEffect(() => {
-    if (!examData.attemptId || isSubmitted) {
+    if (!examData.attemptId || isSubmitted || isReviewMode) {
       return;
     }
     writeAttemptBackup();
-  }, [answers, examData.attemptId, isSubmitted, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timeLeft]);
+  }, [answers, examData.attemptId, isSubmitted, isReviewMode, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timeLeft]);
 
   useEffect(() => {
-    if (!examData.attemptId || isSubmitted) {
+    if (!examData.attemptId || isSubmitted || isReviewMode) {
       return;
     }
 
@@ -1147,10 +1205,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     window.addEventListener("pagehide", handlePageHide);
     return () => window.removeEventListener("pagehide", handlePageHide);
-  }, [examData.attemptId, isSubmitted, answers, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timeLeft]);
+  }, [examData.attemptId, isSubmitted, isReviewMode, answers, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timeLeft]);
 
   async function persistProgressNow() {
-    if (!examData.attemptId || isSubmitted) {
+    if (!examData.attemptId || isSubmitted || isReviewMode) {
       return;
     }
 
@@ -1181,7 +1239,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function queueProgressPersist(delay = 700) {
-    if (!examData.attemptId || isSubmitted) {
+    if (!examData.attemptId || isSubmitted || isReviewMode) {
       return;
     }
     setSyncState("saving");
@@ -1195,7 +1253,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   async function flushPendingAnswerSaves() {
-    if (!examData.attemptId) {
+    if (!examData.attemptId || isReviewMode) {
       return;
     }
 
@@ -1246,14 +1304,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   useEffect(() => {
-    if (!examData.attemptId || isSubmitted) {
+    if (!examData.attemptId || isSubmitted || isReviewMode) {
       return;
     }
     queueProgressPersist(700);
-  }, [activeQuestionId, examData.attemptId, fontScale, isSubmitted, splitRatio, textHighlights, theme]);
+  }, [activeQuestionId, examData.attemptId, fontScale, isSubmitted, isReviewMode, splitRatio, textHighlights, theme]);
 
   useEffect(() => {
-    if (!examData.attemptId || isSubmitted) {
+    if (!examData.attemptId || isSubmitted || isReviewMode) {
       return;
     }
 
@@ -1264,7 +1322,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     return () => {
       window.clearInterval(timer);
     };
-  }, [examData.attemptId, isSubmitted]);
+  }, [examData.attemptId, isSubmitted, isReviewMode]);
 
   useEffect(() => {
     return () => {
@@ -1285,7 +1343,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function handleSubmit() {
-    if (isSubmitted) return;
+    if (isSubmitted || isReviewMode) return;
     if (unansweredCount === 0) {
       void submitAttempt();
       return;
@@ -1294,6 +1352,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function persistAnswer(questionId: string, value: string) {
+    if (isReviewMode) {
+      return;
+    }
+
     setAnswers((current) => {
       const next = { ...current, [questionId]: value };
       latestAnswersRef.current = next;
@@ -1463,6 +1525,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }, [isDraggingSplit]);
 
   useEffect(() => {
+    if (isReviewMode) {
+      allowLeaveRef.current = true;
+      return;
+    }
+
     if (isSubmitted) {
       allowLeaveRef.current = true;
       return;
@@ -1498,7 +1565,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isSubmitted]);
+  }, [isReviewMode, isSubmitted]);
 
   async function confirmLeave() {
     allowLeaveRef.current = true;
@@ -1783,7 +1850,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   function beginWordBankPointerDrag(
     event: ReactPointerEvent<HTMLElement>,
-    payload: { groupId: string; value: string; sourceQuestionId?: string }
+    payload: { groupId: string; value: string; sourceQuestionId?: string; previewLabel?: string }
   ) {
     if (event.button !== 0) {
       return;
@@ -1807,7 +1874,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         }
 
         state.dragging = true;
-        setDraggingWordBank({ groupId: state.groupId, value: state.value, sourceQuestionId: state.sourceQuestionId });
+        setDraggingWordBank({
+          groupId: state.groupId,
+          value: state.value,
+          sourceQuestionId: state.sourceQuestionId,
+          previewLabel: payload.previewLabel,
+        });
         setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
         document.body.style.cursor = "grabbing";
         document.body.style.userSelect = "none";
@@ -1975,7 +2047,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       rows.push(
         <span key={`${blockKey}-row-${index}`}>
           {bulletLineIndexes.has(index) ? (
-            <span className="my-0.5 inline-flex max-w-full items-start gap-2 align-top">
+            <span className="my-0.5 ml-4 inline-flex max-w-full items-start gap-2 align-top">
               <span className="mt-[0.55em] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
               <span className="min-w-0 flex-1">{lineContent}</span>
             </span>
@@ -2065,23 +2137,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             .filter((entry): entry is { groupId: string; value: string; text: string } => Boolean(entry && entry.groupId === group.id))
             .map((entry) => normalizeHeadingComparableValue(entry.value)),
         ])
-      : group.type.includes("wordbank")
+      : group.type.includes("wordbank") || group.type.includes("listening_matching")
         ? new Set<string>(
-            group.questions
-              .map((question) => String(answers[question.id] ?? "").trim())
+          group.questions
+              .map((question) => {
+                const groupOptions = typedQuestionOptionLines(group, question, []);
+                return normalizeMatchingAnswerValue(String(answers[question.id] ?? "").trim(), groupOptions, question.type);
+              })
               .filter(Boolean)
               .map((value) => normalizeHeadingComparableValue(value))
           )
         : new Set<string>();
 
-    const bankOptions = group.type.includes("matching_headings") || group.type.includes("wordbank")
+    const isWordBankLikeGroup = group.type.includes("wordbank") || group.type.includes("listening_matching");
+    const bankOptions = group.type.includes("matching_headings") || isWordBankLikeGroup
       ? baseOptionEntries.filter((entry) => {
-          const value = normalizeHeadingComparableValue(group.type.includes("wordbank") ? (entry.optionView.text || entry.optionView.label || entry.option) : entry.optionView.value);
+          const value = normalizeHeadingComparableValue(
+            isWordBankLikeGroup
+              ? entry.optionView.value
+              : entry.optionView.value
+          );
           return !selectedValues.has(value);
         })
       : baseOptionEntries;
 
-    if (bankOptions.length === 0) {
+    if (bankOptions.length === 0 && !isWordBankLikeGroup) {
       return null;
     }
 
@@ -2090,25 +2170,29 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     return (
       <div
         data-heading-bank-group-id={group.type.includes("matching_headings") ? group.id : undefined}
-        data-wordbank-bank-group-id={group.type.includes("wordbank") ? group.id : undefined}
+        data-wordbank-bank-group-id={isWordBankLikeGroup ? group.id : undefined}
         className={cn(
           "max-w-[34rem] p-1 transition",
           (dragOverHeadingBankGroupId === group.id || dragOverWordBankGroupId === group.id) && isBankDropReady && "rounded-xl bg-primary/5"
         )}
       >
-        <p
-          className={cn(
-            "mb-3 font-black uppercase tracking-[0.18em]",
-            group.type.includes("matching_headings")
-              ? "text-[13px] text-foreground"
-              : "text-[10px] text-foreground/80"
-          )}
-        >
-          {group.type.includes("matching_headings") ? "List of Headings" : "Options"}
-        </p>
+        {!group.type.includes("listening_matching") ? (
+          <p
+            className={cn(
+              "mb-3 font-black uppercase tracking-[0.18em]",
+              group.type.includes("matching_headings")
+                ? "text-[13px] text-foreground"
+                : "text-[10px] text-foreground/80"
+            )}
+          >
+            {group.type.includes("matching_headings") ? "List of Headings" : "Options"}
+          </p>
+        ) : null}
         <div className={cn(
           group.type.includes("wordbank")
             ? "flex flex-wrap gap-2"
+            : group.type.includes("listening_matching")
+              ? "space-y-2"
             : "space-y-2"
         )}>
           {bankOptions.map((entry) => {
@@ -2118,7 +2202,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             const hasPrefix = !group.type.includes("matching_headings")
               && (optionView.hasExplicitPrefix || shouldAutoLetterMatchingOptions(group.type));
             const optionBlockKey = `option-bank-${group.id}-${value}-${text}`;
-            const comparableWordBankValue = entry.optionView.text || entry.optionView.label || option;
             const isDraggingOption = group.type.includes("matching_headings")
               ? (
                   draggingHeading?.groupId === group.id &&
@@ -2126,9 +2209,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   !draggingHeading?.sourceQuestionId
                 )
               : (
-                  group.type.includes("wordbank")
+                  isWordBankLikeGroup
                   && draggingWordBank?.groupId === group.id
-                  && normalizeHeadingComparableValue(draggingWordBank?.value) === normalizeHeadingComparableValue(comparableWordBankValue)
+                  && normalizeHeadingComparableValue(draggingWordBank?.value) === normalizeHeadingComparableValue(value)
                   && !draggingWordBank?.sourceQuestionId
                 );
 
@@ -2144,21 +2227,24 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     beginHeadingPointerDrag(event, { groupId: group.id, value });
                     return;
                   }
-                  if (group.type.includes("wordbank")) {
+                  if (isWordBankLikeGroup) {
                     beginWordBankPointerDrag(event, {
                       groupId: group.id,
-                      value: comparableWordBankValue,
+                      value: entry.optionView.value,
+                      previewLabel: entry.optionView.label,
                     });
                   }
                 }}
                 className={cn(
-                  "rounded-xl border px-3 py-2 transition-transform duration-150",
+                  "rounded-xl px-3 py-2 transition-transform duration-150",
                   group.type.includes("matching_headings")
-                    ? "border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
+                    ? "border border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
                     : group.type.includes("wordbank")
-                      ? "inline-flex w-auto max-w-full cursor-grab items-center border-border/55 bg-card active:cursor-grabbing hover:bg-muted/20"
-                      : "border-border/55 bg-card",
-                  hasPrefix ? "flex gap-3" : "block"
+                      ? "inline-flex w-auto max-w-full cursor-grab items-center border border-border/55 bg-card active:cursor-grabbing hover:bg-muted/20"
+                      : group.type.includes("listening_matching")
+                        ? "cursor-grab rounded-lg border border-border/90 bg-card px-3 py-1.5 shadow-sm active:cursor-grabbing dark:border-slate-500/80"
+                        : "border border-border/55 bg-card",
+                  hasPrefix ? "flex items-start gap-0.5" : "block"
                 )}
               >
               {hasPrefix ? (
@@ -2171,18 +2257,25 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         <GripVertical className="h-4 w-4" />
                       </span>
                     ) : null}
-                    <span className="w-8 shrink-0 text-[13px] font-black uppercase tracking-[0.12em] text-foreground/85">
-                      {value}
-                    </span>
                     <span
                       ref={(node) => {
                         textBlockRefs.current[optionBlockKey] = node;
                       }}
                       data-highlight-text
                       onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
-                      className="select-text flex-1 text-[16px] font-bold leading-6 text-foreground"
+                      className={cn(
+                        "select-text flex-1 text-[16px] leading-6 text-foreground",
+                        group.type.includes("listening_matching") && "min-w-0 leading-5"
+                      )}
                     >
-                      {renderHighlightedText(optionBlockKey, text)}
+                      {group.type.includes("listening_matching") ? (
+                        <>
+                          <span className="font-black">{value}.</span>{" "}
+                          <span className="font-normal">{renderHighlightedText(optionBlockKey, text)}</span>
+                        </>
+                      ) : (
+                        renderHighlightedText(optionBlockKey, `${value}. ${text}`)
+                      )}
                     </span>
                   </>
                 ) : (
@@ -2213,27 +2306,27 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               </div>
             );
           })}
+          {bankOptions.length === 0 && isWordBankLikeGroup ? (
+            <div className="rounded-xl border border-dashed border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground">
+              All options are in use
+            </div>
+          ) : null}
         </div>
       </div>
     );
   }
 
   function renderDiagramBlock(group: PreviewGroup) {
-    if (!group.type.includes("diagram") || !group.diagramImageUrl) {
+    if ((!group.type.includes("diagram") && !group.type.includes("plan_map_labeling")) || !group.diagramImageUrl) {
       return null;
     }
 
     return (
       <div className="p-1">
-        {group.diagramTitle ? (
-          <p className="mb-4 text-center text-[17px] font-bold tracking-tight text-foreground">
-            {renderFormattedText(group.diagramTitle, `diagram-title-${group.id}`)}
-          </p>
-        ) : null}
         <div className="overflow-hidden rounded-xl p-2">
           <img
             src={group.diagramImageUrl}
-            alt={group.diagramTitle || group.title}
+            alt={group.title}
             className="max-h-[340px] w-full object-contain"
           />
         </div>
@@ -2340,11 +2433,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     const isWordBankGroup = group.type.includes("wordbank");
     return (
       <div className="px-2 py-2">
-        {group.title ? (
-          <p className="mb-4 text-center text-[17px] font-bold tracking-tight text-foreground">
-            {renderFormattedText(group.title, `completion-title-${group.id}`)}
-          </p>
-        ) : null}
         <div
           className="whitespace-pre-wrap font-sans text-foreground"
           style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
@@ -2428,6 +2516,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function renderQuestionControl(question: PreviewQuestion, group: PreviewGroup) {
+    const reviewItem = isReviewMode ? reviewItems[question.id] : undefined;
+    const formattedReviewCorrectAnswer = reviewItem
+      ? (
+          isMatching(question.type) || isWordBankCompletion(question.type)
+            ? reviewItem.correctAnswers.map((answer) => formatMatchingAnswerForReview(answer, typedQuestionOptionLines(group, question, []), question.type)).join(", ")
+            : reviewItem.correctAnswers.join(", ")
+        )
+      : "";
+
     if (isTfng(question.type) || isYnng(question.type)) {
       const options = isTfng(question.type)
         ? ["TRUE", "FALSE", "NOT GIVEN"]
@@ -2437,6 +2534,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         <div className="space-y-0">
           {options.map((option) => {
             const selected = answers[question.id] === option;
+            const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(option));
+            const isIncorrectSelected = Boolean(reviewItem && selected && !isCorrectOption);
             return (
               <button
                 key={option}
@@ -2448,6 +2547,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 }}
                 className={cn(
                   "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+                  isReviewMode && isCorrectOption && "bg-emerald-500/10",
+                  isReviewMode && isIncorrectSelected && "bg-red-500/10",
                   selected
                     ? "bg-card"
                     : "bg-card hover:bg-muted/20"
@@ -2457,10 +2558,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   className={cn(
                     "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition",
                     theme === "light"
-                      ? selected
+                      ? isReviewMode && isCorrectOption
+                        ? "border-emerald-600 text-emerald-600"
+                        : isReviewMode && isIncorrectSelected
+                          ? "border-red-600 text-red-600"
+                          : selected
                         ? "border-slate-700 text-slate-700"
                         : "border-slate-400/85 text-transparent"
-                      : selected
+                      : isReviewMode && isCorrectOption
+                        ? "border-emerald-400 text-emerald-400"
+                        : isReviewMode && isIncorrectSelected
+                          ? "border-red-400 text-red-400"
+                          : selected
                         ? "border-slate-300 text-slate-300"
                         : "border-slate-500/85 text-transparent"
                   )}
@@ -2476,6 +2585,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               </button>
             );
           })}
+          {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
+            <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Correct answer: {formattedReviewCorrectAnswer}
+            </p>
+          ) : null}
         </div>
       );
     }
@@ -2486,6 +2600,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           {(question.options ?? []).map((option, index) => {
             const optionLetter = String.fromCharCode(65 + index);
             const checked = answers[question.id] === optionLetter;
+            const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(optionLetter));
+            const isIncorrectSelected = Boolean(reviewItem && checked && !isCorrectOption);
             return (
               <button
                 key={`${question.id}-${optionLetter}`}
@@ -2497,6 +2613,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 }}
                 className={cn(
                   "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+                  isReviewMode && isCorrectOption && "bg-emerald-500/10",
+                  isReviewMode && isIncorrectSelected && "bg-red-500/10",
                   checked
                     ? "bg-card shadow-none"
                     : "bg-card hover:bg-muted/20"
@@ -2506,7 +2624,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   className={cn(
                     "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition",
                     checked
-                      ? "border-slate-700 text-slate-700 dark:border-slate-300 dark:text-slate-300"
+                      ? isReviewMode && isCorrectOption
+                        ? "border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
+                        : isReviewMode && isIncorrectSelected
+                          ? "border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
+                          : "border-slate-700 text-slate-700 dark:border-slate-300 dark:text-slate-300"
                       : "border-slate-400/85 text-transparent dark:border-slate-500/85"
                   )}
                 >
@@ -2527,6 +2649,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               </button>
             );
           })}
+          {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
+            <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Correct answer: {formattedReviewCorrectAnswer}
+            </p>
+          ) : null}
         </div>
       );
     }
@@ -2544,6 +2671,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             const optionLetter = String.fromCharCode(65 + index);
             const checked = hasMultiValue(answers[question.id], optionLetter);
             const disabled = !checked && selectedCount >= maxSelections;
+            const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(optionLetter));
+            const isIncorrectSelected = Boolean(reviewItem && checked && !isCorrectOption);
 
             return (
               <button
@@ -2557,6 +2686,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 }}
                 className={cn(
                   "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+                  isReviewMode && isCorrectOption && "bg-emerald-500/10",
+                  isReviewMode && isIncorrectSelected && "bg-red-500/10",
                   disabled && "opacity-70",
                   checked
                     ? "bg-card shadow-none"
@@ -2569,7 +2700,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   className={cn(
                     "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border-2 transition",
                     checked
-                      ? "border-slate-950 bg-slate-950 ring-1 ring-slate-950/20 dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50/20"
+                      ? isReviewMode && isCorrectOption
+                        ? "border-emerald-600 bg-emerald-600 ring-1 ring-emerald-600/20 dark:border-emerald-400 dark:bg-emerald-400 dark:ring-emerald-400/20"
+                        : isReviewMode && isIncorrectSelected
+                          ? "border-red-600 bg-red-600 ring-1 ring-red-600/20 dark:border-red-400 dark:bg-red-400 dark:ring-red-400/20"
+                          : "border-slate-950 bg-slate-950 ring-1 ring-slate-950/20 dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50/20"
                       : disabled
                         ? "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70"
                         : "border-slate-500 bg-background dark:border-slate-400 dark:bg-transparent"
@@ -2592,6 +2727,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               </button>
             );
           })}
+          {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
+            <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Correct answer: {formattedReviewCorrectAnswer}
+            </p>
+          ) : null}
         </div>
       );
     }
@@ -2599,24 +2739,87 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     if (isMatching(question.type)) {
       const isMatchingInformation = question.type.includes("matching_information");
       const isMatchingFeatures = question.type.includes("matching_features");
-      const isInlineMatching = isMatchingInformation || isMatchingFeatures;
+      const isListeningMatching = question.type.includes("listening_matching");
+      const isInlineMatching = isMatchingInformation || isMatchingFeatures || isListeningMatching;
       const sectionKey = group.sectionId ?? group.sectionLabel ?? "section";
       const matchingInformationOptions = matchingInformationParagraphOptions.get(sectionKey) ?? [];
       const matchingOptions = typedQuestionOptionLines(group, question, matchingInformationOptions);
+      const matchingOptionViews = matchingOptions.map((option, index) => typedOptionView(option, index, question.type));
       const normalizedMatchingValue = normalizeMatchingAnswerValue(
         answers[question.id] ?? "",
         matchingOptions,
         question.type
       );
+      const activeMatchingOption = matchingOptionViews.find((option) => option.value === normalizedMatchingValue) ?? null;
+
+      if (matchingOptions.length === 0) {
+        return (
+          <div className={cn(
+            isMatchingInformation
+              ? "min-w-[150px] max-w-[180px] flex-none"
+              : isMatchingFeatures
+                ? "min-w-[150px] max-w-[210px] flex-none"
+                : isListeningMatching
+                  ? "min-w-[160px] max-w-[220px] flex-none"
+                  : "pl-12"
+          )}>
+            <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-3 py-2 text-xs font-semibold text-muted-foreground">
+              Options not configured
+            </div>
+          </div>
+        );
+      }
+
+      if (isListeningMatching) {
+        return (
+          <div className="min-w-[132px] max-w-[168px] flex-none space-y-1">
+            <button
+              type="button"
+              data-question-anchor={question.id}
+              data-wordbank-drop-question-id={question.id}
+              data-wordbank-drop-group-id={group.id}
+              onClick={() => setActiveQuestionId(question.id)}
+              onPointerDown={(event) => {
+                if (!activeMatchingOption) {
+                  return;
+                }
+                beginWordBankPointerDrag(event, {
+                  groupId: group.id,
+                  value: activeMatchingOption.value,
+                  sourceQuestionId: question.id,
+                  previewLabel: activeMatchingOption.label,
+                });
+              }}
+              className={cn(
+                "flex h-8 w-full items-center rounded-xl border-2 border-dashed border-slate-400/90 bg-card px-3 text-left text-sm font-semibold text-foreground shadow-none transition dark:border-slate-400/85",
+                dragOverWordBankQuestionId === question.id && "border-primary/80 bg-primary/10",
+                isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500/90 bg-emerald-500/10 dark:border-emerald-400/85",
+                isReviewMode && reviewItem?.isCorrect === false && "border-red-500/90 bg-red-500/10 dark:border-red-400/85",
+                activeMatchingOption ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+                activeQuestionId === question.id && activeInputClass
+              )}
+            >
+              <span className={cn("truncate", !activeMatchingOption && "opacity-0")}>
+                {activeMatchingOption ? activeMatchingOption.label : "\u00A0"}
+              </span>
+            </button>
+            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+          </div>
+        );
+      }
 
       return (
-        <div className={cn(
-          isMatchingInformation
-            ? "min-w-[92px] max-w-[126px] flex-none"
-            : isMatchingFeatures
-              ? "min-w-[150px] max-w-[210px] flex-none"
-              : "pl-12"
-        )}>
+          <div className={cn(
+            isMatchingInformation
+              ? "min-w-[92px] max-w-[126px] flex-none"
+              : isMatchingFeatures
+                ? "min-w-[150px] max-w-[210px] flex-none"
+                : "pl-12"
+          )}>
           <div className={cn(
             "relative",
             isMatchingInformation
@@ -2671,13 +2874,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
 
       return (
-        <div className="pl-12">
+        <div className="pl-12 space-y-1">
           <div className="relative max-w-md">
             <select
               value={answers[question.id] ?? ""}
               onChange={(event) => persistAnswer(question.id, event.target.value)}
               className={cn(
                 "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+                isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
                 theme === "light"
                   ? "focus:border-[#2f436f]"
                   : "focus:border-slate-400"
@@ -2695,37 +2900,108 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
+          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Correct answer: {formattedReviewCorrectAnswer}
+            </p>
+          ) : null}
         </div>
       );
     }
 
+    if (isPlanMapLabeling(question.type)) {
+      const mapOptions = typedQuestionOptionLines(group, question, []);
+      const normalizedMapValue = normalizeMatchingAnswerValue(
+        answers[question.id] ?? "",
+        mapOptions,
+        question.type
+      );
+
+      if (mapOptions.length > 0) {
+        return (
+          <div className="pl-12 space-y-1">
+            <div className="relative max-w-[220px]">
+              <select
+                value={normalizedMapValue}
+                onChange={(event) => persistAnswer(question.id, event.target.value)}
+                className={cn(
+                  "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                  isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+                  isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
+                  theme === "light"
+                    ? "focus:border-[#2f436f]"
+                    : "focus:border-slate-400"
+                )}
+              >
+                <option value="">Select map label</option>
+                {mapOptions.map((option, index) => {
+                  const optionView = typedOptionView(option, index, question.type);
+                  return (
+                    <option key={`${question.id}-map-${optionView.value}`} value={optionView.value}>
+                      {optionView.value}
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
+            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                Correct answer: {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+          </div>
+        );
+      }
+    }
+
     if (isCompletion(question.type)) {
       return (
-        <div className="pl-12">
+        <div className="pl-12 space-y-1">
           <Input
             value={answers[question.id] ?? ""}
             onFocus={() => setActiveQuestionId(question.id)}
             onChange={(event) => persistAnswer(question.id, event.target.value)}
             placeholder="Type your answer"
-            className={cn("h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none", inputFocusClass)}
+            className={cn(
+              "h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none",
+              isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+              isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
+              inputFocusClass
+            )}
             autoComplete="off"
             spellCheck="false"
           />
+          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Correct answer: {formattedReviewCorrectAnswer}
+            </p>
+          ) : null}
         </div>
       );
     }
 
     return (
-      <div className="pl-12">
+      <div className="pl-12 space-y-1">
         <Input
           value={answers[question.id] ?? ""}
           onFocus={() => setActiveQuestionId(question.id)}
           onChange={(event) => persistAnswer(question.id, event.target.value)}
           placeholder="Type your answer"
-          className={cn("h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none", inputFocusClass)}
+          className={cn(
+            "h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none",
+            isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+            isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
+            inputFocusClass
+          )}
           autoComplete="off"
           spellCheck="false"
         />
+        {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            Correct answer: {formattedReviewCorrectAnswer}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -2754,7 +3030,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               if (draggingWordBank) {
                 return (
                   <span className="text-[15px] font-semibold leading-6 text-foreground">
-                    {draggingWordBank.value}
+                    {draggingWordBank.previewLabel ?? draggingWordBank.value}
                   </span>
                 );
               }
@@ -2898,7 +3174,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       ) : null}
 
       <header className="sticky top-0 z-40 border-b border-border/80 bg-background/95 text-foreground shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-        <div className="mx-auto grid min-h-[68px] max-w-[1800px] grid-cols-1 gap-3 px-4 py-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-6">
+        <div className={cn(
+          "mx-auto grid min-h-[68px] max-w-[1800px] grid-cols-1 gap-3 px-4 py-3 lg:items-center lg:px-6",
+          isSinglePaneListeningMode
+            ? "lg:grid-cols-[auto_minmax(0,1fr)_auto]"
+            : "lg:grid-cols-[1fr_auto_1fr]"
+        )}>
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -2975,23 +3256,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           </div>
 
           <div className="flex items-center justify-center">
-            <div
-              className={cn(
-                "px-2 text-center transition-all",
-                isLastMinute && "animate-[pulse_2.4s_ease-in-out_infinite]"
-              )}
-            >
-              <p
+            {isSinglePaneListeningMode && currentSection?.audioUrl ? (
+              <ListeningWaveformPlayer
+                audioRef={listeningAudioRef}
+                src={currentSection.audioUrl}
+                className="w-full max-w-[44rem]"
+              />
+            ) : (
+              <div
                 className={cn(
-                  "text-[15px] font-bold leading-none",
-                  isLastFiveMinutes
-                    ? "font-mono tracking-[0.18em] text-red-400 dark:text-red-300"
-                    : "tracking-[0.04em] text-foreground"
+                  "px-2 text-center transition-all",
+                  isLastMinute && "animate-[pulse_2.4s_ease-in-out_infinite]"
                 )}
               >
-                {timerDisplay}
-              </p>
-            </div>
+                <p
+                  className={cn(
+                    "text-[15px] font-bold leading-none",
+                    isLastFiveMinutes
+                      ? "font-mono tracking-[0.18em] text-red-400 dark:text-red-300"
+                      : "tracking-[0.04em] text-foreground"
+                  )}
+                >
+                  {timerDisplay}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
@@ -3036,20 +3325,22 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitted || isSubmitting}
-              className={cn(
-                "h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                theme === "dark"
-                  ? "border border-slate-400 bg-slate-300 text-slate-950 hover:bg-slate-200"
-                  : "border border-border bg-muted/45 text-slate-700 hover:bg-muted/70"
-              )}
-            >
-              {isSubmitted ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <SendHorizontal className="mr-1.5 h-3.5 w-3.5" />}
-              {isSubmitting ? "Submitting" : isSubmitted ? "Submitted" : "Submit"}
-            </Button>
+            {!isReviewMode ? (
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitted || isSubmitting}
+                className={cn(
+                  "h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                  theme === "dark"
+                    ? "border border-slate-400 bg-slate-300 text-slate-950 hover:bg-slate-200"
+                    : "border border-border bg-muted/45 text-slate-700 hover:bg-muted/70"
+                )}
+              >
+                {isSubmitted ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <SendHorizontal className="mr-1.5 h-3.5 w-3.5" />}
+                {isSubmitting ? "Submitting" : isSubmitted ? "Submitted" : "Submit"}
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -3059,6 +3350,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         style={layoutStyle}
         className="relative mx-auto flex max-w-[1800px] flex-col lg:h-[calc(100vh-68px-64px)] lg:flex-row"
       >
+        {!isSinglePaneListeningMode ? (
         <section
           className={cn(
             "border-b border-border/70 lg:w-[var(--reading-pane)] lg:flex-none lg:border-b-0 lg:border-r lg:border-border/80",
@@ -3084,7 +3376,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             <article className="space-y-5">
               {currentSection?.audioUrl ? (
                 <div className="rounded-[1.4rem] border border-border/75 bg-card/70 p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.55)]">
-                  {isListeningPreview && mode === "practice" ? (
+                  {isListeningPreview && isReviewMode ? (
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <Button
                         type="button"
@@ -3113,7 +3405,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   ) : null}
                   <audio
                     ref={listeningAudioRef}
-                    key={`${currentSection.id}-${currentSection.audioUrl}`}
                     controls
                     preload="metadata"
                     controlsList="nodownload noplaybackrate"
@@ -3183,23 +3474,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     </p>
                   </div>
                 );
-              }) : isListeningPreview ? (
-                <div className="rounded-[1.4rem] border border-dashed border-border/80 bg-card/30 px-5 py-6 text-center">
-                  <p className="text-[10px] font-black uppercase tracking-[0.26em] text-muted-foreground">
-                    Transcript
-                  </p>
-                  <p className="mt-2 text-sm font-medium text-muted-foreground">
-                    Transcript was not attached to this listening section.
-                  </p>
-                </div>
-              ) : null}
+              }) : null}
             </article>
           </div>
         </section>
+        ) : null}
 
         <section
           className={cn(
-            "lg:w-[var(--question-pane)] lg:flex-none",
+            isSinglePaneListeningMode || (isReviewMode && isListeningPreview) ? "lg:w-full lg:flex-1" : "lg:w-[var(--question-pane)] lg:flex-none",
             theme === "light" ? "bg-[#FBFCFD]" : "bg-muted/15"
           )}
         >
@@ -3209,19 +3492,55 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             style={{ scrollbarGutter: "stable" }}
           >
             <div className="space-y-8">
-              {currentQuestionGroups.map((group) => (
+              {isSinglePaneListeningMode ? (
+                <div className="space-y-4">
+                  {isAttemptPreview ? null : (
+                    <div className="space-y-2">
+                      <h1 className="text-3xl font-black tracking-tight text-foreground">{examData.title}</h1>
+                      <p className="max-w-3xl text-sm font-medium text-muted-foreground">
+                        {examData.subtitle}
+                      </p>
+                    </div>
+                  )}
+                  {currentSection?.previewLabel ? (
+                    <div className="space-y-2 rounded-2xl border border-border/75 bg-card/55 px-4 py-3">
+                      <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                        {currentSection.previewLabel}
+                      </h2>
+                      {currentSection?.label ? (
+                        <p className="border-l-2 border-primary/70 pl-3 text-sm font-medium leading-6 text-foreground">
+                          {(() => {
+                            const sectionQuestionNumbers = currentSection?.questions.map((question) => question.number) ?? [];
+                            const sectionQuestionStart = sectionQuestionNumbers.length > 0 ? Math.min(...sectionQuestionNumbers) : null;
+                            const sectionQuestionEnd = sectionQuestionNumbers.length > 0 ? Math.max(...sectionQuestionNumbers) : null;
+                            return sectionQuestionStart !== null && sectionQuestionEnd !== null
+                              ? `${currentSection.label}. Questions ${sectionQuestionStart}-${sectionQuestionEnd}.`
+                              : `${currentSection.label}.`;
+                          })()}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {isListeningPreview && showListeningTranscript && currentTranscriptSegments.length > 0 ? (
+                    <ListeningTranscriptPanel
+                      audioRef={listeningAudioRef}
+                      segments={currentTranscriptSegments}
+                      questionLocations={currentTranscriptQuestionLocations}
+                      showAnswerLocations={showTranscriptAnswerLocations}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              {currentQuestionGroups.map((group, groupIndex) => (
                 <div key={group.id} className="rounded-none border-0 bg-transparent p-0 shadow-none">
-                  <div className="px-0 py-0">
-                    {(() => {
-                      const groupSlots = group.questions.flatMap((question) => questionDisplaySlots(question));
-                      const startLabel = groupSlots[0] ?? String(group.questions[0]?.number ?? group.title);
-                      const endLabel = groupSlots[groupSlots.length - 1] ?? String(group.questions[group.questions.length - 1]?.number ?? group.title);
-                      return (
-                    <h3 className="text-base font-black tracking-tight text-foreground">
-                      Questions {startLabel} - {endLabel}
-                    </h3>
-                      );
-                    })()}
+                  {(() => {
+                    const isListeningMatchingGroup = group.type.includes("listening_matching");
+                    return (
+                      <>
+                  <div className="border-l-2 border-primary/70 pl-3">
+                    <p className="text-base font-black tracking-tight text-foreground">
+                      {questionRangeLabelForGroup(group)}
+                    </p>
                     <div
                       ref={(node) => {
                         textBlockRefs.current[`group-instruction-${group.id}`] = node;
@@ -3235,9 +3554,23 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     </div>
                   </div>
 
-                  <div className="space-y-4 px-0 py-2">
+                  <div className={cn(
+                    "px-0 py-2",
+                    isListeningMatchingGroup ? "flex items-start gap-2" : "space-y-4"
+                  )}>
+                    <div className={cn(
+                      "min-w-0",
+                      isListeningMatchingGroup ? "w-[28rem] shrink-0 space-y-4" : "space-y-4"
+                    )}>
+                    {shouldRenderCustomGroupTitle(group) ? (
+                      <div className="px-2">
+                        <h2 className="text-center text-[17px] font-bold tracking-tight text-foreground md:text-[19px]">
+                          {renderFormattedText(group.title, `group-title-${group.id}`)}
+                        </h2>
+                      </div>
+                    ) : null}
                     {renderDiagramBlock(group)}
-                    {renderOptionBank(group)}
+                    {!isListeningMatchingGroup ? renderOptionBank(group) : null}
 
                     {usesBracketCompletionLayout(group.type) && group.questionBlock?.trim()
                       ? renderInlineCompletionGroup(group)
@@ -3246,7 +3579,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                           const isBinaryQuestion = isTfng(question.type) || isYnng(question.type);
                           const isMatchingInformationQuestion = question.type.includes("matching_information");
                           const isMatchingFeaturesQuestion = question.type.includes("matching_features");
-                          const isInlineMatchingQuestion = isMatchingInformationQuestion || isMatchingFeaturesQuestion;
+                          const isListeningMatchingQuestion = question.type.includes("listening_matching");
+                          const isInlineMatchingQuestion =
+                            isMatchingInformationQuestion || isMatchingFeaturesQuestion || isListeningMatchingQuestion;
                           const inlineQuestionLabel = question.label ?? String(question.number);
                           return (
                           <div
@@ -3259,8 +3594,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                               activeQuestionId === question.id && ""
                             )}
                           >
-                            <div className={cn("mb-2.5 flex items-start gap-3", isBinaryQuestion && "mb-1.5", isInlineMatchingQuestion && "mb-0 gap-1.5 items-start")}>
-                              <div className={cn("min-w-0 flex-1 space-y-1", isInlineMatchingQuestion && "flex flex-1 flex-wrap items-start gap-1.5 space-y-0", isMcqMultiple(question.type) && "space-y-0")}>
+                            <div className={cn(
+                              "mb-2.5 flex items-start gap-3",
+                              isBinaryQuestion && "mb-1.5",
+                              isInlineMatchingQuestion && "mb-0 gap-1 items-start",
+                              isListeningMatchingQuestion && "gap-4"
+                            )}>
+                              <div className={cn(
+                                "min-w-0 flex-1 space-y-1",
+                                isInlineMatchingQuestion && "flex flex-1 flex-wrap items-start gap-1 space-y-0",
+                                isListeningMatchingQuestion && "w-auto flex-none",
+                                isMcqMultiple(question.type) && "space-y-0"
+                              )}>
                                 <p
                                   ref={(node) => {
                                     textBlockRefs.current[`question-prompt-${question.id}`] = node;
@@ -3270,7 +3615,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                                   className={cn(
                                     "select-text font-sans text-foreground",
                                     isMatchingInformationQuestion && "min-w-[160px] flex-1",
-                                    isMatchingFeaturesQuestion && "min-w-[180px] flex-1"
+                                    isMatchingFeaturesQuestion && "min-w-[180px] flex-1",
+                                    isListeningMatchingQuestion && "w-[260px] max-w-[260px] flex-none"
                                   )}
                                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: isInlineMatchingQuestion ? 1.35 : 1.5 }}
                                 >
@@ -3300,32 +3646,43 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         );
                         })
                         : null}
+                    </div>
+                    {isListeningMatchingGroup ? (
+                      <div className="w-[14rem] shrink-0">
+                        {renderOptionBank(group)}
+                      </div>
+                    ) : null}
                   </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <div
-          className="pointer-events-none absolute inset-y-0 z-20 hidden lg:flex"
-          style={{ left: `calc(${splitRatio}% - 18px)` }}
-        >
-          <div className="relative flex w-9 items-center justify-center">
-            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/80" />
-            <button
-              type="button"
-              aria-label="Adjust split layout"
-              onPointerDown={startSplitDrag}
-              className={cn(
-                "pointer-events-auto relative flex h-8 w-8 cursor-ew-resize items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[0_10px_28px_-18px_rgba(15,23,42,0.65)] transition hover:bg-muted hover:text-foreground",
-                isDraggingSplit && "border-primary/40 bg-primary/10 text-primary"
-              )}
-            >
-              <MoveHorizontal className="h-4 w-4" />
-            </button>
+        {!isSinglePaneListeningMode ? (
+          <div
+            className="pointer-events-none absolute inset-y-0 z-20 hidden lg:flex"
+            style={{ left: `calc(${splitRatio}% - 18px)` }}
+          >
+            <div className="relative flex w-9 items-center justify-center">
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/80" />
+              <button
+                type="button"
+                aria-label="Adjust split layout"
+                onPointerDown={startSplitDrag}
+                className={cn(
+                  "pointer-events-auto relative flex h-8 w-8 cursor-ew-resize items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[0_10px_28px_-18px_rgba(15,23,42,0.65)] transition hover:bg-muted hover:text-foreground",
+                  isDraggingSplit && "border-primary/40 bg-primary/10 text-primary"
+                )}
+              >
+                <MoveHorizontal className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        ) : null}
       </main>
 
       <footer className="sticky bottom-0 z-30 border-t border-border/80 bg-background/95 backdrop-blur-xl">

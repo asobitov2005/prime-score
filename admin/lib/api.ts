@@ -51,6 +51,13 @@ function sanitizeListeningSectionContent(type: "reading" | "listening", content:
     .trim();
 }
 
+function resolveAdminQuestionType(typeId: string, sharedOptions: string[]) {
+  if (typeId === "listening_plan_map_labeling" && sharedOptions.length === 0) {
+    return "listening_plan_map_labeling_free_text";
+  }
+  return typeId;
+}
+
 function buildRequestHeaders(): Record<string, string> {
   const token = getClientAdminAccessToken();
   if (!token) {
@@ -358,6 +365,10 @@ type BackendAdminAudioTranscriptResponse = {
     start_sec?: number;
     end_sec?: number;
     text?: string;
+    confidence?: number;
+    drift_start_sec?: number;
+    drift_end_sec?: number;
+    needs_review?: boolean;
   }>;
   transcript_question_locations?: Array<{
     question_id?: string | null;
@@ -370,8 +381,31 @@ type BackendAdminAudioTranscriptResponse = {
   }>;
 };
 
+type BackendAdminAudioTranscriptJobCreateResponse = {
+  job_id: string;
+  status: string;
+};
+
+type BackendAdminAudioTranscriptJobRead = {
+  job_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  result?: BackendAdminAudioTranscriptResponse | null;
+  error?: string | null;
+};
+
 function mapTranscriptSegments(
-  segments: Array<{ id?: string; start_sec?: number; end_sec?: number; text?: string }> | undefined | null
+  segments: Array<{
+    id?: string;
+    start_sec?: number;
+    end_sec?: number;
+    text?: string;
+    confidence?: number;
+    drift_start_sec?: number;
+    drift_end_sec?: number;
+    needs_review?: boolean;
+  }> | undefined | null
 ): AdminTranscriptSegment[] {
   return (segments ?? [])
     .filter((segment) => typeof segment?.text === "string" && segment.text.trim().length > 0)
@@ -380,6 +414,10 @@ function mapTranscriptSegments(
       startSec: Math.max(0, Number(segment.start_sec ?? 0)),
       endSec: Math.max(0, Number(segment.end_sec ?? segment.start_sec ?? 0)),
       text: String(segment.text ?? "").trim(),
+      confidence: segment.confidence == null ? undefined : Number(segment.confidence),
+      driftStartSec: segment.drift_start_sec == null ? undefined : Number(segment.drift_start_sec),
+      driftEndSec: segment.drift_end_sec == null ? undefined : Number(segment.drift_end_sec),
+      needsReview: segment.needs_review == null ? undefined : Boolean(segment.needs_review),
     }));
 }
 
@@ -588,6 +626,9 @@ function buildParagraphPayloads(content: string, showLabels: boolean): BackendAd
 
 function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPayload {
   const resolvedQuestionType = (typeId: string): string => {
+    if (typeId === "listening_plan_map_labeling_free_text") {
+      return "listening_plan_map_labeling";
+    }
     if (typeId.includes("_")) {
       return typeId;
     }
@@ -677,11 +718,11 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
       type_id: resolvedQuestionType(group.typeId),
       question_start: group.questionStart,
       question_end: group.questionEnd,
-      shared_options: group.sharedOptions,
+      shared_options: group.typeId === "listening_plan_map_labeling_free_text" ? [] : group.sharedOptions,
       question_block: group.questionBlock,
       answer_block: group.answerBlock,
       secondary_block: group.secondaryBlock,
-      diagram_title: group.diagramTitle,
+      diagram_title: "",
       diagram_image_url: group.diagramImageUrl,
       questions: group.questions.map((question) => ({
         id: isUuidLike(question.id) ? question.id : undefined,
@@ -748,7 +789,7 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
       sectionId: group.section_id,
       title: group.title,
       instructions: group.instructions,
-      typeId: group.type_id,
+      typeId: resolveAdminQuestionType(group.type_id, group.shared_options),
       questionStart: group.question_start,
       questionEnd: group.question_end,
       sharedOptions: group.shared_options,
@@ -974,6 +1015,8 @@ export const adminApi = {
     sectionTitle?: string;
     transcript?: string;
     transcriptSegments?: AdminTranscriptSegment[];
+    onProgress?: (state: { value: number; label: string }) => void;
+    onJobId?: (jobId: string) => void;
     questions: Array<{
       questionId?: string;
       questionLabel: string;
@@ -985,35 +1028,89 @@ export const adminApi = {
     transcriptSegments: AdminTranscriptSegment[];
     transcriptQuestionLocations: AdminTranscriptQuestionLocation[];
   }> {
-    const response = await requestJson<BackendAdminAudioTranscriptResponse>("/audio/transcribe", {
+    const payload = {
+      audio_url: input.audioUrl,
+      audio_filename: input.audioFilename,
+      audio_content_type: input.audioContentType,
+      section_label: input.sectionLabel,
+      section_title: input.sectionTitle,
+      transcript: input.transcript,
+      transcript_segments: (input.transcriptSegments ?? []).map((segment) => ({
+        id: segment.id,
+        start_sec: segment.startSec,
+        end_sec: segment.endSec,
+        text: segment.text,
+      })),
+      questions: input.questions.map((question) => ({
+        question_id: question.questionId,
+        question_label: question.questionLabel,
+        question_prompt: question.questionPrompt,
+        accepted_answers: question.acceptedAnswers,
+      })),
+    };
+
+    const started = await requestJson<BackendAdminAudioTranscriptJobCreateResponse>("/audio/transcribe/jobs", {
       method: "POST",
-      body: JSON.stringify({
-        audio_url: input.audioUrl,
-        audio_filename: input.audioFilename,
-        audio_content_type: input.audioContentType,
-        section_label: input.sectionLabel,
-        section_title: input.sectionTitle,
-        transcript: input.transcript,
-        transcript_segments: (input.transcriptSegments ?? []).map((segment) => ({
-          id: segment.id,
-          start_sec: segment.startSec,
-          end_sec: segment.endSec,
-          text: segment.text,
-        })),
-        questions: input.questions.map((question) => ({
-          question_id: question.questionId,
-          question_label: question.questionLabel,
-          question_prompt: question.questionPrompt,
-          accepted_answers: question.acceptedAnswers,
-        })),
-      }),
+      body: JSON.stringify(payload),
     });
+    input.onJobId?.(started.job_id);
+    input.onProgress?.({ value: 8, label: "Queued for transcription" });
+
+    let response: BackendAdminAudioTranscriptResponse | null = null;
+    const maxPolls = 180;
+    for (let poll = 0; poll < maxPolls; poll += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const job = await requestJson<BackendAdminAudioTranscriptJobRead>(`/audio/transcribe/jobs/${started.job_id}`);
+      const progressValue = Math.min(94, 12 + poll * 2);
+      input.onProgress?.({
+        value: job.status === "queued" ? 10 : progressValue,
+        label:
+          job.status === "queued"
+            ? "Preparing audio..."
+            : job.status === "running"
+              ? "Generating transcript and timestamps..."
+              : job.status === "completed"
+                ? "Finalizing transcript..."
+                : "Processing transcript...",
+      });
+      if (job.status === "completed" && job.result) {
+        response = job.result;
+        break;
+      }
+      if (job.status === "failed") {
+        throw new Error(job.error?.trim() || "Transcript generation failed.");
+      }
+      if (job.status === "cancelled") {
+        throw new Error(job.error?.trim() || "Transcript generation cancelled.");
+      }
+    }
+
+    if (!response) {
+      const finalJob = await requestJson<BackendAdminAudioTranscriptJobRead>(`/audio/transcribe/jobs/${started.job_id}`);
+      if (finalJob.status === "completed" && finalJob.result) {
+        response = finalJob.result;
+      } else if (finalJob.status === "failed") {
+        throw new Error(finalJob.error?.trim() || "Transcript generation failed.");
+      } else if (finalJob.status === "cancelled") {
+        throw new Error(finalJob.error?.trim() || "Transcript generation cancelled.");
+      }
+    }
+
+    if (!response) {
+      throw new Error("Transcript generation is still running. Try again in a moment.");
+    }
+    input.onProgress?.({ value: 100, label: "Transcript ready" });
 
     return {
       transcript: response.transcript ?? "",
       transcriptSegments: mapTranscriptSegments(response.transcript_segments),
       transcriptQuestionLocations: mapTranscriptQuestionLocations(response.transcript_question_locations),
     };
+  },
+  async cancelListeningTranscriptJob(jobId: string): Promise<void> {
+    await requestJson<BackendAdminAudioTranscriptJobRead>(`/audio/transcribe/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
   },
   async listAiThreads(): Promise<AdminAiThreadSummary[]> {
     const response = await requestJson<BackendAdminAiThreadSummary[]>("/ai/threads");

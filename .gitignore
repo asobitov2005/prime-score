@@ -61,6 +61,7 @@ docker-compose.override.yml
 /clean_project.py
 
 # Runtime data — never commit
+.dev-pids/
 .codex-runlogs/
 /Pasted image*.png
 /Screenshot *.png

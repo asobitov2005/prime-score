@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app import models  # noqa: F401
 from app.services.admin_ai_agent import resume_pending_admin_ai_jobs
 
 

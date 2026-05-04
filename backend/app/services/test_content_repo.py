@@ -14,6 +14,7 @@ from app.core.enums import AccessType, TestMode, TestScope, TestStatus, TestType
 from app.core.security import hash_password
 from app.models.admin import Admin
 from app.models.enums import AdminRole
+from app.models.enums import AttemptStatus as ModelAttemptStatus
 from app.models.enums import AccessType as ModelAccessType
 from app.models.enums import QuestionType as ModelQuestionType
 from app.models.enums import TestFormat as ModelTestFormat
@@ -35,6 +36,7 @@ from app.services.fixtures import (
 )
 from app.services.object_storage import normalize_storage_asset_path
 from app.services.scoring import listening_exam_seconds, mc_multiple_question_weight
+from app.services.snapshots import freeze_test_snapshot
 from app.services.test_source import normalize_test_source_detail
 
 logger = logging.getLogger(__name__)
@@ -110,6 +112,41 @@ def _is_quick_fix_format_compatible(
         else {"full", "part_1", "part_2", "part_3", "part_4"}
     )
     return current_format in allowed_formats and requested_format in allowed_formats
+
+
+async def _refresh_in_progress_attempt_snapshots_for_test(
+    session: AsyncSession,
+    *,
+    test_id: UUID,
+) -> None:
+    attempts = list(
+        (
+            await session.scalars(
+                select(Attempt).where(
+                    Attempt.test_id == test_id,
+                    Attempt.status == ModelAttemptStatus.IN_PROGRESS,
+                )
+            )
+        ).all()
+    )
+    if not attempts:
+        return
+
+    for attempt in attempts:
+        snapshot = await build_test_snapshot_from_db(
+            session,
+            test_id=test_id,
+            scope=TestScope(attempt.scope.value),
+            mode=TestMode(attempt.mode.value),
+            section_id=attempt.section_id,
+        )
+        if snapshot is None:
+            continue
+
+        frozen_snapshot = freeze_test_snapshot(snapshot)
+        attempt.test_snapshot = frozen_snapshot
+        attempt.max_score = int(frozen_snapshot.get("total_questions", attempt.max_score or 0))
+        attempt.time_limit_seconds = int(frozen_snapshot.get("time_limit_seconds", attempt.time_limit_seconds or 0))
 
 
 def _strip_custom_test_suffix(value: str | None) -> str:
@@ -676,16 +713,23 @@ def _normalize_transcript_segments(raw_segments: object) -> list[dict[str, objec
         text = str(raw_segment.get("text") or "").strip()
         if not text:
             continue
-        start_sec = max(0, int(raw_segment.get("start_sec") or 0))
-        end_sec = max(start_sec, int(raw_segment.get("end_sec") or start_sec))
-        normalized.append(
-            {
-                "id": str(raw_segment.get("id") or f"segment-{index}"),
-                "start_sec": start_sec,
-                "end_sec": end_sec,
-                "text": text,
-            }
-        )
+        start_sec = max(0.0, float(raw_segment.get("start_sec") or 0))
+        end_sec = max(start_sec, float(raw_segment.get("end_sec") or start_sec))
+        item: dict[str, object] = {
+            "id": str(raw_segment.get("id") or f"segment-{index}"),
+            "start_sec": round(start_sec, 2),
+            "end_sec": round(end_sec, 2),
+            "text": text,
+        }
+        if raw_segment.get("confidence") is not None:
+            item["confidence"] = round(float(raw_segment.get("confidence") or 0), 4)
+        if raw_segment.get("drift_start_sec") is not None:
+            item["drift_start_sec"] = round(abs(float(raw_segment.get("drift_start_sec") or 0)), 2)
+        if raw_segment.get("drift_end_sec") is not None:
+            item["drift_end_sec"] = round(abs(float(raw_segment.get("drift_end_sec") or 0)), 2)
+        if raw_segment.get("needs_review") is not None:
+            item["needs_review"] = bool(raw_segment.get("needs_review"))
+        normalized.append(item)
     return normalized
 
 
@@ -699,15 +743,15 @@ def _normalize_transcript_question_locations(raw_locations: object) -> list[dict
         question_label = str(raw_location.get("question_label") or "").strip()
         if not question_label:
             continue
-        start_sec = max(0, int(raw_location.get("start_sec") or 0))
-        end_sec = max(start_sec, int(raw_location.get("end_sec") or start_sec))
+        start_sec = max(0.0, float(raw_location.get("start_sec") or 0))
+        end_sec = max(start_sec, float(raw_location.get("end_sec") or start_sec))
         normalized.append(
             {
                 "question_id": raw_location.get("question_id"),
                 "question_label": question_label,
                 "question_prompt": str(raw_location.get("question_prompt") or "").strip(),
-                "start_sec": start_sec,
-                "end_sec": end_sec,
+                "start_sec": round(start_sec, 2),
+                "end_sec": round(end_sec, 2),
                 "answer_text": str(raw_location.get("answer_text") or "").strip(),
                 "correct_answer": str(raw_location.get("correct_answer") or "").strip(),
             }
@@ -1218,6 +1262,7 @@ async def quick_fix_published_test_in_db(
                     )
                 )
 
+    await _refresh_in_progress_attempt_snapshots_for_test(session, test_id=test.id)
     await session.commit()
     fresh = await _load_full_test_for_write(session, test.id)
     if fresh is None:

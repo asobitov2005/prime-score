@@ -316,17 +316,21 @@ class AdminAudioTranscriptRequest(BaseModel):
 
 class AdminAudioTranscriptSegmentRead(BaseModel):
     id: str
-    start_sec: int
-    end_sec: int
+    start_sec: float
+    end_sec: float
     text: str
+    confidence: float | None = None
+    drift_start_sec: float | None = None
+    drift_end_sec: float | None = None
+    needs_review: bool | None = None
 
 
 class AdminAudioTranscriptQuestionLocationRead(BaseModel):
     question_id: str | None = None
     question_label: str
     question_prompt: str
-    start_sec: int
-    end_sec: int
+    start_sec: float
+    end_sec: float
     answer_text: str
     correct_answer: str
 
@@ -335,6 +339,20 @@ class AdminAudioTranscriptResponse(BaseModel):
     transcript: str
     transcript_segments: list[AdminAudioTranscriptSegmentRead] = Field(default_factory=list)
     transcript_question_locations: list[AdminAudioTranscriptQuestionLocationRead] = Field(default_factory=list)
+
+
+class AdminAudioTranscriptJobCreateResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class AdminAudioTranscriptJobRead(BaseModel):
+    job_id: str
+    status: str
+    created_at: str
+    updated_at: str
+    result: AdminAudioTranscriptResponse | None = None
+    error: str | None = None
 
 
 class AdminDraftQuestionWrite(BaseModel):

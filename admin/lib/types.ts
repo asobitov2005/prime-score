@@ -208,6 +208,10 @@ export interface AdminTranscriptSegment {
   startSec: number;
   endSec: number;
   text: string;
+  confidence?: number;
+  driftStartSec?: number;
+  driftEndSec?: number;
+  needsReview?: boolean;
 }
 
 export interface AdminTranscriptQuestionLocation {

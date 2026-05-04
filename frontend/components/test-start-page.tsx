@@ -18,17 +18,18 @@ interface TestStartPageProps {
 
 export function TestStartPage({ test }: TestStartPageProps) {
   const router = useRouter();
-  const [scope, setScope] = useState<TestScope>("full");
+  const isFullTest = test.format === "full";
+  const [scope, setScope] = useState<TestScope>(isFullTest ? "full" : "section");
   const [mode, setMode] = useState<AttemptMode>("practice");
   const [sectionId, setSectionId] = useState(test.sections[0]?.id ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedSection = test.sections.find((section) => section.id === sectionId) ?? test.sections[0];
   const isSectionMode = scope === "section";
+  const effectiveScope = isFullTest ? scope : "section";
+  const effectiveMode = effectiveScope === "section" ? "practice" : mode;
 
   async function startAttempt() {
-    const targetMode = isSectionMode ? "practice" : mode;
-
     try {
       setIsSubmitting(true);
       const response = await fetch("/api/attempts/start", {
@@ -38,9 +39,9 @@ export function TestStartPage({ test }: TestStartPageProps) {
         },
         body: JSON.stringify({
           testId: test.id,
-          scope,
-          sectionId: isSectionMode ? sectionId : undefined,
-          mode: targetMode,
+          scope: effectiveScope,
+          sectionId: effectiveScope === "section" ? sectionId : undefined,
+          mode: effectiveMode,
         }),
       });
 
@@ -51,8 +52,8 @@ export function TestStartPage({ test }: TestStartPageProps) {
       const result = (await response.json()) as { attemptId: string };
       const resumeToken = Date.now();
       const href = test.type === "reading"
-        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`
-        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${targetMode}&resume=${resumeToken}`;
+        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`
+        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`;
       emitNavigationStart(href);
       router.push(href);
     } finally {
@@ -105,7 +106,7 @@ export function TestStartPage({ test }: TestStartPageProps) {
             />
           </div>
 
-          {isSectionMode ? (
+          {isFullTest && isSectionMode ? (
             <div className="space-y-2">
               <label className="text-sm font-medium">Choose section</label>
               <Select value={sectionId} onChange={(event) => setSectionId(event.target.value)}>
@@ -143,7 +144,7 @@ export function TestStartPage({ test }: TestStartPageProps) {
             <p className="mt-2 text-sm font-medium">
               {isSectionMode ? selectedSection?.title ?? "Section" : `Full ${test.type} test`}
               {" • "}
-              {isSectionMode ? "Practice" : mode === "practice" ? "Practice" : "Exam"}
+              {effectiveScope === "section" ? "Practice" : mode === "practice" ? "Practice" : "Exam"}
             </p>
           </div>
 

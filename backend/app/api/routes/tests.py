@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,6 +17,89 @@ from app.services.runtime_store import start_attempt
 from app.services.test_content_repo import build_test_snapshot_from_db, get_test_from_db, list_tests_from_db
 
 router = APIRouter()
+
+_SECTION_FORMAT_RE = re.compile(r"^(?:passage|part)_(\d+)$", re.IGNORECASE)
+
+
+def _extract_section_number_from_format(test_format: str | None) -> int | None:
+    if not test_format:
+        return None
+    match = _SECTION_FORMAT_RE.match(test_format)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_section_id_from_snapshot(snapshot: dict[str, object] | None, test_format: str | None) -> UUID | None:
+    if not snapshot:
+        return None
+
+    raw_sections = snapshot.get("sections")
+    if not isinstance(raw_sections, list) or not raw_sections:
+        return None
+
+    target_section_number = _extract_section_number_from_format(test_format)
+    if target_section_number is not None:
+        for section in raw_sections:
+            if not isinstance(section, dict):
+                continue
+            try:
+                if int(section.get("section_number") or 0) == target_section_number:
+                    return UUID(str(section["section_id"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+
+    first_section = raw_sections[0]
+    if not isinstance(first_section, dict):
+        return None
+    try:
+        return UUID(str(first_section["section_id"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+async def _build_effective_snapshot(
+    session: AsyncSession,
+    *,
+    test_id: UUID,
+    test_format: str | None,
+    mode: TestMode,
+) -> tuple[dict[str, object] | None, TestScope, UUID | None]:
+    snapshot = await build_test_snapshot_from_db(
+        session,
+        test_id=test_id,
+        scope=TestScope.full,
+        mode=mode,
+    )
+    if snapshot is None:
+        snapshot = build_test_snapshot(test_id=test_id, scope=TestScope.full, mode=mode.value)
+
+    if not test_format or test_format == "full":
+        return snapshot, TestScope.full, None
+
+    section_id = _resolve_section_id_from_snapshot(snapshot, test_format)
+    if section_id is None:
+        return snapshot, TestScope.full, None
+
+    section_snapshot = await build_test_snapshot_from_db(
+        session,
+        test_id=test_id,
+        scope=TestScope.section,
+        mode=TestMode.practice,
+        section_id=section_id,
+    )
+    if section_snapshot is None:
+        section_snapshot = build_test_snapshot(
+            test_id=test_id,
+            scope=TestScope.section,
+            mode=TestMode.practice.value,
+            section_id=section_id,
+        )
+
+    return section_snapshot or snapshot, TestScope.section, section_id
 
 
 @router.get("", response_model=list[TestCatalogItemRead])
@@ -61,10 +145,10 @@ async def get_test(test_id: UUID, session: AsyncSession = Depends(get_db_session
     fixture: dict[str, object] | None = None
     try:
         fixture = await get_test_from_db(session, test_id)
-        snapshot = await build_test_snapshot_from_db(
+        snapshot, _, _ = await _build_effective_snapshot(
             session,
             test_id=test_id,
-            scope=TestScope.full,
+            test_format=str(fixture.get("format") or "full") if fixture else "full",
             mode=TestMode.practice,
         )
     except Exception:
@@ -76,7 +160,12 @@ async def get_test(test_id: UUID, session: AsyncSession = Depends(get_db_session
     if fixture is None and test_id != UUID("22222222-2222-2222-2222-222222222222"):
         fixture = get_test_fixture(test_id)
         if fixture is not None:
-            snapshot = build_test_snapshot(test_id=test_id, scope=TestScope.full, mode=TestMode.practice.value)
+            snapshot, _, _ = await _build_effective_snapshot(
+                session,
+                test_id=test_id,
+                test_format=str(fixture.get("format") or "full"),
+                mode=TestMode.practice,
+            )
 
     if fixture is None or snapshot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
@@ -96,15 +185,33 @@ async def start_test(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> TestStartResponse:
+    effective_scope = payload.scope
+    effective_section_id = payload.section_id
+    effective_mode = payload.mode
+
+    if payload.scope == TestScope.full:
+        test_detail = await get_test_from_db(session, test_id)
+        test_format = str(test_detail.get("format") or "full") if test_detail else None
+        if test_format and test_format != "full":
+            _, resolved_scope, resolved_section_id = await _build_effective_snapshot(
+                session,
+                test_id=test_id,
+                test_format=test_format,
+                mode=payload.mode,
+            )
+            effective_scope = resolved_scope
+            effective_section_id = resolved_section_id
+            effective_mode = TestMode.practice
+
     try:
         try:
             attempt = await start_attempt_in_db(
                 session,
                 principal=current_user,
                 test_id=test_id,
-                scope=payload.scope,
-                section_id=payload.section_id,
-                mode=payload.mode,
+                scope=effective_scope,
+                section_id=effective_section_id,
+                mode=effective_mode,
                 force_new=payload.force_new,
             )
         except Exception:
@@ -115,9 +222,9 @@ async def start_test(
             attempt = start_attempt(
                 user_id=current_user.id,
                 test_id=test_id,
-                scope=payload.scope,
-                section_id=payload.section_id,
-                mode=payload.mode,
+                scope=effective_scope,
+                section_id=effective_section_id,
+                mode=effective_mode,
             )
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.") from exc

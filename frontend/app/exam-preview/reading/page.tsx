@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ReadingExamPreview, type ReadingExamPreviewData } from "@/components/exam/reading-exam-preview";
-import { getBackendAttempt } from "@/lib/server-attempts";
+import { getBackendAttempt, getBackendAttemptReview } from "@/lib/server-attempts";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -214,6 +214,7 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
         sectionPreviewLabel: index === 0 ? sectionPreviewLabel : undefined,
         sectionIntro: index === 0 ? (sectionIntro ?? undefined) : undefined,
         sectionTitle: index === 0 ? (section.title ?? undefined) : undefined,
+        sectionSubtitle: index === 0 ? (section.subtitle ?? undefined) : undefined,
         sectionLabel: index === 0 ? resolvedSectionLabel : undefined,
       });
     });
@@ -235,6 +236,7 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
         type: group.question_type,
         sectionId: section.section_id,
         sectionTitle: section.title ?? undefined,
+        sectionSubtitle: section.subtitle ?? undefined,
         sectionLabel: resolvedSectionLabel,
         questionBlock: group.shared_content?.question_block ?? "",
         secondaryBlock: group.shared_content?.secondary_block ?? "",
@@ -254,6 +256,20 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
       });
     });
   });
+
+  const review = await getBackendAttemptReview(attemptId).catch(() => null);
+  const reviewItems = Object.fromEntries(
+    (review?.items ?? []).map((item) => [
+      item.question_id,
+      {
+        answerValue: item.answer_value ?? null,
+        isCorrect: item.is_correct ?? null,
+        correctAnswers: item.correct_answers ?? [],
+        options: item.options ?? [],
+        questionType: item.question_type,
+      },
+    ])
+  );
 
   return {
     attemptId,
@@ -275,11 +291,16 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
       fontScale: attempt.ui_state?.font_scale ?? undefined,
       activeQuestionId: attempt.active_question_id ?? undefined,
     },
+    reviewItems,
   };
 }
 
 export default async function ReadingExamPreviewPage({ searchParams }: ReadingExamPreviewPageProps) {
-  const mode = searchParams?.mode === "practice" ? "practice" : "exam";
+  const mode = searchParams?.mode === "practice"
+    ? "practice"
+    : searchParams?.mode === "review"
+      ? "review"
+      : "exam";
   const attemptId = searchParams?.attemptId;
 
   if (!attemptId) {

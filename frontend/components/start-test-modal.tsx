@@ -21,6 +21,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   const router = useRouter();
   const { isPremium } = useAuthStore();
   const isFullTest = !test.format || test.format === "full";
+  const defaultSectionId = test.sections[0]?.id;
   const [open, setOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,10 +72,13 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   }
 
   async function startTest(mode: "exam" | "practice") {
+    const effectiveScope = isFullTest ? "full" : "section";
+    const effectiveMode = isFullTest ? mode : "practice";
     const payload = {
       testId: test.id,
-      scope: "full",
-      mode,
+      scope: effectiveScope,
+      sectionId: effectiveScope === "section" ? defaultSectionId : undefined,
+      mode: effectiveMode,
       forceNew: Boolean(completedAttempt && !activeAttempt),
     };
     try {
@@ -89,8 +93,8 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
       const resumeToken = Date.now();
       setOpen(false);
       const href = test.type === "reading"
-        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`
-        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${mode}&resume=${resumeToken}`;
+        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`
+        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`;
       emitNavigationStart(href);
       router.push(href);
     } catch (err) {

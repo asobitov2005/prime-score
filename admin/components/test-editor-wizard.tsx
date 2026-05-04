@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Notice, ProgressBar, SectionHeader, Select, Textarea } from "@/components/ui";
@@ -24,6 +24,13 @@ type Props = {
   mode: "create" | "edit";
   testId?: string;
   initialDraft?: AdminTestDraftState;
+};
+
+type TranscriptProgressState = {
+  value: number;
+  label: string;
+  startedAt: number;
+  jobId?: string;
 };
 
 
@@ -53,6 +60,7 @@ const defaultInstructions: Record<string, string> = {
   "listening_mc_multiple": "Choose TWO letters, A-E.",
   "listening_matching": "What does the speaker say about each of the following items?\n\nChoose the correct letter, A, B or C, and write them next to Questions.",
   "listening_plan_map_labeling": "Label the map below.\n\nWrite the correct letter, A-H, next to Questions.",
+  "listening_plan_map_labeling_free_text": "Label the map below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
   "listening_short_answer": "Answer the questions below.\n\nWrite {NO MORE THAN THREE WORDS AND/OR A NUMBER} for each answer."
 };
 
@@ -61,6 +69,13 @@ const INLINE_BLANK_PLACEHOLDER = "........................";
 function formatTranscriptTimestamp(totalSeconds: number) {
   const minutes = Math.floor(Math.max(0, totalSeconds) / 60);
   const seconds = Math.max(0, totalSeconds) % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatElapsedDuration(ms: number) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
@@ -78,6 +93,25 @@ function splitNonEmptyLines(text: string) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function expandMapOptionRangeLines(text: string) {
+  return splitNonEmptyLines(text).flatMap((line) => {
+    const rangeMatch = line.match(/^([A-Za-z])\s*[-–—]\s*([A-Za-z])$/);
+    if (!rangeMatch) {
+      return [line];
+    }
+
+    const startCode = rangeMatch[1].toUpperCase().charCodeAt(0);
+    const endCode = rangeMatch[2].toUpperCase().charCodeAt(0);
+    if (Number.isNaN(startCode) || Number.isNaN(endCode) || startCode > endCode) {
+      return [line];
+    }
+
+    return Array.from({ length: endCode - startCode + 1 }, (_, index) =>
+      String.fromCharCode(startCode + index)
+    );
+  });
 }
 
 function normalizeInlineBlankPlaceholders(text: string) {
@@ -103,6 +137,36 @@ function extractMatchingOptionValue(option: string) {
 
 function stripMatchingOptionPrefix(option: string) {
   return option.trim().replace(/^([a-z0-9ivxlcdm]+)[.)]\s*/i, "").trim();
+}
+
+function resolveChoiceAnswerText(
+  group: AdminTestDraftQuestionGroup,
+  question: AdminTestDraftQuestion,
+  answer: string
+) {
+  const trimmed = answer.trim();
+  if (!trimmed) return "";
+
+  if (group.typeId.includes("mc_")) {
+    const upper = trimmed.toUpperCase();
+    if (/^[A-Z]$/.test(upper)) {
+      const optionIndex = upper.charCodeAt(0) - 65;
+      const optionText = question.variants?.[optionIndex];
+      return optionText?.trim() || "";
+    }
+  }
+
+  if (
+    group.typeId.includes("matching_features")
+    || group.typeId.includes("matching_sentence_endings")
+    || group.typeId.includes("plan_map_labeling")
+    || group.typeId.includes("matching")
+  ) {
+    const option = (group.sharedOptions ?? []).find((item) => extractMatchingOptionValue(item).toUpperCase() === trimmed.toUpperCase());
+    return option ? stripMatchingOptionPrefix(option) : "";
+  }
+
+  return trimmed;
 }
 
 function createDraftId(prefix: string) {
@@ -136,6 +200,37 @@ function getAudioFileDurationSeconds(file: File) {
     };
     audio.src = objectUrl;
   });
+}
+
+function clipboardImageFileName(mimeType: string) {
+  const normalizedType = mimeType.toLowerCase();
+  if (normalizedType === "image/png") return "clipboard-image.png";
+  if (normalizedType === "image/jpeg") return "clipboard-image.jpg";
+  if (normalizedType === "image/webp") return "clipboard-image.webp";
+  return "clipboard-image";
+}
+
+function extractClipboardImageFile(items: DataTransferItemList | null | undefined) {
+  if (!items) {
+    return null;
+  }
+
+  for (const item of Array.from(items)) {
+    if (item.kind !== "file" || !item.type.startsWith("image/")) {
+      continue;
+    }
+
+    const file = item.getAsFile();
+    if (!file) {
+      continue;
+    }
+
+    return new File([file], file.name || clipboardImageFileName(file.type), {
+      type: file.type || "image/png",
+    });
+  }
+
+  return null;
 }
 
 function alphabetLabelFromIndex(index: number) {
@@ -481,8 +576,20 @@ function isBracketCompletionType(typeId: string) {
   );
 }
 
+function isListeningMapLabelingType(typeId: string) {
+  return typeId.includes("plan_map_labeling");
+}
+
+function isListeningMapFreeTextType(typeId: string) {
+  return typeId.includes("plan_map_labeling_free_text");
+}
+
+function isListeningMapOptionType(typeId: string) {
+  return isListeningMapLabelingType(typeId) && !isListeningMapFreeTextType(typeId);
+}
+
 function isDiagramLabelingType(typeId: string) {
-  return typeId.includes("diagram");
+  return typeId.includes("diagram") || isListeningMapLabelingType(typeId);
 }
 
 function parseBracketCompletionAnswers(line: string) {
@@ -848,6 +955,12 @@ function collectGroupIssues(
   }
   if (isBracketCompletionType(group.typeId)) {
     issues.push(...analyzeCompletionGroup(group).issues);
+  }
+  if (isListeningMapOptionType(group.typeId) && group.sharedOptions.length === 0) {
+    issues.push("Add map option labels or a range like A-H so dropdown answers can render.");
+  }
+  if (isDiagramLabelingType(group.typeId) && !group.diagramImageUrl) {
+    issues.push("Upload the map / diagram image for this labeling group.");
   }
   if (group.typeId.includes("mc_")) {
     issues.push(...analyzeMultipleChoiceGroup(group).issues);
@@ -1314,9 +1427,7 @@ function normalizeMetadataQuickFixes(draft: AdminTestDraftState): AdminTestDraft
     },
     questionGroups: (draft.questionGroups ?? []).map((group) => ({
       ...group,
-      title: group.typeId.includes("summary_completion")
-        ? normalizeInlineBlankPlaceholders(group.title.trim())
-        : normalizeInlineBlankPlaceholders(group.title.trim()) || `Questions ${group.questionStart}${group.questionEnd > group.questionStart ? `-${group.questionEnd}` : ""}`,
+      title: normalizeInlineBlankPlaceholders(group.title.trim()),
       instructions: normalizeInlineBlankPlaceholders(group.instructions.trim()),
       questionBlock: group.questionBlock !== undefined ? normalizeInlineBlankPlaceholders(group.questionBlock) : group.questionBlock,
       answerBlock: group.answerBlock !== undefined ? normalizeInlineBlankPlaceholders(group.answerBlock) : group.answerBlock,
@@ -1490,6 +1601,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
   // Auto-Save Effect (Debounced)
   const [lastSavedDraftStr, setLastSavedDraftStr] = useState<string>("");
   const draftRef = useRef(draft);
+  const lastHydratedDraftSeedRef = useRef(draftSeedStr);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -1513,6 +1625,17 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
   }, [draft, isPublishedEdit, lastSavedDraftStr, saveState, publishState]);
 
   useEffect(() => {
+    const currentDraftStr = JSON.stringify(draftRef.current);
+    const previousHydratedSeedStr = lastHydratedDraftSeedRef.current;
+    const canHydrateSafely =
+      currentDraftStr === previousHydratedSeedStr
+      || currentDraftStr === draftSeedStr;
+
+    if (!canHydrateSafely) {
+      return;
+    }
+
+    lastHydratedDraftSeedRef.current = draftSeedStr;
     setDraft(draftSeed);
     setLastSavedDraftStr(draftSeedStr);
   }, [draftSeed, draftSeedStr]);
@@ -1573,14 +1696,14 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
       };
 
       setResolvedTestId(saved.id);
-      setDraft(() => ({
-        ...currentDraftToSave,
+      setDraft((current) => ({
+        ...current,
         metadata: {
-          ...currentDraftToSave.metadata,
+          ...current.metadata,
           title: saved.title,
           status: saved.status,
           version: saved.version,
-          format: saved.format
+          format: saved.format,
         }
       }));
       
@@ -1634,10 +1757,10 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
         },
       };
 
-      setDraft(() => ({
-        ...currentDraftToSave,
+      setDraft((current) => ({
+        ...current,
         metadata: {
-          ...currentDraftToSave.metadata,
+          ...current.metadata,
           title: saved.title,
           status: saved.status,
           version: saved.version,
@@ -1943,6 +2066,7 @@ function ContentPanel({
   const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
   const [uploadingSectionId, setUploadingSectionId] = useState<string | null>(null);
   const [transcribingSectionId, setTranscribingSectionId] = useState<string | null>(null);
+  const [transcriptProgressBySection, setTranscriptProgressBySection] = useState<Record<string, TranscriptProgressState>>({});
   const [collapseStateReady, setCollapseStateReady] = useState(false);
   const collapseStorageKey = useMemo(() => "admin-content-sections:" + pathname, [pathname]);
 
@@ -2011,7 +2135,9 @@ function ContentPanel({
                 questionId: `${question.id}:${label}`,
                 questionLabel: label,
                 questionPrompt: question.prompt,
-                acceptedAnswers: [question.acceptedAnswers[index] ?? ""].filter(Boolean),
+                acceptedAnswers: [
+                  resolveChoiceAnswerText(group, question, question.acceptedAnswers[index] ?? "")
+                ].filter(Boolean),
               }));
             }
           }
@@ -2020,7 +2146,9 @@ function ContentPanel({
             questionId: question.id,
             questionLabel: question.label,
             questionPrompt: question.prompt,
-            acceptedAnswers: question.acceptedAnswers,
+            acceptedAnswers: question.acceptedAnswers
+              .map((answer) => resolveChoiceAnswerText(group, question, answer))
+              .filter(Boolean),
           }];
         })
       );
@@ -2028,6 +2156,14 @@ function ContentPanel({
   const regenerateTranscript = async (section: AdminTestDraftContentSection, audioMeta?: { filename?: string; contentType?: string }) => {
     if (!section.audioUrl) return;
     setTranscribingSectionId(section.id);
+    setTranscriptProgressBySection((current) => ({
+      ...current,
+      [section.id]: {
+        value: 4,
+        label: "Starting transcript job...",
+        startedAt: Date.now(),
+      },
+    }));
     try {
       const transcriptPayload = await adminApi.generateListeningTranscript({
         audioUrl: section.audioUrl,
@@ -2037,6 +2173,28 @@ function ContentPanel({
         sectionTitle: section.title,
         transcript: section.transcript,
         transcriptSegments: section.transcriptSegments,
+        onJobId: (jobId) => {
+          setTranscriptProgressBySection((current) => ({
+            ...current,
+            [section.id]: {
+              value: current[section.id]?.value ?? 6,
+              label: current[section.id]?.label ?? "Starting transcript job...",
+              startedAt: current[section.id]?.startedAt ?? Date.now(),
+              jobId,
+            },
+          }));
+        },
+        onProgress: ({ value, label }) => {
+          setTranscriptProgressBySection((current) => ({
+            ...current,
+            [section.id]: {
+              value,
+              label,
+              startedAt: current[section.id]?.startedAt ?? Date.now(),
+              jobId: current[section.id]?.jobId,
+            },
+          }));
+        },
         questions: getSectionTranscriptQuestionPayload(section.id),
       });
       const transcriptText = transcriptPayload.transcript.trim() || buildTranscriptTextFromSegments(transcriptPayload.transcriptSegments);
@@ -2048,6 +2206,26 @@ function ContentPanel({
       });
     } finally {
       setTranscribingSectionId((current) => (current === section.id ? null : current));
+      setTranscriptProgressBySection((current) => {
+        const next = { ...current };
+        delete next[section.id];
+        return next;
+      });
+    }
+  };
+
+  const cancelTranscriptGeneration = async (sectionId: string) => {
+    const jobId = transcriptProgressBySection[sectionId]?.jobId;
+    if (!jobId) return;
+    try {
+      await adminApi.cancelListeningTranscriptJob(jobId);
+    } finally {
+      setTranscribingSectionId((current) => (current === sectionId ? null : current));
+      setTranscriptProgressBySection((current) => {
+        const next = { ...current };
+        delete next[sectionId];
+        return next;
+      });
     }
   };
 
@@ -2329,12 +2507,31 @@ function ContentPanel({
                                   {transcribingSectionId === section.id ? "Generating..." : "Regenerate Transcript"}
                                 </Button>
                               ) : null}
-                              <label className="inline-flex cursor-pointer items-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/40">
+                              {transcribingSectionId === section.id ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:bg-destructive/10"
+                                  onClick={() => void cancelTranscriptGeneration(section.id)}
+                                >
+                                  Cancel
+                                </Button>
+                              ) : null}
+                              <label
+                                className={cn(
+                                  "inline-flex items-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground",
+                                  transcribingSectionId === section.id
+                                    ? "cursor-not-allowed opacity-50"
+                                    : "cursor-pointer hover:bg-muted/40"
+                                )}
+                              >
                                 {uploadingSectionId === section.id ? "Uploading..." : "Upload Audio"}
                                 <input
                                   type="file"
                                   accept="audio/*"
                                   className="hidden"
+                                  disabled={transcribingSectionId === section.id}
                                   onChange={(event) => void handleAudioUpload(section.id, event.target.files?.[0] ?? null)}
                                 />
                               </label>
@@ -2364,7 +2561,26 @@ function ContentPanel({
                             </div>
                           </div>
                           {transcribingSectionId === section.id ? (
-                            <p className="mt-4 text-sm font-medium text-primary">Generating transcript with timestamps...</p>
+                            <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                              <div className="mb-2 flex items-center justify-between gap-3">
+                                <p className="text-sm font-semibold text-foreground">
+                                  {transcriptProgressBySection[section.id]?.label ?? "Generating transcript with timestamps..."}
+                                </p>
+                                <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                                  {formatElapsedDuration(
+                                    Date.now() - (transcriptProgressBySection[section.id]?.startedAt ?? Date.now())
+                                  )}
+                                </span>
+                              </div>
+                              <ProgressBar
+                                value={transcriptProgressBySection[section.id]?.value ?? 8}
+                                className="h-2.5 bg-primary/10"
+                              />
+                              <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-medium text-muted-foreground">
+                                <span>{Math.round(transcriptProgressBySection[section.id]?.value ?? 8)}%</span>
+                                <span>Transcript job is running in the background</span>
+                              </div>
+                            </div>
                           ) : section.transcriptSegments && section.transcriptSegments.length > 0 ? (
                             <div className="mt-4 max-h-[320px] space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-background/90 p-3">
                               {section.transcriptSegments.map((segment) => (
@@ -2674,6 +2890,39 @@ function QuestionsPanel({
     }).catch(() => undefined);
   };
 
+  const handleDiagramImagePaste = (groupId: string, event: ReactClipboardEvent<HTMLDivElement>) => {
+    const file = extractClipboardImageFile(event.clipboardData?.items);
+    if (!file) {
+      return;
+    }
+
+    event.preventDefault();
+    handleDiagramImageUpload(groupId, file);
+  };
+
+  const pasteDiagramImageFromClipboard = async (groupId: string) => {
+    if (typeof navigator === "undefined" || !navigator.clipboard || typeof navigator.clipboard.read !== "function") {
+      return;
+    }
+
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const clipboardItem of clipboardItems) {
+        const imageType = clipboardItem.types.find((type) => type.startsWith("image/"));
+        if (!imageType) {
+          continue;
+        }
+
+        const blob = await clipboardItem.getType(imageType);
+        const file = new File([blob], clipboardImageFileName(imageType), { type: imageType });
+        handleDiagramImageUpload(groupId, file);
+        return;
+      }
+    } catch {
+      // Browser permission/security policies can block direct clipboard reads.
+    }
+  };
+
   const updateGroup = (groupId: string, updates: Partial<AdminTestDraftQuestionGroup>) => {
     setDraft((current) => ({
       ...current,
@@ -2685,6 +2934,11 @@ function QuestionsPanel({
 
           if (updates.typeId && updates.typeId !== g.typeId) {
             newGroup.instructions = defaultInstructions[updates.typeId] || newGroup.instructions;
+            if (isListeningMapOptionType(updates.typeId)) {
+              newGroup.sharedOptions = expandMapOptionRangeLines(newGroup.secondaryBlock ?? "");
+            } else if (isListeningMapFreeTextType(updates.typeId)) {
+              newGroup.sharedOptions = [];
+            }
           }
 
           if (newGroup.typeId.includes("matching_headings")) {
@@ -2753,6 +3007,8 @@ function QuestionsPanel({
               || newGroup.typeId.includes("wordbank")
             ) {
               newGroup.sharedOptions = sBlock.split("\n").map((line) => line.trim()).filter(Boolean);
+            } else if (isListeningMapOptionType(newGroup.typeId)) {
+              newGroup.sharedOptions = expandMapOptionRangeLines(sBlock);
             } else {
               newGroup.sharedOptions = [];
             }
@@ -3388,29 +3644,38 @@ function QuestionsPanel({
                   </EditableField>
 
                   {isDiagramLabelingType(group.typeId) ? (
-                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
-                      <EditableField label="Diagram Title">
-                        <Input
-                          className="bg-background"
-                          value={group.diagramTitle || ""}
-                          onChange={(e) => updateGroup(group.id, { diagramTitle: e.target.value })}
-                          placeholder="e.g. Cross-section of the water filter"
-                        />
-                      </EditableField>
+                    <div className="grid gap-4">
                       <EditableField label="Diagram Image">
-                        <div className="space-y-3 rounded-xl border border-border/70 bg-card/45 p-3">
+                        <div
+                          className="space-y-3 rounded-xl border border-border/70 bg-card/45 p-3"
+                          tabIndex={0}
+                          onPaste={(event) => handleDiagramImagePaste(group.id, event)}
+                        >
                           <input
                             type="file"
                             accept="image/*"
                             className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary-foreground"
                             onChange={(event) => handleDiagramImageUpload(group.id, event.target.files?.[0] ?? null)}
                           />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void pasteDiagramImageFromClipboard(group.id)}
+                            >
+                              Paste from Clipboard
+                            </Button>
+                            <p className="text-xs text-muted-foreground">
+                              You can also click here and press Ctrl+V / Cmd+V.
+                            </p>
+                          </div>
                           {group.diagramImageUrl ? (
                             <div className="space-y-3">
                               <div className="overflow-hidden rounded-xl border border-border bg-background/70 p-2">
                                 <img
                                   src={group.diagramImageUrl}
-                                  alt={group.diagramTitle || group.title}
+                                  alt={group.title}
                                   className="max-h-[220px] w-full rounded-lg object-contain"
                                 />
                               </div>
@@ -3424,20 +3689,24 @@ function QuestionsPanel({
                               </Button>
                             </div>
                           ) : (
-                            <p className="text-xs text-muted-foreground">Upload the diagram asset shown above the blanks in preview and exam mode.</p>
+                            <p className="text-xs text-muted-foreground">Upload or paste the diagram asset shown above the blanks in preview and exam mode.</p>
                           )}
                         </div>
                       </EditableField>
                     </div>
                   ) : null}
 
-                  {(group.typeId.includes("matching_headings") || group.typeId.includes("matching_features") || group.typeId.includes("matching_sentence_endings") || group.typeId.includes("wordbank")) && (
+                  {(group.typeId.includes("matching_headings") || group.typeId.includes("matching_features") || group.typeId.includes("matching_sentence_endings") || group.typeId.includes("wordbank") || group.typeId.includes("listening_matching") || isListeningMapOptionType(group.typeId)) && (
                     <EditableField
                       label={
                         group.typeId.includes("matching_headings")
                           ? "Headings"
                           : group.typeId.includes("matching_sentence_endings")
                             ? "Sentence Endings"
+                          : isListeningMapOptionType(group.typeId)
+                            ? "Map Options / Range"
+                          : group.typeId.includes("listening_matching")
+                            ? "Options"
                           : group.typeId.includes("wordbank")
                             ? "Word Bank"
                             : "Options"
@@ -3452,6 +3721,10 @@ function QuestionsPanel({
                             ? "i. Planning a bigger idea\nii. Looking back at early mistakes\n..."
                             : group.typeId.includes("matching_sentence_endings")
                               ? "A. was first proposed in 1920.\nB. reduced travel costs for workers.\nC. remained popular in rural areas."
+                            : isListeningMapOptionType(group.typeId)
+                              ? "A-H\nor\nA\nB\nC\nD"
+                            : group.typeId.includes("listening_matching")
+                              ? "A. Option One\nB. Option Two\nC. Option Three\nD. Option Four"
                             : group.typeId.includes("wordbank")
                               ? "A. Option One\nB. Option Two\nC. Option Three"
                               : "A. Option One\nB. Option Two\n..."
@@ -4161,15 +4434,10 @@ function EditorPreviewSection({
 
     return (
       <div className={cn("border border-border/70 bg-muted/20", compact ? "rounded-[1rem] p-3" : "rounded-2xl p-4")}>
-        {group.diagramTitle ? (
-          <p className={cn("mb-3 text-center font-bold tracking-tight text-foreground", compact ? "text-[14px]" : "text-[16px]")}>
-            {renderBraceBoldText(group.diagramTitle, `${group.id}-diagram-title`)}
-          </p>
-        ) : null}
         <div className="overflow-hidden rounded-xl border border-border bg-background/80 p-2">
           <img
             src={group.diagramImageUrl}
-            alt={group.diagramTitle || group.title}
+            alt={group.title}
             className={cn("w-full object-contain", compact ? "max-h-[220px]" : "max-h-[320px]")}
           />
         </div>
@@ -4387,6 +4655,8 @@ function previewTypeLabel(typeId: string) {
   if (typeId.includes("mc_")) return "Multiple Choice";
   if (typeId.includes("matching")) return "Matching";
   if (typeId.includes("summary") || typeId.includes("sentence_completion") || typeId.includes("note_completion")) return "Completion";
+  if (isListeningMapOptionType(typeId)) return "Map Labeling";
+  if (isListeningMapFreeTextType(typeId)) return "Map Labeling (free text)";
   if (typeId.includes("diagram")) return "Diagram Labeling";
   if (typeId.includes("short_answer")) return "Short Answer";
   return "Question Group";
@@ -4503,6 +4773,36 @@ function renderAdminPreviewAnswer(
             );
           })}
         </select>
+      </div>
+    );
+  }
+
+  if (isListeningMapLabelingType(group.typeId)) {
+    if (group.sharedOptions.length > 0) {
+      return (
+        <div className="max-w-[220px]">
+          <select
+            value=""
+            onChange={() => undefined}
+            className="flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 text-sm font-semibold text-muted-foreground"
+          >
+            <option value="">Select map label</option>
+            {group.sharedOptions.map((option) => {
+              const value = extractMatchingOptionValue(option) || option.trim();
+              return (
+                <option key={`${question.id}-${value}`} value={value}>
+                  {value}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-xs rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground">
+        Type map label
       </div>
     );
   }

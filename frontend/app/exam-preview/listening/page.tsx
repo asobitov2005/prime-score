@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ReadingExamPreview, type ReadingExamPreviewData } from "@/components/exam/reading-exam-preview";
-import { getBackendAttempt } from "@/lib/server-attempts";
+import { getBackendAttempt, getBackendAttemptReview } from "@/lib/server-attempts";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -170,6 +170,7 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
         sectionId: section.section_id,
         sectionPreviewLabel: paragraphIndex === 0 ? sectionPreviewLabel : undefined,
         sectionTitle: paragraphIndex === 0 ? (section.title ?? undefined) : undefined,
+        sectionSubtitle: paragraphIndex === 0 ? (section.subtitle ?? undefined) : undefined,
         sectionLabel: paragraphIndex === 0 ? sectionLabel : undefined,
         sectionAudioUrl: paragraphIndex === 0 ? (section.audio_url ?? undefined) : undefined,
         sectionAudioDurationSeconds: paragraphIndex === 0 ? (section.audio_duration_seconds ?? undefined) : undefined,
@@ -195,6 +196,7 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
         type: group.question_type,
         sectionId: section.section_id,
         sectionTitle: section.title ?? undefined,
+        sectionSubtitle: section.subtitle ?? undefined,
         sectionLabel,
         sectionAudioUrl: groupIndex === 0 ? (section.audio_url ?? undefined) : undefined,
         sectionAudioDurationSeconds: groupIndex === 0 ? (section.audio_duration_seconds ?? undefined) : undefined,
@@ -219,6 +221,20 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
     });
   });
 
+  const review = await getBackendAttemptReview(attemptId).catch(() => null);
+  const reviewItems = Object.fromEntries(
+    (review?.items ?? []).map((item) => [
+      item.question_id,
+      {
+        answerValue: item.answer_value ?? null,
+        isCorrect: item.is_correct ?? null,
+        correctAnswers: item.correct_answers ?? [],
+        options: item.options ?? [],
+        questionType: item.question_type,
+      },
+    ])
+  );
+
   return {
     attemptId,
     exitHref: "/tests?type=listening",
@@ -240,11 +256,16 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
       fontScale: attempt.ui_state?.font_scale ?? undefined,
       activeQuestionId: attempt.active_question_id ?? undefined,
     },
+    reviewItems,
   };
 }
 
 export default async function ListeningExamPreviewPage({ searchParams }: ListeningExamPreviewPageProps) {
-  const mode = searchParams?.mode === "practice" ? "practice" : "exam";
+  const mode = searchParams?.mode === "practice"
+    ? "practice"
+    : searchParams?.mode === "review"
+      ? "review"
+      : "exam";
   const attemptId = searchParams?.attemptId;
 
   if (!attemptId) {

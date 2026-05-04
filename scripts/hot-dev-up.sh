@@ -38,7 +38,9 @@ docker compose up -d postgres redis minio bot >/dev/null
 docker compose stop api frontend admin worker >/dev/null 2>&1 || true
 
 start_if_needed "backend" "$ROOT_DIR/backend" "$LOG_DIR/backend.log" \
-  "$ROOT_DIR/backend/.venv/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  "$ROOT_DIR/backend/.venv/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload \
+  --reload-dir app \
+  --reload-dir alembic
 
 start_if_needed "worker" "$ROOT_DIR/backend" "$LOG_DIR/worker.log" \
   "$ROOT_DIR/backend/.venv/bin/python" -m watchfiles \

@@ -34,6 +34,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
   const scorePercent = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
   const estimatedScore = formatBandScore(result.band_score);
   const percentile = formatPercentile(result.band_score, scorePercent);
+  const reviewHref = `/exam-preview/${result.test_type === "listening" ? "listening" : "reading"}?attemptId=${params.attemptId}&mode=review&resume=${Date.now()}`;
 
   return (
     <div className="space-y-3">
@@ -48,7 +49,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Button asChild size="sm">
-                <Link href={`/attempts/${params.attemptId}/review`}>
+                <Link href={reviewHref}>
                   Review Answers
                   <ArrowRight className="h-4 w-4" />
                 </Link>

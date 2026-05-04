@@ -17,17 +17,21 @@ class TestParagraphSnapshotRead(BaseModel):
 
 class TestTranscriptSegmentRead(BaseModel):
     id: str
-    start_sec: int
-    end_sec: int
+    start_sec: float
+    end_sec: float
     text: str
+    confidence: float | None = None
+    drift_start_sec: float | None = None
+    drift_end_sec: float | None = None
+    needs_review: bool | None = None
 
 
 class TestTranscriptQuestionLocationRead(BaseModel):
-    question_id: UUID | None = None
+    question_id: str | UUID | None = None
     question_label: str
     question_prompt: str
-    start_sec: int
-    end_sec: int
+    start_sec: float
+    end_sec: float
     answer_text: str
     correct_answer: str
 

@@ -118,6 +118,52 @@ def _hydrate_snapshot_media_from_live(
     if not live_snapshot:
         return snapshot
 
+    def _segment_max_end(raw_segments: object) -> float:
+        if not isinstance(raw_segments, list):
+            return 0.0
+        max_end = 0.0
+        for segment in raw_segments:
+            if not isinstance(segment, dict):
+                continue
+            try:
+                max_end = max(max_end, float(segment.get("end_sec") or 0))
+            except (TypeError, ValueError):
+                continue
+        return max_end
+
+    def _location_nonzero_count(raw_locations: object) -> int:
+        if not isinstance(raw_locations, list):
+            return 0
+        count = 0
+        for location in raw_locations:
+            if not isinstance(location, dict):
+                continue
+            try:
+                if float(location.get("start_sec") or 0) > 0 or float(location.get("end_sec") or 0) > 0:
+                    count += 1
+            except (TypeError, ValueError):
+                continue
+        return count
+
+    def _location_quality_score(raw_locations: object) -> float:
+        if not isinstance(raw_locations, list) or not raw_locations:
+            return 0.0
+        score = 0.0
+        for location in raw_locations:
+            if not isinstance(location, dict):
+                continue
+            answer_text = str(location.get("answer_text") or "").strip()
+            correct_answer = str(location.get("correct_answer") or "").strip()
+            if answer_text and len(answer_text) > 2:
+                score += 1.0
+            elif answer_text:
+                score += 0.1
+            if correct_answer and len(correct_answer) > 2:
+                score += 0.5
+            elif correct_answer:
+                score += 0.05
+        return score
+
     merged_snapshot = dict(snapshot)
     merged_snapshot["audio_duration_seconds"] = (
         snapshot.get("audio_duration_seconds")
@@ -152,6 +198,31 @@ def _hydrate_snapshot_media_from_live(
             merged_section["transcript_segments"] = live_section.get("transcript_segments", [])
         if not merged_section.get("transcript_question_locations"):
             merged_section["transcript_question_locations"] = live_section.get("transcript_question_locations", [])
+
+        live_segment_end = _segment_max_end(live_section.get("transcript_segments"))
+        merged_segment_end = _segment_max_end(merged_section.get("transcript_segments"))
+        should_replace_transcript = False
+        if live_segment_end > merged_segment_end + 30:
+            should_replace_transcript = True
+        elif merged_segment_end > max(60.0, live_segment_end + 30):
+            should_replace_transcript = True
+        elif merged_section.get("audio_duration_seconds") and merged_segment_end > float(merged_section.get("audio_duration_seconds") or 0) * 1.15:
+            should_replace_transcript = True
+
+        if should_replace_transcript:
+            merged_section["transcript"] = live_section.get("transcript")
+            merged_section["transcript_segments"] = live_section.get("transcript_segments", [])
+            merged_section["transcript_question_locations"] = live_section.get("transcript_question_locations", [])
+        else:
+            live_location_count = _location_nonzero_count(live_section.get("transcript_question_locations"))
+            merged_location_count = _location_nonzero_count(merged_section.get("transcript_question_locations"))
+            live_location_quality = _location_quality_score(live_section.get("transcript_question_locations"))
+            merged_location_quality = _location_quality_score(merged_section.get("transcript_question_locations"))
+            if (
+                live_location_count > merged_location_count
+                or live_location_quality > merged_location_quality + 1
+            ):
+                merged_section["transcript_question_locations"] = live_section.get("transcript_question_locations", [])
         merged_sections.append(merged_section)
 
     merged_snapshot["sections"] = merged_sections

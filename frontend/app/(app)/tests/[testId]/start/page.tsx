@@ -22,6 +22,7 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
   }
 
   const isFullTest = test.format === "full";
+  const defaultSectionId = test.sections[0]?.id;
 
   return (
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
@@ -60,7 +61,8 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
                 testId={test.id} 
                 testType={test.type} 
                 mode="practice" 
-                scope="full"
+                scope={isFullTest ? "full" : "section"}
+                sectionId={isFullTest ? undefined : defaultSectionId}
                 className="w-full h-auto p-4 flex items-center gap-4 text-left bg-card hover:bg-muted/50 border border-border/60 hover:border-primary/40 rounded-xl transition-all shadow-none group"
                 label={
                   <div className="flex items-center gap-4 w-full">

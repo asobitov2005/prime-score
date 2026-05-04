@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import List
+import asyncio
 from uuid import UUID, uuid4
 
 import httpx
@@ -33,6 +35,8 @@ from app.core.enums import ReviewSource
 from app.models.enums import ReviewSource as ModelReviewSource
 from app.schemas.admin import (
     AdminAudioTranscriptRequest,
+    AdminAudioTranscriptJobCreateResponse,
+    AdminAudioTranscriptJobRead,
     AdminAudioTranscriptResponse,
     AdminAuditLogRead,
     AdminContentCreateRequest,
@@ -80,6 +84,15 @@ from app.services.gemini_audio_transcription import (
     ListeningTranscriptQuestion,
     transcribe_listening_audio_from_url,
 )
+from app.services.transcript_jobs import (
+    attach_transcript_job_task,
+    cancel_transcript_job,
+    create_transcript_job,
+    get_transcript_job,
+    mark_transcript_job_completed,
+    mark_transcript_job_failed,
+    mark_transcript_job_running,
+)
 from app.services.payment_service import (
     complete_payment,
     expire_stale_payments,
@@ -124,6 +137,7 @@ class AdminUserDetailRead(BaseModel):
     average_band: float | None = None
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 ADMIN_ACCESS_EXPIRES_DELTA = timedelta(days=7)
 ADMIN_REFRESH_EXPIRES_DELTA = timedelta(days=30)
@@ -838,6 +852,45 @@ async def transcribe_audio_file(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="audio_url is required.")
 
     try:
+        transcript_payload = await asyncio.wait_for(
+            transcribe_listening_audio_from_url(
+                audio_url=str(payload.audio_url),
+                audio_filename=payload.audio_filename,
+                audio_content_type=payload.audio_content_type,
+                section_label=payload.section_label,
+                section_title=payload.section_title,
+                existing_transcript=payload.transcript,
+                existing_transcript_segments=[segment.model_dump() for segment in payload.transcript_segments],
+                questions=[
+                    ListeningTranscriptQuestion(
+                        question_id=item.question_id,
+                        question_label=item.question_label,
+                        question_prompt=item.question_prompt,
+                        accepted_answers=list(item.accepted_answers),
+                    )
+                    for item in payload.questions
+                ],
+            ),
+            timeout=150,
+        )
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Transcript generation exceeded 150 seconds. Retry once or shorten the audio.",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Audio file could not be fetched.") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Transcription failed.") from exc
+
+    return AdminAudioTranscriptResponse(**transcript_payload)
+
+
+async def _run_transcript_job(job_id: str, payload: AdminAudioTranscriptRequest) -> None:
+    try:
+        mark_transcript_job_running(job_id)
         transcript_payload = await transcribe_listening_audio_from_url(
             audio_url=str(payload.audio_url),
             audio_filename=payload.audio_filename,
@@ -856,14 +909,66 @@ async def transcribe_audio_file(
                 for item in payload.questions
             ],
         )
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Audio file could not be fetched.") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        mark_transcript_job_completed(job_id, transcript_payload)
+    except asyncio.CancelledError:
+        mark_transcript_job_failed(job_id, "Cancelled by admin.")
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Transcription failed.") from exc
+        logger.exception("Listening transcript job %s failed", job_id)
+        mark_transcript_job_failed(job_id, str(exc))
 
-    return AdminAudioTranscriptResponse(**transcript_payload)
+
+@router.post("/audio/transcribe/jobs", response_model=AdminAudioTranscriptJobCreateResponse, status_code=202)
+async def create_transcribe_audio_job(
+    payload: AdminAudioTranscriptRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+) -> AdminAudioTranscriptJobCreateResponse:
+    _ = current_admin
+    if not str(payload.audio_url or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="audio_url is required.")
+
+    job = create_transcript_job()
+    task = asyncio.create_task(_run_transcript_job(job.id, payload))
+    attach_transcript_job_task(job.id, task)
+    return AdminAudioTranscriptJobCreateResponse(job_id=job.id, status=job.status)
+
+
+@router.get("/audio/transcribe/jobs/{job_id}", response_model=AdminAudioTranscriptJobRead)
+async def get_transcribe_audio_job(
+    job_id: str,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+) -> AdminAudioTranscriptJobRead:
+    _ = current_admin
+    job = get_transcript_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcript job not found.")
+    return AdminAudioTranscriptJobRead(
+        job_id=job.id,
+        status=job.status,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+        result=AdminAudioTranscriptResponse(**job.result) if job.result else None,
+        error=job.error,
+    )
+
+
+@router.post("/audio/transcribe/jobs/{job_id}/cancel", response_model=AdminAudioTranscriptJobRead)
+async def cancel_transcribe_audio_job(
+    job_id: str,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+) -> AdminAudioTranscriptJobRead:
+    _ = current_admin
+    job = cancel_transcript_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcript job not found.")
+    return AdminAudioTranscriptJobRead(
+        job_id=job.id,
+        status=job.status,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+        result=AdminAudioTranscriptResponse(**job.result) if job.result else None,
+        error=job.error,
+    )
 
 
 @router.post("/images/upload-url", response_model=AdminUploadUrlResponse)

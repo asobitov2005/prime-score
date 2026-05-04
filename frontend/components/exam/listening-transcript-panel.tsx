@@ -34,12 +34,6 @@ interface ListeningTranscriptPanelProps {
   className?: string;
 }
 
-function formatTranscriptTime(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = Math.floor(totalSeconds % 60);
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
 function findActiveSegmentIndex(segments: ListeningTranscriptSegment[], currentTime: number) {
   let low = 0;
   let high = segments.length - 1;
@@ -73,19 +67,48 @@ export function ListeningTranscriptPanel({
   const activeIndexRef = useRef(-1);
   const segmentRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const animationFrameRef = useRef<number | null>(null);
+  const pendingSeekRef = useRef<{ index: number; startSec: number; autoplay: boolean } | null>(null);
+
+  const filteredQuestionLocations = useMemo(() => {
+    const seen = new Set<string>();
+    return questionLocations.filter((location) => {
+      const startSec = Number(location.startSec ?? 0);
+      const endSec = Number(location.endSec ?? 0);
+      const hasResolvedTiming = startSec > 0 || endSec > 0;
+      if (!hasResolvedTiming) {
+        return false;
+      }
+      const key = `${location.questionLabel}:${startSec}:${endSec}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }, [questionLocations]);
 
   const locationsBySegmentId = useMemo(() => {
     const grouped = new Map<string, ListeningTranscriptQuestionLocation[]>();
 
     segments.forEach((segment) => {
-      const locations = questionLocations.filter(
+      const locations = filteredQuestionLocations.filter(
         (location) => location.startSec <= segment.endSec && location.endSec >= segment.startSec,
       );
       grouped.set(segment.id, locations);
     });
 
     return grouped;
-  }, [questionLocations, segments]);
+  }, [filteredQuestionLocations, segments]);
+
+  const firstAnswerSegmentId = useMemo(() => {
+    for (const segment of segments) {
+      const locations = locationsBySegmentId.get(segment.id) ?? [];
+      if (locations.length > 0) {
+        return segment.id;
+      }
+    }
+    return null;
+  }, [locationsBySegmentId, segments]);
 
   useEffect(() => {
     activeIndexRef.current = activeIndex;
@@ -96,6 +119,39 @@ export function ListeningTranscriptPanel({
     if (!audio) {
       return;
     }
+
+    const applySeek = (startSec: number, autoplay: boolean) => {
+      const targetTime = Math.max(0, startSec);
+      const performSeek = () => {
+        if ("fastSeek" in audio && typeof audio.fastSeek === "function") {
+          try {
+            audio.fastSeek(targetTime);
+          } catch {
+            audio.currentTime = targetTime;
+          }
+        } else {
+          audio.currentTime = targetTime;
+        }
+        audio.playbackRate = playbackRate;
+        if (autoplay) {
+          void audio.play().catch(() => undefined);
+        }
+      };
+
+      // Some browsers ignore currentTime until metadata is ready.
+      if (audio.readyState < HTMLMediaElement.HAVE_METADATA || Number.isNaN(audio.duration)) {
+        pendingSeekRef.current = {
+          index: activeIndexRef.current,
+          startSec: targetTime,
+          autoplay,
+        };
+        audio.load();
+        return;
+      }
+
+      pendingSeekRef.current = null;
+      performSeek();
+    };
 
     const syncActiveSegment = (rawTime: number) => {
       if (!segments.length) {
@@ -190,6 +246,12 @@ export function ListeningTranscriptPanel({
     };
     const handleLoadedMetadata = () => {
       audio.playbackRate = playbackRate;
+      if (pendingSeekRef.current) {
+        const pending = pendingSeekRef.current;
+        pendingSeekRef.current = null;
+        applySeek(pending.startSec, pending.autoplay);
+        return;
+      }
       syncActiveSegment(audio.currentTime);
     };
 
@@ -244,6 +306,21 @@ export function ListeningTranscriptPanel({
     }
   }, [activeIndex, segments]);
 
+  useEffect(() => {
+    if (!showAnswerLocations || !firstAnswerSegmentId) {
+      return;
+    }
+
+    const node = segmentRefs.current[firstAnswerSegmentId];
+    if (!node) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      node.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [firstAnswerSegmentId, showAnswerLocations]);
+
   function seekToSegment(index: number) {
     const audio = audioRef.current;
     const segment = segments[index];
@@ -251,11 +328,28 @@ export function ListeningTranscriptPanel({
       return;
     }
 
-    audio.currentTime = Math.max(0, segment.startSec);
-    audio.playbackRate = playbackRate;
     activeIndexRef.current = index;
     setActiveIndex(index);
-    void audio.play().catch(() => undefined);
+    pendingSeekRef.current = { index, startSec: segment.startSec, autoplay: true };
+
+    const targetTime = Math.max(0, segment.startSec);
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA && !Number.isNaN(audio.duration)) {
+      if ("fastSeek" in audio && typeof audio.fastSeek === "function") {
+        try {
+          audio.fastSeek(targetTime);
+        } catch {
+          audio.currentTime = targetTime;
+        }
+      } else {
+        audio.currentTime = targetTime;
+      }
+      audio.playbackRate = playbackRate;
+      pendingSeekRef.current = null;
+      void audio.play().catch(() => undefined);
+      return;
+    }
+
+    audio.load();
   }
 
   function repeatActiveSegment() {
@@ -302,7 +396,7 @@ export function ListeningTranscriptPanel({
         </Button>
       </div>
 
-      <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
+      <div className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1 [scrollbar-width:thin]">
         {segments.map((segment, index) => {
           const isActive = index === activeIndex;
           const segmentLocations = locationsBySegmentId.get(segment.id) ?? [];
@@ -317,50 +411,34 @@ export function ListeningTranscriptPanel({
               type="button"
               onClick={() => seekToSegment(index)}
               className={cn(
-                "w-full rounded-2xl border px-3 py-3 text-left transition-all duration-200 ease-out",
+                "w-full rounded-xl px-2.5 py-2 text-left transition-all duration-200 ease-out",
                 isActive
-                  ? "border-amber-300 bg-amber-100/85 shadow-[0_14px_30px_-24px_rgba(245,158,11,0.95)] dark:border-amber-300/45 dark:bg-amber-300/18"
+                  ? "bg-amber-100/80 shadow-[0_12px_24px_-24px_rgba(245,158,11,0.9)] dark:bg-amber-300/14"
                   : hasAnswerLocation
-                    ? "border-emerald-400/65 bg-emerald-100/85 shadow-[0_14px_30px_-24px_rgba(16,185,129,0.95)] dark:border-emerald-400/45 dark:bg-emerald-400/16"
-                    : "border-transparent bg-background/35 hover:border-amber-200/60 hover:bg-amber-50/60 dark:hover:border-amber-300/20 dark:hover:bg-amber-300/8",
+                    ? "bg-emerald-100/70 shadow-[0_12px_24px_-24px_rgba(16,185,129,0.9)] dark:bg-emerald-400/12"
+                    : "bg-transparent hover:bg-amber-50/45 dark:hover:bg-amber-300/6",
               )}
             >
-              <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-3">
-                <span
-                  className={cn(
-                    "pt-0.5 text-[11px] font-black uppercase tracking-[0.16em]",
-                    isActive
-                      ? "text-amber-800 dark:text-amber-100"
-                      : hasAnswerLocation
-                        ? "text-emerald-800 dark:text-emerald-200"
-                        : "text-muted-foreground",
-                  )}
-                >
-                  {formatTranscriptTime(segment.startSec)}
-                </span>
-                <div className="space-y-2">
-                  <p
-                    className={cn(
-                      "leading-[1.5] text-foreground transition-colors",
-                      isActive || hasAnswerLocation ? "font-bold" : "font-medium",
-                    )}
-                  >
-                    {segment.text}
-                  </p>
-                  {showAnswerLocations && segmentLocations.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {segmentLocations.map((location) => (
-                        <span
-                          key={`${segment.id}-${location.questionLabel}`}
-                          className="rounded-full border border-emerald-500/45 bg-emerald-500/18 px-2.5 py-1 text-[11px] font-bold text-emerald-900 dark:border-emerald-400/40 dark:bg-emerald-400/18 dark:text-emerald-100"
-                        >
-                          {location.questionLabel}: {location.correctAnswer || location.answerText || "match"}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
+              <p
+                className={cn(
+                  "leading-[1.7] text-foreground transition-colors",
+                  hasAnswerLocation ? "font-semibold" : "font-normal",
+                )}
+              >
+                {showAnswerLocations && segmentLocations.length > 0 ? (
+                  <span className="mr-2 inline-flex flex-wrap items-center gap-1.5 align-middle">
+                    {segmentLocations.map((location) => (
+                      <span
+                        key={`${segment.id}-${location.questionLabel}`}
+                        className="inline-flex items-center rounded-md bg-emerald-500/14 px-1.5 py-0.5 text-[12px] font-bold text-emerald-800 dark:bg-emerald-400/16 dark:text-emerald-200"
+                      >
+                        {location.questionLabel}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+                <span className={cn(hasAnswerLocation && "font-semibold")}>{segment.text}</span>
+              </p>
             </button>
           );
         })}
