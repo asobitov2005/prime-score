@@ -1557,6 +1557,30 @@ function parseBinaryInstructionLayout(text: string) {
   };
 }
 
+function parseCompletionTableLayout(text: string) {
+  const rows = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (rows.length === 0 || rows.some((line) => !line.includes("|"))) {
+    return null;
+  }
+
+  const parsedRows = rows.map((line) => {
+    const isHeader = line.startsWith("||") && line.endsWith("||");
+    const body = isHeader ? line.slice(2, -2).trim() : line;
+    const cells = body.split("|").map((cell) => cell.trim());
+    return cells.length >= 2 ? { isHeader, cells } : null;
+  });
+
+  if (parsedRows.some((row) => row === null)) {
+    return null;
+  }
+
+  return parsedRows as Array<{ isHeader: boolean; cells: string[] }>;
+}
+
 function renderInstructionPreviewText(text: string, keyPrefix: string) {
   const binaryLayout = parseBinaryInstructionLayout(text);
   if (!binaryLayout) {
@@ -2246,26 +2270,6 @@ function ContentPanel({
         transcriptSegments: [],
         transcriptQuestionLocations: [],
       });
-      await regenerateTranscript(
-        {
-          ...(updatedSection ?? {
-            id: sectionId,
-            label: "Part",
-            title: "",
-            subtitle: "",
-            content: "",
-            mediaKind: "audio",
-            markerCount: 0,
-          }),
-          audioUrl: asset.publicUrl,
-          audioDurationSeconds: duration,
-          mediaKind: "audio",
-          transcript: "",
-          transcriptSegments: [],
-          transcriptQuestionLocations: [],
-        },
-        { filename: asset.filename, contentType: asset.contentType }
-      );
     } finally {
       setUploadingSectionId((current) => (current === sectionId ? null : current));
       setDraggingSectionId((current) => (current === sectionId ? null : current));
@@ -2492,7 +2496,7 @@ function ContentPanel({
                             <div>
                               <p className="text-sm font-semibold text-foreground">Audio Asset</p>
                               <p className="text-xs text-muted-foreground">
-                                Drag and drop audio here. Transcript and timestamps will be generated automatically.
+                                Drag and drop audio here. Transcript generation is paused for now.
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -2552,7 +2556,7 @@ function ContentPanel({
                             <div>
                               <p className="text-sm font-semibold text-foreground">Generated Transcript</p>
                               <p className="text-xs text-muted-foreground">
-                                Transcript input is automatic. Click regenerate after changing questions if you want fresh answer locations.
+                                Transcript generation is manual for now. Click regenerate only when you need it.
                               </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
@@ -2598,7 +2602,7 @@ function ContentPanel({
                             </div>
                           ) : (
                             <p className="mt-4 text-sm text-muted-foreground">
-                              Upload audio to generate transcript, timestamps, and question answer anchors automatically.
+                              Upload audio first. Transcript, timestamps, and answer anchors are paused until you regenerate manually.
                             </p>
                           )}
                         </div>
@@ -2837,12 +2841,11 @@ function QuestionsPanel({
   const addGroup = (sectionId?: string) => {
     const groups = draft.questionGroups ?? [];
     const typeId = draft.metadata.type === "listening" ? "listening_form_completion" : "reading_true_false_not_given";
-    const nextGroupNum = groups.length + 1;
     const targetSectionId = sectionId ?? draft.content.sections[0]?.id ?? "";
     const newGroup: AdminTestDraftQuestionGroup = {
       id: createDraftId("draft-group"),
       sectionId: targetSectionId,
-      title: `Question Group ${nextGroupNum}`,
+      title: "",
       instructions: defaultInstructions[typeId] || "Enter instructions for this group of questions.",
       typeId,
       questionStart: 1,
@@ -4362,8 +4365,111 @@ function EditorPreviewSection({
   }
 
   function renderCompletionPreview(group: AdminTestDraftState["questionGroups"][number]) {
-    const segments = (group.questionBlock ?? "").split("[]");
+    const questionBlock = group.questionBlock ?? "";
+    const segments = questionBlock.split("[]");
     const isWordBankCompletion = group.typeId.includes("wordbank");
+
+    function renderCompletionAnswer(question: AdminTestDraftQuestion, index: number, key: string) {
+      const isActive = activeQuestionId === question.id;
+      return isWordBankCompletion ? (
+        <select
+          key={`${key}-wordbank`}
+          id={`${previewId}-${section.id}-${question.id}`}
+          value=""
+          onChange={() => undefined}
+          onFocus={() => setActiveQuestionId(question.id)}
+          className={cn(
+            compact
+              ? "mx-1 inline-flex h-8 min-w-[132px] rounded-md border bg-background px-3 text-[12px] font-semibold transition"
+              : "mx-1 inline-flex h-9 min-w-[156px] rounded-md border bg-background px-3 text-sm font-semibold transition",
+            isActive
+              ? "border-primary text-primary shadow-sm"
+              : "border-border text-muted-foreground"
+          )}
+        >
+          <option value="">Select answer</option>
+          {group.sharedOptions.map((option) => (
+            <option key={`${question.id}-${option}`} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <button
+          type="button"
+          key={`${key}-input`}
+          id={`${previewId}-${section.id}-${question.id}`}
+          onClick={() => setActiveQuestionId(question.id)}
+          className={cn(
+            compact
+              ? "mx-1 inline-flex h-8 min-w-[46px] items-center justify-center rounded-md border text-[12px] font-black transition"
+              : "mx-1 inline-flex h-9 min-w-[52px] items-center justify-center rounded-md border text-sm font-black transition",
+            isActive
+              ? "border-primary bg-primary/12 text-primary shadow-sm"
+              : "border-border bg-background text-muted-foreground"
+          )}
+        >
+          {group.questionStart + index}
+        </button>
+      );
+    }
+
+    const tableLayout = parseCompletionTableLayout(questionBlock);
+    if (tableLayout) {
+      const questionIndexRef = { current: 0 };
+      return (
+        <div className="rounded-2xl border border-border/70 bg-muted/10 px-4 py-4">
+          {group.title ? (
+            <p className={cn("mb-4 text-center font-bold tracking-tight text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
+              {renderBraceBoldText(group.title, `${group.id}-completion-title`)}
+            </p>
+          ) : null}
+          <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-dashed border-sky-400/80 bg-sky-50/25 p-1 dark:border-sky-700/70 dark:bg-slate-900/25">
+            <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-dashed border-sky-300/80 bg-sky-50/35 dark:border-sky-700/60 dark:bg-slate-900/35">
+              <tbody>
+                {tableLayout.map((row, rowIndex) => (
+                  <tr
+                    key={`${group.id}-table-row-${rowIndex}`}
+                    className={row.isHeader ? "bg-sky-100/50 dark:bg-sky-950/30" : "border-t border-dashed border-sky-300/70 dark:border-sky-700/55"}
+                  >
+                    {row.cells.map((cell, cellIndex) => {
+                      const CellTag = row.isHeader ? "th" : "td";
+                      const cellSegments = cell.split("[]");
+                      return (
+                        <CellTag
+                          key={`${group.id}-table-cell-${rowIndex}-${cellIndex}`}
+                          className={cn(
+                            "align-middle border-l border-dashed border-sky-300/70 px-3 py-2 text-left font-sans text-foreground first:border-l-0 dark:border-sky-700/55",
+                            row.isHeader ? "text-sm font-bold" : compact ? "text-[14px] leading-[1.55]" : "text-[15px] leading-[1.7]"
+                          )}
+                        >
+                          {cellSegments.map((segment, segmentIndex) => {
+                            const question = segmentIndex < cellSegments.length - 1
+                              ? group.questions[questionIndexRef.current]
+                              : null;
+                            const currentIndex = questionIndexRef.current;
+                            if (question) {
+                              questionIndexRef.current += 1;
+                            }
+                            return (
+                              <span key={`${group.id}-table-fragment-${rowIndex}-${cellIndex}-${segmentIndex}`}>
+                                {segment ? renderBraceBoldText(segment, `${group.id}-table-text-${rowIndex}-${cellIndex}-${segmentIndex}`) : null}
+                                {question ? renderCompletionAnswer(question, currentIndex, `${group.id}-table-answer-${question.id}`) : null}
+                              </span>
+                            );
+                          })}
+                        </CellTag>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-2xl border border-border/70 bg-muted/10 px-4 py-4">
         {group.title ? (
@@ -4374,51 +4480,10 @@ function EditorPreviewSection({
         <div className={cn("whitespace-pre-wrap font-sans text-foreground", compact ? "text-[14px] leading-[1.55]" : "text-[15px] leading-[1.7]")}>
           {segments.map((segment, index) => {
             const question = group.questions[index];
-            const isActive = question ? activeQuestionId === question.id : false;
             return (
               <span key={`${group.id}-completion-${index}`}>
                 {renderBraceBoldText(segment, `${group.id}-completion-segment-${index}`)}
-                {question ? (
-                  isWordBankCompletion ? (
-                    <select
-                      id={`${previewId}-${section.id}-${question.id}`}
-                      value=""
-                      onChange={() => undefined}
-                      onFocus={() => setActiveQuestionId(question.id)}
-                      className={cn(
-                        compact
-                          ? "mx-1 inline-flex h-8 min-w-[132px] rounded-md border bg-background px-3 text-[12px] font-semibold transition"
-                          : "mx-1 inline-flex h-9 min-w-[156px] rounded-md border bg-background px-3 text-sm font-semibold transition",
-                        isActive
-                          ? "border-primary text-primary shadow-sm"
-                          : "border-border text-muted-foreground"
-                      )}
-                    >
-                      <option value="">Select answer</option>
-                      {group.sharedOptions.map((option) => (
-                        <option key={`${question.id}-${option}`} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <button
-                      type="button"
-                      id={`${previewId}-${section.id}-${question.id}`}
-                      onClick={() => setActiveQuestionId(question.id)}
-                      className={cn(
-                        compact
-                          ? "mx-1 inline-flex h-8 min-w-[46px] items-center justify-center rounded-md border text-[12px] font-black transition"
-                          : "mx-1 inline-flex h-9 min-w-[52px] items-center justify-center rounded-md border text-sm font-black transition",
-                        isActive
-                          ? "border-primary bg-primary/12 text-primary shadow-sm"
-                          : "border-border bg-background text-muted-foreground"
-                      )}
-                    >
-                      {group.questionStart + index}
-                    </button>
-                  )
-                ) : null}
+                {question ? renderCompletionAnswer(question, index, `${group.id}-inline-answer-${question.id}`) : null}
               </span>
             );
           })}

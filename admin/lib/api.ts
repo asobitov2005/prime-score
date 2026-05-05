@@ -58,6 +58,14 @@ function resolveAdminQuestionType(typeId: string, sharedOptions: string[]) {
   return typeId;
 }
 
+function sanitizeQuestionGroupTitle(title: string) {
+  const trimmedTitle = title.trim();
+  if (/^Question Group(?:\s+\d+(?:\s*[-,]\s*\d+)*)?$/i.test(trimmedTitle)) {
+    return "";
+  }
+  return trimmedTitle;
+}
+
 function buildRequestHeaders(): Record<string, string> {
   const token = getClientAdminAccessToken();
   if (!token) {
@@ -713,7 +721,7 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
     question_groups: questionGroups.map((group) => ({
       id: isUuidLike(group.id) ? group.id : undefined,
       section_id: sectionIdMap.get(group.sectionId) ?? generateUuid(),
-      title: group.title,
+      title: sanitizeQuestionGroupTitle(group.title),
       instructions: group.instructions,
       type_id: resolvedQuestionType(group.typeId),
       question_start: group.questionStart,
@@ -787,7 +795,7 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
     questionGroups: (draft.questionGroups ?? []).map((group) => ({
       id: group.id,
       sectionId: group.section_id,
-      title: group.title,
+      title: sanitizeQuestionGroupTitle(String(group.title ?? "")),
       instructions: group.instructions,
       typeId: resolveAdminQuestionType(group.type_id, group.shared_options),
       questionStart: group.question_start,

@@ -5,15 +5,11 @@ import { cn } from "@/lib/utils";
 interface AppLoadingPlaceholderProps {
   className?: string;
   mode?: "inline" | "overlay";
-  title?: string;
-  description?: string;
 }
 
 export function AppLoadingPlaceholder({
   className,
   mode = "inline",
-  title = "Loading",
-  description,
 }: AppLoadingPlaceholderProps) {
   const isOverlay = mode === "overlay";
 
@@ -42,17 +38,6 @@ export function AppLoadingPlaceholder({
             <span className="h-2.5 w-2.5 rounded-full bg-primary/75 animate-pulse [animation-delay:140ms]" />
             <span className="h-2.5 w-2.5 rounded-full bg-primary/45 animate-pulse [animation-delay:280ms]" />
           </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <p className="text-sm font-semibold tracking-tight text-foreground">
-            {title}
-          </p>
-          {description ? (
-            <p className="max-w-sm text-sm leading-6 text-muted-foreground">
-              {description}
-            </p>
-          ) : null}
         </div>
       </div>
     </div>

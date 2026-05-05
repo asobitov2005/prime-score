@@ -278,6 +278,7 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
     reading = MePerformanceTestCountBucketRead()
     listening = MePerformanceTestCountBucketRead()
     study_time = MePerformanceStudyTimeRead()
+    seen_test_keys: set[tuple[str, str, str]] = set()
 
     for attempt in attempts:
         test_type = attempt.test_snapshot.get("test_type")
@@ -293,16 +294,31 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
         elif test_type == TestType.listening:
             study_time.listening_time_sec += time_spent_sec
 
-        if str(scope) == TestScope.full.value:
+        sections = list(attempt.test_snapshot.get("sections") or [])
+        section_number = 0
+        if sections:
+            try:
+                section_number = int(sections[0].get("section_number") or 0)
+            except (TypeError, ValueError):
+                section_number = 0
+
+        format_key = str(attempt.test_snapshot.get("format") or "").strip().lower()
+        if not format_key:
+            if str(scope) == TestScope.full.value:
+                format_key = TestScope.full.value
+            elif section_number > 0:
+                format_key = f"section_{section_number}"
+            else:
+                format_key = "unknown"
+
+        test_key = (str(getattr(attempt, "test_id", "")), str(test_type), format_key)
+        if test_key in seen_test_keys:
+            continue
+        seen_test_keys.add(test_key)
+
+        if str(scope) == TestScope.full.value or format_key == TestScope.full.value:
             bucket.full_count += 1
         else:
-            sections = list(attempt.test_snapshot.get("sections") or [])
-            section_number = 0
-            if sections:
-                try:
-                    section_number = int(sections[0].get("section_number") or 0)
-                except (TypeError, ValueError):
-                    section_number = 0
             if section_number == 1:
                 bucket.section_1_count += 1
             elif section_number == 2:

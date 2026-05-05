@@ -555,6 +555,30 @@ function parseBinaryInstructionLayout(text: string) {
   };
 }
 
+function parseCompletionTableLayout(text: string) {
+  const rows = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (rows.length === 0 || rows.some((line) => !line.includes("|"))) {
+    return null;
+  }
+
+  const parsedRows = rows.map((line) => {
+    const isHeader = line.startsWith("||") && line.endsWith("||");
+    const body = isHeader ? line.slice(2, -2).trim() : line;
+    const cells = body.split("|").map((cell) => cell.trim());
+    return cells.length >= 2 ? { isHeader, cells } : null;
+  });
+
+  if (parsedRows.some((row) => row === null)) {
+    return null;
+  }
+
+  return parsedRows as Array<{ isHeader: boolean; cells: string[] }>;
+}
+
 
 function toggleMultiValue(current: string | undefined, next: string, maxValues = 2) {
   const existing = (current ?? "")
@@ -639,9 +663,16 @@ function questionRangeLabelForGroup(group: PreviewGroup) {
   return `Questions ${startLabel} - ${endLabel}`;
 }
 
+function isGenericQuestionGroupTitle(title: string) {
+  return /^Question Group(?:\s+\d+(?:\s*[-,]\s*\d+)*)?$/i.test(title);
+}
+
 function shouldRenderCustomGroupTitle(group: PreviewGroup) {
   const normalizedTitle = String(group.title ?? "").trim();
   if (!normalizedTitle) {
+    return false;
+  }
+  if (isGenericQuestionGroupTitle(normalizedTitle)) {
     return false;
   }
   if (/^Questions?\s+\d+/i.test(normalizedTitle)) {
@@ -1422,7 +1453,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       allowLeaveRef.current = true;
       setIsCalculatingResults(true);
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
-      router.push(`/attempts/${examData.attemptId}/result`);
+      router.replace(`/attempts/${examData.attemptId}/result`);
     } catch {
       setIsCalculatingResults(false);
       setIsSubmitted(false);
@@ -2115,8 +2146,22 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     };
   }, []);
 
+  function optionBankWidthForGroup(group: PreviewGroup) {
+    const longestChars = typedOptionLines(group).reduce((maxLength, option, index) => {
+      const optionView = typedOptionView(option, index, group.type);
+      const text = optionView.text || optionView.label || optionView.value;
+      const hasPrefix =
+        !group.type.includes("matching_headings")
+        && (optionView.hasExplicitPrefix || shouldAutoLetterMatchingOptions(group.type));
+      const displayText = hasPrefix ? `${optionView.value}. ${text}` : text;
+      return Math.max(maxLength, displayText.trim().length);
+    }, 18);
+
+    return `${Math.max(18, longestChars + 6)}ch`;
+  }
+
   function renderOptionBank(group: PreviewGroup) {
-    if (group.type.includes("matching_information")) {
+    if (group.type.includes("matching_information") || group.type.includes("plan_map_labeling")) {
       return null;
     }
 
@@ -2166,15 +2211,17 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     }
 
     const isBankDropReady = draggingHeading?.groupId === group.id || draggingWordBank?.groupId === group.id;
+    const optionBankWidth = optionBankWidthForGroup(group);
 
     return (
       <div
         data-heading-bank-group-id={group.type.includes("matching_headings") ? group.id : undefined}
         data-wordbank-bank-group-id={isWordBankLikeGroup ? group.id : undefined}
         className={cn(
-          "max-w-[34rem] p-1 transition",
+          "w-full p-1 transition",
           (dragOverHeadingBankGroupId === group.id || dragOverWordBankGroupId === group.id) && isBankDropReady && "rounded-xl bg-primary/5"
         )}
+        style={group.type.includes("listening_matching") ? { width: optionBankWidth } : undefined}
       >
         {!group.type.includes("listening_matching") ? (
           <p
@@ -2192,7 +2239,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           group.type.includes("wordbank")
             ? "flex flex-wrap gap-2"
             : group.type.includes("listening_matching")
-              ? "space-y-2"
+              ? "flex flex-col gap-2"
             : "space-y-2"
         )}>
           {bankOptions.map((entry) => {
@@ -2238,14 +2285,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 className={cn(
                   "rounded-xl px-3 py-2 transition-transform duration-150",
                   group.type.includes("matching_headings")
-                    ? "border border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
+                    ? "w-full min-w-0 border border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
                     : group.type.includes("wordbank")
-                      ? "inline-flex w-auto max-w-full cursor-grab items-center border border-border/55 bg-card active:cursor-grabbing hover:bg-muted/20"
+                      ? "inline-flex min-w-[16rem] max-w-full cursor-grab items-center border border-border/55 bg-card active:cursor-grabbing hover:bg-muted/20"
                       : group.type.includes("listening_matching")
-                        ? "cursor-grab rounded-lg border border-border/90 bg-card px-3 py-1.5 shadow-sm active:cursor-grabbing dark:border-slate-500/80"
+                        ? "w-full min-w-0 cursor-grab rounded-lg border border-border/90 bg-card px-3 py-1.5 shadow-sm active:cursor-grabbing dark:border-slate-500/80"
                         : "border border-border/55 bg-card",
                   hasPrefix ? "flex items-start gap-0.5" : "block"
                 )}
+                style={group.type.includes("matching_headings") || isWordBankLikeGroup ? { width: optionBankWidth } : undefined}
               >
               {hasPrefix ? (
                   <>
@@ -2264,7 +2312,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       data-highlight-text
                       onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
                       className={cn(
-                        "select-text flex-1 text-[16px] leading-6 text-foreground",
+                        "select-text flex-1 whitespace-nowrap text-[16px] leading-6 text-foreground",
                         group.type.includes("listening_matching") && "min-w-0 leading-5"
                       )}
                     >
@@ -2295,8 +2343,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       data-highlight-text
                       onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
                       className={cn(
-                        "select-text text-[16px] font-bold leading-6 text-foreground",
-                        group.type.includes("wordbank") ? "block whitespace-nowrap" : "block flex-1"
+                        "select-text whitespace-nowrap text-[16px] font-bold leading-6 text-foreground",
+                        group.type.includes("wordbank") ? "block" : "block flex-1"
                       )}
                     >
                       {renderHighlightedText(optionBlockKey, text)}
@@ -2327,11 +2375,101 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           <img
             src={group.diagramImageUrl}
             alt={group.title}
-            className="max-h-[340px] w-full object-contain"
+            className="max-h-[340px] w-full object-contain object-left"
           />
         </div>
       </div>
     );
+  }
+
+  function renderGroupQuestionList(group: PreviewGroup) {
+    if (usesBracketCompletionLayout(group.type) && group.questionBlock?.trim()) {
+      return renderInlineCompletionGroup(group);
+    }
+
+    if (group.type.includes("matching_headings")) {
+      return null;
+    }
+
+    return group.questions.map((question) => {
+      const isBinaryQuestion = isTfng(question.type) || isYnng(question.type);
+      const isMatchingInformationQuestion = question.type.includes("matching_information");
+      const isMatchingFeaturesQuestion = question.type.includes("matching_features");
+      const isListeningMatchingQuestion = question.type.includes("listening_matching");
+      const isPlanMapQuestion = question.type.includes("plan_map_labeling");
+      const isInlineMatchingQuestion =
+        isMatchingInformationQuestion
+        || isMatchingFeaturesQuestion
+        || isListeningMatchingQuestion
+        || isPlanMapQuestion;
+      const inlineQuestionLabel = question.label ?? String(question.number);
+
+      return (
+        <div
+          key={question.id}
+          id={question.id}
+          onClick={() => setActiveQuestionId(question.id)}
+          className={cn(
+            "px-0 transition",
+            isInlineMatchingQuestion ? "py-0" : "py-2",
+            activeQuestionId === question.id && ""
+          )}
+        >
+          <div className={cn(
+            "mb-2.5 flex items-start gap-3",
+            isBinaryQuestion && "mb-1.5",
+            isInlineMatchingQuestion && "mb-0 gap-1 items-start",
+            isListeningMatchingQuestion && "gap-4",
+            isPlanMapQuestion && "gap-2 items-center"
+          )}>
+            <div className={cn(
+              isPlanMapQuestion
+                ? "inline-grid max-w-[456px] grid-cols-[minmax(0,252px)_188px] items-center gap-4"
+                : "min-w-0 flex-1 space-y-1",
+              isInlineMatchingQuestion && !isPlanMapQuestion && "flex flex-1 flex-wrap items-start gap-1 space-y-0",
+              isListeningMatchingQuestion && "w-auto flex-none",
+              isMcqMultiple(question.type) && "space-y-0"
+            )}>
+              <p
+                ref={(node) => {
+                  textBlockRefs.current[`question-prompt-${question.id}`] = node;
+                }}
+                data-highlight-text
+                onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
+                className={cn(
+                  "select-text font-sans text-foreground",
+                  isMatchingInformationQuestion && "min-w-[160px] flex-1",
+                  isMatchingFeaturesQuestion && "min-w-[180px] flex-1",
+                  isListeningMatchingQuestion && "w-[260px] max-w-[260px] flex-none",
+                  isPlanMapQuestion && "min-w-0 max-w-none"
+                )}
+                style={{ fontSize: `${bodyFontSize}px`, lineHeight: isInlineMatchingQuestion ? 1.35 : 1.5 }}
+              >
+                <span className="mr-3 inline-block whitespace-nowrap text-[16px] font-bold tracking-tight text-foreground">
+                  {inlineQuestionLabel}
+                </span>
+                {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
+              </p>
+              {isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
+              {question.instruction && !group.instruction?.trim() && !isBinaryQuestion && !isMatching(question.type) ? (
+                <p
+                  ref={(node) => {
+                    textBlockRefs.current[`question-instruction-${question.id}`] = node;
+                  }}
+                  data-highlight-text
+                  onMouseUp={(event) => handleTextBlockMouseUp(`question-instruction-${question.id}`, event)}
+                  className="select-text text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+                >
+                  {renderHighlightedText(`question-instruction-${question.id}`, question.instruction)}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {!isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
+        </div>
+      );
+    });
   }
 
   function renderMatchingHeadingDropArea(paragraph: PreviewParagraph) {
@@ -2429,8 +2567,119 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function renderInlineCompletionGroup(group: PreviewGroup) {
-    const segments = (group.questionBlock ?? "").split("[]");
+    const questionBlock = group.questionBlock ?? "";
+    const segments = questionBlock.split("[]");
     const isWordBankGroup = group.type.includes("wordbank");
+
+    function renderInlineCompletionAnswer(question: PreviewQuestion, key: string) {
+      return isWordBankGroup ? (
+        <button
+          type="button"
+          key={`${key}-wordbank`}
+          data-question-anchor={question.id}
+          data-wordbank-drop-question-id={question.id}
+          data-wordbank-drop-group-id={group.id}
+          onClick={() => setActiveQuestionId(question.id)}
+          onPointerDown={(event) => {
+            const currentValue = answers[question.id] ?? "";
+            if (!currentValue) {
+              return;
+            }
+            beginWordBankPointerDrag(event, {
+              groupId: group.id,
+              value: currentValue,
+              sourceQuestionId: question.id,
+            });
+          }}
+          className={cn(
+            "mx-1 inline-flex h-8 min-w-[132px] items-center rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none transition",
+            theme === "light"
+              ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
+              : "border-slate-500/55 bg-card text-foreground",
+            dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
+            answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+            activeQuestionId === question.id && activeInputClass
+          )}
+          style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
+        >
+          <span className={cn(!answers[question.id] && numberedPlaceholderClass)}>
+            {answers[question.id] || (question.label ?? String(question.number))}
+          </span>
+        </button>
+      ) : (
+        <Input
+          key={`${key}-input`}
+          value={answers[question.id] ?? ""}
+          onFocus={() => setActiveQuestionId(question.id)}
+          onChange={(event) => persistAnswer(question.id, event.target.value)}
+          placeholder={question.label ?? String(question.number)}
+          data-question-anchor={question.id}
+          className={cn(
+            "mx-1 inline-flex h-8 min-w-[132px] rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none placeholder:text-[13px] placeholder:font-semibold placeholder:tracking-[0.04em] placeholder:opacity-100",
+            theme === "light"
+              ? "border-[#2f436f]/45 bg-[#f8faff]"
+              : "border-primary/30 bg-card",
+            numberedPlaceholderClass,
+            inputFocusClass,
+            activeQuestionId === question.id && activeInputClass
+          )}
+          style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
+          autoComplete="off"
+          spellCheck="false"
+        />
+      );
+    }
+
+    const tableLayout = parseCompletionTableLayout(questionBlock);
+    if (tableLayout) {
+      const questionIndexRef = { current: 0 };
+
+      return (
+        <div className="px-2 py-2">
+          <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-dashed border-sky-400/80 bg-sky-50/25 p-1 dark:border-sky-700/70 dark:bg-slate-900/25">
+            <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-dashed border-sky-300/80 bg-sky-50/35 dark:border-sky-700/60 dark:bg-slate-900/35">
+              <tbody>
+                {tableLayout.map((row, rowIndex) => (
+                  <tr
+                    key={`${group.id}-table-row-${rowIndex}`}
+                    className={row.isHeader ? "bg-sky-100/50 dark:bg-sky-950/30" : "border-t border-dashed border-sky-300/70 dark:border-sky-700/55"}
+                  >
+                    {row.cells.map((cell, cellIndex) => {
+                      const CellTag = row.isHeader ? "th" : "td";
+                      const cellSegments = cell.split("[]");
+
+                      return (
+                        <CellTag
+                          key={`${group.id}-table-cell-${rowIndex}-${cellIndex}`}
+                          className={cn(
+                            "align-middle border-l border-dashed border-sky-300/70 px-3 py-2 text-left font-sans text-foreground first:border-l-0 dark:border-sky-700/55",
+                            row.isHeader ? "text-sm font-bold" : "text-[15px] font-medium"
+                          )}
+                          style={{ lineHeight: 1.5 }}
+                        >
+                          {cellSegments.map((segment, segmentIndex) => {
+                            const question = segmentIndex < cellSegments.length - 1
+                              ? group.questions[questionIndexRef.current++]
+                              : null;
+                            return (
+                              <span key={`${group.id}-table-fragment-${rowIndex}-${cellIndex}-${segmentIndex}`}>
+                                {segment ? renderHighlightedText(`${group.id}-table-text-${rowIndex}-${cellIndex}-${segmentIndex}`, segment) : null}
+                                {question ? renderInlineCompletionAnswer(question, `${group.id}-table-answer-${question.id}`) : null}
+                              </span>
+                            );
+                          })}
+                        </CellTag>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="px-2 py-2">
         <div
@@ -2451,62 +2700,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 >
                   {renderHighlightedText(`inline-completion-${group.id}-${index}`, segment)}
                 </span>
-                {question ? (
-                  isWordBankGroup ? (
-                    <button
-                      type="button"
-                      data-question-anchor={question.id}
-                      data-wordbank-drop-question-id={question.id}
-                      data-wordbank-drop-group-id={group.id}
-                      onClick={() => setActiveQuestionId(question.id)}
-                      onPointerDown={(event) => {
-                        const currentValue = answers[question.id] ?? "";
-                        if (!currentValue) {
-                          return;
-                        }
-                        beginWordBankPointerDrag(event, {
-                          groupId: group.id,
-                          value: currentValue,
-                          sourceQuestionId: question.id,
-                        });
-                      }}
-                      className={cn(
-                        "mx-1 inline-flex h-8 min-w-[132px] items-center rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none transition",
-                        theme === "light"
-                          ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
-                          : "border-slate-500/55 bg-card text-foreground",
-                        dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
-                        answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
-                        activeQuestionId === question.id && activeInputClass
-                      )}
-                      style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
-                    >
-                      <span className={cn(!answers[question.id] && numberedPlaceholderClass)}>
-                        {answers[question.id] || (question.label ?? String(question.number))}
-                      </span>
-                    </button>
-                  ) : (
-                    <Input
-                      value={answers[question.id] ?? ""}
-                      onFocus={() => setActiveQuestionId(question.id)}
-                      onChange={(event) => persistAnswer(question.id, event.target.value)}
-                      placeholder={question.label ?? String(question.number)}
-                      data-question-anchor={question.id}
-                      className={cn(
-                        "mx-1 inline-flex h-8 min-w-[132px] rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none placeholder:text-[13px] placeholder:font-semibold placeholder:tracking-[0.04em] placeholder:opacity-100",
-                        theme === "light"
-                          ? "border-[#2f436f]/45 bg-[#f8faff]"
-                          : "border-primary/30 bg-card",
-                        numberedPlaceholderClass,
-                        inputFocusClass,
-                        activeQuestionId === question.id && activeInputClass
-                      )}
-                      style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
-                      autoComplete="off"
-                      spellCheck="false"
-                    />
-                  )
-                ) : null}
+                {question ? renderInlineCompletionAnswer(question, `${group.id}-inline-answer-${question.id}`) : null}
               </span>
             );
           })}
@@ -2546,35 +2740,33 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   persistAnswer(question.id, option);
                 }}
                 className={cn(
-                  "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
-                  isReviewMode && isCorrectOption && "bg-emerald-500/10",
-                  isReviewMode && isIncorrectSelected && "bg-red-500/10",
-                  selected
-                    ? "bg-card"
-                    : "bg-card hover:bg-muted/20"
+                  "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
+                  isReviewMode && isCorrectOption && "text-emerald-700 dark:text-emerald-400",
+                  isReviewMode && isIncorrectSelected && "text-red-700 dark:text-red-400",
+                  "bg-transparent hover:bg-transparent"
                 )}
               >
                 <span
                   className={cn(
-                    "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition",
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
                     theme === "light"
                       ? isReviewMode && isCorrectOption
                         ? "border-emerald-600 text-emerald-600"
                         : isReviewMode && isIncorrectSelected
                           ? "border-red-600 text-red-600"
                           : selected
-                        ? "border-slate-700 text-slate-700"
+                        ? "border-slate-900 text-slate-900"
                         : "border-slate-400/85 text-transparent"
                       : isReviewMode && isCorrectOption
                         ? "border-emerald-400 text-emerald-400"
                         : isReviewMode && isIncorrectSelected
                           ? "border-red-400 text-red-400"
                           : selected
-                        ? "border-slate-300 text-slate-300"
+                        ? "border-slate-200 text-slate-200"
                         : "border-slate-500/85 text-transparent"
                   )}
                 >
-                  <span className={cn("h-1.5 w-1.5 rounded-full bg-current transition", selected ? "opacity-100" : "opacity-0")} />
+                  <span className={cn("h-2 w-2 rounded-full bg-current transition", selected ? "opacity-100" : "opacity-0")} />
                 </span>
                 <span
                   className="font-sans text-foreground"
@@ -2612,27 +2804,25 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   persistAnswer(question.id, optionLetter);
                 }}
                 className={cn(
-                  "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
-                  isReviewMode && isCorrectOption && "bg-emerald-500/10",
-                  isReviewMode && isIncorrectSelected && "bg-red-500/10",
-                  checked
-                    ? "bg-card shadow-none"
-                    : "bg-card hover:bg-muted/20"
+                  "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
+                  isReviewMode && isCorrectOption && "text-emerald-700 dark:text-emerald-400",
+                  isReviewMode && isIncorrectSelected && "text-red-700 dark:text-red-400",
+                  "bg-transparent hover:bg-transparent"
                 )}
               >
                 <span
                   className={cn(
-                    "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 transition",
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
                     checked
                       ? isReviewMode && isCorrectOption
                         ? "border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
                         : isReviewMode && isIncorrectSelected
                           ? "border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
-                          : "border-slate-700 text-slate-700 dark:border-slate-300 dark:text-slate-300"
+                          : "border-slate-900 text-slate-900 dark:border-slate-200 dark:text-slate-200"
                       : "border-slate-400/85 text-transparent dark:border-slate-500/85"
                   )}
                 >
-                  <span className={cn("h-1.5 w-1.5 rounded-full bg-current transition", checked ? "opacity-100" : "opacity-0")} />
+                  <span className={cn("h-2 w-2 rounded-full bg-current transition", checked ? "opacity-100" : "opacity-0")} />
                 </span>
                 <span
                   ref={(node) => {
@@ -2640,7 +2830,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   }}
                   data-highlight-text
                   onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
-                  className="select-text font-sans text-foreground"
+                  className={cn("select-text font-sans text-foreground transition-colors", checked && "text-slate-950 dark:text-slate-50")}
                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                 >
                   <span className="mr-2 font-black">{optionLetter}.</span>
@@ -2685,32 +2875,34 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   persistAnswer(question.id, toggleMultiValue(answers[question.id], optionLetter, maxSelections));
                 }}
                 className={cn(
-                  "flex w-full items-start gap-2.5 rounded-2xl px-2 py-1.5 text-left transition",
+                  "flex w-full items-start gap-2.5 rounded-2xl border px-2.5 py-2 text-left transition duration-150",
                   isReviewMode && isCorrectOption && "bg-emerald-500/10",
                   isReviewMode && isIncorrectSelected && "bg-red-500/10",
                   disabled && "opacity-70",
                   checked
-                    ? "bg-card shadow-none"
+                    ? theme === "light"
+                      ? "border-slate-950/50 bg-slate-950/[0.075] shadow-[0_10px_24px_-18px_rgba(15,23,42,0.55),inset_0_0_0_1px_rgba(15,23,42,0.12)]"
+                      : "border-slate-50/35 bg-slate-50/[0.09] shadow-[0_10px_24px_-18px_rgba(248,250,252,0.24),inset_0_0_0_1px_rgba(248,250,252,0.09)]"
                     : disabled
-                      ? "bg-card"
-                      : "bg-card hover:bg-muted/20"
+                      ? "border-border bg-card"
+                      : "border-slate-300/90 bg-card hover:border-slate-400 hover:bg-muted/20 dark:border-slate-700 dark:hover:border-slate-500"
                 )}
               >
                 <span
                   className={cn(
-                    "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border-2 transition",
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 transition",
                     checked
                       ? isReviewMode && isCorrectOption
-                        ? "border-emerald-600 bg-emerald-600 ring-1 ring-emerald-600/20 dark:border-emerald-400 dark:bg-emerald-400 dark:ring-emerald-400/20"
+                        ? "border-emerald-600 bg-emerald-600 ring-2 ring-emerald-600/25 dark:border-emerald-400 dark:bg-emerald-400 dark:ring-emerald-400/25"
                         : isReviewMode && isIncorrectSelected
-                          ? "border-red-600 bg-red-600 ring-1 ring-red-600/20 dark:border-red-400 dark:bg-red-400 dark:ring-red-400/20"
-                          : "border-slate-950 bg-slate-950 ring-1 ring-slate-950/20 dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50/20"
+                          ? "border-red-600 bg-red-600 ring-2 ring-red-600/25 dark:border-red-400 dark:bg-red-400 dark:ring-red-400/25"
+                          : "border-slate-950 bg-slate-950 ring-4 ring-slate-950/12 shadow-[0_0_0_1px_rgba(15,23,42,0.14)] dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50/12 dark:shadow-[0_0_0_1px_rgba(248,250,252,0.16)]"
                       : disabled
                         ? "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70"
-                        : "border-slate-500 bg-background dark:border-slate-400 dark:bg-transparent"
+                        : "border-slate-500 bg-background shadow-sm dark:border-slate-400 dark:bg-transparent"
                   )}
                 >
-                  {checked ? <Check className="h-3 w-3 text-white dark:text-slate-950" strokeWidth={3} /> : null}
+                  {checked ? <Check className="h-3.5 w-3.5 text-white dark:text-slate-950" strokeWidth={3.25} /> : null}
                 </span>
                 <span
                   ref={(node) => {
@@ -2718,7 +2910,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   }}
                   data-highlight-text
                   onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
-                  className={cn("select-text font-sans text-foreground", disabled && "text-muted-foreground")}
+                  className={cn(
+                    "select-text font-sans text-foreground transition-colors",
+                    checked && "text-slate-950 dark:text-slate-50",
+                    disabled && "text-muted-foreground"
+                  )}
                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                 >
                   <span className="mr-2 font-black">{optionLetter}.</span>
@@ -2815,24 +3011,24 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       return (
           <div className={cn(
             isMatchingInformation
-              ? "min-w-[92px] max-w-[126px] flex-none"
+              ? "min-w-[120px] max-w-[156px] flex-none"
               : isMatchingFeatures
-                ? "min-w-[150px] max-w-[210px] flex-none"
+                ? "min-w-[220px] max-w-[300px] flex-none"
                 : "pl-12"
           )}>
           <div className={cn(
             "relative",
             isMatchingInformation
-              ? "max-w-[126px]"
+              ? "max-w-[156px]"
               : isMatchingFeatures
-                ? "max-w-[210px]"
-                : "max-w-sm"
+                ? "max-w-[300px]"
+                : "max-w-md"
           )}>
             <select
               value={normalizedMatchingValue}
               onChange={(event) => persistAnswer(question.id, event.target.value)}
               className={cn(
-                "flex w-full appearance-none items-center rounded-xl border border-border bg-card text-sm font-semibold text-foreground shadow-none outline-none transition",
+                "flex w-full appearance-none items-center rounded-xl border border-border bg-card text-sm font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
                 isMatchingInformation
                   ? "h-8 px-3 pr-8"
                   : isMatchingFeatures
@@ -2875,12 +3071,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
       return (
         <div className="pl-12 space-y-1">
-          <div className="relative max-w-md">
+          <div className="relative max-w-xl">
             <select
               value={answers[question.id] ?? ""}
               onChange={(event) => persistAnswer(question.id, event.target.value)}
               className={cn(
-                "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
                 isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
                 isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
                 theme === "light"
@@ -2919,13 +3115,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
       if (mapOptions.length > 0) {
         return (
-          <div className="pl-12 space-y-1">
-            <div className="relative max-w-[220px]">
+          <div className="w-[188px] flex-none space-y-1">
+            <div className="relative">
               <select
                 value={normalizedMapValue}
                 onChange={(event) => persistAnswer(question.id, event.target.value)}
                 className={cn(
-                  "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                  "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
                   isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
                   isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
                   theme === "light"
@@ -2933,7 +3129,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     : "focus:border-slate-400"
                 )}
               >
-                <option value="">Select map label</option>
+                <option value=""></option>
                 {mapOptions.map((option, index) => {
                   const optionView = typedOptionView(option, index, question.type);
                   return (
@@ -2953,6 +3149,30 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           </div>
         );
       }
+
+      return (
+        <div className="w-[188px] flex-none space-y-1">
+          <Input
+            value={answers[question.id] ?? ""}
+            onFocus={() => setActiveQuestionId(question.id)}
+            onChange={(event) => persistAnswer(question.id, event.target.value)}
+            placeholder=""
+            className={cn(
+              "h-10 w-full rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none",
+              isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+              isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
+              inputFocusClass
+            )}
+            autoComplete="off"
+            spellCheck="false"
+          />
+          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Correct answer: {formattedReviewCorrectAnswer}
+            </p>
+          ) : null}
+        </div>
+      );
     }
 
     if (isCompletion(question.type)) {
@@ -3532,9 +3752,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 </div>
               ) : null}
               {currentQuestionGroups.map((group, groupIndex) => (
-                <div key={group.id} className="rounded-none border-0 bg-transparent p-0 shadow-none">
+                <div key={group.id} className="rounded-none border-0 bg-transparent p-0 pl-4 shadow-none md:pl-6">
                   {(() => {
                     const isListeningMatchingGroup = group.type.includes("listening_matching");
+                    const isPlanMapGroup = group.type.includes("plan_map_labeling");
                     return (
                       <>
                   <div className="border-l-2 border-primary/70 pl-3">
@@ -3547,15 +3768,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       }}
                       data-highlight-text
                       onMouseUp={(event) => handleTextBlockMouseUp(`group-instruction-${group.id}`, event)}
-                      className="mt-2 whitespace-pre-wrap select-text text-sm font-medium leading-6 text-foreground"
-                      style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
+                      className="mt-2.5 whitespace-pre-wrap select-text text-[15px] font-medium leading-7 text-foreground md:text-base"
+                      style={{ fontSize: `${Math.max(bodyFontSize + 1, 16)}px`, lineHeight: 1.6 }}
                     >
                       {renderInstructionText(`group-instruction-${group.id}`, group.instruction)}
                     </div>
                   </div>
 
                   <div className={cn(
-                    "px-0 py-2",
+                    "mt-5 px-0 py-2",
                     isListeningMatchingGroup ? "flex items-start gap-2" : "space-y-4"
                   )}>
                     <div className={cn(
@@ -3569,86 +3790,28 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         </h2>
                       </div>
                     ) : null}
-                    {renderDiagramBlock(group)}
-                    {!isListeningMatchingGroup ? renderOptionBank(group) : null}
-
-                    {usesBracketCompletionLayout(group.type) && group.questionBlock?.trim()
-                      ? renderInlineCompletionGroup(group)
-                      : !group.type.includes("matching_headings")
-                        ? group.questions.map((question) => {
-                          const isBinaryQuestion = isTfng(question.type) || isYnng(question.type);
-                          const isMatchingInformationQuestion = question.type.includes("matching_information");
-                          const isMatchingFeaturesQuestion = question.type.includes("matching_features");
-                          const isListeningMatchingQuestion = question.type.includes("listening_matching");
-                          const isInlineMatchingQuestion =
-                            isMatchingInformationQuestion || isMatchingFeaturesQuestion || isListeningMatchingQuestion;
-                          const inlineQuestionLabel = question.label ?? String(question.number);
-                          return (
-                          <div
-                            key={question.id}
-                            id={question.id}
-                            onClick={() => setActiveQuestionId(question.id)}
-                            className={cn(
-                              "px-0 transition",
-                              isInlineMatchingQuestion ? "py-0" : "py-2",
-                              activeQuestionId === question.id && ""
-                            )}
-                          >
-                            <div className={cn(
-                              "mb-2.5 flex items-start gap-3",
-                              isBinaryQuestion && "mb-1.5",
-                              isInlineMatchingQuestion && "mb-0 gap-1 items-start",
-                              isListeningMatchingQuestion && "gap-4"
-                            )}>
-                              <div className={cn(
-                                "min-w-0 flex-1 space-y-1",
-                                isInlineMatchingQuestion && "flex flex-1 flex-wrap items-start gap-1 space-y-0",
-                                isListeningMatchingQuestion && "w-auto flex-none",
-                                isMcqMultiple(question.type) && "space-y-0"
-                              )}>
-                                <p
-                                  ref={(node) => {
-                                    textBlockRefs.current[`question-prompt-${question.id}`] = node;
-                                  }}
-                                  data-highlight-text
-                                  onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
-                                  className={cn(
-                                    "select-text font-sans text-foreground",
-                                    isMatchingInformationQuestion && "min-w-[160px] flex-1",
-                                    isMatchingFeaturesQuestion && "min-w-[180px] flex-1",
-                                    isListeningMatchingQuestion && "w-[260px] max-w-[260px] flex-none"
-                                  )}
-                                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: isInlineMatchingQuestion ? 1.35 : 1.5 }}
-                                >
-                                  <span className="mr-3 inline-block whitespace-nowrap text-[16px] font-bold tracking-tight text-foreground">
-                                    {inlineQuestionLabel}
-                                  </span>
-                                  {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
-                                </p>
-                                {isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
-                                {question.instruction && !group.instruction?.trim() && !isBinaryQuestion && !isMatching(question.type) ? (
-                                  <p
-                                    ref={(node) => {
-                                      textBlockRefs.current[`question-instruction-${question.id}`] = node;
-                                    }}
-                                    data-highlight-text
-                                    onMouseUp={(event) => handleTextBlockMouseUp(`question-instruction-${question.id}`, event)}
-                                    className="select-text text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-                                  >
-                                    {renderHighlightedText(`question-instruction-${question.id}`, question.instruction)}
-                                  </p>
-                                  ) : null}
-                              </div>
-                            </div>
-
-                            {!isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
-                          </div>
-                        );
-                        })
-                        : null}
+                    {isPlanMapGroup ? (
+                      <div className="grid gap-3 lg:grid-cols-[560px_312px] lg:items-start lg:justify-start">
+                        <div className="min-w-0 w-[560px] justify-self-start">
+                          {renderDiagramBlock(group)}
+                        </div>
+                        <div className="min-w-0 justify-self-start space-y-3 lg:self-center">
+                          {renderGroupQuestionList(group)}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {renderDiagramBlock(group)}
+                        {!isListeningMatchingGroup ? renderOptionBank(group) : null}
+                        {renderGroupQuestionList(group)}
+                      </>
+                    )}
                     </div>
                     {isListeningMatchingGroup ? (
-                      <div className="w-[14rem] shrink-0">
+                      <div
+                        className="shrink-0"
+                        style={{ width: optionBankWidthForGroup(group) }}
+                      >
                         {renderOptionBank(group)}
                       </div>
                     ) : null}

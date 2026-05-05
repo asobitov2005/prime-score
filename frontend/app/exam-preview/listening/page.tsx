@@ -14,6 +14,8 @@ interface ListeningExamPreviewPageProps {
   };
 }
 
+type RawParagraph = string | { id?: string; text?: string; label?: string };
+
 function normalizeTranscriptSegments(
   segments:
     | Array<{
@@ -125,6 +127,34 @@ function buildSubtitle(questionStart: number | null, questionEnd: number | null,
   return `Listen to the recording and answer questions ${questionStart}-${questionEnd} in the panel on the right.`;
 }
 
+function extractParagraphText(paragraph: RawParagraph) {
+  if (typeof paragraph !== "string") {
+    return paragraph.text ?? "";
+  }
+
+  const trimmed = paragraph.trim();
+  if (!trimmed.startsWith("{") || !trimmed.includes("text")) {
+    return paragraph;
+  }
+
+  const textMarker = trimmed.match(/['"]text['"]\s*:\s*/);
+  if (!textMarker) {
+    return paragraph;
+  }
+
+  const textStart = textMarker.index! + textMarker[0].length;
+  const quote = trimmed[textStart];
+  const labelMarker = trimmed.lastIndexOf(", 'label':");
+  const doubleLabelMarker = trimmed.lastIndexOf(', "label":');
+  const endMarker = Math.max(labelMarker, doubleLabelMarker);
+
+  if ((quote !== "'" && quote !== '"') || endMarker <= textStart) {
+    return paragraph;
+  }
+
+  return trimmed.slice(textStart + 1, endMarker - 1);
+}
+
 async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPreviewData | null> {
   const attempt = await getBackendAttempt(attemptId).catch(() => null);
   const snapshot = attempt?.test_snapshot;
@@ -158,15 +188,19 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
     const sectionPreviewLabel = `Listening Section ${resolvedPartNumber}`;
     const transcriptSegments = normalizeTranscriptSegments(section.transcript_segments);
     const transcriptQuestionLocations = normalizeTranscriptQuestionLocations(section.transcript_question_locations);
-    const transcriptText = String(section.transcript ?? section.content ?? "").trim();
-    const transcriptParagraphs = transcriptText.length > 0
-      ? transcriptText.split(/\n\s*\n/).filter((paragraph) => paragraph.trim().length > 0)
-      : [];
+    const rawParagraphs = section.paragraphs?.length
+      ? section.paragraphs
+      : String(section.content ?? "").trim().length > 0
+        ? String(section.content ?? "").split(/\n\s*\n/).filter((paragraph) => paragraph.trim().length > 0)
+        : String(section.transcript ?? "").trim().length > 0
+          ? String(section.transcript ?? "").split(/\n\s*\n/).filter((paragraph) => paragraph.trim().length > 0)
+          : [];
 
-    transcriptParagraphs.forEach((paragraph, paragraphIndex) => {
+    rawParagraphs.forEach((paragraph, paragraphIndex) => {
+      const paragraphText = extractParagraphText(paragraph);
       paragraphs.push({
         paragraphKey: `${section.section_id}-${paragraphIndex + 1}`,
-        text: paragraph,
+        text: paragraphText,
         sectionId: section.section_id,
         sectionPreviewLabel: paragraphIndex === 0 ? sectionPreviewLabel : undefined,
         sectionTitle: paragraphIndex === 0 ? (section.title ?? undefined) : undefined,

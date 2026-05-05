@@ -2,12 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Minus, XCircle } from "lucide-react";
 import { AnswersOverviewCard } from "./answers-overview-card";
+import { ResultBackGuard } from "./result-back-guard";
+import { ResultViewTracker } from "./result-view-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getLeaderboardRank } from "@/lib/server-me";
 import { getBackendAttemptResult, getBackendAttemptReview } from "@/lib/server-attempts";
 import { getTestSourceDetail } from "@/lib/test-source";
+import type { TestType } from "@/lib/types";
 
 interface AttemptResultPageProps {
   params: {
@@ -32,12 +35,23 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
   const incorrectCount = Math.max(0, answeredCount - correctCount);
   const notAnsweredCount = Math.max(0, totalQuestions - answeredCount);
   const scorePercent = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
-  const estimatedScore = formatBandScore(result.band_score);
-  const percentile = formatPercentile(result.band_score, scorePercent);
+  const estimatedScore = formatBandScore(result.band_score, result.raw_score, result.test_type);
+  const percentile = formatPercentile(result.band_score, result.raw_score, result.test_type, scorePercent);
   const reviewHref = `/exam-preview/${result.test_type === "listening" ? "listening" : "reading"}?attemptId=${params.attemptId}&mode=review&resume=${Date.now()}`;
 
   return (
     <div className="space-y-3">
+      <ResultBackGuard testType={result.test_type} />
+      <ResultViewTracker
+        attemptId={params.attemptId}
+        testId={result.test_id}
+        testTitle={result.test_title ?? "Unknown test"}
+        testType={result.test_type}
+        testFormat={result.test_format}
+        rawScore={result.raw_score}
+        totalQuestions={result.total_questions}
+        bandScore={result.band_score}
+      />
       <Card className="border-0 bg-transparent shadow-none">
         <CardHeader className="space-y-0.5 px-0 pb-0 pt-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -137,18 +151,83 @@ function formatTestFormat(value: string | null | undefined): string {
   return value.replace("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatBandScore(value: number | string | null | undefined): string {
-  if (value === null || value === undefined) {
-    return "—";
+function deriveBandScore(
+  value: number | string | null | undefined,
+  rawScore: number | null | undefined,
+  testType: TestType
+): number | null {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
   }
 
-  const numericValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numericValue) ? numericValue.toFixed(1) : "—";
+  if (rawScore === null || rawScore === undefined) {
+    return null;
+  }
+
+  const table = testType === "listening"
+    ? [
+        [39, 40, 9.0],
+        [37, 38, 8.5],
+        [35, 36, 8.0],
+        [32, 34, 7.5],
+        [30, 31, 7.0],
+        [26, 29, 6.5],
+        [23, 25, 6.0],
+        [18, 22, 5.5],
+        [16, 17, 5.0],
+        [13, 15, 4.5],
+        [11, 12, 4.0],
+        [8, 10, 3.5],
+        [6, 7, 3.0],
+        [4, 5, 2.5],
+        [3, 3, 2.0],
+        [2, 2, 1.0],
+      ]
+    : [
+        [39, 40, 9.0],
+        [37, 38, 8.5],
+        [35, 36, 8.0],
+        [33, 34, 7.5],
+        [30, 32, 7.0],
+        [27, 29, 6.5],
+        [23, 26, 6.0],
+        [19, 22, 5.5],
+        [15, 18, 5.0],
+        [13, 14, 4.5],
+        [10, 12, 4.0],
+        [8, 9, 3.5],
+        [6, 7, 3.0],
+        [4, 5, 2.5],
+        [3, 3, 2.0],
+        [2, 2, 1.0],
+      ];
+
+  const normalizedRawScore = Math.max(0, Math.floor(rawScore));
+  const match = table.find(([min, max]) => normalizedRawScore >= min && normalizedRawScore <= max);
+  return match ? match[2] : null;
 }
 
-function formatPercentile(value: number | string | null | undefined, scorePercent: number): string {
-  const numericValue = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(numericValue)) {
+function formatBandScore(
+  value: number | string | null | undefined,
+  rawScore: number | null | undefined,
+  testType: TestType
+): string {
+  const derivedBandScore = deriveBandScore(value, rawScore, testType);
+  if (derivedBandScore === null) {
+    return "—";
+  }
+  return derivedBandScore.toFixed(1);
+}
+
+function formatPercentile(
+  value: number | string | null | undefined,
+  rawScore: number | null | undefined,
+  testType: TestType,
+  scorePercent: number
+): string {
+  const numericValue = deriveBandScore(value, rawScore, testType);
+  if (numericValue === null) {
     return `${Math.max(1, Math.min(99, scorePercent))}th`;
   }
 

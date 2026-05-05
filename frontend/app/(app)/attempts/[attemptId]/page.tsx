@@ -15,5 +15,8 @@ export default async function AttemptIndexPage({ params, searchParams }: Attempt
   const query = searchParams;
   const backendAttempt = await getBackendAttempt(attemptId).catch(() => null);
   const type = backendAttempt?.test_type ?? (query?.type === "listening" ? "listening" : "reading");
+  if (backendAttempt?.status === "completed" || backendAttempt?.status === "auto_submitted") {
+    redirect(`/tests?type=${type}&refresh=${Date.now()}`);
+  }
   redirect(`/attempts/${attemptId}/${type}`);
 }

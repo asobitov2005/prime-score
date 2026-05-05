@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { trackCtaClick } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -30,7 +31,18 @@ export function MarketingAuthCta({
 
   return (
     <Button asChild className={cn(className)}>
-      <Link href={href}>
+      <Link
+        href={href}
+        onClick={() => {
+          trackCtaClick({
+            ctaName: hasHydrated && isAuthenticated ? "go_dashboard" : "go_login",
+            ctaLabel: label,
+            ctaLocation: "marketing_auth_cta",
+            destination: href,
+            authState: hasHydrated && isAuthenticated ? "authenticated" : "guest",
+          });
+        }}
+      >
         {label}
         {showArrow ? <ArrowRight className="ml-2 h-5 w-5" /> : null}
       </Link>

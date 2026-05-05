@@ -18,5 +18,8 @@ interface ListeningAttemptPageProps {
 export default async function ListeningAttemptPage({ params, searchParams }: ListeningAttemptPageProps) {
   const backendAttempt = await getBackendAttempt(params.attemptId).catch(() => null);
   const mode = backendAttempt?.mode ?? (searchParams?.mode === "practice" ? "practice" : "exam");
+  if (backendAttempt?.status === "completed" || backendAttempt?.status === "auto_submitted") {
+    redirect(`/tests?type=listening&refresh=${Date.now()}`);
+  }
   redirect(`/exam-preview/listening?attemptId=${params.attemptId}&mode=${mode}&resume=${Date.now()}`);
 }

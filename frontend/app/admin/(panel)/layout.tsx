@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { useAdminStore } from "@/store/admin-store";
+import { Loader2 } from "lucide-react";
 
 interface AdminPanelLayoutProps {
   children: ReactNode;
@@ -23,7 +24,7 @@ export default function AdminPanelLayout({ children }: AdminPanelLayoutProps) {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-muted-foreground text-sm font-medium">Yuklanmoqda...</div>
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }

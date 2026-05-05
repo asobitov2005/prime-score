@@ -59,6 +59,7 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
             <div className="group relative flex flex-col items-center">
               <StartTestButton 
                 testId={test.id} 
+                testTitle={test.title}
                 testType={test.type} 
                 mode="practice" 
                 scope={isFullTest ? "full" : "section"}
@@ -83,6 +84,7 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
               <div className="group relative flex flex-col items-center">
                 <StartTestButton 
                   testId={test.id} 
+                  testTitle={test.title}
                   testType={test.type} 
                   mode="exam" 
                   scope="full"

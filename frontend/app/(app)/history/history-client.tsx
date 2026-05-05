@@ -74,6 +74,31 @@ function modeBadgeClass(mode: AttemptRow["mode"]): string {
   return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
 }
 
+function typeBadgeClass(type: AttemptRow["type"]): string {
+  if (type === "reading") {
+    return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  }
+  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+}
+
+function historyTypeCardClass(type: AttemptRow["type"]): string {
+  if (type === "reading") {
+    return "border-sky-500/20 bg-[linear-gradient(135deg,rgba(14,165,233,0.08),rgba(14,165,233,0.02)_26%,rgba(255,255,255,0)_42%)]";
+  }
+  return "border-amber-500/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.09),rgba(245,158,11,0.025)_26%,rgba(255,255,255,0)_42%)]";
+}
+
+function historyTypeAccentClass(type: AttemptRow["type"]): string {
+  if (type === "reading") {
+    return "bg-sky-500";
+  }
+  return "bg-amber-500";
+}
+
+function formatType(type: AttemptRow["type"]): string {
+  return type === "reading" ? "Reading" : "Listening";
+}
+
 function formatScore(attempt: AttemptRow): string {
   const score = attempt.score.trim();
   if (score.includes("/") || score === "Pending" || attempt.totalQuestions === null) {
@@ -300,13 +325,28 @@ export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
           {historyGroups.map((group) => {
             const { latestAttempt, bestAttempt } = group;
             return (
-              <details key={group.key} className="group m-2 rounded-xl border border-border/75 bg-background shadow-sm">
+              <details
+                key={group.key}
+                className={cn(
+                  "group relative m-2 rounded-xl border bg-background shadow-sm",
+                  historyTypeCardClass(latestAttempt.type)
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute bottom-4 left-0 top-4 w-1 rounded-full",
+                    historyTypeAccentClass(latestAttempt.type)
+                  )}
+                />
                 <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-4 transition-colors hover:bg-muted/20 [&::-webkit-details-marker]:hidden">
                   <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
                   <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[minmax(0,1.7fr)_auto_auto_auto_auto] md:items-center">
                     <div className="min-w-0 space-y-2">
                       <div className="truncate text-sm font-bold text-foreground">{latestAttempt.testTitle}</div>
                       <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", typeBadgeClass(latestAttempt.type))}>
+                          {formatType(latestAttempt.type)}
+                        </Badge>
                         <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", sourceBadgeClass(latestAttempt.source))}>
                           {latestAttempt.source}
                         </Badge>
@@ -346,8 +386,21 @@ export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
                 <div className="border-t border-border/60 bg-muted/10 px-4 py-4">
                   <div className="relative space-y-3 pl-5 before:absolute before:bottom-3 before:left-2 before:top-3 before:w-px before:bg-border">
                     {group.attempts.map((attempt, index) => (
-                      <div key={attempt.id} className="relative rounded-lg border border-border/85 bg-background px-4 py-3 shadow-sm">
-                        <span className="absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary shadow-sm" />
+                      <div
+                        key={attempt.id}
+                        className={cn(
+                          "relative rounded-lg border bg-background px-4 py-3 shadow-sm",
+                          attempt.type === "reading"
+                            ? "border-sky-500/20"
+                            : "border-amber-500/20"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-background shadow-sm",
+                            historyTypeAccentClass(attempt.type)
+                          )}
+                        />
                         <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_auto_auto_auto] md:items-center">
                           <div className="min-w-0 space-y-1">
                             <div className="text-sm font-bold text-foreground">Attempt #{group.attempts.length - index}</div>

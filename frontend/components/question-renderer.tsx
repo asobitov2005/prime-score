@@ -9,6 +9,7 @@ import {
   shouldAutoLetterMatchingOptions,
 } from "@/lib/matching-option-format";
 import { cn } from "@/lib/utils";
+import { Check } from "lucide-react";
 
 // Make sure to match the type that is actually passed
 export function QuestionRenderer({ question, compact = false, value = "", onValueChange }: any) {
@@ -99,17 +100,24 @@ export function QuestionRenderer({ question, compact = false, value = "", onValu
                 key={letter}
                 type="button"
                 className={cn(
-                  "flex w-full items-start space-x-3 rounded-xl border p-4 text-left transition-colors",
-                  checked ? "border-primary/40 bg-primary/10" : "border-border/50 bg-background/50 hover:bg-muted/50"
+                  "flex w-full items-start space-x-3 rounded-xl border p-4 text-left transition-colors duration-150",
+                  checked
+                    ? "border-slate-950/45 bg-slate-950/[0.07] shadow-[0_10px_24px_-18px_rgba(15,23,42,0.5)] dark:border-slate-50/35 dark:bg-slate-50/[0.08] dark:shadow-[0_10px_24px_-18px_rgba(248,250,252,0.22)]"
+                    : "border-border/60 bg-background/60 hover:border-slate-400 hover:bg-muted/50 dark:hover:border-slate-500"
                 )}
                 onClick={() => onValueChange(toggleMultipleChoiceValue(letter))}
               >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  readOnly
-                  className="mt-0.5 h-4 w-4 rounded border-primary text-primary accent-current"
-                />
+                <span
+                  className={cn(
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 transition",
+                    checked
+                      ? "border-slate-950 bg-slate-950 ring-4 ring-slate-950/12 shadow-[0_0_0_1px_rgba(15,23,42,0.14)] dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50/12 dark:shadow-[0_0_0_1px_rgba(248,250,252,0.16)]"
+                      : "border-slate-500 bg-background shadow-sm dark:border-slate-400 dark:bg-transparent"
+                  )}
+                  aria-hidden="true"
+                >
+                  {checked ? <Check className="h-3.5 w-3.5 text-white dark:text-slate-950" strokeWidth={3.25} /> : null}
+                </span>
                 <span className="font-serif text-[15px] leading-relaxed cursor-pointer font-normal flex-1">
                   <span className="font-bold mr-2 text-foreground">{letter}.</span> {variant}
                 </span>

@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { createApiClient, ApiError } from "@/lib/api/client";
+import {
+  parseAnalyticsAmount,
+  trackBeginCheckout,
+  trackPaymentMatched,
+  trackPurchase,
+} from "@/lib/analytics";
 import type { PaymentRecordResponse } from "@/lib/api/types";
 import type { MarketingPlan } from "@/lib/server-plans";
 import type { UserPaymentRecord } from "@/lib/types";
@@ -250,6 +256,9 @@ export function SubscriptionWorkspace({
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [notifications, setNotifications] = useState<EventNotification[]>([]);
   const notifIdRef = useRef(0);
+  const paymentStatusRef = useRef<Record<string, UserPaymentRecord["status"]>>(
+    Object.fromEntries(initialPayments.map((item) => [item.id, item.status])),
+  );
 
   const activePayment = useMemo(
     () => payments.find((item) => item.status === "pending" || item.status === "matched") ?? null,
@@ -258,6 +267,46 @@ export function SubscriptionWorkspace({
 
   const hasActiveInvoice = activePayment !== null;
 
+  const syncPaymentStatuses = useCallback((nextPayments: UserPaymentRecord[], emitEvents: boolean) => {
+    const previousStatuses = paymentStatusRef.current;
+
+    if (emitEvents) {
+      for (const payment of nextPayments) {
+        const previousStatus = previousStatuses[payment.id];
+        if (!previousStatus || previousStatus === payment.status) {
+          continue;
+        }
+
+        if (payment.status === "matched") {
+          trackPaymentMatched({
+            paymentId: payment.id,
+            invoiceCode: payment.invoiceCode,
+            planId: payment.planId,
+            planName: payment.planName,
+            durationDays: payment.durationDays,
+            value: parseAnalyticsAmount(payment.amount),
+            currency: payment.currency,
+          });
+        }
+
+        if (payment.status === "completed") {
+          trackPurchase({
+            paymentId: payment.id,
+            invoiceCode: payment.invoiceCode,
+            planId: payment.planId,
+            planName: payment.planName,
+            durationDays: payment.durationDays,
+            value: parseAnalyticsAmount(payment.amount),
+            currency: payment.currency,
+            grantedUntil: payment.grantedUntil,
+          });
+        }
+      }
+    }
+
+    paymentStatusRef.current = Object.fromEntries(nextPayments.map((item) => [item.id, item.status]));
+  }, []);
+
   /* ── Data refresh (used as fallback and for initial load after SSE events) ── */
 
   const refreshPayments = useCallback(async () => {
@@ -265,6 +314,7 @@ export function SubscriptionWorkspace({
     try {
       const items = await api.listPayments();
       const mapped = items.map(mapPaymentRecord);
+      syncPaymentStatuses(mapped, true);
       setPayments(mapped);
       const completed = mapped.find((item) => item.status === "completed" && item.grantedUntil);
       if (completed?.grantedUntil) {
@@ -276,7 +326,7 @@ export function SubscriptionWorkspace({
     } finally {
       setRefreshing(false);
     }
-  }, [api, syncSession]);
+  }, [api, syncPaymentStatuses, syncSession]);
 
   /* ── SSE real-time events ── */
 
@@ -294,12 +344,37 @@ export function SubscriptionWorkspace({
 
       if (event.type === "payment_matched") {
         addNotification("matched", `To'lov aniqlandi! Invoice ${event.invoiceCode} tekshirilmoqda...`);
+        const matchedPayment = payments.find((item) => item.id === event.paymentId || item.invoiceCode === event.invoiceCode);
+        if (matchedPayment) {
+          trackPaymentMatched({
+            paymentId: matchedPayment.id,
+            invoiceCode: matchedPayment.invoiceCode,
+            planId: matchedPayment.planId,
+            planName: matchedPayment.planName,
+            durationDays: matchedPayment.durationDays,
+            value: parseAnalyticsAmount(matchedPayment.amount),
+            currency: matchedPayment.currency,
+          });
+        }
         void refreshPayments();
       }
 
       if (event.type === "payment_completed") {
         addNotification("completed", `Premium faollashtirildi! ${event.planName ?? "Plan"} — ${event.grantedUntil ? new Date(event.grantedUntil).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : ""} gacha.`);
         syncSession({ isPremium: true, premiumUntil: event.grantedUntil ?? null });
+        const completedPayment = payments.find((item) => item.id === event.paymentId || item.invoiceCode === event.invoiceCode);
+        if (completedPayment) {
+          trackPurchase({
+            paymentId: completedPayment.id,
+            invoiceCode: completedPayment.invoiceCode,
+            planId: completedPayment.planId,
+            planName: completedPayment.planName,
+            durationDays: completedPayment.durationDays,
+            value: parseAnalyticsAmount(completedPayment.amount),
+            currency: completedPayment.currency,
+            grantedUntil: event.grantedUntil ?? completedPayment.grantedUntil,
+          });
+        }
         void refreshPayments();
       }
 
@@ -308,7 +383,7 @@ export function SubscriptionWorkspace({
         void refreshPayments();
       }
     },
-    [addNotification, refreshPayments, syncSession],
+    [addNotification, payments, refreshPayments, syncSession],
   );
 
   usePaymentSSE({
@@ -356,6 +431,20 @@ export function SubscriptionWorkspace({
     try {
       const payload = await api.createPayment({ plan_id: plan.id });
       const payment = mapPaymentRecord(payload.payment);
+      trackBeginCheckout({
+        paymentId: payment.id,
+        invoiceCode: payment.invoiceCode,
+        planId: payment.planId,
+        planName: payment.planName || plan.title,
+        durationDays: payment.durationDays ?? plan.durationDays,
+        value: parseAnalyticsAmount(payment.amount) ?? plan.numericPrice,
+        currency: payment.currency || plan.currency,
+        discountValue: parseAnalyticsAmount(payment.discountAmount),
+      });
+      paymentStatusRef.current = {
+        ...paymentStatusRef.current,
+        [payment.id]: payment.status,
+      };
       setPayments((current) => [payment, ...current.filter((item) => item.id !== payment.id)]);
       setWheelPayment(payment);
       setHighlightIndex(0);
@@ -373,6 +462,10 @@ export function SubscriptionWorkspace({
     try {
       const payload = await api.cancelPayment(paymentId);
       const canceled = mapPaymentRecord(payload.payment);
+      paymentStatusRef.current = {
+        ...paymentStatusRef.current,
+        [canceled.id]: canceled.status,
+      };
       setPayments((current) => [canceled, ...current.filter((item) => item.id !== canceled.id)]);
     } catch (cancelError) {
       const message = cancelError instanceof ApiError ? cancelError.message : "Failed to cancel invoice.";

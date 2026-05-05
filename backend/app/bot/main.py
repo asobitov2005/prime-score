@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import socket
 
 from aiogram import Bot, Dispatcher, F, types
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command
+from aiohttp.abc import AbstractResolver, ResolveResult
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from sqlalchemy import select
 
@@ -23,6 +27,57 @@ logger = logging.getLogger(__name__)
 
 _CODE_TTL = 180
 _TICK = 30
+
+
+class _TelegramIPv4Resolver(AbstractResolver):
+    def __init__(self) -> None:
+        configured = os.getenv("TELEGRAM_API_IPV4", "149.154.167.99")
+        self._ips = [ip.strip() for ip in configured.split(",") if ip.strip()]
+
+    async def resolve(
+        self, host: str, port: int = 0, family: socket.AddressFamily = socket.AF_INET
+    ) -> list[ResolveResult]:
+        if host != "api.telegram.org":
+            infos = await asyncio.get_running_loop().getaddrinfo(
+                host,
+                port,
+                type=socket.SOCK_STREAM,
+                family=family,
+                flags=socket.AI_ADDRCONFIG,
+            )
+            return [
+                {
+                    "hostname": host,
+                    "host": address[0],
+                    "port": address[1],
+                    "family": info_family,
+                    "proto": proto,
+                    "flags": socket.AI_NUMERICHOST,
+                }
+                for info_family, _, proto, _, address in infos
+            ]
+
+        return [
+            {
+                "hostname": host,
+                "host": ip,
+                "port": port,
+                "family": socket.AF_INET,
+                "proto": socket.IPPROTO_TCP,
+                "flags": socket.AI_NUMERICHOST,
+            }
+            for ip in self._ips
+        ]
+
+    async def close(self) -> None:
+        return None
+
+
+def _bot_session() -> AiohttpSession:
+    session = AiohttpSession()
+    session._connector_init["family"] = socket.AF_INET
+    session._connector_init["resolver"] = _TelegramIPv4Resolver()
+    return session
 
 
 def _phone_keyboard() -> ReplyKeyboardMarkup:
@@ -65,7 +120,7 @@ async def run_bot() -> None:
         logger.error("TELEGRAM_BOT_TOKEN is not configured — bot will not start.")
         return
 
-    bot = Bot(token=settings.telegram_bot_token)
+    bot = Bot(token=settings.telegram_bot_token, session=_bot_session())
     dp = Dispatcher()
     store = get_code_store()
 

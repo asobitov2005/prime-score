@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
+import { trackAttemptSubmit } from "@/lib/analytics";
 import { getMatchingOptionViewModel, shouldAutoLetterMatchingOptions } from "@/lib/matching-option-format";
 import { QuestionRenderer } from "@/components/question-renderer";
 import { useUIStore } from "@/store/ui-store";
@@ -118,6 +119,14 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
         })
         .then(() => {
+          trackAttemptSubmit({
+            attemptId,
+            testTitle,
+            testType: "reading",
+            mode,
+            scope,
+            submitReason: "time_up",
+          });
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
         })
@@ -178,6 +187,14 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),
+                  });
+                  trackAttemptSubmit({
+                    attemptId,
+                    testTitle,
+                    testType: "reading",
+                    mode,
+                    scope,
+                    submitReason: "user_confirmed",
                   });
                   router.push(`/attempts/${attemptId}/result`);
                 } finally {
@@ -435,6 +452,14 @@ export function ListeningAttemptWorkspace({
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
         })
         .then(() => {
+          trackAttemptSubmit({
+            attemptId,
+            testTitle,
+            testType: "listening",
+            mode,
+            scope,
+            submitReason: "time_up",
+          });
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
         })
@@ -527,6 +552,14 @@ export function ListeningAttemptWorkspace({
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),
+                  });
+                  trackAttemptSubmit({
+                    attemptId,
+                    testTitle,
+                    testType: "listening",
+                    mode,
+                    scope,
+                    submitReason: "user_confirmed",
                   });
                   router.push(`/attempts/${attemptId}/result`);
                 } finally {

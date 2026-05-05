@@ -2,11 +2,8 @@ import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placehold
 
 export default function MarketingLoading() {
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-10 md:px-6 lg:px-8">
-      <AppLoadingPlaceholder
-        title="Opening the next page"
-        description="Loading the next PrimeScore screen without breaking the transition."
-      />
+    <div className="flex min-h-[50vh] flex-col items-center justify-center">
+      <AppLoadingPlaceholder />
     </div>
   );
 }

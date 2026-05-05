@@ -109,6 +109,7 @@ export type BackendAttemptSnapshot = {
 
 export type BackendAttemptRead = {
   attempt_id: string;
+  status: string;
   test_id: string;
   test_title: string;
   test_type: TestType;

@@ -30,7 +30,7 @@ from app.schemas.tests import TestSnapshotRead
 from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, save_progress_in_db, submit_attempt_in_db
 from app.services.object_storage import normalize_storage_asset_path
 from app.services.scoring import mc_multiple_question_weight
-from app.services.runtime_store import get_attempt, save_answer, save_progress, submit_attempt
+from app.services.runtime_store import _band_for_raw_score, get_attempt, save_answer, save_progress, submit_attempt
 from app.services.test_content_repo import build_test_snapshot_from_db
 
 router = APIRouter()
@@ -489,6 +489,12 @@ async def get_result(
     snapshot = attempt.test_snapshot
     answered_slots_count = _count_answered_slots(snapshot, attempt.answers)
     diagram_groups = _extract_diagram_groups(snapshot)
+    effective_band_score = attempt.band_score
+    if effective_band_score is None and attempt.raw_score is not None:
+        effective_band_score = _band_for_raw_score(
+            TestType(str(snapshot.get("test_type", TestType.reading))),
+            int(attempt.raw_score),
+        )
     return AttemptResultRead(
         attempt_id=attempt.attempt_id,
         status=attempt.status,
@@ -499,7 +505,7 @@ async def get_result(
         source_detail=(str(snapshot.get("source_detail")) if snapshot.get("source_detail") is not None else None),
         test_title=str(snapshot.get("title")),
         raw_score=attempt.raw_score,
-        band_score=attempt.band_score,
+        band_score=effective_band_score,
         answers_count=_count_answered_values(attempt.answers),
         answered_slots_count=answered_slots_count,
         total_questions=attempt.total_questions,

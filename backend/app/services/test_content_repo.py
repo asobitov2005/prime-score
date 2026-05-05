@@ -1006,7 +1006,7 @@ async def save_test_draft_to_db(
         group_model = QuestionGroup(
             id=group_id,
             section_id=section_id,
-            title=str(group["title"]),
+            title=str(group.get("title") or "").strip(),
             instructions=str(group["instructions"]),
             question_type=ModelQuestionType(str(group["type_id"])),
             question_start=int(group["question_start"]),
@@ -1207,13 +1207,10 @@ async def quick_fix_published_test_in_db(
         if (
             expected_section is None
             or group_model.section_id != expected_section.id
-            or str(group_payload["type_id"]) != group_model.question_type.value
-            or int(group_payload["question_start"]) != int(group_model.question_start)
-            or int(group_payload["question_end"]) != int(group_model.question_end)
         ):
             raise ValueError("quick_fix_requires_new_version")
 
-        group_model.title = str(group_payload["title"])
+        group_model.title = str(group_payload.get("title") or "").strip()
         group_model.instructions = str(group_payload["instructions"])
         group_model.shared_content = {
             "question_block": str(group_payload.get("question_block") or ""),
@@ -1236,7 +1233,12 @@ async def quick_fix_published_test_in_db(
             if question_model is None:
                 raise ValueError("quick_fix_requires_new_version")
 
-            question_number = _question_number(str(question_payload.get("label", "")), group_model.question_start)
+            raw_question_label = str(question_payload.get("label") or "").strip()
+            question_number = (
+                _question_number(raw_question_label, group_model.question_start)
+                if raw_question_label
+                else int(question_model.number)
+            )
             if int(question_model.number) != int(question_number):
                 raise ValueError("quick_fix_requires_new_version")
 

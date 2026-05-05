@@ -18,5 +18,8 @@ interface ReadingAttemptPageProps {
 export default async function ReadingAttemptPage({ params, searchParams }: ReadingAttemptPageProps) {
   const backendAttempt = await getBackendAttempt(params.attemptId).catch(() => null);
   const mode = backendAttempt?.mode ?? (searchParams?.mode === "practice" ? "practice" : "exam");
+  if (backendAttempt?.status === "completed" || backendAttempt?.status === "auto_submitted") {
+    redirect(`/tests?type=reading&refresh=${Date.now()}`);
+  }
   redirect("/exam-preview/reading?attemptId=" + params.attemptId + "&mode=" + mode + "&resume=" + Date.now());
 }

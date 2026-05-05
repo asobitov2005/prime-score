@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Medal, Minus, Trophy, TrendingUp } from "lucide-react";
+import { Medal, Minus, Trophy, TrendingUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createApiClient } from "@/lib/api/client";
 import type { LeaderboardEntry, LeaderboardResponseData, TestType } from "@/lib/types";
@@ -230,8 +230,8 @@ export default function LeaderboardPage() {
         <div className="p-0">
           <div className="divide-y divide-border/40">
             {query.isLoading ? (
-              <div className="p-12 text-center text-sm font-bold text-muted-foreground">
-                Loading leaderboard...
+              <div className="flex justify-center p-8 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : query.isError ? (
               <div className="p-12 text-center text-sm font-bold text-muted-foreground">

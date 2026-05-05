@@ -5,11 +5,13 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { trackTestStart } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { emitNavigationStart } from "@/lib/navigation-transition";
 
 export function StartTestButton({
   testId,
+  testTitle,
   testType,
   mode,
   scope,
@@ -19,6 +21,7 @@ export function StartTestButton({
   className
 }: {
   testId: string;
+  testTitle: string;
   testType: string;
   mode: string;
   scope: string;
@@ -51,6 +54,15 @@ export function StartTestButton({
 
           if (!response.ok) throw new Error("Failed to start.");
           const result = (await response.json()) as { attemptId: string };
+          trackTestStart({
+            attemptId: result.attemptId,
+            testId,
+            testTitle,
+            testType,
+            mode,
+            scope,
+            sectionId,
+          });
           const resumeToken = Date.now();
           const href = testType === "reading"
             ? "/exam-preview/reading?attemptId=" + result.attemptId + "&mode=" + mode + "&resume=" + resumeToken

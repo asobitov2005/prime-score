@@ -291,7 +291,6 @@ export default function SettingsPage() {
               {isLoadingSessions ? (
                 <div className="p-6 flex flex-col items-center justify-center space-y-2">
                   <Loader2 className="h-6 w-6 text-primary animate-spin" />
-                  <p className="text-xs text-muted-foreground">Loading active sessions...</p>
                 </div>
               ) : sessions.length === 0 ? (
                 <div className="p-6 text-center">

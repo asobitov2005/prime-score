@@ -77,19 +77,13 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!hasHydrated && !isPublicTestsRoute) {
     return (
-      <AppLoadingPlaceholder
-        title="Restoring your workspace"
-        description="Checking your PrimeScore session before the app layout opens."
-      />
+      <AppLoadingPlaceholder />
     );
   }
 
   if (hasHydrated && !isAuthenticated && !isPublicTestsRoute) {
     return (
-      <AppLoadingPlaceholder
-        title="Redirecting to sign in"
-        description="Your session is not active, so PrimeScore is taking you to the login screen."
-      />
+      <AppLoadingPlaceholder />
     );
   }
 

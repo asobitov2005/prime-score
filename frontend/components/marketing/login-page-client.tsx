@@ -11,6 +11,7 @@ import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
 import { buildUserDisplayName } from "@/lib/user-name";
 import { useAuthStore } from "@/store/auth-store";
 import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
+import { trackCtaClick, trackLogin } from "@/lib/analytics";
 
 export function LoginPageClient() {
   const router = useRouter();
@@ -70,6 +71,10 @@ export function LoginPageClient() {
         isPremium: Boolean(userData.is_premium),
         premiumUntil: userData.premium_until ?? null,
       });
+      trackLogin({
+        method: "telegram_code",
+        isPremium: Boolean(userData.is_premium),
+      });
 
       setStep("done");
       setTimeout(() => router.replace("/dashboard"), 1500);
@@ -90,8 +95,6 @@ export function LoginPageClient() {
     return (
       <AppLoadingPlaceholder
         mode="overlay"
-        title="Checking your session"
-        description="Restoring your sign-in state before PrimeScore opens the dashboard."
       />
     );
   }
@@ -138,11 +141,37 @@ export function LoginPageClient() {
 
                 <div className="grid gap-3">
                   <Button asChild className="w-full h-12 text-sm font-black rounded-xl shadow-lg bg-primary text-primary-foreground hover:bg-primary/90 border-0 transition-all hover:-translate-y-0.5 group">
-                    <a href={`https://t.me/${BOT_USERNAME}`} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={`https://t.me/${BOT_USERNAME}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        trackCtaClick({
+                          ctaName: "open_telegram_bot",
+                          ctaLabel: "Open Telegram Bot",
+                          ctaLocation: "login_page",
+                          destination: `https://t.me/${BOT_USERNAME}`,
+                          authState: "guest",
+                        });
+                      }}
+                    >
                       <MessageSquareShare className="mr-2 h-4 w-4" /> Open Telegram Bot <ExternalLink className="ml-2 h-4 w-4 opacity-50 transition-transform group-hover:translate-x-1" />
                     </a>
                   </Button>
-                  <Button variant="outline" onClick={() => setStep("verify")} className="w-full h-12 text-sm font-bold rounded-xl border-border/60">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      trackCtaClick({
+                        ctaName: "open_code_verify",
+                        ctaLabel: "I have the code",
+                        ctaLocation: "login_page",
+                        destination: "/login#verify",
+                        authState: "guest",
+                      });
+                      setStep("verify");
+                    }}
+                    className="w-full h-12 text-sm font-bold rounded-xl border-border/60"
+                  >
                     I have the code
                   </Button>
                 </div>
