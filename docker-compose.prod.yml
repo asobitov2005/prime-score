@@ -1,0 +1,194 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-primescore}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-primescore}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+
+  api:
+    image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      RUN_APP_BOOTSTRAP: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "-Q", "default,heavy,notifications,admin_ai,writing", "--concurrency=4", "-Ofair"]
+
+  beat:
+    image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      RUN_APP_BOOTSTRAP: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    command: ["celery", "-A", "app.tasks.celery_app", "beat", "--loglevel=info"]
+
+  bot:
+    image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      RUN_APP_BOOTSTRAP: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "app.bot.main"]
+
+  frontend:
+    image: ghcr.io/asobitov2005/prime-score-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000/api}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  admin:
+    image: ghcr.io/asobitov2005/prime-score-admin:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_PORT:-3001}:3001"
+    environment:
+      NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-/api/admin}
+      ADMIN_API_INTERNAL_BASE_URL: ${ADMIN_API_INTERNAL_BASE_URL:-http://api:8000/api/admin}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/login').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:
+  minio_data:

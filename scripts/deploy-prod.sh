@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+: "${IMAGE_TAG:?IMAGE_TAG is required}"
+
+COMPOSE_FILE="docker-compose.prod.yml"
+SERVICES=(api worker beat bot frontend admin)
+
+echo "[deploy] Using image tag: $IMAGE_TAG"
+
+docker-compose -f "$COMPOSE_FILE" pull "${SERVICES[@]}"
+docker-compose -f "$COMPOSE_FILE" up -d "${SERVICES[@]}"
+
+echo "[verify] Waiting for API"
+for _ in $(seq 1 30); do
+  if curl -fsS "http://127.0.0.1:${BACKEND_PORT:-8000}/health" >/dev/null; then
+    break
+  fi
+  sleep 2
+done
+
+echo "[verify] Waiting for frontend"
+for _ in $(seq 1 30); do
+  if curl -fsSI "http://127.0.0.1:${FRONTEND_PORT:-3100}" >/dev/null; then
+    break
+  fi
+  sleep 2
+done
+
+echo "[verify] Waiting for admin"
+for _ in $(seq 1 30); do
+  if curl -fsSI "http://127.0.0.1:${ADMIN_PORT:-3101}/login" >/dev/null; then
+    break
+  fi
+  sleep 2
+done
+
+docker-compose -f "$COMPOSE_FILE" ps

@@ -1,0 +1,104 @@
+name: Build And Deploy
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  REPO_OWNER: asobitov2005
+  DEPLOY_HOST: 84.247.183.218
+  DEPLOY_USER: root
+  DEPLOY_PATH: /root/projects/prime-score
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-backend:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and Push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=/api
+            API_INTERNAL_BASE_URL=http://api:8000/api
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-frontend:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Build and Push Admin
+        uses: docker/build-push-action@v6
+        with:
+          context: ./admin
+          push: true
+          build-args: |
+            NEXT_PUBLIC_ADMIN_API_BASE_URL=/api/admin
+            ADMIN_API_INTERNAL_BASE_URL=http://api:8000/api/admin
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-admin:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-admin:latest
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,mode=max,scope=admin
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load Deploy Key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add Server To Known Hosts
+        run: ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload Deploy Files
+        run: |
+          scp docker-compose.prod.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.prod.yml"
+          scp scripts/deploy-prod.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/scripts/deploy-prod.sh"
+
+      - name: Run Deploy
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "\
+            cd '$DEPLOY_PATH' && \
+            chmod +x scripts/deploy-prod.sh && \
+            IMAGE_TAG='${{ github.sha }}' ./scripts/deploy-prod.sh\
+          "
