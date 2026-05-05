@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LandingPageClient } from "@/components/marketing/landing-page-client";
+import { getLandingOnlineCount } from "@/lib/server-live-stats";
 import { getPublicPlans } from "@/lib/server-plans";
 import { getPublicReviews } from "@/lib/server-reviews";
 import {
@@ -12,7 +13,7 @@ import {
   landingKeywords,
 } from "@/lib/seo";
 
-export const revalidate = 3600;
+export const revalidate = 75;
 
 export const metadata: Metadata = {
   title: "Free IELTS Mock Tests Online | Reading, Listening, Writing & Speaking",
@@ -54,9 +55,10 @@ const structuredDataBlocks = [
 ];
 
 export default async function LandingPage() {
-  const [plans, reviews] = await Promise.all([
+  const [plans, reviews, onlineCount] = await Promise.all([
     getPublicPlans(),
     getPublicReviews(6),
+    getLandingOnlineCount(),
   ]);
 
   return (
@@ -69,7 +71,7 @@ export default async function LandingPage() {
         />
       ))}
 
-      <LandingPageClient plans={plans} reviews={reviews} />
+      <LandingPageClient plans={plans} reviews={reviews} onlineCount={onlineCount} />
     </>
   );
 }

@@ -46,9 +46,14 @@ const skills = ["Reading.", "Listening.", "Writing.", "Speaking."];
 interface LandingPageClientProps {
   plans: MarketingPlan[];
   reviews: ReviewItem[];
+  onlineCount: number;
 }
 
-export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
+function formatOnlineCount(value: number): string {
+  return value.toLocaleString("en-US");
+}
+
+export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageClientProps) {
   const [skillIndex, setSkillIndex] = useState(0);
   const [isReviewsVisible, setIsReviewsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
@@ -160,12 +165,12 @@ export function LandingPageClient({ plans, reviews }: LandingPageClientProps) {
                         {user.initial}
                       </div>
                     ))}
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background bg-primary text-[9px] font-semibold text-primary-foreground">
-                      +2k
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-background bg-primary text-[9px] font-semibold uppercase text-primary-foreground">
+                      Live
                     </div>
                   </div>
                   <div className="flex flex-col -space-y-0.5">
-                    <span className="text-[13px] font-semibold text-foreground">2,481+ online</span>
+                    <span className="text-[13px] font-semibold text-foreground">{formatOnlineCount(onlineCount)} online</span>
                     <p className="text-[10px] font-medium text-muted-foreground/70 tracking-tight">Active students</p>
                   </div>
                 </div>

@@ -9,7 +9,8 @@ from app.db.session import get_db_session
 from app.models.review import Review
 from app.models.enums import ReviewSource as ModelReviewSource
 from app.schemas.common import DebugPrincipal
-from app.schemas.review import PublicReviewCreateRequest, PublicReviewRead, ReviewSubmissionResponse
+from app.schemas.review import LandingLiveStatsRead, PublicReviewCreateRequest, PublicReviewRead, ReviewSubmissionResponse
+from app.services.live_metrics import landing_live_metrics_service
 from app.services.attempt_repo import ensure_debug_user
 
 router = APIRouter()
@@ -43,6 +44,15 @@ async def list_public_reviews(session: AsyncSession = Depends(get_db_session)) -
         )
         for review in reviews
     ]
+
+
+@router.get("/live-stats", response_model=LandingLiveStatsRead)
+async def get_landing_live_stats() -> LandingLiveStatsRead:
+    snapshot = landing_live_metrics_service.get_snapshot()
+    return LandingLiveStatsRead(
+        online_count=snapshot.online_count,
+        refreshed_at=snapshot.refreshed_at,
+    )
 
 
 @router.post("", response_model=ReviewSubmissionResponse, status_code=status.HTTP_201_CREATED)

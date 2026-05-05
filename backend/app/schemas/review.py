@@ -27,6 +27,11 @@ class ReviewSubmissionResponse(BaseModel):
     message: str
 
 
+class LandingLiveStatsRead(BaseModel):
+    online_count: int
+    refreshed_at: datetime
+
+
 class AdminReviewRead(BaseModel):
     id: UUID
     source: ReviewSource
