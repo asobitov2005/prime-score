@@ -33,6 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       deploy_files: ${{ steps.changes.outputs.deploy_files }}
+      compose_changed: ${{ steps.changes.outputs.compose_changed }}
+      script_changed: ${{ steps.changes.outputs.script_changed }}
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
       admin: ${{ steps.changes.outputs.admin }}
@@ -61,11 +63,21 @@ jobs:
           echo "$CHANGED_FILES"
 
           deploy_files=false
+          compose_changed=false
+          script_changed=false
           backend=false
           frontend=false
           admin=false
 
-          if echo "$CHANGED_FILES" | grep -Eq '^(docker-compose\.prod\.yml|scripts/deploy-prod\.sh)$'; then
+          if echo "$CHANGED_FILES" | grep -Eq '^docker-compose\.prod\.yml$'; then
+            compose_changed=true
+          fi
+
+          if echo "$CHANGED_FILES" | grep -Eq '^scripts/deploy-prod\.sh$'; then
+            script_changed=true
+          fi
+
+          if [ "$compose_changed" = true ] || [ "$script_changed" = true ]; then
             deploy_files=true
           fi
 
@@ -92,7 +104,7 @@ jobs:
             services+=(admin)
           fi
 
-          if [ "$deploy_files" = true ] && [ "${#services[@]}" -eq 0 ]; then
+          if [ "$compose_changed" = true ] && [ "${#services[@]}" -eq 0 ]; then
             services=(api worker beat bot frontend admin)
           fi
 
@@ -110,6 +122,8 @@ jobs:
 
           {
             echo "deploy_files=$deploy_files"
+            echo "compose_changed=$compose_changed"
+            echo "script_changed=$script_changed"
             echo "backend=$backend"
             echo "frontend=$frontend"
             echo "admin=$admin"

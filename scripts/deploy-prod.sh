@@ -7,13 +7,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
-: "${SERVICES:?SERVICES is required}"
 
 COMPOSE_FILE="docker-compose.prod.yml"
+SERVICES="${SERVICES:-}"
 read -r -a SERVICE_LIST <<< "$SERVICES"
 
 echo "[deploy] Using image tag: $IMAGE_TAG"
 echo "[deploy] Services: ${SERVICE_LIST[*]}"
+
+if [ "${#SERVICE_LIST[@]}" -eq 0 ]; then
+  echo "[deploy] No service restarts requested"
+  exit 0
+fi
 
 docker-compose -f "$COMPOSE_FILE" pull "${SERVICE_LIST[@]}"
 docker-compose -f "$COMPOSE_FILE" up -d --no-deps "${SERVICE_LIST[@]}"
