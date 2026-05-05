@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
-    # Keep app assembly in one place so the API container can bootstrap predictably.
+    # Keep app assembly centralized so the API container boot path stays predictable.
     settings = get_settings()
 
     app = FastAPI(
