@@ -89,7 +89,7 @@ def generate_writing_task_image_summary_task(self: Task[Any, Any], task_id: str)
 def expire_stale_invoices() -> dict[str, Any]:
     """Expire pending payment invoices past their 10-minute TTL."""
     import asyncio
-    from app.db.session import get_session_maker
+    from app.db.session import get_session_maker, reset_session_state
     from app.services.payment_service import expire_stale_payments
 
     async def _run() -> int:
@@ -100,5 +100,9 @@ def expire_stale_invoices() -> dict[str, Any]:
                 await session.commit()
             return count
 
-    expired_count = asyncio.run(_run())
+    reset_session_state()
+    try:
+        expired_count = asyncio.run(_run())
+    finally:
+        reset_session_state()
     return {"status": "ok", "expired": expired_count}

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 from app.core.config import get_settings
+from app.db.session import reset_session_state
 
 settings = get_settings()
 
@@ -50,3 +52,8 @@ celery_app.conf.update(
     },
     timezone=settings.timezone,
 )
+
+
+@worker_process_init.connect
+def reset_db_state_after_fork(**_: object) -> None:
+    reset_session_state()

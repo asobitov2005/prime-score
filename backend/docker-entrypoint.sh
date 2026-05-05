@@ -2,6 +2,8 @@
 set -eu
 
 RUN_APP_BOOTSTRAP="${RUN_APP_BOOTSTRAP:-1}"
+RUN_DB_MIGRATIONS="${RUN_DB_MIGRATIONS:-$RUN_APP_BOOTSTRAP}"
+RUN_APP_SEED="${RUN_APP_SEED:-$RUN_APP_BOOTSTRAP}"
 
 python - <<'PY'
 import asyncio
@@ -32,8 +34,11 @@ async def wait_for_database() -> None:
 asyncio.run(wait_for_database())
 PY
 
-if [ "$RUN_APP_BOOTSTRAP" = "1" ]; then
+if [ "$RUN_DB_MIGRATIONS" = "1" ]; then
   alembic upgrade head
+fi
+
+if [ "$RUN_APP_SEED" = "1" ]; then
   python -m app.db.seed
 fi
 

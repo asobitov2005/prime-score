@@ -59,6 +59,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
       GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      RUN_DB_MIGRATIONS: "1"
+      RUN_APP_SEED: "1"
     depends_on:
       postgres:
         condition: service_healthy
