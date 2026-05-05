@@ -200,7 +200,7 @@ services:
       NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-/api/admin}
       ADMIN_API_INTERNAL_BASE_URL: ${ADMIN_API_INTERNAL_BASE_URL:-http://api:8000/api/admin}
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/login').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 20
