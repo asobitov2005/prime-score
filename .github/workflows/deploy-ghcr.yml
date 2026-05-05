@@ -140,11 +140,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+        id: buildx
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore Backend Build Caches
+        uses: actions/cache@v4
+        id: backend-cache
+        with:
+          path: ${{ runner.temp }}/backend-buildkit-cache
+          key: ${{ runner.os }}-backend-buildkit-${{ hashFiles('backend/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-buildkit-
+      - name: Restore Backend Cache Mounts
+        uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-dir: ${{ runner.temp }}/backend-buildkit-cache
+          dockerfile: backend/Dockerfile
+          skip-extraction: ${{ steps.backend-cache.outputs.cache-hit }}
       - name: Build and Push Backend
         uses: docker/build-push-action@v6
         with:
@@ -164,11 +180,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+        id: buildx
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore Frontend Build Caches
+        uses: actions/cache@v4
+        id: frontend-cache
+        with:
+          path: ${{ runner.temp }}/frontend-buildkit-cache
+          key: ${{ runner.os }}-frontend-buildkit-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-buildkit-
+      - name: Restore Frontend Cache Mounts
+        uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-dir: ${{ runner.temp }}/frontend-buildkit-cache
+          dockerfile: frontend/Dockerfile
+          skip-extraction: ${{ steps.frontend-cache.outputs.cache-hit }}
       - name: Build and Push Frontend
         uses: docker/build-push-action@v6
         with:
@@ -191,11 +223,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+        id: buildx
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore Admin Build Caches
+        uses: actions/cache@v4
+        id: admin-cache
+        with:
+          path: ${{ runner.temp }}/admin-buildkit-cache
+          key: ${{ runner.os }}-admin-buildkit-${{ hashFiles('admin/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-admin-buildkit-
+      - name: Restore Admin Cache Mounts
+        uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          cache-dir: ${{ runner.temp }}/admin-buildkit-cache
+          dockerfile: admin/Dockerfile
+          skip-extraction: ${{ steps.admin-cache.outputs.cache-hit }}
       - name: Build and Push Admin
         uses: docker/build-push-action@v6
         with:
