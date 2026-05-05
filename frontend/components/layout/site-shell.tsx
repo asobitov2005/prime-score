@@ -41,6 +41,7 @@ const highlights = [
 ];
 
 export function SiteShell({ children }: SiteShellProps) {
+  // This shell owns the authenticated navigation frame for the main user app.
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const { isAuthenticated, name, phoneNumber, sessionId, refreshToken, clearSession, syncSession, hasHydrated } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
