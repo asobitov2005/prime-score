@@ -23,6 +23,7 @@ export function AdminShell({
   children: ReactNode;
   admin: AdminIdentity;
 }) {
+  // The admin shell keeps dashboard navigation state steady across pages.
   const pathname = usePathname();
   const pageLabel = resolvePageLabel(pathname);
   const initials = admin.username.slice(0, 2).toUpperCase();
