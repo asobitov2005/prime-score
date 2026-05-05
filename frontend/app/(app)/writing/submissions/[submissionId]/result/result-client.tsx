@@ -593,7 +593,7 @@ export function WritingResultClient({
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/writing/submissions/${submissionId}`, {
+        const res = await fetch(`/internal-api/writing/submissions/${submissionId}`, {
           credentials: "include",
           cache: "no-store",
         });
@@ -603,7 +603,7 @@ export function WritingResultClient({
         if (cancelled) return;
         if (status === "completed") {
           setStage("loading_result");
-          const r = await fetch(`/api/writing/submissions/${submissionId}/result`, {
+          const r = await fetch(`/internal-api/writing/submissions/${submissionId}/result`, {
             credentials: "include",
             cache: "no-store",
           });

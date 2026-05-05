@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { Providers } from "@/app/providers";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
 import { SiteShell } from "@/components/layout/site-shell";
@@ -46,7 +46,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             style={{ display: "none", visibility: "hidden" }}
           />
         </noscript>
-        <PageViewTracker />
+        <Suspense fallback={null}>
+          <PageViewTracker />
+        </Suspense>
         <Providers>
           <SiteShell>{children}</SiteShell>
         </Providers>

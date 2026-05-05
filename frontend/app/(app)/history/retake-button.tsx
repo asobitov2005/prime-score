@@ -19,7 +19,7 @@ export function HistoryRetakeButton({ testId, testType, mode }: HistoryRetakeBut
   async function retake() {
     try {
       setIsStarting(true);
-      const response = await fetch("/api/attempts/start", {
+      const response = await fetch("/internal-api/attempts/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

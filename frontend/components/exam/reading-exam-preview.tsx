@@ -12,7 +12,6 @@ import { ListeningWaveformPlayer } from "@/components/exam/listening-waveform-pl
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
 import {
   formatMatchingAnswerForReview,
   getMatchingOptionViewModel,
@@ -251,7 +250,7 @@ const DEFAULT_EXAM_DATA: ReadingExamPreviewData = {
   questionGroups: QUESTION_GROUPS,
 };
 
-const attemptApiBaseUrl = getFrontendClientApiBaseUrl();
+const attemptApiBaseUrl = "/internal-api";
 
 function formatCountdown(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
 import { trackAttemptSubmit } from "@/lib/analytics";
 import { getMatchingOptionViewModel, shouldAutoLetterMatchingOptions } from "@/lib/matching-option-format";
 import { QuestionRenderer } from "@/components/question-renderer";
@@ -38,7 +37,7 @@ interface ListeningAttemptWorkspaceProps {
 }
 
 export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, passage, sections, meta, initialAnswers }: ReadingAttemptWorkspaceProps) {
-  const apiBaseUrl = getFrontendClientApiBaseUrl();
+  const attemptApiBaseUrl = "/internal-api/attempts";
   const router = useRouter();
   const { activeAttemptTab, setActiveAttemptTab } = useUIStore();
   const visibleTab = activeAttemptTab === "transcript" ? "passage" : activeAttemptTab;
@@ -113,7 +112,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${apiBaseUrl}/attempts/${attemptId}/submit`, {
+      fetch(`${attemptApiBaseUrl}/${attemptId}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
@@ -132,14 +131,14 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
         })
         .catch(() => setIsSubmitting(false));
     }
-  }, [apiBaseUrl, timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
+  }, [attemptApiBaseUrl, timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
 
   async function persistAnswer(questionId: string, value: string) {
     setAnswers((current) => ({ ...current, [questionId]: value }));
     setSaveState("saving");
 
     try {
-      const response = await fetch(`/api/attempts/${attemptId}/answer`, {
+      const response = await fetch(`/internal-api/attempts/${attemptId}/answer`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json"
@@ -183,7 +182,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
               onClick={async () => {
                 try {
                   setIsSubmitting(true);
-                  await fetch(`/api/attempts/${attemptId}/submit`, {
+                  await fetch(`/internal-api/attempts/${attemptId}/submit`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),
@@ -369,7 +368,7 @@ export function ListeningAttemptWorkspace({
   meta,
   initialAnswers
 }: ListeningAttemptWorkspaceProps) {
-  const apiBaseUrl = getFrontendClientApiBaseUrl();
+  const attemptApiBaseUrl = "/internal-api/attempts";
   const router = useRouter();
   const { activeAttemptTab, setActiveAttemptTab } = useUIStore();
   const [activeSegment, setActiveSegment] = useState(part.segments[0]?.id ?? "");
@@ -446,7 +445,7 @@ export function ListeningAttemptWorkspace({
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${apiBaseUrl}/attempts/${attemptId}/submit`, {
+      fetch(`${attemptApiBaseUrl}/${attemptId}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
@@ -465,7 +464,7 @@ export function ListeningAttemptWorkspace({
         })
         .catch(() => setIsSubmitting(false));
     }
-  }, [apiBaseUrl, timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
+  }, [attemptApiBaseUrl, timeLeft, mode, meta.timeLimitSeconds, isSubmitting, attemptId, router]);
 
   useEffect(() => {
     const audioUrl = (part as any).audioUrl || (part as any).audioAssetKey || "/dummy.mp3";
@@ -504,7 +503,7 @@ export function ListeningAttemptWorkspace({
     setSaveState("saving");
 
     try {
-      const response = await fetch(`/api/attempts/${attemptId}/answer`, {
+      const response = await fetch(`/internal-api/attempts/${attemptId}/answer`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json"
@@ -548,7 +547,7 @@ export function ListeningAttemptWorkspace({
               onClick={async () => {
                 try {
                   setIsSubmitting(true);
-                  await fetch(`/api/attempts/${attemptId}/submit`, {
+                  await fetch(`/internal-api/attempts/${attemptId}/submit`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),

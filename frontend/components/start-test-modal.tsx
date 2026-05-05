@@ -83,7 +83,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
     };
     try {
       setIsSubmitting(true);
-      const response = await fetch("/api/attempts/start", {
+      const response = await fetch("/internal-api/attempts/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
