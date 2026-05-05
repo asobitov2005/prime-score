@@ -20,9 +20,6 @@ if [ "${#SERVICE_LIST[@]}" -eq 0 ]; then
   exit 0
 fi
 
-docker-compose -f "$COMPOSE_FILE" pull "${SERVICE_LIST[@]}"
-docker-compose -f "$COMPOSE_FILE" up -d --no-deps "${SERVICE_LIST[@]}"
-
 has_service() {
   local name="$1"
   for service in "${SERVICE_LIST[@]}"; do
@@ -32,6 +29,21 @@ has_service() {
   done
   return 1
 }
+
+PULL_LIST=()
+if has_service api || has_service worker || has_service beat || has_service bot; then
+  PULL_LIST+=(api)
+fi
+if has_service frontend; then
+  PULL_LIST+=(frontend)
+fi
+if has_service admin; then
+  PULL_LIST+=(admin)
+fi
+
+echo "[deploy] Pull targets: ${PULL_LIST[*]}"
+docker-compose -f "$COMPOSE_FILE" pull "${PULL_LIST[@]}"
+docker-compose -f "$COMPOSE_FILE" up -d --no-deps "${SERVICE_LIST[@]}"
 
 if has_service api || has_service worker || has_service beat || has_service bot; then
   echo "[verify] Waiting for API"
