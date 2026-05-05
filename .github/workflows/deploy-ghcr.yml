@@ -204,6 +204,7 @@ jobs:
       - build-frontend
       - build-admin
     if: |
+      always() &&
       needs.detect-changes.outputs.should_deploy == 'true' &&
       needs.build-backend.result != 'failure' &&
       needs.build-backend.result != 'cancelled' &&

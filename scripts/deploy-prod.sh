@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # This script is copied to the server and used by GitHub Actions deploys.
+# It selectively restarts only the services affected by the current push.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
