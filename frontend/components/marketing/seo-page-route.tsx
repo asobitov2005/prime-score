@@ -50,14 +50,11 @@ function SeoLandingPageView({ page }: { page: SeoLandingPage }) {
   const relatedPages = getRelatedSeoPages(page);
 
   return (
-    <div className="relative isolate w-full overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[30rem] bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.17),transparent_58%)]" />
-      <div className="pointer-events-none absolute inset-x-0 top-[20rem] h-[34rem] bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.08),transparent_52%)]" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[24rem] bg-[radial-gradient(circle_at_bottom,hsl(var(--primary)/0.07),transparent_60%)]" />
-      <div className="pointer-events-none absolute left-[-8rem] top-10 h-[28rem] w-[28rem] rounded-full bg-primary/10 blur-[120px]" />
-      <div className="pointer-events-none absolute bottom-[10%] right-[-10rem] h-[24rem] w-[24rem] rounded-full bg-emerald-500/10 blur-[120px]" />
+    <div className="relative mx-auto max-w-[1500px] overflow-hidden">
+      <div className="pointer-events-none absolute left-[-12%] top-[-10%] h-[28rem] w-[28rem] rounded-full bg-primary/10 blur-[120px]" />
+      <div className="pointer-events-none absolute bottom-[10%] right-[-14%] h-[24rem] w-[24rem] rounded-full bg-emerald-500/10 blur-[120px]" />
 
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-20">
+      <div className="relative z-10 px-4 py-12 sm:px-8 lg:px-12 lg:py-20">
         <section className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.75fr)] lg:items-start">
           <div className="space-y-8">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
