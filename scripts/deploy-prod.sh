@@ -7,6 +7,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 : "${IMAGE_TAG:?IMAGE_TAG is required}"
+API_HEALTH_URL="${API_HEALTH_URL:-http://172.28.100.10:8000/health}"
+FRONTEND_HEALTH_URL="${FRONTEND_HEALTH_URL:-http://172.28.100.11:3000}"
+ADMIN_HEALTH_URL="${ADMIN_HEALTH_URL:-http://172.28.100.12:3001/login}"
 
 COMPOSE_FILE="docker-compose.prod.yml"
 SERVICES="${SERVICES:-}"
@@ -76,7 +79,7 @@ fi
 if has_service api || has_service worker || has_service beat || has_service bot; then
   echo "[verify] Waiting for API"
   for _ in $(seq 1 30); do
-    if curl -fsS "http://127.0.0.1:${BACKEND_PORT:-8000}/health" >/dev/null; then
+    if curl -fsS "$API_HEALTH_URL" >/dev/null; then
       break
     fi
     sleep 2
@@ -86,7 +89,7 @@ fi
 if has_service frontend; then
   echo "[verify] Waiting for frontend"
   for _ in $(seq 1 30); do
-    if curl -fsSI "http://127.0.0.1:${FRONTEND_PORT:-3100}" >/dev/null; then
+    if curl -fsSI "$FRONTEND_HEALTH_URL" >/dev/null; then
       break
     fi
     sleep 2
@@ -96,7 +99,7 @@ fi
 if has_service admin; then
   echo "[verify] Waiting for admin"
   for _ in $(seq 1 30); do
-    if curl -fsSI "http://127.0.0.1:${ADMIN_PORT:-3101}/login" >/dev/null; then
+    if curl -fsSI "$ADMIN_HEALTH_URL" >/dev/null; then
       break
     fi
     sleep 2

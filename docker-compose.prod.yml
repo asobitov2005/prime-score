@@ -13,6 +13,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks:
+      prime_score_net:
+        ipv4_address: 172.28.100.2
 
   redis:
     image: redis:7
@@ -23,6 +26,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks:
+      prime_score_net:
+        ipv4_address: 172.28.100.3
 
   minio:
     image: minio/minio:latest
@@ -33,6 +39,9 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+    networks:
+      prime_score_net:
+        ipv4_address: 172.28.100.4
 
   api:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
@@ -61,13 +70,14 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-    ports:
-      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      prime_score_net:
+        ipv4_address: 172.28.100.10
 
   worker:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
@@ -96,6 +106,8 @@ services:
       minio:
         condition: service_started
     command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "-Q", "default,heavy,notifications,admin_ai,writing", "--concurrency=4", "-Ofair"]
+    networks:
+      - prime_score_net
 
   beat:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
@@ -124,6 +136,8 @@ services:
       minio:
         condition: service_started
     command: ["celery", "-A", "app.tasks.celery_app", "beat", "--loglevel=info"]
+    networks:
+      - prime_score_net
 
   bot:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
@@ -150,6 +164,8 @@ services:
       redis:
         condition: service_healthy
     command: ["python", "-m", "app.bot.main"]
+    networks:
+      - prime_score_net
 
   frontend:
     image: ghcr.io/asobitov2005/prime-score-frontend:${IMAGE_TAG:-latest}
@@ -157,8 +173,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
       API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000/api}
@@ -167,6 +181,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      prime_score_net:
+        ipv4_address: 172.28.100.11
 
   admin:
     image: ghcr.io/asobitov2005/prime-score-admin:${IMAGE_TAG:-latest}
@@ -174,8 +191,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:${ADMIN_PORT:-3001}:3001"
     environment:
       NEXT_PUBLIC_ADMIN_API_BASE_URL: ${NEXT_PUBLIC_ADMIN_API_BASE_URL:-/api/admin}
       ADMIN_API_INTERNAL_BASE_URL: ${ADMIN_API_INTERNAL_BASE_URL:-http://api:8000/api/admin}
@@ -184,7 +199,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    networks:
+      prime_score_net:
+        ipv4_address: 172.28.100.12
 
 volumes:
   postgres_data:
   minio_data:
+
+networks:
+  prime_score_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.100.0/24
