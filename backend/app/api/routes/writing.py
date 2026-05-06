@@ -18,12 +18,14 @@ from app.models.enums import (
     WritingTaskStatus,
     WritingTaskType,
 )
-from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
+from app.models.writing import WritingDraft, WritingEvaluation, WritingSubmission, WritingTask
 from app.schemas.common import DebugPrincipal
 from app.schemas.writing import (
     WritingCriterionFeedback,
     WritingDashboardSummary,
     WritingEvaluationRead,
+    WritingDraftRead,
+    WritingDraftUpsertRequest,
     WritingHistoryItem,
     WritingHistoryResponse,
     WritingInlineAnnotation,
@@ -72,6 +74,21 @@ def _serialize_task_list_item(task: WritingTask) -> WritingTaskListItem:
         difficulty=task.difficulty,
         source=task.source,
         description=task.description,
+    )
+
+
+def _serialize_draft(draft: WritingDraft) -> WritingDraftRead:
+    payload = draft.payload or {}
+    return WritingDraftRead(
+        draft_key=draft.draft_key,
+        task_id=draft.task_id,
+        task_type=draft.task_type,
+        topic=str(payload.get("topic") or ""),
+        essay_text=str(payload.get("essay") or ""),
+        image_data_url=payload.get("imageDataUrl") if isinstance(payload, dict) else None,
+        started=bool(payload.get("started", False)) if isinstance(payload, dict) else False,
+        time_spent_seconds=int(draft.time_spent_seconds or 0),
+        updated_at=draft.updated_at,
     )
 
 
@@ -222,6 +239,86 @@ async def get_published_task(
     if task is None or task.status != WritingTaskStatus.PUBLISHED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
     return _serialize_task_read(task)
+
+
+@router.get("/drafts/{draft_key}", response_model=WritingDraftRead)
+async def get_writing_draft(
+    draft_key: str,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> WritingDraftRead:
+    draft = await session.scalar(
+        select(WritingDraft).where(
+            WritingDraft.user_id == current_user.id,
+            WritingDraft.draft_key == draft_key,
+        )
+    )
+    if draft is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found.")
+    return _serialize_draft(draft)
+
+
+@router.put("/drafts/{draft_key}", response_model=WritingDraftRead)
+async def save_writing_draft(
+    draft_key: str,
+    payload: WritingDraftUpsertRequest,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> WritingDraftRead:
+    if payload.task_id is not None:
+        task = await session.get(WritingTask, payload.task_id)
+        if task is None or task.status != WritingTaskStatus.PUBLISHED:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
+
+    draft = await session.scalar(
+        select(WritingDraft).where(
+            WritingDraft.user_id == current_user.id,
+            WritingDraft.draft_key == draft_key,
+        )
+    )
+    if draft is None:
+        draft = WritingDraft(
+            user_id=current_user.id,
+            draft_key=draft_key,
+            task_id=payload.task_id,
+            task_type=payload.task_type,
+            payload={},
+            time_spent_seconds=payload.time_spent_seconds,
+        )
+        session.add(draft)
+
+    draft.task_id = payload.task_id
+    draft.task_type = payload.task_type
+    draft.time_spent_seconds = payload.time_spent_seconds
+    draft.payload = {
+        "topic": (payload.topic or "").strip(),
+        "essay": payload.essay_text,
+        "imageDataUrl": payload.image_data_url,
+        "started": payload.started,
+    }
+
+    await session.commit()
+    await session.refresh(draft)
+    return _serialize_draft(draft)
+
+
+@router.delete("/drafts/{draft_key}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_writing_draft(
+    draft_key: str,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    draft = await session.scalar(
+        select(WritingDraft).where(
+            WritingDraft.user_id == current_user.id,
+            WritingDraft.draft_key == draft_key,
+        )
+    )
+    if draft is None:
+        return None
+    await session.delete(draft)
+    await session.commit()
+    return None
 
 
 @router.post(

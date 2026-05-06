@@ -7,5 +7,5 @@ interface WritingTaskDetailPageProps {
 }
 
 export default function WritingTaskDetailPage({ params }: WritingTaskDetailPageProps) {
-  redirect(`/exam-preview/writing?taskId=${params.taskId}`);
+  redirect(`/exam-preview/writing?taskId=${params.taskId}&mode=practice`);
 }

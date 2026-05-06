@@ -54,7 +54,7 @@ export default async function WritingPage() {
           minutes={20}
           words={150}
           icon={<ImageIcon className="h-5 w-5" />}
-          href="/exam-preview/writing?task_type=task_1"
+          href="/exam-preview/writing?task_type=task_1&mode=practice"
         />
         <TaskQuickStartCard
           taskNumber={2}
@@ -63,7 +63,7 @@ export default async function WritingPage() {
           minutes={40}
           words={250}
           icon={<PenSquare className="h-5 w-5" />}
-          href="/exam-preview/writing?task_type=task_2"
+          href="/exam-preview/writing?task_type=task_2&mode=practice"
         />
       </div>
 

@@ -58,6 +58,30 @@ class WritingUploadImageResponse(BaseModel):
     url: str
 
 
+class WritingDraftUpsertRequest(BaseModel):
+    task_id: UUID | None = None
+    task_type: WritingTaskType
+    topic: str | None = Field(default=None, max_length=5000)
+    essay_text: str = Field(default="", max_length=20000)
+    image_data_url: str | None = None
+    started: bool = False
+    time_spent_seconds: int = Field(default=0, ge=0)
+
+
+class WritingDraftRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    draft_key: str
+    task_id: UUID | None = None
+    task_type: WritingTaskType
+    topic: str = ""
+    essay_text: str = ""
+    image_data_url: str | None = None
+    started: bool = False
+    time_spent_seconds: int = 0
+    updated_at: datetime
+
+
 class AdminWritingTaskCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     task_type: WritingTaskType

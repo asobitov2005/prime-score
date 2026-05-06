@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,6 +46,24 @@ class WritingTask(UUIDMixin, TimestampMixin, Base):
     created_by: Mapped[UUID | None] = mapped_column(
         ForeignKey("admins.id"), nullable=True, index=True
     )
+
+
+class WritingDraft(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "writing_drafts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "draft_key", name="uq_writing_drafts_user_id_draft_key"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    draft_key: Mapped[str] = mapped_column(String(160), index=True)
+    task_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("writing_tasks.id"), nullable=True, index=True
+    )
+    task_type: Mapped[WritingTaskType] = mapped_column(
+        Enum(WritingTaskType, native_enum=False), index=True
+    )
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class WritingSubmission(UUIDMixin, TimestampMixin, Base):

@@ -3,10 +3,33 @@
 import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
 import { useAuthStore } from "@/store/auth-store";
 import type {
+  WritingTaskType,
   WritingSubmissionRecord,
   WritingSubmissionResult,
   WritingTaskDetail,
 } from "@/lib/server-writing";
+
+export interface WritingDraftRead {
+  draft_key: string;
+  task_id?: string | null;
+  task_type: WritingTaskType;
+  topic: string;
+  essay_text: string;
+  image_data_url?: string | null;
+  started: boolean;
+  time_spent_seconds: number;
+  updated_at: string;
+}
+
+export interface WritingDraftUpsertRequest {
+  task_id?: string | null;
+  task_type: WritingTaskType;
+  topic?: string | null;
+  essay_text: string;
+  image_data_url?: string | null;
+  started: boolean;
+  time_spent_seconds: number;
+}
 
 async function clientFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = getFrontendClientApiBaseUrl();
@@ -39,6 +62,23 @@ async function clientFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getWritingTaskClient(taskId: string): Promise<WritingTaskDetail> {
   return clientFetch<WritingTaskDetail>(`/writing/tasks/${taskId}`);
+}
+
+export function getWritingDraftClient(draftKey: string): Promise<WritingDraftRead> {
+  return clientFetch<WritingDraftRead>(`/writing/drafts/${draftKey}`);
+}
+
+export function saveWritingDraftClient(draftKey: string, payload: WritingDraftUpsertRequest): Promise<WritingDraftRead> {
+  return clientFetch<WritingDraftRead>(`/writing/drafts/${draftKey}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteWritingDraftClient(draftKey: string): Promise<void> {
+  return clientFetch<void>(`/writing/drafts/${draftKey}`, {
+    method: "DELETE",
+  });
 }
 
 export function pollWritingSubmission(submissionId: string): Promise<WritingSubmissionRecord> {

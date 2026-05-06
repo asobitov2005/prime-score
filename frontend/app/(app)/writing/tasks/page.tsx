@@ -128,7 +128,7 @@ function TaskCard({ task }: { task: WritingTaskListItem }) {
   const minutes = Math.round((task.time_limit_seconds ?? 0) / 60);
 
   return (
-    <Link href={`/exam-preview/writing?taskId=${task.id}`} className="group block">
+    <Link href={`/exam-preview/writing?taskId=${task.id}&mode=practice`} className="group block">
       <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-border/60 bg-card/70 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
         {imgSrc ? (
           <div className="relative h-36 w-full overflow-hidden bg-muted/40">

@@ -8,11 +8,18 @@ import { AlertTriangle, ArrowLeft, Clock3, ImageIcon, Loader2, Send, Target, Upl
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitWritingSubmission, uploadWritingImage } from "@/lib/client-writing";
+import {
+  deleteWritingDraftClient,
+  getWritingDraftClient,
+  saveWritingDraftClient,
+  submitWritingSubmission,
+  uploadWritingImage,
+} from "@/lib/client-writing";
 import { emitNavigationStart } from "@/lib/navigation-transition";
 import { cn } from "@/lib/utils";
 
 type WritingTaskType = "task_1" | "task_2";
+type WritingMode = "practice" | "exam";
 
 interface ExamWritingTask {
   id: string;
@@ -23,6 +30,14 @@ interface ExamWritingTask {
   word_minimum: number;
   time_limit_seconds: number;
   source: string | null;
+}
+
+interface WritingDraftRecord {
+  topic?: string;
+  essay?: string;
+  imageDataUrl?: string | null;
+  started?: boolean;
+  timeSpentSeconds?: number;
 }
 
 const TASK_CONFIG: Record<WritingTaskType, { label: string; words: number; seconds: number; instruction: string }> = {
@@ -54,9 +69,11 @@ function formatTime(totalSeconds: number): string {
 export function WritingExamClient({
   task,
   taskType,
+  writingMode,
 }: {
   task: ExamWritingTask | null;
   taskType: WritingTaskType;
+  writingMode: WritingMode;
 }) {
   const router = useRouter();
   const resolvedTaskType = task?.task_type ?? taskType;
@@ -65,76 +82,166 @@ export function WritingExamClient({
   const timeLimitSeconds = task?.time_limit_seconds ?? config.seconds;
   const storageKey = `writing-exam-draft:${task?.id ?? `custom:${resolvedTaskType}`}`;
 
+  const [isStarted, setIsStarted] = useState(writingMode === "exam");
   const [topic, setTopic] = useState("");
   const [essay, setEssay] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [draftImageDataUrl, setDraftImageDataUrl] = useState<string | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(timeLimitSeconds);
   const [elapsed, setElapsed] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const essayRef = useRef<HTMLTextAreaElement>(null);
   const lastSavedRef = useRef<number>(0);
 
   useEffect(() => {
-    setSecondsRemaining(timeLimitSeconds);
-    setElapsed(0);
-    setImageFile(null);
-    setSubmitError(null);
+    let cancelled = false;
 
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { topic?: string; essay?: string };
-        setTopic(task ? "" : parsed.topic ?? "");
-        setEssay(parsed.essay ?? "");
-        return;
+    async function hydrateDraft() {
+      setSecondsRemaining(timeLimitSeconds);
+      setElapsed(0);
+      setIsStarted(writingMode === "exam");
+      setImageFile(null);
+      setDraftImageDataUrl(null);
+      setSubmitError(null);
+
+      let localDraft: WritingDraftRecord | null = null;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) {
+          localDraft = JSON.parse(raw) as WritingDraftRecord;
+          if (!task) {
+            setTopic(localDraft.topic ?? "");
+          }
+          setEssay(localDraft.essay ?? "");
+          setDraftImageDataUrl(localDraft.imageDataUrl ?? null);
+        } else {
+          setTopic("");
+          setEssay("");
+        }
+      } catch {
+        setTopic("");
+        setEssay("");
       }
-    } catch {}
 
-    setTopic("");
-    setEssay("");
-  }, [storageKey, task, timeLimitSeconds]);
-
-  useEffect(() => {
-    if (!imageFile) {
-      setImagePreviewUrl(null);
-      return;
+      try {
+        const remoteDraft = await getWritingDraftClient(storageKey);
+        if (cancelled) return;
+        if (!task) {
+          setTopic(remoteDraft.topic || localDraft?.topic || "");
+        }
+        setEssay(remoteDraft.essay_text || localDraft?.essay || "");
+        setDraftImageDataUrl(remoteDraft.image_data_url ?? localDraft?.imageDataUrl ?? null);
+        setElapsed(remoteDraft.time_spent_seconds ?? 0);
+        setSecondsRemaining(Math.max(0, timeLimitSeconds - (remoteDraft.time_spent_seconds ?? 0)));
+        setIsStarted(writingMode === "exam" || remoteDraft.started || (remoteDraft.time_spent_seconds ?? 0) > 0);
+      } catch {
+        if (cancelled) return;
+        if (localDraft) {
+          setTopic(task ? "" : localDraft.topic ?? "");
+          setEssay(localDraft.essay ?? "");
+          setDraftImageDataUrl(localDraft.imageDataUrl ?? null);
+          setSecondsRemaining(Math.max(0, timeLimitSeconds - (localDraft.timeSpentSeconds ?? 0)));
+          setElapsed(localDraft.timeSpentSeconds ?? 0);
+          setIsStarted(writingMode === "exam" || localDraft.started || (localDraft.timeSpentSeconds ?? 0) > 0);
+        }
+      }
     }
 
+    void hydrateDraft();
+    return () => {
+      cancelled = true;
+    };
+  }, [storageKey, task, timeLimitSeconds, writingMode]);
+
+  useEffect(() => {
+    if (!imageFile) return;
     const nextUrl = URL.createObjectURL(imageFile);
     setImagePreviewUrl(nextUrl);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setDraftImageDataUrl(typeof reader.result === "string" ? reader.result : null);
+    };
+    reader.readAsDataURL(imageFile);
+
     return () => URL.revokeObjectURL(nextUrl);
   }, [imageFile]);
 
   useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(draftImageDataUrl);
+    }
+  }, [draftImageDataUrl, imageFile]);
+
+  useEffect(() => {
+    if (!isStarted || timeLimitSeconds <= 0) return;
+
     const id = window.setInterval(() => {
       setSecondsRemaining((current) => Math.max(0, current - 1));
       setElapsed((current) => current + 1);
     }, 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [isStarted, timeLimitSeconds]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
       const now = Date.now();
       if (now - lastSavedRef.current > 4500) {
+        const payload = {
+          task_id: task?.id ?? null,
+          task_type: resolvedTaskType,
+          topic: task ? "" : topic,
+          essay_text: essay,
+          image_data_url: draftImageDataUrl,
+          started: isStarted,
+          time_spent_seconds: elapsed,
+        };
         try {
-          window.localStorage.setItem(storageKey, JSON.stringify({ topic, essay }));
+          window.localStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              topic: payload.topic,
+              essay: payload.essay_text,
+              imageDataUrl: payload.image_data_url,
+              started: payload.started,
+              timeSpentSeconds: payload.time_spent_seconds,
+            } satisfies WritingDraftRecord),
+          );
+          void saveWritingDraftClient(storageKey, payload).catch(() => {});
           lastSavedRef.current = now;
         } catch {}
       }
     }, 5000);
     return () => window.clearInterval(id);
-  }, [essay, storageKey, topic]);
+  }, [draftImageDataUrl, elapsed, essay, isStarted, resolvedTaskType, storageKey, task, topic]);
 
   const wordCount = useMemo(() => countWords(essay), [essay]);
   const minDraftWords = Math.ceil(wordMinimum * 0.5);
   const hasPrompt = task ? true : topic.trim().length > 0;
-  const canSubmit = hasPrompt && wordCount >= minDraftWords;
-  const timeUp = secondsRemaining === 0;
+  const hasTask1Image = resolvedTaskType === "task_1" && Boolean(task ? task.image_url : draftImageDataUrl || imageFile);
+  const setupReady = task ? true : hasPrompt && (resolvedTaskType === "task_2" || hasTask1Image);
+  const canSubmit = isStarted && hasPrompt && wordCount >= minDraftWords;
+  const timeUp = isStarted && secondsRemaining === 0;
+
+  const startPractice = useCallback(() => {
+    if (!setupReady) return;
+    setSubmitError(null);
+    setIsStarted(true);
+    window.requestAnimationFrame(() => {
+      essayRef.current?.focus();
+    });
+  }, [setupReady]);
+
+  const handleImageChange = useCallback((file: File | null) => {
+    setImageFile(file);
+    if (!file) {
+      setDraftImageDataUrl(null);
+    }
+  }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!canSubmit || isSubmitting) return;
+    if (!isStarted || !canSubmit || isSubmitting) return;
 
     setIsSubmitting(true);
     setSubmitError(null);
@@ -143,6 +250,12 @@ export function WritingExamClient({
       let imageUrl: string | null = null;
       if (!task && resolvedTaskType === "task_1" && imageFile) {
         const upload = await uploadWritingImage(imageFile);
+        imageUrl = upload.url;
+      } else if (!task && resolvedTaskType === "task_1" && draftImageDataUrl) {
+        const response = await fetch(draftImageDataUrl);
+        const blob = await response.blob();
+        const file = new File([blob], `${storageKey}.png`, { type: blob.type || "image/png" });
+        const upload = await uploadWritingImage(file);
         imageUrl = upload.url;
       }
 
@@ -158,6 +271,7 @@ export function WritingExamClient({
       try {
         window.localStorage.removeItem(storageKey);
       } catch {}
+      void deleteWritingDraftClient(storageKey).catch(() => {});
 
       const href = `/writing/submissions/${result.id}/result`;
       emitNavigationStart(href);
@@ -166,7 +280,7 @@ export function WritingExamClient({
       setSubmitError(error instanceof Error ? error.message : "Failed to submit essay.");
       setIsSubmitting(false);
     }
-  }, [canSubmit, elapsed, essay, imageFile, isSubmitting, resolvedTaskType, router, storageKey, task, topic]);
+  }, [canSubmit, draftImageDataUrl, elapsed, essay, imageFile, isStarted, isSubmitting, resolvedTaskType, router, storageKey, task, topic]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -203,7 +317,63 @@ export function WritingExamClient({
         </div>
       </header>
 
-      <main className="grid min-h-[calc(100vh-4rem)] lg:grid-cols-[minmax(320px,43%)_minmax(0,57%)]">
+      {!isStarted ? (
+        <div className="fixed inset-x-0 bottom-0 top-16 z-40 overflow-y-auto bg-background/95 px-4 py-6 backdrop-blur-md sm:px-6 lg:px-8">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 rounded-[2rem] border border-border/60 bg-card/95 p-5 shadow-2xl shadow-black/10 sm:p-6 lg:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                  Practice mode
+                </div>
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                  Add the question and image first, then start the test.
+                </h2>
+                <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                  Your draft is saved in the browser and in the database. The timer only starts after you press Start Test.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                onClick={startPractice}
+                disabled={!setupReady}
+                className="h-11 rounded-xl px-5"
+              >
+                Start Test
+              </Button>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-5">
+                {task ? (
+                  <PresetPrompt task={task} />
+                ) : (
+                  <CustomPrompt
+                    taskType={resolvedTaskType}
+                    topic={topic}
+                    onTopicChange={setTopic}
+                    imageFile={imageFile}
+                    imagePreviewUrl={imagePreviewUrl}
+                    onImageChange={handleImageChange}
+                  />
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-[1.75rem] border border-border/60 bg-background/70 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Practice notes</p>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Task {resolvedTaskType === "task_1" ? "1" : "2"} setup is ready. Once you press Start Test, the answer workspace opens full screen and the timer begins.
+                </p>
+                <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-4 text-xs leading-6 text-muted-foreground">
+                  Draft autosaves every 5 seconds. If you close the tab and come back, the question, answer, and timer state should return.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <main className={cn("grid min-h-[calc(100vh-4rem)] lg:grid-cols-[minmax(320px,43%)_minmax(0,57%)]", !isStarted && "pointer-events-none select-none opacity-0")}>
         <section className="border-b border-border/80 bg-background lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <div className="space-y-6 px-4 py-5 sm:px-6">
             <div className="space-y-2">
@@ -222,7 +392,7 @@ export function WritingExamClient({
                 onTopicChange={setTopic}
                 imageFile={imageFile}
                 imagePreviewUrl={imagePreviewUrl}
-                onImageChange={setImageFile}
+                onImageChange={handleImageChange}
               />
             )}
 
