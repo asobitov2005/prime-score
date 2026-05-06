@@ -42,7 +42,7 @@ export default async function WritingTasksPage({ searchParams }: WritingTasksPag
           Choose a {taskType === "task_1" ? "Task 1" : "Task 2"} prompt
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Pick any ready-made prompt, or go back and paste your own topic in the writing workspace.
+          Pick any ready-made prompt. The writing workspace opens in a separate exam-style window.
         </p>
       </div>
 
@@ -128,7 +128,7 @@ function TaskCard({ task }: { task: WritingTaskListItem }) {
   const minutes = Math.round((task.time_limit_seconds ?? 0) / 60);
 
   return (
-    <Link href={`/writing/tasks/${task.id}`} className="group block">
+    <Link href={`/exam-preview/writing?taskId=${task.id}`} className="group block">
       <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-border/60 bg-card/70 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
         {imgSrc ? (
           <div className="relative h-36 w-full overflow-hidden bg-muted/40">

@@ -9,6 +9,25 @@ import { useAuthStore } from "@/store/auth-store";
 
 export type DashboardAnalyticsFilter = "all" | TestType;
 
+export function roundToIeltsBand(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  if (value >= 9) {
+    return 9;
+  }
+
+  const whole = Math.floor(value);
+  const fraction = value - whole;
+  if (fraction < 0.25) {
+    return whole;
+  }
+  if (fraction < 0.75) {
+    return whole + 0.5;
+  }
+  return Math.min(9, whole + 1);
+}
+
 function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAnalytics {
   return {
     performanceSummary: {
@@ -80,7 +99,7 @@ export function getAverageBand(analytics: DashboardAnalytics, type: TestType): n
   }
 
   const total = values.reduce((sum, value) => sum + value, 0);
-  return Number((total / values.length).toFixed(1));
+  return roundToIeltsBand(total / values.length);
 }
 
 export function useDashboardAnalytics(initialAnalytics: DashboardAnalytics, filter: DashboardAnalyticsFilter = "all") {

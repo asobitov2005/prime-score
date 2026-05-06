@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Repeat2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,41 @@ function findActiveSegmentIndex(segments: ListeningTranscriptSegment[], currentT
   }
 
   return -1;
+}
+
+function renderInlineItalicText(text: string, keyPrefix: string): ReactNode {
+  const tokens = text.split(/(<\/?i>)/i);
+  const parts: ReactNode[] = [];
+  let italic = false;
+  let plainIndex = 0;
+
+  tokens.forEach((token, index) => {
+    if (!token) {
+      return;
+    }
+    if (/^<i>$/i.test(token)) {
+      italic = true;
+      return;
+    }
+    if (/^<\/i>$/i.test(token)) {
+      italic = false;
+      return;
+    }
+
+    if (italic) {
+      parts.push(
+        <em key={`${keyPrefix}-italic-${index}`} className="italic">
+          {token}
+        </em>
+      );
+      return;
+    }
+
+    parts.push(<span key={`${keyPrefix}-plain-${plainIndex}`}>{token}</span>);
+    plainIndex += 1;
+  });
+
+  return parts.length > 0 ? parts : text;
 }
 
 export function ListeningTranscriptPanel({
@@ -437,7 +472,9 @@ export function ListeningTranscriptPanel({
                     ))}
                   </span>
                 ) : null}
-                <span className={cn(hasAnswerLocation && "font-semibold")}>{segment.text}</span>
+                <span className={cn(hasAnswerLocation && "font-semibold")}>
+                  {renderInlineItalicText(segment.text, `${segment.id}-text`)}
+                </span>
               </p>
             </button>
           );

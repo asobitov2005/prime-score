@@ -53,6 +53,7 @@ export function submitWritingSubmission(payload: {
   task_id?: string;
   task_type?: "task_1" | "task_2";
   topic?: string;
+  image_url?: string | null;
   essay_text: string;
   time_spent_seconds: number;
 }): Promise<WritingSubmissionRecord> {
@@ -60,4 +61,35 @@ export function submitWritingSubmission(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function uploadWritingImage(file: File): Promise<{ url: string }> {
+  const baseUrl = getFrontendClientApiBaseUrl();
+  const accessToken = useAuthStore.getState().accessToken;
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${baseUrl}/writing/upload-image`, {
+    method: "POST",
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = "Image upload failed.";
+    try {
+      const payload = (await response.json()) as { detail?: string; message?: string };
+      message = payload.detail ?? payload.message ?? message;
+    } catch {
+      try {
+        const text = await response.text();
+        if (text.trim()) message = text.trim();
+      } catch {}
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as { url: string };
 }

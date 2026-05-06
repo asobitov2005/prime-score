@@ -154,80 +154,82 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       <TestsRefreshOnMount />
       
       {/* Filters Container */}
-      <SmartFilterShell className="sticky top-[var(--app-shell-sticky-top,7.5rem)] z-40 mt-2 bg-background/95 backdrop-blur-md pb-4 space-y-4">
-        {/* Primary Filter (Reading / Listening) */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex gap-1.5 bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">
-            {[
-              { id: "reading", label: "Reading", icon: BookOpen },
-              { id: "listening", label: "Listening", icon: Headphones }
-            ].map(type => {
-              const Icon = type.icon;
-              const isActive = activeType === type.id;
-              return (
-                <Button
-                  key={type.id}
-                  asChild
-                  variant="ghost"
-                  className={cn(
-                    "flex-1 md:w-36 h-10 rounded-xl font-semibold text-sm transition-all duration-300 gap-2",
-                    isActive 
-                      ? "bg-background text-foreground shadow-sm border border-border/50 scale-105 z-10" 
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Link href={buildTestsHref({ type: type.id, format: "all" })}>
-                    <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "opacity-50")} />
-                    {type.label}
+      <SmartFilterShell className="sticky top-[var(--app-shell-sticky-top,5rem)] z-40 transition-[top] duration-300 ease-out">
+        <div className="space-y-4 bg-background/95 pb-4 backdrop-blur-md">
+          {/* Primary Filter (Reading / Listening) */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex gap-1.5 bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">
+              {[
+                { id: "reading", label: "Reading", icon: BookOpen },
+                { id: "listening", label: "Listening", icon: Headphones }
+              ].map(type => {
+                const Icon = type.icon;
+                const isActive = activeType === type.id;
+                return (
+                  <Button
+                    key={type.id}
+                    asChild
+                    variant="ghost"
+                    className={cn(
+                      "flex-1 md:w-36 h-10 rounded-xl font-semibold text-sm transition-all duration-300 gap-2",
+                      isActive 
+                        ? "bg-background text-foreground shadow-sm border border-border/50 scale-105 z-10" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Link href={buildTestsHref({ type: type.id, format: "all" })}>
+                      <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "opacity-50")} />
+                      {type.label}
+                    </Link>
+                  </Button>
+                );
+              })}
+            </div>
+
+            <div className="flex w-full justify-end md:ml-auto md:w-[24rem] md:max-w-[24rem]">
+              <SearchInput activeType={activeType} />
+            </div>
+          </div>
+
+          {/* Secondary Filter (Dynamic) */}
+          <div className="flex flex-col gap-3 bg-card/40 border border-border/40 rounded-[2rem] p-1 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto custom-scrollbar py-1 px-1">
+              {formats.map((f) => {
+                const isActive = activeFormat === f.id;
+                return (
+                  <Button
+                    key={f.id}
+                    asChild
+                    variant={isActive ? "solid" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "h-8 px-4 rounded-full font-bold text-xs whitespace-nowrap transition-all",
+                      isActive 
+                        ? "bg-primary text-primary-foreground dark:text-slate-950 shadow-lg shadow-primary/20 scale-105" 
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    <Link href={buildTestsHref({ format: f.id })}>
+                      {f.label}
+                    </Link>
+                  </Button>
+                );
+              })}
+            </div>
+
+            <div className="flex w-full items-center justify-end gap-2 px-1 pb-1 sm:w-auto sm:pb-0">
+              {hasFormatFilter && (
+                <Button asChild variant="ghost" size="sm" className="h-10 px-4 text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
+                  <Link href={buildTestsHref({ format: "all" })}>
+                    <X className="h-3.5 w-3.5 mr-2" />
+                    Clear
                   </Link>
                 </Button>
-              );
-            })}
-          </div>
+              )}
 
-          <div className="flex w-full justify-end md:ml-auto md:w-[24rem] md:max-w-[24rem]">
-            <SearchInput activeType={activeType} />
-          </div>
-        </div>
-
-        {/* Secondary Filter (Dynamic) */}
-        <div className="flex flex-col gap-3 bg-card/40 border border-border/40 rounded-[2rem] p-1 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto custom-scrollbar py-1 px-1">
-            {formats.map((f) => {
-              const isActive = activeFormat === f.id;
-              return (
-                <Button
-                  key={f.id}
-                  asChild
-                  variant={isActive ? "solid" : "ghost"}
-                  size="sm"
-                  className={cn(
-                    "h-8 px-4 rounded-full font-bold text-xs whitespace-nowrap transition-all",
-                    isActive 
-                      ? "bg-primary text-primary-foreground dark:text-slate-950 shadow-lg shadow-primary/20 scale-105" 
-                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  )}
-                >
-                  <Link href={buildTestsHref({ format: f.id })}>
-                    {f.label}
-                  </Link>
-                </Button>
-              );
-            })}
-          </div>
-
-          <div className="flex w-full items-center justify-end gap-2 px-1 pb-1 sm:w-auto sm:pb-0">
-            {hasFormatFilter && (
-              <Button asChild variant="ghost" size="sm" className="h-10 px-4 text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
-                <Link href={buildTestsHref({ format: "all" })}>
-                  <X className="h-3.5 w-3.5 mr-2" />
-                  Clear
-                </Link>
-              </Button>
-            )}
-
-            <div className="ml-1 inline-flex h-10 items-center rounded-full border border-border/45 bg-background/70 px-4 text-sm font-semibold text-muted-foreground/85 shadow-sm backdrop-blur-sm">
-              {tests.length} tests
+              <div className="ml-1 inline-flex h-10 items-center rounded-full border border-border/45 bg-background/70 px-4 text-sm font-semibold text-muted-foreground/85 shadow-sm backdrop-blur-sm">
+                {tests.length} tests
+              </div>
             </div>
           </div>
         </div>

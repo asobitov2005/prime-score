@@ -189,8 +189,8 @@ export function NavigationTransitionOverlay() {
       aria-hidden
       className={isVisible ? "pointer-events-none fixed inset-x-0 top-0 z-[120] opacity-100 transition-opacity duration-200" : "pointer-events-none fixed inset-x-0 top-0 z-[120] opacity-0 transition-opacity duration-150"}
     >
-      <div className="relative h-[3px] w-full overflow-hidden bg-primary/10">
-        <div className="absolute inset-y-0 left-0 w-[36%] rounded-r-full bg-gradient-to-r from-primary/65 via-primary to-orange-300 shadow-[0_0_18px_rgba(255,145,0,0.5)] [animation:prime-route-progress_1.05s_ease-in-out_infinite]" />
+      <div className="relative h-[2px] w-full overflow-hidden bg-border/35">
+        <div className="absolute inset-y-0 left-0 w-[28%] rounded-r-full bg-gradient-to-r from-transparent via-primary to-orange-300 shadow-[0_0_14px_rgba(255,145,0,0.36)] [animation:prime-route-progress_1.15s_cubic-bezier(0.45,0,0.25,1)_infinite]" />
       </div>
     </div>
   );

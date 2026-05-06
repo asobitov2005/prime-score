@@ -470,9 +470,64 @@ function parsePassageBlockStyle(rawText: string) {
     bold: isStyled && hasOuterBraces,
   };
 }
+function parseBraceBoldSegments(text: string) {
+  const segments: Array<{ text: string; bold: boolean }> = [];
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const openIndex = text.indexOf("{", cursor);
+    if (openIndex === -1) {
+      segments.push({ text: text.slice(cursor), bold: false });
+      break;
+    }
+
+    if (openIndex > cursor) {
+      segments.push({ text: text.slice(cursor, openIndex), bold: false });
+    }
+
+    const closeIndex = text.indexOf("}", openIndex + 1);
+    if (closeIndex === -1) {
+      segments.push({ text: text.slice(openIndex), bold: false });
+      break;
+    }
+
+    const boldText = text.slice(openIndex + 1, closeIndex);
+    if (boldText) {
+      segments.push({ text: boldText, bold: true });
+    }
+    cursor = closeIndex + 1;
+  }
+
+  return segments;
+}
+
+function parseInlineItalicSegments(text: string) {
+  const segments: Array<{ text: string; italic: boolean }> = [];
+  const tokens = text.split(/(<\/?i>)/i);
+  let italic = false;
+
+  tokens.forEach((token) => {
+    if (!token) {
+      return;
+    }
+    if (/^<i>$/i.test(token)) {
+      italic = true;
+      return;
+    }
+    if (/^<\/i>$/i.test(token)) {
+      italic = false;
+      return;
+    }
+    segments.push({ text: token, italic });
+  });
+
+  return segments;
+}
+
 function parseBraceBoldText(text: string) {
   const normalizedText = normalizeInlineBlankPlaceholders(text);
   const boldRanges: TextRange[] = [];
+  const italicRanges: TextRange[] = [];
   const bulletLineIndexes = new Set<number>();
   let plainText = "";
 
@@ -487,39 +542,30 @@ function parseBraceBoldText(text: string) {
       plainText += "\n";
     }
 
-    let cursor = 0;
-    while (cursor < line.length) {
-      const openIndex = line.indexOf("{", cursor);
-      if (openIndex === -1) {
-        plainText += line.slice(cursor);
-        break;
-      }
+    parseBraceBoldSegments(line).forEach((boldSegment) => {
+      parseInlineItalicSegments(boldSegment.text).forEach((italicSegment) => {
+        const segmentStart = plainText.length;
+        plainText += italicSegment.text;
+        const segmentEnd = plainText.length;
 
-      const closeIndex = line.indexOf("}", openIndex + 1);
-      if (closeIndex === -1) {
-        plainText += line.slice(cursor);
-        break;
-      }
-
-      plainText += line.slice(cursor, openIndex);
-      const boldStart = plainText.length;
-      const boldContent = line.slice(openIndex + 1, closeIndex);
-      plainText += boldContent;
-      const boldEnd = plainText.length;
-
-      if (boldEnd > boldStart) {
-        boldRanges.push({ start: boldStart, end: boldEnd });
-      }
-
-      cursor = closeIndex + 1;
-    }
+        if (segmentEnd <= segmentStart) {
+          return;
+        }
+        if (boldSegment.bold) {
+          boldRanges.push({ start: segmentStart, end: segmentEnd });
+        }
+        if (italicSegment.italic) {
+          italicRanges.push({ start: segmentStart, end: segmentEnd });
+        }
+      });
+    });
 
     if (line.length === 0 && lineIndex < lines.length - 1) {
       plainText += "";
     }
   });
 
-  return { plainText, boldRanges, bulletLineIndexes };
+  return { plainText, boldRanges, italicRanges, bulletLineIndexes };
 }
 
 function parseBinaryInstructionLayout(text: string) {
@@ -560,22 +606,38 @@ function parseCompletionTableLayout(text: string) {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  if (rows.length === 0 || rows.some((line) => !line.includes("|"))) {
+  if (rows.length === 0) {
     return null;
   }
 
-  const parsedRows = rows.map((line) => {
+  const parsedRows: Array<{ isHeader: boolean; cells: string[] }> = [];
+
+  for (const line of rows) {
+    if (!line.includes("|")) {
+      const previousRow = parsedRows[parsedRows.length - 1];
+      if (!previousRow) {
+        return null;
+      }
+
+      const continuationTargetIndex = /^\(.*\)$/.test(line)
+        ? 0
+        : Math.max(0, previousRow.cells.length - 1);
+      previousRow.cells[continuationTargetIndex] = previousRow.cells[continuationTargetIndex]
+        ? `${previousRow.cells[continuationTargetIndex]}\n${line}`
+        : line;
+      continue;
+    }
+
     const isHeader = line.startsWith("||") && line.endsWith("||");
     const body = isHeader ? line.slice(2, -2).trim() : line;
     const cells = body.split("|").map((cell) => cell.trim());
-    return cells.length >= 2 ? { isHeader, cells } : null;
-  });
-
-  if (parsedRows.some((row) => row === null)) {
-    return null;
+    if (cells.length < 2) {
+      return null;
+    }
+    parsedRows.push({ isHeader, cells });
   }
 
-  return parsedRows as Array<{ isHeader: boolean; cells: string[] }>;
+  return parsedRows;
 }
 
 
@@ -1960,7 +2022,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function renderHighlightedText(blockKey: string, text: string) {
-    const { plainText, boldRanges, bulletLineIndexes } = parseBraceBoldText(text);
+    const { plainText, boldRanges, italicRanges, bulletLineIndexes } = parseBraceBoldText(text);
     const highlights = (textHighlights[blockKey] ?? []).slice().sort((a, b) => a.start - b.start);
 
     function renderFormattedSlice(start: number, end: number, keyPrefix: string) {
@@ -1969,41 +2031,56 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       }
 
       const parts: ReactNode[] = [];
-      let cursor = start;
       const overlappingBoldRanges = boldRanges.filter((range) => range.end > start && range.start < end);
+      const overlappingItalicRanges = italicRanges.filter((range) => range.end > start && range.start < end);
+      const boundaries = new Set<number>([start, end]);
 
-      overlappingBoldRanges.forEach((range, index) => {
-        const segmentStart = Math.max(start, range.start);
-        const segmentEnd = Math.min(end, range.end);
-
-        if (cursor < segmentStart) {
-          parts.push(
-            <span key={`${keyPrefix}-plain-${index}-${cursor}`}>
-              {plainText.slice(cursor, segmentStart)}
-            </span>
-          );
-        }
-
-        if (segmentStart < segmentEnd) {
-          parts.push(
-            <strong key={`${keyPrefix}-bold-${index}-${segmentStart}`} className="font-bold text-inherit">
-              {plainText.slice(segmentStart, segmentEnd)}
-            </strong>
-          );
-        }
-
-        cursor = segmentEnd;
+      overlappingBoldRanges.forEach((range) => {
+        boundaries.add(Math.max(start, range.start));
+        boundaries.add(Math.min(end, range.end));
+      });
+      overlappingItalicRanges.forEach((range) => {
+        boundaries.add(Math.max(start, range.start));
+        boundaries.add(Math.min(end, range.end));
       });
 
-      if (cursor < end) {
-        parts.push(<span key={`${keyPrefix}-tail-${cursor}`}>{plainText.slice(cursor, end)}</span>);
+      const sortedBoundaries = Array.from(boundaries).sort((left, right) => left - right);
+      for (let index = 0; index < sortedBoundaries.length - 1; index += 1) {
+        const segmentStart = sortedBoundaries[index] ?? start;
+        const segmentEnd = sortedBoundaries[index + 1] ?? end;
+        if (segmentEnd <= segmentStart) {
+          continue;
+        }
+
+        const segmentText = plainText.slice(segmentStart, segmentEnd);
+        const isBold = overlappingBoldRanges.some((range) => range.start < segmentEnd && range.end > segmentStart);
+        const isItalic = overlappingItalicRanges.some((range) => range.start < segmentEnd && range.end > segmentStart);
+
+        if (isBold) {
+          parts.push(
+            <strong
+              key={`${keyPrefix}-segment-${index}-${segmentStart}`}
+              className={cn("font-bold text-inherit", isItalic && "italic")}
+            >
+              {segmentText}
+            </strong>
+          );
+          continue;
+        }
+
+        if (isItalic) {
+          parts.push(
+            <em key={`${keyPrefix}-segment-${index}-${segmentStart}`} className="italic">
+              {segmentText}
+            </em>
+          );
+          continue;
+        }
+
+        parts.push(<span key={`${keyPrefix}-segment-${index}-${segmentStart}`}>{segmentText}</span>);
       }
 
-      if (parts.length === 0) {
-        return plainText.slice(start, end);
-      }
-
-      return parts;
+      return parts.length > 0 ? parts : plainText.slice(start, end);
     }
 
     function renderHighlightedSlice(start: number, end: number, keyPrefix: string) {
@@ -2635,13 +2712,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
       return (
         <div className="px-2 py-2">
-          <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-dashed border-sky-400/80 bg-sky-50/25 p-1 dark:border-sky-700/70 dark:bg-slate-900/25">
-            <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-dashed border-sky-300/80 bg-sky-50/35 dark:border-sky-700/60 dark:bg-slate-900/35">
+          <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-border bg-background p-1 shadow-[0_0_0_1px_hsl(var(--border)),0_8px_24px_-18px_hsl(var(--foreground)/0.28)]">
+            <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-border bg-background">
               <tbody>
                 {tableLayout.map((row, rowIndex) => (
                   <tr
                     key={`${group.id}-table-row-${rowIndex}`}
-                    className={row.isHeader ? "bg-sky-100/50 dark:bg-sky-950/30" : "border-t border-dashed border-sky-300/70 dark:border-sky-700/55"}
+                    className={row.isHeader ? "bg-muted/85" : "border-t border-border"}
                   >
                     {row.cells.map((cell, cellIndex) => {
                       const CellTag = row.isHeader ? "th" : "td";
@@ -2651,8 +2728,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         <CellTag
                           key={`${group.id}-table-cell-${rowIndex}-${cellIndex}`}
                           className={cn(
-                            "align-middle border-l border-dashed border-sky-300/70 px-3 py-2 text-left font-sans text-foreground first:border-l-0 dark:border-sky-700/55",
-                            row.isHeader ? "text-sm font-bold" : "text-[15px] font-medium"
+                            "align-middle border-l border-border px-3 py-2 text-left font-sans text-foreground first:border-l-0",
+                            row.isHeader ? "text-sm font-bold" : "text-[15px] font-normal"
                           )}
                           style={{ lineHeight: 1.5 }}
                         >
@@ -2660,9 +2737,20 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                             const question = segmentIndex < cellSegments.length - 1
                               ? group.questions[questionIndexRef.current++]
                               : null;
+                            const blockKey = `${group.id}-table-text-${rowIndex}-${cellIndex}-${segmentIndex}`;
                             return (
                               <span key={`${group.id}-table-fragment-${rowIndex}-${cellIndex}-${segmentIndex}`}>
-                                {segment ? renderHighlightedText(`${group.id}-table-text-${rowIndex}-${cellIndex}-${segmentIndex}`, segment) : null}
+                                {segment ? (
+                                  <span
+                                    ref={(node) => {
+                                      textBlockRefs.current[blockKey] = node;
+                                    }}
+                                    data-highlight-text
+                                    onMouseUp={(event) => handleTextBlockMouseUp(blockKey, event)}
+                                  >
+                                    {renderHighlightedText(blockKey, segment)}
+                                  </span>
+                                ) : null}
                                 {question ? renderInlineCompletionAnswer(question, `${group.id}-table-answer-${question.id}`) : null}
                               </span>
                             );
@@ -2874,17 +2962,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   persistAnswer(question.id, toggleMultiValue(answers[question.id], optionLetter, maxSelections));
                 }}
                 className={cn(
-                  "flex w-full items-start gap-2.5 rounded-2xl border px-2.5 py-2 text-left transition duration-150",
+                  "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
                   isReviewMode && isCorrectOption && "bg-emerald-500/10",
                   isReviewMode && isIncorrectSelected && "bg-red-500/10",
                   disabled && "opacity-70",
-                  checked
-                    ? theme === "light"
-                      ? "border-slate-950/50 bg-slate-950/[0.075] shadow-[0_10px_24px_-18px_rgba(15,23,42,0.55),inset_0_0_0_1px_rgba(15,23,42,0.12)]"
-                      : "border-slate-50/35 bg-slate-50/[0.09] shadow-[0_10px_24px_-18px_rgba(248,250,252,0.24),inset_0_0_0_1px_rgba(248,250,252,0.09)]"
-                    : disabled
-                      ? "border-border bg-card"
-                      : "border-slate-300/90 bg-card hover:border-slate-400 hover:bg-muted/20 dark:border-slate-700 dark:hover:border-slate-500"
+                  disabled
+                    ? "bg-card"
+                    : "bg-card hover:bg-muted/20"
                 )}
               >
                 <span
@@ -2892,13 +2976,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 transition",
                     checked
                       ? isReviewMode && isCorrectOption
-                        ? "border-emerald-600 bg-emerald-600 ring-2 ring-emerald-600/25 dark:border-emerald-400 dark:bg-emerald-400 dark:ring-emerald-400/25"
+                        ? "border-transparent bg-emerald-600 dark:bg-emerald-400"
                         : isReviewMode && isIncorrectSelected
-                          ? "border-red-600 bg-red-600 ring-2 ring-red-600/25 dark:border-red-400 dark:bg-red-400 dark:ring-red-400/25"
-                          : "border-slate-950 bg-slate-950 ring-4 ring-slate-950/12 shadow-[0_0_0_1px_rgba(15,23,42,0.14)] dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50/12 dark:shadow-[0_0_0_1px_rgba(248,250,252,0.16)]"
+                          ? "border-transparent bg-red-600 dark:bg-red-400"
+                          : "border-transparent bg-slate-950 dark:bg-slate-50"
                       : disabled
                         ? "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70"
-                        : "border-slate-500 bg-background shadow-sm dark:border-slate-400 dark:bg-transparent"
+                        : "border-slate-500 bg-background dark:border-slate-400 dark:bg-transparent"
                   )}
                 >
                   {checked ? <Check className="h-3.5 w-3.5 text-white dark:text-slate-950" strokeWidth={3.25} /> : null}
@@ -2911,7 +2995,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
                   className={cn(
                     "select-text font-sans text-foreground transition-colors",
-                    checked && "text-slate-950 dark:text-slate-50",
                     disabled && "text-muted-foreground"
                   )}
                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}

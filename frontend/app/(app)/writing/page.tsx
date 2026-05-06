@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   BarChart3,
+  ClipboardCheck,
   ImageIcon,
   PenSquare,
   Sparkles,
@@ -41,11 +42,9 @@ export default async function WritingPage() {
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Writing</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Get IELTS-grade feedback in seconds. Paste your own topic and essay, or pick a ready-made prompt from the library.
+          Practice in an IELTS-style writing workspace, or check an answer you already wrote.
         </p>
       </div>
-
-      <CustomWritingPanel />
 
       <div className="grid gap-4 md:grid-cols-2">
         <TaskQuickStartCard
@@ -54,11 +53,8 @@ export default async function WritingPage() {
           subtitle="Describe a chart, graph, or diagram"
           minutes={20}
           words={150}
-          tone="from-sky-500/15 via-sky-500/5 to-transparent"
-          accent="text-sky-600 dark:text-sky-400"
-          dot="bg-sky-500"
           icon={<ImageIcon className="h-5 w-5" />}
-          href="/writing/tasks?task_type=task_1"
+          href="/exam-preview/writing?task_type=task_1"
         />
         <TaskQuickStartCard
           taskNumber={2}
@@ -66,13 +62,12 @@ export default async function WritingPage() {
           subtitle="Write a 250-word academic essay"
           minutes={40}
           words={250}
-          tone="from-violet-500/15 via-violet-500/5 to-transparent"
-          accent="text-violet-600 dark:text-violet-400"
-          dot="bg-violet-500"
           icon={<PenSquare className="h-5 w-5" />}
-          href="/writing/tasks?task_type=task_2"
+          href="/exam-preview/writing?task_type=task_2"
         />
       </div>
+
+      <CustomWritingPanel />
 
       <SummaryCard summary={summary} />
 
@@ -93,9 +88,9 @@ export default async function WritingPage() {
         <CardContent className="pt-0">
           {recent.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-6 py-10 text-center">
-              <Sparkles className="mx-auto h-6 w-6 text-muted-foreground" />
+              <ClipboardCheck className="mx-auto h-6 w-6 text-muted-foreground" />
               <p className="mt-2 text-sm font-semibold text-foreground">No submissions yet</p>
-              <p className="text-xs text-muted-foreground">Paste your own topic above or open the prompt library.</p>
+              <p className="text-xs text-muted-foreground">Start a prompt or check a finished answer above.</p>
             </div>
           ) : (
             <div className="divide-y divide-border/50 rounded-2xl border border-border/50 bg-background/40">
@@ -116,9 +111,6 @@ function TaskQuickStartCard({
   subtitle,
   minutes,
   words,
-  tone,
-  accent,
-  dot,
   icon,
   href,
 }: {
@@ -127,9 +119,6 @@ function TaskQuickStartCard({
   subtitle: string;
   minutes: number;
   words: number;
-  tone: string;
-  accent: string;
-  dot: string;
   icon: React.ReactNode;
   href: string;
 }) {
@@ -137,13 +126,12 @@ function TaskQuickStartCard({
     <Link href={href} className="group block">
       <Card
         className={cn(
-          "relative overflow-hidden rounded-3xl border-border/60 bg-card/70 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+          "relative overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md",
         )}
       >
-        <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", tone)} />
         <CardContent className="relative z-10 flex flex-col gap-5 p-6">
           <div className="flex items-center justify-between">
-            <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl bg-background/80 shadow-sm", accent)}>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-foreground shadow-sm">
               {icon}
             </div>
             <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em]">
@@ -158,7 +146,7 @@ function TaskQuickStartCard({
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground">
-              <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
+              <ClockDot />
               {minutes} min
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground">
@@ -168,13 +156,17 @@ function TaskQuickStartCard({
           </div>
 
           <div className="flex items-center justify-between">
-            <span className={cn("text-sm font-semibold", accent)}>Start a task</span>
-            <ArrowUpRight className={cn("h-5 w-5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5", accent)} />
+            <span className="text-sm font-semibold text-foreground">Start task</span>
+            <ArrowUpRight className="h-5 w-5 text-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </div>
         </CardContent>
       </Card>
     </Link>
   );
+}
+
+function ClockDot() {
+  return <span className="h-1.5 w-1.5 rounded-full bg-foreground/60" />;
 }
 
 function SummaryCard({ summary }: { summary: WritingDashboardSummary | null }) {

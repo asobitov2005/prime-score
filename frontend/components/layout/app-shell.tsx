@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "next/navigation";
-import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
+import { AppRouteLoadingFrame } from "@/components/layout/app-loading-placeholder";
 import { consumePendingPublicRedirect } from "@/lib/navigation-transition";
 
 interface AppShellProps {
@@ -20,6 +20,7 @@ interface AppShellProps {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/tests", label: "Tests", icon: BookOpenText },
+  { href: "/ielts-mock-test-online", label: "IELTS Mock", icon: PencilRuler },
   { href: "/writing", label: "Writing", icon: PenSquare },
   { href: "/speaking", label: "Speaking", icon: Podcast, soon: true },
   { href: "/articles", label: "Articles", icon: Newspaper, soon: true },
@@ -76,15 +77,11 @@ export function AppShell({ children }: AppShellProps) {
   }, [isMobileOpen]);
 
   if (!hasHydrated && !isPublicTestsRoute) {
-    return (
-      <AppLoadingPlaceholder />
-    );
+    return <AppRouteLoadingFrame sidebar={sidebar} />;
   }
 
   if (hasHydrated && !isAuthenticated && !isPublicTestsRoute) {
-    return (
-      <AppLoadingPlaceholder />
-    );
+    return <AppRouteLoadingFrame sidebar={sidebar} />;
   }
 
   const SidebarContent = () => (
@@ -204,7 +201,7 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   return (
-    <div className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6 md:py-8 flex flex-col lg:flex-row gap-6 md:gap-8 items-start relative">
+    <div className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 pt-3 pb-6 md:pt-4 md:pb-8 flex flex-col lg:flex-row gap-6 md:gap-8 items-start relative">
       {/* Mobile Sidebar Toggle Button - Floating because header is global */}
       <Button 
         variant="outline" 
@@ -239,7 +236,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <aside className={cn(
-        "hidden lg:block w-64 shrink-0 transition-all duration-300 sticky top-[var(--app-shell-sticky-top,7.5rem)]", 
+        "hidden lg:block w-64 shrink-0 transition-all duration-300 sticky top-[var(--app-shell-sticky-top,5rem)]",
         sidebar === "collapsed" ? "lg:hidden" : "lg:block"
       )}>
         <div className="space-y-4">

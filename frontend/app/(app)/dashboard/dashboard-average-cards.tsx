@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { BookOpenText, Headphones } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { getAverageBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
@@ -11,7 +10,7 @@ interface DashboardAverageCardsProps {
 }
 
 function formatBand(value: number | null): string {
-  return value === null ? "N/A" : value.toFixed(1);
+  return value === null ? "0" : value.toFixed(1);
 }
 
 export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCardsProps) {
@@ -29,18 +28,9 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
           </div>
           <div>
             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Avg Reading</p>
-            {averageReading === null ? (
-              <Link
-                href="/tests?type=reading"
-                className="mt-1 inline-flex items-center text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                Start Test →
-              </Link>
-            ) : (
-              <p className="mt-0.5 text-[1.75rem] md:text-3xl font-black text-foreground tracking-tighter">
-                {formatBand(averageReading)}
-              </p>
-            )}
+            <p className="mt-0.5 text-[1.75rem] md:text-3xl font-black text-foreground tracking-tighter">
+              {formatBand(averageReading)}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -52,18 +42,9 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
           </div>
           <div>
             <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Avg Listening</p>
-            {averageListening === null ? (
-              <Link
-                href="/tests?type=listening"
-                className="mt-1 inline-flex items-center text-sm font-semibold text-emerald-600 transition-colors hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
-              >
-                Start Test →
-              </Link>
-            ) : (
-              <p className="mt-0.5 text-[1.75rem] md:text-3xl font-black text-foreground tracking-tighter">
-                {formatBand(averageListening)}
-              </p>
-            )}
+            <p className="mt-0.5 text-[1.75rem] md:text-3xl font-black text-foreground tracking-tighter">
+              {formatBand(averageListening)}
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import html
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,7 +33,9 @@ from app.schemas.writing import (
     WritingTaskListItem,
     WritingTaskListResponse,
     WritingTaskRead,
+    WritingUploadImageResponse,
 )
+from app.services.object_storage import upload_test_diagram_image
 
 
 router = APIRouter()
@@ -96,6 +99,8 @@ def _build_custom_task(
     *,
     task_type: WritingTaskType,
     topic: str,
+    image_url: str | None = None,
+    image_summary: str | None = None,
 ) -> WritingTask:
     clean_topic = " ".join((topic or "").split())
     title_topic = clean_topic[:120]
@@ -108,9 +113,15 @@ def _build_custom_task(
         title=f"Custom topic: {title_topic}",
         task_type=task_type,
         prompt_html=prompt_html,
-        image_storage_path=None,
-        image_summary=None,
-        image_summary_status="not_required",
+        image_storage_path=image_url if task_type == WritingTaskType.TASK_1 else None,
+        image_summary=image_summary if task_type == WritingTaskType.TASK_1 else None,
+        image_summary_status=(
+            "ready"
+            if task_type == WritingTaskType.TASK_1 and image_summary
+            else "failed"
+            if task_type == WritingTaskType.TASK_1 and image_url
+            else "not_required"
+        ),
         word_minimum=_default_word_minimum(task_type),
         time_limit_seconds=_default_time_limit_seconds(task_type),
         difficulty=WritingDifficulty.MEDIUM,
@@ -121,6 +132,46 @@ def _build_custom_task(
         sample_answer=None,
         created_by=None,
     )
+
+
+@router.post("/upload-image", response_model=WritingUploadImageResponse)
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user: DebugPrincipal = Depends(get_current_user),
+) -> WritingUploadImageResponse:
+    _ = current_user
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only image files are allowed.",
+        )
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded image is empty.",
+        )
+    if len(payload) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image size must be under 10 MB.",
+        )
+
+    try:
+        url = upload_test_diagram_image(
+            content=payload,
+            filename=file.filename or "writing-image",
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    return WritingUploadImageResponse(url=url)
 
 
 @router.get("/tasks", response_model=WritingTaskListResponse)
@@ -189,9 +240,18 @@ async def submit_writing(
         if task is None or task.status != WritingTaskStatus.PUBLISHED:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
     else:
+        task_type = payload.task_type or WritingTaskType.TASK_2
+        image_url = (payload.image_url or "").strip() if task_type == WritingTaskType.TASK_1 else ""
+        image_summary = ""
+        if image_url:
+            from app.services.writing_image_summary import generate_image_summary
+
+            image_summary = await asyncio.to_thread(generate_image_summary, image_url)
         task = _build_custom_task(
-            task_type=payload.task_type or WritingTaskType.TASK_2,
+            task_type=task_type,
             topic=(payload.topic or "").strip(),
+            image_url=image_url or None,
+            image_summary=image_summary or None,
         )
         session.add(task)
         await session.flush()

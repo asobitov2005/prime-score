@@ -102,7 +102,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
 
   return (
     <div className="relative mx-auto max-w-[1600px] overflow-hidden">
-      <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto">
+      <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 sm:pb-0 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto md:-mb-[12%] xl:-mb-[8%]">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none animate-in fade-in duration-1000" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none animate-in fade-in duration-1000 delay-500" />
 
@@ -484,7 +484,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
         </section>
 
-        <section className="relative z-10 w-full mt-4 lg:mt-6 pt-6 pb-0 border-t border-border/30 text-center flex flex-col items-center">
+        <section className="relative z-10 w-full mt-0 border-t border-border/30 pt-2 pb-0 text-center flex flex-col items-center">
           <div className="max-w-3xl mx-auto space-y-6">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>

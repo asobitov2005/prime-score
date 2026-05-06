@@ -54,6 +54,10 @@ class WritingTaskListResponse(BaseModel):
     total: int
 
 
+class WritingUploadImageResponse(BaseModel):
+    url: str
+
+
 class AdminWritingTaskCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     task_type: WritingTaskType
@@ -87,6 +91,7 @@ class WritingSubmitRequest(BaseModel):
     task_id: UUID | None = None
     task_type: WritingTaskType | None = None
     topic: str | None = Field(default=None, min_length=1, max_length=5000)
+    image_url: str | None = Field(default=None, max_length=1000)
     essay_text: str = Field(min_length=1, max_length=20000)
     time_spent_seconds: int = Field(default=0, ge=0)
 

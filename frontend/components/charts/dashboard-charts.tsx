@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronDown, DatabaseZap, Lock, TrendingUp } from "lucide-react";
+import { ChevronDown, Lock, TrendingUp } from "lucide-react";
 import {
   CartesianGrid,
   Legend,
@@ -16,7 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { DashboardAnalytics, TestType } from "@/lib/types";
-import { useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
+import { roundToIeltsBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -42,39 +42,6 @@ const EMPTY_ANALYTICS: DashboardAnalytics = {
   errorDistribution: [],
   progressSeries: []
 };
-
-const READING_LABELS = [
-  "Multiple Choice (Single)",
-  "Multiple Choice (Multiple)",
-  "True / False / Not Given",
-  "Yes / No / Not Given",
-  "Matching Information",
-  "Matching Headings",
-  "Matching Features",
-  "Matching Sentence Endings",
-  "Sentence Completion",
-  "Summary Completion (Word Bank)",
-  "Summary Completion (Free Text)",
-  "Note Completion",
-  "Table Completion",
-  "Flow-chart Completion",
-  "Diagram Labeling",
-  "Short Answer"
-];
-
-const LISTENING_LABELS = [
-  "Multiple Choice (Single)",
-  "Multiple Choice (Multiple)",
-  "Matching",
-  "Plan / Map Labeling",
-  "Form Completion",
-  "Note Completion",
-  "Table Completion",
-  "Flow-chart Completion",
-  "Summary Completion",
-  "Sentence Completion",
-  "Short Answer"
-];
 
 function toLocalDateKey(value: Date) {
   const year = value.getFullYear();
@@ -186,15 +153,6 @@ function formatStudyTime(totalSeconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-function isAnalyticsEmpty(analytics: DashboardAnalytics): boolean {
-  return (
-    analytics.progressSeries.length === 0
-    && analytics.errorDistribution.length === 0
-    && analytics.comparison.items.length === 0
-    && analytics.questionTypeAnalysis.every((item) => item.workedCount === 0)
-  );
-}
-
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex h-full min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 text-center text-sm font-medium text-muted-foreground">
@@ -272,144 +230,15 @@ function buildLastTenDayAverage(analytics: DashboardAnalytics) {
 
   return {
     reading: readingValues.length > 0
-      ? Number((readingValues.reduce((sum, value) => sum + value, 0) / readingValues.length).toFixed(1))
+      ? roundToIeltsBand(readingValues.reduce((sum, value) => sum + value, 0) / readingValues.length)
       : null,
     listening: listeningValues.length > 0
-      ? Number((listeningValues.reduce((sum, value) => sum + value, 0) / listeningValues.length).toFixed(1))
+      ? roundToIeltsBand(listeningValues.reduce((sum, value) => sum + value, 0) / listeningValues.length)
       : null
   };
 }
 
-function buildSampleAnalytics(filter: TestType | "all"): DashboardAnalytics {
-  const labels = filter === "reading" ? READING_LABELS : filter === "listening" ? LISTENING_LABELS : [];
-  const questionTypeAnalysis = labels.map((label, index) => {
-    const workedCount = Math.max(6, 18 - (index % 5) * 2);
-    const accuracy = Math.max(42, Math.min(88, 58 + ((index * 7) % 26)));
-    const correctCount = Math.round((workedCount * accuracy) / 100);
-    return {
-      label,
-      workedCount,
-      correctCount,
-      accuracy,
-      errorCount: workedCount - correctCount
-    };
-  });
-
-  const progressBase = filter === "reading"
-    ? [
-        { label: "12 Apr", occurredAt: "2026-04-12T10:00:00.000Z", reading: 5.5, listening: null },
-        { label: "13 Apr", occurredAt: "2026-04-13T10:00:00.000Z", reading: 6.0, listening: null },
-        { label: "14 Apr", occurredAt: "2026-04-14T10:00:00.000Z", reading: null, listening: null },
-        { label: "15 Apr", occurredAt: "2026-04-15T10:00:00.000Z", reading: 6.0, listening: null },
-        { label: "16 Apr", occurredAt: "2026-04-16T10:00:00.000Z", reading: null, listening: null },
-        { label: "17 Apr", occurredAt: "2026-04-17T10:00:00.000Z", reading: 6.5, listening: null },
-        { label: "18 Apr", occurredAt: "2026-04-18T10:00:00.000Z", reading: null, listening: null },
-        { label: "19 Apr", occurredAt: "2026-04-19T10:00:00.000Z", reading: 7.0, listening: null },
-        { label: "20 Apr", occurredAt: "2026-04-20T10:00:00.000Z", reading: null, listening: null },
-        { label: "21 Apr", occurredAt: "2026-04-21T10:00:00.000Z", reading: 7.5, listening: null }
-      ]
-    : filter === "listening"
-      ? [
-          { label: "12 Apr", occurredAt: "2026-04-12T10:00:00.000Z", reading: null, listening: 6.0 },
-          { label: "13 Apr", occurredAt: "2026-04-13T10:00:00.000Z", reading: null, listening: 6.5 },
-          { label: "14 Apr", occurredAt: "2026-04-14T10:00:00.000Z", reading: null, listening: null },
-          { label: "15 Apr", occurredAt: "2026-04-15T10:00:00.000Z", reading: null, listening: 6.5 },
-          { label: "16 Apr", occurredAt: "2026-04-16T10:00:00.000Z", reading: null, listening: null },
-          { label: "17 Apr", occurredAt: "2026-04-17T10:00:00.000Z", reading: null, listening: 7.0 },
-          { label: "18 Apr", occurredAt: "2026-04-18T10:00:00.000Z", reading: null, listening: null },
-          { label: "19 Apr", occurredAt: "2026-04-19T10:00:00.000Z", reading: null, listening: 7.2 },
-          { label: "20 Apr", occurredAt: "2026-04-20T10:00:00.000Z", reading: null, listening: 7.5 },
-          { label: "21 Apr", occurredAt: "2026-04-21T10:00:00.000Z", reading: null, listening: 7.5 }
-        ]
-      : [
-          { label: "12 Apr", occurredAt: "2026-04-12T10:00:00.000Z", reading: 5.5, listening: 6.0 },
-          { label: "13 Apr", occurredAt: "2026-04-13T10:00:00.000Z", reading: 6.0, listening: 6.5 },
-          { label: "14 Apr", occurredAt: "2026-04-14T10:00:00.000Z", reading: null, listening: null },
-          { label: "15 Apr", occurredAt: "2026-04-15T10:00:00.000Z", reading: 6.0, listening: 6.5 },
-          { label: "16 Apr", occurredAt: "2026-04-16T10:00:00.000Z", reading: null, listening: null },
-          { label: "17 Apr", occurredAt: "2026-04-17T10:00:00.000Z", reading: 6.5, listening: 7.0 },
-          { label: "18 Apr", occurredAt: "2026-04-18T10:00:00.000Z", reading: null, listening: null },
-          { label: "19 Apr", occurredAt: "2026-04-19T10:00:00.000Z", reading: 7.0, listening: 7.2 },
-          { label: "20 Apr", occurredAt: "2026-04-20T10:00:00.000Z", reading: null, listening: 7.5 },
-          { label: "21 Apr", occurredAt: "2026-04-21T10:00:00.000Z", reading: 7.5, listening: 7.5 }
-        ];
-
-  const tests = filter === "reading"
-    ? [
-        { testTitle: "Cambridge 17 Reading Test 2", testDate: "2026-04-11T10:00:00.000Z" },
-        { testTitle: "Cambridge 18 Reading Test 1", testDate: "2026-04-14T10:00:00.000Z" },
-        { testTitle: "Cambridge 18 Reading Test 3", testDate: "2026-04-18T10:00:00.000Z" },
-        { testTitle: "Cambridge 19 Reading Test 3", testDate: "2026-04-21T10:00:00.000Z" }
-      ]
-    : filter === "listening"
-      ? [
-          { testTitle: "Cambridge 17 Listening Test 3", testDate: "2026-04-11T10:00:00.000Z" },
-          { testTitle: "Cambridge 18 Listening Test 2", testDate: "2026-04-14T10:00:00.000Z" },
-          { testTitle: "Cambridge 18 Listening Test 4", testDate: "2026-04-18T10:00:00.000Z" },
-          { testTitle: "Cambridge 19 Listening Test 1", testDate: "2026-04-21T10:00:00.000Z" }
-        ]
-      : [];
-
-  const comparisonItems = questionTypeAnalysis.map((item, index) => {
-    const testA = Math.max(35, item.accuracy - 12 + (index % 3));
-    const testB = Math.max(40, item.accuracy - 5);
-    const testC = Math.max(45, item.accuracy - 2);
-    const testD = item.accuracy;
-    return {
-      label: item.label,
-      previousAccuracy: Number(((testA + testB + testC) / 3).toFixed(1)),
-      currentAccuracy: testD,
-      delta: Number((testD - ((testA + testB + testC) / 3)).toFixed(1)),
-      accuracies: [testA, testB, testC, testD]
-    };
-  });
-
-  const totalErrors = questionTypeAnalysis.reduce((sum, item) => sum + item.errorCount, 0);
-  return {
-    performanceSummary: {
-      studyTime: {
-        totalTimeSec: (5 * 60 + 12) * 60 + (4 * 60 + 16) * 60,
-        readingTimeSec: (5 * 60 + 12) * 60,
-        listeningTimeSec: (4 * 60 + 16) * 60
-      },
-      reading: {
-        fullCount: 4,
-        section1Count: 3,
-        section2Count: 2,
-        section3Count: 2,
-        section4Count: 0
-      },
-      listening: {
-        fullCount: 3,
-        section1Count: 2,
-        section2Count: 2,
-        section3Count: 2,
-        section4Count: 2
-      }
-    },
-    questionTypeAnalysis,
-    comparison: {
-      previousTestTitle: tests[2]?.testTitle ?? null,
-      previousTestDate: tests[2]?.testDate ?? null,
-      currentTestTitle: tests[3]?.testTitle ?? null,
-      currentTestDate: tests[3]?.testDate ?? null,
-      tests,
-      items: comparisonItems
-    },
-    errorDistribution: questionTypeAnalysis
-      .filter((item) => item.errorCount > 0)
-      .map((item) => ({
-        label: item.label,
-        errorCount: item.errorCount,
-        share: Number(((item.errorCount / totalErrors) * 100).toFixed(1))
-      }))
-      .sort((left, right) => right.errorCount - left.errorCount),
-    progressSeries: progressBase
-  };
-}
-
 export function DashboardCharts({ analytics: initialAnalytics }: DashboardChartsProps) {
-  const [showSamplePreview, setShowSamplePreview] = useState(false);
   const [analysisFilter, setAnalysisFilter] = useState<TestType>("reading");
   const [comparisonFilter, setComparisonFilter] = useState<TestType>("reading");
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
@@ -424,19 +253,9 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
   const analysisData = analysisQuery.data ?? EMPTY_ANALYTICS;
   const comparisonData = comparisonQuery.data ?? EMPTY_ANALYTICS;
 
-  const overallHasNoRealData = isAnalyticsEmpty(overallData);
-  const analysisHasNoRealData = isAnalyticsEmpty(analysisData);
-  const comparisonHasNoRealData = isAnalyticsEmpty(comparisonData);
-
-  const overallAnalytics = showSamplePreview || overallHasNoRealData
-    ? buildSampleAnalytics("all")
-    : overallData;
-  const analysisAnalytics = showSamplePreview || analysisHasNoRealData
-    ? buildSampleAnalytics(analysisFilter)
-    : analysisData;
-  const comparisonAnalytics = showSamplePreview || comparisonHasNoRealData
-    ? buildSampleAnalytics(comparisonFilter)
-    : comparisonData;
+  const overallAnalytics = overallData;
+  const analysisAnalytics = analysisData;
+  const comparisonAnalytics = comparisonData;
 
   const progressSeries = useMemo(() => buildDailyProgressSeries(overallAnalytics.progressSeries), [overallAnalytics.progressSeries]);
   const lastTenDayAverage = buildLastTenDayAverage(overallAnalytics);
@@ -448,21 +267,6 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
       <div className="px-1 space-y-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">Performance Analytics</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowSamplePreview((current) => !current)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] transition-colors",
-                showSamplePreview || overallHasNoRealData
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                  : "border-border/70 bg-card text-muted-foreground hover:border-amber-500/20 hover:text-foreground"
-              )}
-            >
-              <DatabaseZap className="h-3.5 w-3.5" />
-              {showSamplePreview || overallHasNoRealData ? "Sample Preview On" : "Preview Sample Data"}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -614,7 +418,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                   "text-2xl tracking-tight text-foreground",
                   lastTenDayAverage.reading === null ? "font-semibold" : "font-black"
                 )}>
-                  {lastTenDayAverage.reading?.toFixed(1) ?? "N/A"}
+                  {lastTenDayAverage.reading?.toFixed(1) ?? "0"}
                 </p>
               </div>
               <p className="mt-1 text-xs font-medium text-muted-foreground">Reading</p>
@@ -627,7 +431,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                   "text-2xl tracking-tight text-foreground",
                   lastTenDayAverage.listening === null ? "font-semibold" : "font-black"
                 )}>
-                  {lastTenDayAverage.listening?.toFixed(1) ?? "N/A"}
+                  {lastTenDayAverage.listening?.toFixed(1) ?? "0"}
                 </p>
               </div>
               <p className="mt-1 text-xs font-medium text-muted-foreground">Listening</p>
@@ -657,15 +461,28 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                     <Tooltip
                       contentStyle={{
                         borderRadius: 16,
-                        border: "1px solid rgba(148, 163, 184, 0.18)",
-                        background: "rgba(15, 23, 42, 0.96)",
-                        color: "#fff"
+                        border: "1px solid hsl(var(--border))",
+                        background: "hsl(var(--background))",
+                        color: "hsl(var(--foreground))",
+                        boxShadow: "0 20px 48px -24px rgba(15, 23, 42, 0.45)"
+                      }}
+                      labelStyle={{
+                        color: "hsl(var(--muted-foreground))",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase"
+                      }}
+                      itemStyle={{
+                        color: "hsl(var(--foreground))",
+                        fontWeight: 700
                       }}
                       formatter={(value, name) => {
                         const normalizedValue = Array.isArray(value) ? value[0] : value;
+                        const label = typeof name === "string" && name.trim().length > 0 ? name : "Score";
                         return [
-                          normalizedValue === null || normalizedValue === undefined ? "N/A" : `${Number(normalizedValue).toFixed(1)} band`,
-                          name === "reading" ? "Reading" : "Listening"
+                          normalizedValue === null || normalizedValue === undefined ? "0 band" : `${Number(normalizedValue).toFixed(1)} band`,
+                          label
                         ];
                       }}
                       labelFormatter={(value: string) => `Date: ${value}`}

@@ -155,8 +155,8 @@
 
 @keyframes prime-loader-breathe {
   0%, 100% {
-    transform: scale(0.94);
-    opacity: 0.72;
+    transform: scale(0.96);
+    opacity: 0.86;
   }
   50% {
     transform: scale(1);
@@ -166,13 +166,22 @@
 
 @keyframes prime-loader-slide {
   0% {
-    transform: translateX(-85%);
+    transform: translateX(-110%);
   }
   50% {
-    transform: translateX(80%);
+    transform: translateX(70%);
   }
   100% {
-    transform: translateX(190%);
+    transform: translateX(220%);
+  }
+}
+
+@keyframes prime-skeleton-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
   }
 }
 

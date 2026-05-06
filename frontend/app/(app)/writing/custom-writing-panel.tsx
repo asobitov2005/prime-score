@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { Loader2, PenLine, Send, Target, Clock3, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ImageIcon, Loader2, PenLine, Send, Target, UploadCloud, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,45 +9,42 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitWritingSubmission } from "@/lib/client-writing";
+import { submitWritingSubmission, uploadWritingImage } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 
 type WritingTaskType = "task_1" | "task_2";
 
-const TASK_CONFIG: Record<WritingTaskType, { label: string; words: number; minutes: number }> = {
-  task_1: { label: "Task 1", words: 150, minutes: 20 },
-  task_2: { label: "Task 2", words: 250, minutes: 40 },
+const TASK_CONFIG: Record<WritingTaskType, { label: string; words: number; description: string }> = {
+  task_1: {
+    label: "Task 1",
+    words: 150,
+    description: "Check a chart, table, map, process, or letter-style response.",
+  },
+  task_2: {
+    label: "Task 2",
+    words: 250,
+    description: "Check a finished academic essay response.",
+  },
 };
 
 function countWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function formatSeconds(value: number): string {
-  const total = Math.max(0, value);
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
 export function CustomWritingPanel() {
   const router = useRouter();
-  const [taskType, setTaskType] = useState<WritingTaskType>("task_2");
+  const [taskType, setTaskType] = useState<WritingTaskType | null>(null);
   const [topic, setTopic] = useState("");
   const [essay, setEssay] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const startedAtRef = useRef<number>(Date.now());
 
-  const storageKey = `writing-custom-draft:${taskType}`;
+  const storageKey = taskType ? `writing-finished-draft:${taskType}` : null;
 
   useEffect(() => {
-    startedAtRef.current = Date.now();
-    setElapsed(0);
-  }, [taskType]);
-
-  useEffect(() => {
+    if (!taskType || !storageKey) return;
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (raw) {
@@ -60,35 +56,59 @@ export function CustomWritingPanel() {
     } catch {}
     setTopic("");
     setEssay("");
-  }, [storageKey]);
+  }, [storageKey, taskType]);
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setElapsed(Math.round((Date.now() - startedAtRef.current) / 1000));
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify({ topic, essay }));
-      } catch {}
-    }, 1000);
-    return () => window.clearInterval(id);
+    if (!storageKey) return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify({ topic, essay }));
+    } catch {}
   }, [essay, storageKey, topic]);
 
-  const config = TASK_CONFIG[taskType];
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [imageFile]);
+
+  const config = taskType ? TASK_CONFIG[taskType] : null;
   const wordCount = useMemo(() => countWords(essay), [essay]);
-  const canSubmit = topic.trim().length > 0 && wordCount >= Math.ceil(config.words * 0.5);
+  const requiredDraftWords = config ? Math.ceil(config.words * 0.5) : 0;
+  const canSubmit = Boolean(taskType && topic.trim().length > 0 && wordCount >= requiredDraftWords);
+
+  function selectTaskType(nextTaskType: WritingTaskType) {
+    setTaskType(nextTaskType);
+    setImageFile(null);
+    setSubmitError(null);
+  }
 
   async function handleSubmit() {
-    if (!canSubmit || isSubmitting) return;
+    if (!taskType || !config || !canSubmit || isSubmitting) return;
+
     setIsSubmitting(true);
     setSubmitError(null);
     try {
+      let imageUrl: string | null = null;
+      if (taskType === "task_1" && imageFile) {
+        const upload = await uploadWritingImage(imageFile);
+        imageUrl = upload.url;
+      }
+
       const result = await submitWritingSubmission({
         task_type: taskType,
         topic: topic.trim(),
+        image_url: imageUrl,
         essay_text: essay,
-        time_spent_seconds: elapsed,
+        time_spent_seconds: 0,
       });
+
       try {
-        window.localStorage.removeItem(storageKey);
+        if (storageKey) window.localStorage.removeItem(storageKey);
       } catch {}
       router.push(`/writing/submissions/${result.id}/result`);
     } catch (error) {
@@ -98,130 +118,144 @@ export function CustomWritingPanel() {
   }
 
   return (
-    <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
+    <Card className="rounded-2xl border-border/60 bg-card/80 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-            Instant check
-          </Badge>
-          <Badge tone="outline" className="text-[10px] uppercase tracking-[0.18em]">
-            No preset prompt needed
+          <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em]">
+            Finished answer check
           </Badge>
         </div>
         <CardTitle className="text-xl font-semibold tracking-tight text-foreground">
-          Paste any topic and grade your own essay
+          Check writing you already finished
         </CardTitle>
         <CardDescription className="text-sm text-muted-foreground">
-          If you already have a question and essay, drop both here. PrimeScore will score it without waiting for you to create a task first.
+          Choose the task type first, then paste the question and your answer for grading.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="space-y-4 rounded-2xl border border-border/50 bg-background/40 p-4">
-          <div className="space-y-2">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Task type</div>
-            <div className="grid grid-cols-2 gap-2">
-              {(["task_1", "task_2"] as const).map((value) => (
-                <button
-                  key={value}
+      <CardContent className="space-y-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          {(["task_1", "task_2"] as const).map((value) => {
+            const taskConfig = TASK_CONFIG[value];
+            const active = taskType === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => selectTaskType(value)}
+                className={cn(
+                  "flex min-h-[116px] w-full items-start gap-4 rounded-xl border p-4 text-left transition-colors",
+                  active
+                    ? "border-foreground/30 bg-background text-foreground"
+                    : "border-border/60 bg-background/50 text-muted-foreground hover:border-foreground/20 hover:text-foreground",
+                )}
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-card text-foreground">
+                  {value === "task_1" ? <ImageIcon className="h-5 w-5" /> : <PenLine className="h-5 w-5" />}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-base font-semibold">{taskConfig.label}</span>
+                  <span className="mt-1 block text-sm leading-5">{taskConfig.description}</span>
+                  <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold">
+                    <Target className="h-3.5 w-3.5" />
+                    {taskConfig.words}+ words
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {taskType && config ? (
+          <div className="grid gap-4 border-t border-border/60 pt-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="finished-writing-topic" className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Topic / question
+                </label>
+                <Textarea
+                  id="finished-writing-topic"
+                  value={topic}
+                  onChange={(event) => setTopic(event.target.value)}
+                  placeholder="Paste the exact essay question or task prompt here"
+                  className="min-h-[132px] rounded-xl border-border/60 bg-background/70 text-sm leading-6"
+                />
+              </div>
+
+              {taskType === "task_1" ? (
+                <div className="space-y-2">
+                  <label htmlFor="finished-writing-image" className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Task 1 visual
+                  </label>
+                  <div className="rounded-xl border border-dashed border-border/70 bg-background/50 p-3">
+                    {imagePreviewUrl ? (
+                      <div className="space-y-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imagePreviewUrl} alt="Task 1 visual preview" className="max-h-44 w-full rounded-lg object-contain" />
+                        <Button type="button" variant="outline" size="sm" className="h-9 rounded-lg" onClick={() => setImageFile(null)}>
+                          <X className="h-4 w-4" />
+                          Remove image
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 px-3 py-6 text-center text-sm text-muted-foreground">
+                        <UploadCloud className="h-6 w-6" />
+                        <span className="font-medium text-foreground">Upload chart or diagram</span>
+                        <span className="text-xs">PNG, JPG, or WebP under 10 MB</span>
+                        <Input
+                          id="finished-writing-image"
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          onChange={(event) => setImageFile(event.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-border/50 bg-background/60 px-4 py-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Words</span>
+                  <span className="font-semibold text-foreground">{wordCount}</span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {wordCount >= config.words ? "IELTS minimum reached." : `Aim for ${config.words}+ words.`}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label htmlFor="finished-writing-essay" className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                Essay
+              </label>
+              <Textarea
+                id="finished-writing-essay"
+                value={essay}
+                onChange={(event) => setEssay(event.target.value)}
+                placeholder="Paste your finished answer here"
+                className="min-h-[360px] resize-y rounded-xl border-border/60 bg-background/70 px-4 py-4 text-sm leading-7"
+              />
+              {submitError ? (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+                  {submitError}
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">Draft text is saved locally. No timer is used for finished-answer checks.</p>
+                <Button
                   type="button"
-                  onClick={() => setTaskType(value)}
-                  className={cn(
-                    "rounded-2xl border px-4 py-3 text-left transition-colors",
-                    taskType === value
-                      ? "border-primary/50 bg-primary/10 text-foreground"
-                      : "border-border/60 bg-background text-muted-foreground hover:text-foreground",
-                  )}
+                  onClick={() => void handleSubmit()}
+                  disabled={!canSubmit || isSubmitting}
+                  className="h-11 rounded-xl px-5"
                 >
-                  <div className="font-semibold">{TASK_CONFIG[value].label}</div>
-                  <div className="mt-1 text-xs">{TASK_CONFIG[value].words}+ words</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="writing-topic" className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-              Topic / question
-            </label>
-            <Input
-              id="writing-topic"
-              value={topic}
-              onChange={(event) => setTopic(event.target.value)}
-              placeholder="Paste the essay question or topic here"
-              className="h-12 rounded-2xl"
-            />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            <div className="rounded-2xl border border-border/50 bg-background/70 px-3 py-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                <Target className="h-3.5 w-3.5" />
-                Words
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Submit for grading
+                </Button>
               </div>
-              <div className="mt-1 text-lg font-semibold text-foreground">{wordCount}</div>
-              <div className="text-xs text-muted-foreground">Aim for {config.words}+</div>
-            </div>
-            <div className="rounded-2xl border border-border/50 bg-background/70 px-3 py-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                <Clock3 className="h-3.5 w-3.5" />
-                Timer
-              </div>
-              <div className="mt-1 text-lg font-semibold text-foreground tabular-nums">{formatSeconds(elapsed)}</div>
-              <div className="text-xs text-muted-foreground">Guide: {config.minutes} min</div>
-            </div>
-            <div className="rounded-2xl border border-border/50 bg-background/70 px-3 py-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5" />
-                Submit
-              </div>
-              <div className="mt-1 text-sm font-semibold text-foreground">
-                {canSubmit ? "Ready" : `Need ${Math.ceil(config.words * 0.5)}+ words`}
-              </div>
-              <div className="text-xs text-muted-foreground">Topic must be filled</div>
             </div>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" className="rounded-xl">
-              <Link href={`/writing/tasks?task_type=${taskType}`}>Browse ready prompts</Link>
-            </Button>
-            <Button asChild variant="ghost" className="rounded-xl">
-              <Link href="/writing/history">View history</Link>
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <PenLine className="h-4 w-4" />
-            Essay
-          </div>
-          <Textarea
-            value={essay}
-            onChange={(event) => setEssay(event.target.value)}
-            placeholder="Paste or write your essay here..."
-            className="min-h-[420px] rounded-3xl border-border/60 bg-background/60 px-4 py-4 font-mono text-sm leading-7"
-          />
-          {submitError ? (
-            <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
-              {submitError}
-            </div>
-          ) : null}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">
-              Autosaved locally per task type. No admin-side prompt creation needed.
-            </p>
-            <Button
-              type="button"
-              onClick={() => void handleSubmit()}
-              disabled={!canSubmit || isSubmitting}
-              className="h-11 rounded-xl px-5"
-            >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Submit for grading
-            </Button>
-          </div>
-        </div>
+        ) : null}
       </CardContent>
     </Card>
   );

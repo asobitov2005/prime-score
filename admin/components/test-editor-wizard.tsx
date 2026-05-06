@@ -1478,21 +1478,66 @@ function parseBraceBoldText(text: string) {
   return segments;
 }
 
+function parseInlineItalicText(text: string) {
+  const segments: Array<{ text: string; italic: boolean }> = [];
+  const tokens = text.split(/(<\/?i>)/i);
+  let italic = false;
+
+  tokens.forEach((token) => {
+    if (!token) {
+      return;
+    }
+    if (/^<i>$/i.test(token)) {
+      italic = true;
+      return;
+    }
+    if (/^<\/i>$/i.test(token)) {
+      italic = false;
+      return;
+    }
+    segments.push({ text: token, italic });
+  });
+
+  return segments;
+}
+
 function renderBraceBoldInlineText(text: string, keyPrefix: string) {
-  const segments = parseBraceBoldText(text);
-  if (segments.length === 0) {
+  const italicSegments = parseInlineItalicText(text);
+  if (italicSegments.length === 0) {
     return text;
   }
 
-  return segments.map((segment, index) =>
-    segment.bold ? (
-      <strong key={`${keyPrefix}-bold-${index}`} className="font-bold text-inherit">
-        {segment.text}
-      </strong>
-    ) : (
-      <span key={`${keyPrefix}-plain-${index}`}>{segment.text}</span>
-    )
-  );
+  return italicSegments.flatMap((italicSegment, italicIndex) => {
+    const segments = parseBraceBoldText(italicSegment.text);
+    if (segments.length === 0) {
+      return [];
+    }
+
+    return segments.map((segment, index) => {
+      const sharedClassName = italicSegment.italic ? "italic" : undefined;
+
+      if (segment.bold) {
+        return (
+          <strong
+            key={`${keyPrefix}-bold-${italicIndex}-${index}`}
+            className={cn("font-bold text-inherit", sharedClassName)}
+          >
+            {segment.text}
+          </strong>
+        );
+      }
+
+      if (italicSegment.italic) {
+        return (
+          <em key={`${keyPrefix}-italic-${italicIndex}-${index}`} className="italic">
+            {segment.text}
+          </em>
+        );
+      }
+
+      return <span key={`${keyPrefix}-plain-${italicIndex}-${index}`}>{segment.text}</span>;
+    });
+  });
 }
 
 function renderBraceBoldText(text: string, keyPrefix: string) {
@@ -1563,22 +1608,38 @@ function parseCompletionTableLayout(text: string) {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  if (rows.length === 0 || rows.some((line) => !line.includes("|"))) {
+  if (rows.length === 0) {
     return null;
   }
 
-  const parsedRows = rows.map((line) => {
+  const parsedRows: Array<{ isHeader: boolean; cells: string[] }> = [];
+
+  for (const line of rows) {
+    if (!line.includes("|")) {
+      const previousRow = parsedRows[parsedRows.length - 1];
+      if (!previousRow) {
+        return null;
+      }
+
+      const continuationTargetIndex = /^\(.*\)$/.test(line)
+        ? 0
+        : Math.max(0, previousRow.cells.length - 1);
+      previousRow.cells[continuationTargetIndex] = previousRow.cells[continuationTargetIndex]
+        ? `${previousRow.cells[continuationTargetIndex]}\n${line}`
+        : line;
+      continue;
+    }
+
     const isHeader = line.startsWith("||") && line.endsWith("||");
     const body = isHeader ? line.slice(2, -2).trim() : line;
     const cells = body.split("|").map((cell) => cell.trim());
-    return cells.length >= 2 ? { isHeader, cells } : null;
-  });
-
-  if (parsedRows.some((row) => row === null)) {
-    return null;
+    if (cells.length < 2) {
+      return null;
+    }
+    parsedRows.push({ isHeader, cells });
   }
 
-  return parsedRows as Array<{ isHeader: boolean; cells: string[] }>;
+  return parsedRows;
 }
 
 function renderInstructionPreviewText(text: string, keyPrefix: string) {
@@ -2592,13 +2653,17 @@ function ContentPanel({
                                   <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                                     {formatTranscriptTimestamp(segment.startSec)}
                                   </span>
-                                  <p className="text-sm leading-relaxed text-foreground">{segment.text}</p>
+                                  <p className="text-sm leading-relaxed text-foreground">
+                                    {renderBraceBoldText(segment.text, `${section.id}-segment-${segment.id}`)}
+                                  </p>
                                 </div>
                               ))}
                             </div>
                           ) : section.transcript?.trim() ? (
                             <div className="mt-4 max-h-[320px] overflow-y-auto rounded-xl border border-border/60 bg-background/90 p-4">
-                              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{section.transcript.trim()}</p>
+                              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                                {renderBraceBoldText(section.transcript.trim(), `${section.id}-transcript`)}
+                              </p>
                             </div>
                           ) : (
                             <p className="mt-4 text-sm text-muted-foreground">
@@ -4328,7 +4393,7 @@ function EditorPreviewSection({
                       </span>
                       <div className="space-y-2">
                         <p className={cn("text-foreground", compact ? "text-[13px] leading-[1.45]" : "text-[14px] leading-[1.55]")}>
-                          {segment.text}
+                          {renderBraceBoldText(segment.text, `${previewId}-${section.id}-${segment.id}`)}
                         </p>
                         {showAnswerLocations && segmentLocations.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
@@ -4352,7 +4417,7 @@ function EditorPreviewSection({
         ) : fallbackTranscript ? (
           <div className="rounded-xl border border-border/70 bg-background/90 px-4 py-4">
             <p className={cn("whitespace-pre-wrap text-foreground", compact ? "text-[13px] leading-[1.45]" : "text-[14px] leading-[1.55]")}>
-              {fallbackTranscript}
+              {renderBraceBoldText(fallbackTranscript, `${previewId}-${section.id}-fallback-transcript`)}
             </p>
           </div>
         ) : (
@@ -4424,13 +4489,13 @@ function EditorPreviewSection({
               {renderBraceBoldText(group.title, `${group.id}-completion-title`)}
             </p>
           ) : null}
-          <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-dashed border-sky-400/80 bg-sky-50/25 p-1 dark:border-sky-700/70 dark:bg-slate-900/25">
-            <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-dashed border-sky-300/80 bg-sky-50/35 dark:border-sky-700/60 dark:bg-slate-900/35">
+          <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-border bg-background p-1 shadow-[0_0_0_1px_hsl(var(--border)),0_8px_24px_-18px_hsl(var(--foreground)/0.28)]">
+            <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-border bg-background">
               <tbody>
                 {tableLayout.map((row, rowIndex) => (
                   <tr
                     key={`${group.id}-table-row-${rowIndex}`}
-                    className={row.isHeader ? "bg-sky-100/50 dark:bg-sky-950/30" : "border-t border-dashed border-sky-300/70 dark:border-sky-700/55"}
+                    className={row.isHeader ? "bg-muted/85" : "border-t border-border"}
                   >
                     {row.cells.map((cell, cellIndex) => {
                       const CellTag = row.isHeader ? "th" : "td";
@@ -4439,7 +4504,7 @@ function EditorPreviewSection({
                         <CellTag
                           key={`${group.id}-table-cell-${rowIndex}-${cellIndex}`}
                           className={cn(
-                            "align-middle border-l border-dashed border-sky-300/70 px-3 py-2 text-left font-sans text-foreground first:border-l-0 dark:border-sky-700/55",
+                            "align-middle border-l border-border px-3 py-2 text-left font-sans text-foreground first:border-l-0",
                             row.isHeader ? "text-sm font-bold" : compact ? "text-[14px] leading-[1.55]" : "text-[15px] leading-[1.7]"
                           )}
                         >

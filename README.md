@@ -44,6 +44,23 @@ Eng tez yo'l:
 docker compose up --build
 ```
 
+Dev hot-reload va terminal yopilgandan keyin ham ishlashi uchun:
+
+```bash
+docker compose down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+Bu override bilan `api`, `worker`, `beat`, `bot`, `frontend`, `admin` fon rejimida turadi; kod o'zgarsa app servislar avtomatik restart/reload qiladi.
+
+Foydali buyruqlar:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api frontend admin
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
+
 Default portlar:
 
 - frontend: `http://localhost:3000`

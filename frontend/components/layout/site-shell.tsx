@@ -54,6 +54,16 @@ export function SiteShell({ children }: SiteShellProps) {
   const currentPath = usePathname();
   const router = useRouter();
   const unreadCount = notifications.filter(n => !n.is_read).length;
+  const isAppRoute = currentPath.startsWith("/dashboard")
+    || currentPath.startsWith("/tests")
+    || currentPath.startsWith("/attempts")
+    || currentPath.startsWith("/history")
+    || currentPath.startsWith("/leaderboard")
+    || currentPath.startsWith("/subscription")
+    || currentPath.startsWith("/settings")
+    || currentPath.startsWith("/writing")
+    || currentPath.startsWith("/speaking")
+    || currentPath.startsWith("/articles");
   const hideSiteChrome = currentPath.startsWith("/admin") || currentPath.startsWith("/exam-preview/");
 
   const fetchNotifications = async () => {
@@ -194,7 +204,7 @@ export function SiteShell({ children }: SiteShellProps) {
     <div
       className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative"
       style={{
-        "--app-shell-sticky-top": isHeaderCompact ? "5.75rem" : "7.5rem",
+        "--app-shell-sticky-top": isHeaderCompact ? "5rem" : "6.5rem",
       } as CSSProperties}
     >
       <Suspense fallback={null}>
@@ -202,19 +212,20 @@ export function SiteShell({ children }: SiteShellProps) {
       </Suspense>
 
       <header className={cn(
-        "sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-sm transition-all duration-300 flex items-center shrink-0",
-        isHeaderCompact ? "h-16 md:h-20" : "h-20 md:h-28"
+        "sticky top-0 z-50 border-b border-primary/10 bg-[linear-gradient(180deg,hsl(var(--background)/0.96),hsl(var(--background)/0.88))] shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all duration-300 flex items-center shrink-0",
+        isHeaderCompact ? "h-14 md:h-16" : "h-[4.5rem] md:h-24"
       )}>
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2 group focus-visible:outline-none rounded-xl">
             <div className={cn(
               "relative transition-all duration-300 group-hover:scale-105 flex items-center justify-center",
-              isHeaderCompact ? "h-10 md:h-12" : "h-12 md:h-16"
+              isHeaderCompact ? "h-9 md:h-10" : "h-11 md:h-14"
             )}>
               <img src={theme === "light" ? "/logo-light.svg" : "/logo.svg"} alt="PrimeScore" className="relative z-10 h-full w-auto object-contain drop-shadow-sm" />
             </div>
           </Link>
 
+          {!isAppRoute ? (
           <nav className={cn(
             "hidden items-center md:flex ml-auto mr-6 transition-all duration-300",
             isHeaderCompact ? "gap-4" : "gap-6"
@@ -241,7 +252,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   currentPath.startsWith("/tests") ? "text-primary bg-primary/5" : "text-muted-foreground/80 hover:text-foreground"
                 )}
               >
-                IELTS Mock <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform duration-200", isMockTestsOpen && "rotate-180")} />
+                Practice Tests <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform duration-200", isMockTestsOpen && "rotate-180")} />
               </button>
 
               <div className={cn(
@@ -249,7 +260,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 isMockTestsOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
               )}>
                 <Link 
-                  href="/ielts-reading-mock-online" 
+                  href="/tests?type=reading" 
                   onClick={() => setIsMockTestsOpen(false)}
                   className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
@@ -262,7 +273,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   </div>
                 </Link>
                 <Link 
-                  href="/ielts-listening-mock-online" 
+                  href="/tests?type=listening" 
                   onClick={() => setIsMockTestsOpen(false)}
                   className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
@@ -304,13 +315,13 @@ export function SiteShell({ children }: SiteShellProps) {
             </div>
 
             <NavLink href="/#features" label="Features" />
-            <NavLink href="/ielts-mock-test-online" label="Mock Online" active={currentPath === "/ielts-mock-test-online"} />
             <NavLink href="/pricing" label="Pricing" />
             <NavLink href="/#reviews" label="Reviews" />
             <NavLink href="/#about" label="About" />
           </nav>
+          ) : null}
 
-          <div className="flex items-center gap-2 sm:gap-3 relative">
+          <div className={cn("relative flex items-center gap-2 sm:gap-3", isAppRoute && "ml-auto")}>
             <Button
               variant="ghost"
               size="icon"
@@ -321,36 +332,38 @@ export function SiteShell({ children }: SiteShellProps) {
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMobileNavOpen((v) => !v);
-              }}
-              className="md:hidden relative h-10 w-10 rounded-xl border border-border/60 bg-muted/40 hover:bg-muted transition-all active:scale-95 flex items-center justify-center"
-              aria-label="Toggle navigation menu"
-              aria-expanded={isMobileNavOpen}
-            >
-              <span className="sr-only">Menu</span>
-              <span
-                className={cn(
-                  "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
-                  isMobileNavOpen ? "rotate-45 translate-y-0" : "-translate-y-[5px]"
-                )}
-              />
-              <span
-                className={cn(
-                  "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
-                  isMobileNavOpen ? "opacity-0" : "translate-y-0 opacity-100"
-                )}
-              />
-              <span
-                className={cn(
-                  "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
-                  isMobileNavOpen ? "-rotate-45 translate-y-0" : "translate-y-[5px]"
-                )}
-              />
-            </button>
+            {!isAppRoute ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMobileNavOpen((v) => !v);
+                }}
+                className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/40 transition-all hover:bg-muted active:scale-95 md:hidden"
+                aria-label="Toggle navigation menu"
+                aria-expanded={isMobileNavOpen}
+              >
+                <span className="sr-only">Menu</span>
+                <span
+                  className={cn(
+                    "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                    isMobileNavOpen ? "rotate-45 translate-y-0" : "-translate-y-[5px]"
+                  )}
+                />
+                <span
+                  className={cn(
+                    "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                    isMobileNavOpen ? "opacity-0" : "translate-y-0 opacity-100"
+                  )}
+                />
+                <span
+                  className={cn(
+                    "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                    isMobileNavOpen ? "-rotate-45 translate-y-0" : "translate-y-[5px]"
+                  )}
+                />
+              </button>
+            ) : null}
             
             {!mounted || !hasHydrated ? (
               <div className="hidden md:block h-11 w-24 bg-muted animate-pulse rounded-xl" />
@@ -454,7 +467,7 @@ export function SiteShell({ children }: SiteShellProps) {
         </div>
       </header>
 
-      {isMobileNavOpen && (
+      {isMobileNavOpen && !isAppRoute && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-background/70 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setIsMobileNavOpen(false)}
@@ -579,7 +592,7 @@ export function SiteShell({ children }: SiteShellProps) {
       <main className="flex-1">{children}</main>
 
       {currentPath === "/" && (
-        <footer className="border-t border-border/40 bg-muted/30 shrink-0 py-10 mt-auto relative z-20">
+        <footer className="border-t border-border/40 bg-muted/30 shrink-0 pt-6 pb-8 mt-auto relative z-20">
           <div className="w-full mx-auto px-4 text-center">
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
               © 2026 PrimeScore · IELTS Mock Test Online Platform
