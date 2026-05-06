@@ -154,6 +154,7 @@ def _make_question(
         "options": options or [],
         "explanation": explanation
         or f"The accepted answer for question {question_number} is stored in fixture variants.",
+        "explanation_reference": {"quote": "Mock reference text for fixture"},
         "word_limit": word_limit,
     }
 

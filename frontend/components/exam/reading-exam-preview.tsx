@@ -124,6 +124,8 @@ export interface ReadingExamPreviewData {
     correctAnswers: string[];
     options?: string[];
     questionType?: string;
+    explanation?: string | null;
+    explanationReference?: { quote?: string } | null;
   }>;
 }
 
@@ -812,6 +814,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [dragOverWordBankGroupId, setDragOverWordBankGroupId] = useState<string | null>(null);
   const [dragPreviewPosition, setDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
   const [textHighlights, setTextHighlights] = useState<Record<string, TextHighlight[]>>(examData.initialTextHighlights ?? {});
+  const [explanationHighlightQuote, setExplanationHighlightQuote] = useState<string | null>(null);
   const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarState>(null);
   const [syncState, setSyncState] = useState<"idle" | "saving" | "saved" | "error">(
     examData.attemptId ? "saved" : "idle"
@@ -2023,7 +2026,40 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   function renderHighlightedText(blockKey: string, text: string) {
     const { plainText, boldRanges, italicRanges, bulletLineIndexes } = parseBraceBoldText(text);
-    const highlights = (textHighlights[blockKey] ?? []).slice().sort((a, b) => a.start - b.start);
+    let highlights = (textHighlights[blockKey] ?? []).slice();
+
+    if (explanationHighlightQuote && blockKey.startsWith("passage-")) {
+      const normalizedQuote = explanationHighlightQuote.trim();
+      if (normalizedQuote.length > 3) {
+        try {
+          const escapedQuote = normalizedQuote.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+          const regex = new RegExp(escapedQuote, 'g');
+          let match;
+          while ((match = regex.exec(plainText)) !== null) {
+            highlights.push({
+              id: `explanation-highlight-${match.index}`,
+              start: match.index,
+              end: match.index + match[0].length,
+            });
+          }
+        } catch (e) {
+          // fallback to simple indexOf
+          let searchStartIndex = 0;
+          while (true) {
+            const index = plainText.indexOf(normalizedQuote, searchStartIndex);
+            if (index === -1) break;
+            highlights.push({
+              id: `explanation-highlight-${index}`,
+              start: index,
+              end: index + normalizedQuote.length,
+            });
+            searchStartIndex = index + normalizedQuote.length;
+          }
+        }
+      }
+    }
+
+    highlights = highlights.sort((a, b) => a.start - b.start);
 
     function renderFormattedSlice(start: number, end: number, keyPrefix: string) {
       if (start >= end) {
@@ -2109,10 +2145,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         }
 
         if (segmentStart < segmentEnd) {
+          const isExplanation = highlight.id.startsWith("explanation-highlight-");
           parts.push(
             <mark
               key={`${highlight.id}-${segmentStart}-${segmentEnd}`}
-              className="rounded-[0.25rem] bg-amber-300/65 px-[1px] text-inherit dark:bg-[#5b4618]/50 dark:ring-1 dark:ring-[#c9952f]/40"
+              className={cn(
+                "rounded-[0.25rem] px-[1px] text-inherit",
+                isExplanation
+                  ? "bg-orange-400/80 ring-2 ring-orange-500/50 dark:bg-orange-500/50 dark:ring-orange-400/50 transition-all duration-300"
+                  : "bg-amber-300/65 dark:bg-[#5b4618]/50 dark:ring-1 dark:ring-[#c9952f]/40"
+              )}
             >
               {renderFormattedSlice(segmentStart, segmentEnd, `${keyPrefix}-mark-${index}`)}
             </mark>
@@ -2796,6 +2838,33 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     );
   }
 
+  function renderReviewExplanation(reviewItem: NonNullable<typeof reviewItems[string]>) {
+    if (!reviewItem.explanation) {
+      return null;
+    }
+
+    return (
+      <div 
+        className="mt-2 group relative z-10"
+        onMouseEnter={() => setExplanationHighlightQuote(reviewItem.explanationReference?.quote ?? null)}
+        onMouseLeave={() => setExplanationHighlightQuote(null)}
+      >
+        <div className="inline-flex items-center gap-1.5 cursor-help rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-700 transition-colors hover:bg-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:hover:bg-orange-900/50">
+          <Lightbulb className="h-3.5 w-3.5" />
+          <span>Explanation</span>
+        </div>
+        <div className="absolute left-0 top-full mt-2 hidden w-64 md:w-80 rounded-xl border border-border/50 bg-popover p-3 text-sm text-popover-foreground shadow-xl group-hover:block animate-in fade-in zoom-in-95 z-50">
+          <p className="leading-relaxed">{reviewItem.explanation}</p>
+          {reviewItem.explanationReference?.quote ? (
+            <div className="mt-2 rounded bg-muted/50 p-2 text-xs italic text-muted-foreground border-l-2 border-orange-400">
+              "{reviewItem.explanationReference.quote}"
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   function renderQuestionControl(question: PreviewQuestion, group: PreviewGroup) {
     const reviewItem = isReviewMode ? reviewItems[question.id] : undefined;
     const formattedReviewCorrectAnswer = reviewItem
@@ -2869,6 +2938,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
         </div>
       );
     }
@@ -2931,6 +3001,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
         </div>
       );
     }
@@ -3010,6 +3081,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
         </div>
       );
     }
@@ -3086,6 +3158,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 {formattedReviewCorrectAnswer}
               </p>
             ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
           </div>
         );
       }
@@ -3183,6 +3256,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
         </div>
       );
     }
@@ -3228,6 +3302,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 Correct answer: {formattedReviewCorrectAnswer}
               </p>
             ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
           </div>
         );
       }
@@ -3253,6 +3328,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
         </div>
       );
     }
@@ -3279,6 +3355,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
         </div>
       );
     }
@@ -3297,14 +3374,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             inputFocusClass
           )}
           autoComplete="off"
-          spellCheck="false"
-        />
-        {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
-          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-            Correct answer: {formattedReviewCorrectAnswer}
-          </p>
-        ) : null}
-      </div>
+            spellCheck="false"
+          />
+          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Correct answer: {formattedReviewCorrectAnswer}
+            </p>
+          ) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+        </div>
     );
   }
 

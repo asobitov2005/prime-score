@@ -202,11 +202,14 @@ export function SiteShell({ children }: SiteShellProps) {
 
   return (
     <div
-      className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative"
+      className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative bg-noise"
       style={{
         "--app-shell-sticky-top": isHeaderCompact ? "5rem" : "6.5rem",
       } as CSSProperties}
     >
+      {/* Global Grid Background Added here */}
+      <div className="absolute inset-0 z-0 bg-grid pointer-events-none" />
+
       <Suspense fallback={null}>
         <NavigationTransitionOverlay />
       </Suspense>

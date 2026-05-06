@@ -568,14 +568,16 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
         fixture = get_question_fixture(attempt.test_id, question_id)
         if answer_key is None and fixture is not None:
             answer_key = {
-                "accepted_answers": list(fixture["accepted_answers"]),
-                "explanation": fixture["explanation"],
+                "accepted_answers": list(fixture.get("accepted_answers", [])),
+                "explanation": fixture.get("explanation"),
+                "explanation_reference": fixture.get("explanation_reference", {}),
             }
         if answer_key is None:
             continue
         answer_value = answer_map.get(str(question_id))
         accepted_answers = [str(item) for item in answer_key.get("accepted_answers", [])]
         explanation = str(answer_key.get("explanation") or "")
+        explanation_reference = answer_key.get("explanation_reference") or {}
         is_correct = bool(answer_value) and is_answer_correct(answer_value, accepted_answers)
         question_weight = (
             mc_multiple_question_weight(
@@ -600,6 +602,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             "is_correct": is_correct,
             "correct_answers": accepted_answers,
             "explanation": explanation,
+            "explanation_reference": explanation_reference,
         }
         scoring_items.append(scoring_item)
 

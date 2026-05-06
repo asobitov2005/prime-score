@@ -173,10 +173,10 @@ export default function LeaderboardPage() {
   const currentUser = query.data?.currentUser ?? null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-12 animate-in fade-in duration-500">
+      <div className="mx-auto max-w-7xl space-y-6 pb-12 animate-in fade-in duration-500">
       <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-background shadow-sm">
-        <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-sky-500/40 via-violet-500/70 to-emerald-500/40" />
-        <div className="relative z-10 space-y-1 bg-muted/5 p-5 lg:px-6">
+        <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+        <div className="relative z-10 space-y-1 border-b border-border/40 bg-muted/5 p-5 lg:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
               <h1 className="text-xl font-bold tracking-tight text-foreground md:text-2xl">Leaderboard</h1>

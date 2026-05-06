@@ -136,6 +136,7 @@ class AttemptReviewItemRead(BaseModel):
     is_correct: bool | None = None
     correct_answers: list[str] = []
     explanation: str | None = None
+    explanation_reference: dict | None = None
 
 
 class AttemptReviewRead(BaseModel):

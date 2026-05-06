@@ -365,6 +365,7 @@ def _serialize_snapshot_from_test(
         str(question.id): {
             "accepted_answers": [answer.value for answer in question.answer_variants],
             "explanation": question.explanation or "",
+            "explanation_reference": question.explanation_reference or {},
         }
         for section in selected_sections
         for group in sorted(section.question_groups, key=lambda item: (item.question_start, item.question_end))

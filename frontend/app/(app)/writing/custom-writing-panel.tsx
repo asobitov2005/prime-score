@@ -31,9 +31,9 @@ function countWords(value: string): number {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
-export function CustomWritingPanel() {
+export function CustomWritingPanel({ initialTaskType = null }: { initialTaskType?: WritingTaskType | null }) {
   const router = useRouter();
-  const [taskType, setTaskType] = useState<WritingTaskType | null>(null);
+  const [taskType, setTaskType] = useState<WritingTaskType | null>(initialTaskType);
   const [topic, setTopic] = useState("");
   const [essay, setEssay] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -42,6 +42,12 @@ export function CustomWritingPanel() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const storageKey = taskType ? `writing-finished-draft:${taskType}` : null;
+
+  useEffect(() => {
+    setTaskType(initialTaskType);
+    setImageFile(null);
+    setSubmitError(null);
+  }, [initialTaskType]);
 
   useEffect(() => {
     if (!taskType || !storageKey) return;

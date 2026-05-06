@@ -550,7 +550,8 @@ async def get_review(
             answer_value=item["answer_value"],
             is_correct=item["is_correct"],
             correct_answers=list(item["correct_answers"]),
-            explanation=item["explanation"] if current_user.is_premium else None,
+            explanation=item.get("explanation") if current_user.is_premium else None,
+            explanation_reference=item.get("explanation_reference") if current_user.is_premium else None,
         )
         for item in attempt.scoring_items
     ]

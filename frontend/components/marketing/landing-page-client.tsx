@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { motion, type Variants } from "framer-motion";
 import { ArrowRight, BookOpenText, CheckCircle2, Headphones, Mic2, PenSquare, ShieldCheck, Zap } from "lucide-react";
 import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
@@ -10,35 +11,144 @@ import { mockTests, type ReviewItem } from "@/lib/mock-data";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
 
+import { FloatingElements } from "@/components/marketing/floating-elements";
+
+const containerVariants: Variants = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.3,
+    }
+  }
+};
+
+const fromTop: Variants = { hidden: { opacity: 0, y: -50 }, show: { opacity: 1, y: 0, transition: { type: 'spring', damping: 15 } } };
+const fromBottom: Variants = { hidden: { opacity: 0, y: 50 }, show: { opacity: 1, y: 0, transition: { type: 'spring', damping: 15 } } };
+const fromLeft: Variants = { hidden: { opacity: 0, x: -50 }, show: { opacity: 1, x: 0, transition: { type: 'spring', damping: 15 } } };
+const fromRight: Variants = { hidden: { opacity: 0, x: 50 }, show: { opacity: 1, x: 0, transition: { type: 'spring', damping: 15 } } };
+const popIn: Variants = { hidden: { opacity: 0, scale: 0.8 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', damping: 12 } } };
+
 const sectionPages = [
   {
-    title: "IELTS Reading mock online",
-    desc: "Academic Reading passages, timing, and answer review.",
+    id: "reading",
+    title: "Reading Engine",
+    desc: "Highlight text, right-click to take notes, and tackle True/False/Not Given questions using our split-screen architecture.",
     href: "/ielts-reading-mock-online",
-    icon: BookOpenText,
-    tone: "bg-orange-500/10 text-orange-500",
+    icon: <BookOpenText className="w-6 h-6 text-orange-500" />,
+    boxFrom: { x: -100, y: -100, rotate: -5 },
+    className: "bg-gradient-to-br from-card/80 to-card/40 border-orange-500/20",
+    content: (
+      <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 flex gap-4 overflow-hidden shadow-inner">
+        <motion.div variants={fromLeft} className="w-1/2 border-r border-border/50 pr-4 space-y-2 relative pt-2">
+          <div className="h-2 w-3/4 bg-foreground/20 rounded"></div>
+          <div className="h-2 w-full bg-foreground/10 rounded"></div>
+          <div className="h-2 w-full bg-orange-500/30 rounded border-b border-orange-500/50 mt-4 mb-4"></div>
+          <div className="h-2 w-5/6 bg-foreground/10 rounded"></div>
+          <div className="h-2 w-4/6 bg-foreground/10 rounded"></div>
+        </motion.div>
+        <motion.div variants={fromRight} className="w-1/2 space-y-5 pt-2">
+          <div className="h-8 w-full rounded bg-orange-500/10 border border-orange-500/20 flex items-center px-2">
+             <div className="w-3 h-3 rounded-full border border-orange-500/50 mr-2 shrink-0"></div>
+             <div className="h-1.5 w-1/2 bg-orange-500/40 rounded"></div>
+          </div>
+          <div className="h-8 w-full rounded bg-foreground/5 border border-border/50 flex items-center px-2">
+             <div className="w-3 h-3 rounded-full border border-border/50 mr-2 shrink-0"></div>
+             <div className="h-1.5 w-2/3 bg-foreground/20 rounded"></div>
+          </div>
+        </motion.div>
+      </div>
+    )
   },
   {
-    title: "IELTS Listening mock online",
-    desc: "Audio-based Listening practice and review flow.",
+    id: "listening",
+    title: "Listening Pro",
+    desc: "Experience the real CBT audio interface. Multi-part audios, map labeling, and drag-and-drop questions.",
     href: "/ielts-listening-mock-online",
-    icon: Headphones,
-    tone: "bg-blue-500/10 text-blue-500",
+    icon: <Headphones className="w-6 h-6 text-blue-500" />,
+    boxFrom: { x: 100, y: -100, rotate: 5 },
+    className: "bg-gradient-to-br from-card/80 to-card/40 border-blue-500/20",
+    content: (
+      <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 overflow-hidden shadow-inner flex flex-col justify-between">
+        <motion.div variants={fromTop} className="flex justify-between items-center border-b border-border/50 pb-3 pt-1">
+           <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/50 shrink-0">
+                 <div className="w-2 h-2 bg-blue-400 rounded-sm"></div>
+              </div>
+              <div className="text-[10px] sm:text-xs font-mono text-muted-foreground truncate">Part 1. Section A</div>
+           </div>
+           <div className="text-[10px] sm:text-xs font-mono text-blue-500 shrink-0">02:14 / 05:30</div>
+        </motion.div>
+        <div className="flex items-end gap-1 h-16 w-full mt-auto">
+          {[...Array(24)].map((_, i) => (
+            <motion.div 
+              key={i}
+              variants={i % 2 === 0 ? fromBottom : fromTop}
+              className="flex-1 bg-blue-500/40 rounded-t-sm"
+              style={{ height: `${Math.max(20, Math.random() * 100)}%` }}
+            ></motion.div>
+          ))}
+        </div>
+      </div>
+    )
   },
   {
-    title: "IELTS Writing mock online",
-    desc: "Task 1 and Task 2 feedback for custom essays.",
+    id: "writing",
+    title: "Writing AI Checker",
+    desc: "Submit Task 1 & 2. Our AI highlights grammar issues, suggests C1/C2 vocabulary, and calculates Band Score.",
     href: "/ielts-writing-mock-online",
-    icon: PenSquare,
-    tone: "bg-violet-500/10 text-violet-500",
+    icon: <PenSquare className="w-6 h-6 text-violet-500" />,
+    boxFrom: { x: -100, y: 100, rotate: 5 },
+    className: "bg-gradient-to-br from-card/80 to-card/40 border-violet-500/20",
+    content: (
+      <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 shadow-inner flex flex-col gap-4">
+        <motion.div variants={fromTop} className="font-mono text-xs sm:text-sm text-muted-foreground leading-relaxed mt-2">
+          The graph illustrates the <motion.span variants={popIn} className="text-red-400 line-through bg-red-500/10 px-1 rounded mx-1">ammount</motion.span> of energy...
+        </motion.div>
+        <motion.div variants={popIn} className="absolute top-16 left-6 bg-card border border-violet-500/30 p-2.5 rounded-lg shadow-xl flex items-center gap-2 z-10 w-fit">
+          <div className="w-5 h-5 bg-violet-500/20 rounded-full flex items-center justify-center shrink-0">
+            <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
+          </div>
+          <span className="text-violet-500 font-mono text-[11px] sm:text-xs tracking-tight whitespace-nowrap">amount (spelling)</span>
+        </motion.div>
+        <motion.div variants={fromBottom} className="mt-auto border-t border-border/50 pt-3 flex justify-between items-center">
+           <div className="text-[11px] sm:text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estimated Band</div>
+           <div className="text-base sm:text-lg font-bold text-violet-500">7.0</div>
+        </motion.div>
+      </div>
+    )
   },
   {
-    title: "IELTS Speaking mock online",
-    desc: "Dedicated Speaking preparation route for online learners.",
+    id: "speaking",
+    title: "Speaking Simulator",
+    desc: "An AI examiner asks you questions, records your voice, and evaluates fluency, lexical resource, and pronunciation.",
     href: "/ielts-speaking-mock-online",
-    icon: Mic2,
-    tone: "bg-emerald-500/10 text-emerald-500",
-  },
+    icon: <Mic2 className="w-6 h-6 text-emerald-500" />,
+    boxFrom: { x: 100, y: 100, rotate: -5 },
+    className: "bg-gradient-to-br from-card/80 to-card/40 border-emerald-500/20",
+    content: (
+      <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 shadow-inner flex flex-col items-center justify-between">
+        <motion.div variants={fromTop} className="flex flex-col items-center gap-2 mt-4 z-10">
+           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 p-[2px] shadow-lg shadow-emerald-500/20">
+              <div className="w-full h-full bg-card rounded-full flex items-center justify-center">
+                 <div className="w-4 h-4 bg-emerald-500 rounded-full animate-pulse"></div>
+              </div>
+           </div>
+           <div className="text-[10px] sm:text-xs font-mono text-foreground/80 mt-1 font-medium bg-background/80 px-2 py-0.5 rounded-full border border-border/50 backdrop-blur-sm">AI Examiner</div>
+        </motion.div>
+        <div className="flex gap-1.5 items-end h-16 mt-auto mb-2 opacity-80">
+           {[...Array(9)].map((_, i) => (
+             <motion.div 
+               key={i}
+               variants={i % 2 === 0 ? fromLeft : fromRight}
+               className="w-2 sm:w-2.5 rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400"
+               style={{ height: `${30 + Math.random() * 60}%` }}
+             ></motion.div>
+           ))}
+        </div>
+      </div>
+    )
+  }
 ];
 
 const skills = ["Reading.", "Listening.", "Writing.", "Speaking."];
@@ -103,8 +213,8 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
   return (
     <div className="relative mx-auto max-w-[1600px] overflow-hidden">
       <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 sm:pb-0 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto md:-mb-[12%] xl:-mb-[8%]">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none animate-in fade-in duration-1000" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none animate-in fade-in duration-1000 delay-500" />
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/3 blur-[160px] pointer-events-none animate-in fade-in duration-1000" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/3 blur-[160px] pointer-events-none animate-in fade-in duration-1000 delay-500" />
 
         <section className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
           <div className="space-y-8 md:space-y-10">
@@ -307,67 +417,6 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
         </section>
 
         <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
-          <div className="text-center space-y-4 mb-16">
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
-              IELTS mock online for every <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">section.</span>
-            </h2>
-            <p className="text-muted-foreground font-medium text-lg max-w-2xl mx-auto">
-              Reading, Listening, Writing, and Speaking each get a clear practice path.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-1000 delay-700 fill-mode-both">
-            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
-              <div className="bg-primary/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
-                <ShieldCheck className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-base text-foreground mb-2">Real exam conditions</h3>
-                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
-                  Experience IELTS-style timing and interface for accurate practice.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
-              <div className="bg-blue-500/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
-                <BookOpenText className="h-6 w-6 text-blue-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-base text-foreground mb-2">All IELTS skills</h3>
-                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
-                  Practice Reading, Listening, Writing, and Speaking from one online platform.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
-              <div className="bg-amber-500/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
-                <Zap className="h-6 w-6 text-amber-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-base text-foreground mb-2">Instant band score</h3>
-                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
-                  Get your estimated band score immediately after completion.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-6 rounded-[2rem] bg-card border border-border/50 hover:bg-muted/30 transition-all hover:-translate-y-1 hover:shadow-lg shadow-sm flex flex-col gap-5 group">
-              <div className="bg-emerald-500/10 p-3.5 rounded-2xl w-fit group-hover:scale-110 transition-transform">
-                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-base text-foreground mb-2">Detailed answer review</h3>
-                <p className="text-sm font-medium text-muted-foreground/90 leading-relaxed">
-                  See correct answers with highlighted text to understand your mistakes.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
           <div className="max-w-3xl space-y-4 mb-10">
             <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground leading-[1.08]">
               Online IELTS mock practice for every section.
@@ -377,26 +426,57 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {sectionPages.map((section) => {
-              const Icon = section.icon;
-              return (
-                <Link
-                  key={section.href}
-                  href={section.href}
-                  className="group rounded-[2rem] border border-border/50 bg-card/70 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-[1600px]">
+            {sectionPages.map((mod, i) => (
+              <motion.div
+                key={mod.id}
+                initial={{ 
+                  opacity: 0, 
+                  y: 50,
+                  scale: 0.95
+                }}
+                whileInView={{ 
+                  opacity: 1, 
+                  y: 0, 
+                  scale: 1
+                }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ 
+                  type: "spring", 
+                  damping: 20, 
+                  stiffness: 70, 
+                  delay: i * 0.1
+                }}
+                className={cn(
+                  "group relative rounded-3xl border p-6 flex flex-col transition-all hover:-translate-y-1 hover:shadow-xl overflow-hidden cursor-pointer",
+                  mod.className
+                )}
+                onClick={() => window.location.href = mod.href}
+              >
+                <motion.div 
+                  variants={containerVariants}
+                  initial="hidden"
+                  whileInView="show"
+                  viewport={{ once: true }}
+                  className="relative z-10 h-full flex flex-col"
                 >
-                  <div className={cn("mb-5 flex h-12 w-12 items-center justify-center rounded-2xl transition-transform group-hover:scale-110", section.tone)}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-base font-semibold leading-6 text-foreground">{section.title}</h3>
-                  <p className="mt-2 text-sm font-medium leading-6 text-muted-foreground">{section.desc}</p>
-                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-primary">
-                    Open page <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                  </span>
-                </Link>
-              );
-            })}
+                  <motion.div variants={popIn} className="w-12 h-12 rounded-xl bg-background/50 backdrop-blur-md flex items-center justify-center border border-border/50 mb-5 shadow-sm group-hover:scale-110 transition-transform duration-300">
+                    {mod.icon}
+                  </motion.div>
+                  
+                  <motion.h3 variants={fromLeft} className="text-xl font-bold mb-3 text-foreground tracking-tight">
+                    {mod.title}
+                  </motion.h3>
+                  <motion.p variants={fromRight} className="text-muted-foreground text-sm leading-relaxed mb-6">
+                    {mod.desc}
+                  </motion.p>
+
+                  <motion.div variants={fromBottom} className="mt-auto pt-4 scale-[0.85] origin-bottom sm:scale-100 xl:scale-[0.8] 2xl:scale-90">
+                    {mod.content}
+                  </motion.div>
+                </motion.div>
+              </motion.div>
+            ))}
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-muted-foreground">
@@ -484,8 +564,9 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
         </section>
 
-        <section className="relative z-10 w-full mt-0 border-t border-border/30 pt-2 pb-0 text-center flex flex-col items-center">
-          <div className="max-w-3xl mx-auto space-y-6">
+        <section className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-20 text-center flex flex-col items-center overflow-hidden">
+          <FloatingElements />
+          <div className="max-w-3xl mx-auto space-y-6 relative z-10">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
             </h2>
@@ -493,12 +574,15 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
               Experience strict test conditions, instant scoring, writing feedback, and focused online practice.
             </p>
 
-            <div className="pt-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-              <MarketingAuthCta
-                guestLabel="Get Started for Free"
-                authLabel="Go to Dashboard"
-                className="h-11 px-6 text-sm sm:h-12 sm:px-8 sm:text-base font-semibold shadow-xl shadow-primary/20 transition-all hover:-translate-y-0.5 rounded-xl bg-primary text-background"
-              />
+            <div className="pt-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300 flex justify-center">
+              <div className="aurora-btn rounded-xl">
+                <div className="aurora-btn-inner bg-background"></div>
+                <MarketingAuthCta
+                  guestLabel="Get Started for Free"
+                  authLabel="Go to Dashboard"
+                  className="h-11 px-6 text-sm sm:h-14 sm:px-10 sm:text-base font-semibold shadow-xl shadow-primary/20 transition-all hover:-translate-y-0.5 rounded-xl bg-primary/90 text-primary-foreground relative z-10"
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -509,15 +593,16 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
 
 function ReviewCard({ review }: { review: ReviewItem }) {
   return (
-    <div className="p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/30 transition-all flex flex-col justify-between gap-6 shadow-sm">
-      <div className="space-y-4">
-        <svg className="h-6 w-6 text-primary/20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <div className="group relative p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between gap-6 shadow-sm hover:shadow-[0_0_40px_rgba(255,107,0,0.1)] overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      <div className="space-y-4 relative z-10">
+        <svg className="h-6 w-6 text-primary/40 group-hover:text-primary transition-colors duration-300" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
         </svg>
-        <p className="text-sm font-medium text-muted-foreground leading-relaxed italic">"{review.text}"</p>
+        <p className="text-sm font-medium text-muted-foreground leading-relaxed italic group-hover:text-foreground/90 transition-colors">"{review.text}"</p>
       </div>
-      <div className="flex items-center gap-3 pt-2 border-t border-border/40">
-        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold shadow-inner ring-2 ring-background">
+      <div className="flex items-center gap-3 pt-2 border-t border-border/40 relative z-10">
+        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner ring-2 ring-background group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
           {review.name.charAt(0)}
         </div>
         <div>

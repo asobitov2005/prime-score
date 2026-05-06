@@ -562,8 +562,9 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
             ),
             "answer_value": answer_value,
             "is_correct": is_correct,
-            "correct_answers": list(fixture["accepted_answers"]),
-            "explanation": fixture["explanation"],
+            "correct_answers": list(fixture.get("accepted_answers", [])),
+            "explanation": fixture.get("explanation"),
+            "explanation_reference": fixture.get("explanation_reference", {}),
         }
         scoring_items.append(scoring_item)
 
