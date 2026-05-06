@@ -105,7 +105,7 @@ jobs:
           fi
 
           if [ "$compose_changed" = true ] && [ "${#services[@]}" -eq 0 ]; then
-            services=(api worker beat bot frontend admin)
+            services=(postgres redis minio api worker beat bot frontend admin)
           fi
 
           if [ "$backend" = true ] || [ "$frontend" = true ] || [ "$admin" = true ]; then

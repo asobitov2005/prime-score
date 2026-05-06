@@ -31,6 +31,7 @@ has_service() {
 }
 
 PULL_LIST=()
+INFRA_LIST=()
 if has_service api || has_service worker || has_service beat || has_service bot; then
   PULL_LIST+=(api)
 fi
@@ -40,10 +41,37 @@ fi
 if has_service admin; then
   PULL_LIST+=(admin)
 fi
+if has_service postgres; then
+  INFRA_LIST+=(postgres)
+fi
+if has_service redis; then
+  INFRA_LIST+=(redis)
+fi
+if has_service minio; then
+  INFRA_LIST+=(minio)
+fi
 
 echo "[deploy] Pull targets: ${PULL_LIST[*]}"
-docker-compose -f "$COMPOSE_FILE" pull "${PULL_LIST[@]}"
-docker-compose -f "$COMPOSE_FILE" up -d --no-deps "${SERVICE_LIST[@]}"
+if [ "${#PULL_LIST[@]}" -gt 0 ]; then
+  docker-compose -f "$COMPOSE_FILE" pull "${PULL_LIST[@]}"
+fi
+
+if [ "${#INFRA_LIST[@]}" -gt 0 ]; then
+  echo "[deploy] Infra targets: ${INFRA_LIST[*]}"
+  docker-compose -f "$COMPOSE_FILE" up -d "${INFRA_LIST[@]}"
+fi
+
+APP_LIST=()
+for service in "${SERVICE_LIST[@]}"; do
+  case "$service" in
+    postgres|redis|minio) ;;
+    *) APP_LIST+=("$service") ;;
+  esac
+done
+
+if [ "${#APP_LIST[@]}" -gt 0 ]; then
+  docker-compose -f "$COMPOSE_FILE" up -d --no-deps "${APP_LIST[@]}"
+fi
 
 if has_service api || has_service worker || has_service beat || has_service bot; then
   echo "[verify] Waiting for API"
