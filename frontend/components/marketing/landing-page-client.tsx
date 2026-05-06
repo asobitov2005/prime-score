@@ -101,12 +101,16 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
   const displayedTests = getDisplayedTests();
 
   return (
-    <div className="relative mx-auto max-w-[1600px] overflow-hidden">
-      <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 sm:pb-0 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto md:-mb-[12%] xl:-mb-[8%]">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none animate-in fade-in duration-1000" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none animate-in fade-in duration-1000 delay-500" />
+    <div className="relative isolate w-full overflow-hidden bg-background">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[34rem] bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_58%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-[24rem] h-[42rem] bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.08),transparent_52%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[28rem] bg-[radial-gradient(circle_at_bottom,hsl(var(--primary)/0.07),transparent_60%)]" />
+      <div className="pointer-events-none absolute left-[-8rem] top-16 h-72 w-72 rounded-full bg-primary/10 blur-[120px] animate-in fade-in duration-1000" />
+      <div className="pointer-events-none absolute right-[-10rem] top-[28rem] h-80 w-80 rounded-full bg-primary/10 blur-[140px] animate-in fade-in duration-1000 delay-300" />
+      <div className="pointer-events-none absolute left-1/2 top-[62rem] h-80 w-80 -translate-x-1/2 rounded-full bg-primary/5 blur-[150px] animate-in fade-in duration-1000 delay-500" />
 
-        <section className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
+      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col px-4 pb-16 pt-8 sm:px-6 sm:pt-12 md:pb-20 lg:px-8 lg:pt-20 lg:pb-24">
+        <section className="grid w-full gap-12 lg:gap-20 lg:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)] lg:items-start">
           <div className="space-y-8 md:space-y-10">
             <div className="space-y-4">
               <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
@@ -201,7 +205,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
             </div>
           </div>
 
-          <div className="relative w-full max-w-lg mx-auto mt-0 lg:-mt-6 xl:ml-auto animate-in fade-in slide-in-from-right-10 duration-1000 delay-300 ease-out fill-mode-both">
+          <div className="relative mx-auto mt-0 w-full max-w-xl lg:ml-auto animate-in fade-in slide-in-from-right-10 duration-1000 delay-300 ease-out fill-mode-both">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-tr from-primary/10 via-primary/5 to-transparent rounded-full blur-[80px] -z-10" />
 
             <div className="relative rounded-3xl border border-white/10 bg-background/60 backdrop-blur-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.4)] transition-all duration-700 overflow-hidden flex flex-col">
@@ -306,9 +310,9 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
         </section>
 
-        <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+        <section id="features" className="relative w-full mt-24 border-t border-border/30 pt-16 lg:mt-32">
           <div className="text-center space-y-4 mb-16">
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               IELTS mock online for every <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">section.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-lg max-w-2xl mx-auto">
@@ -367,7 +371,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
         </section>
 
-        <section className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+        <section className="relative w-full mt-24 border-t border-border/30 pt-16 lg:mt-32">
           <div className="max-w-3xl space-y-4 mb-10">
             <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground leading-[1.08]">
               Online IELTS mock practice for every section.
@@ -412,7 +416,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
         </section>
 
-        <section id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+        <section id="pricing" className="relative w-full mt-24 border-t border-border/30 pt-16 lg:mt-32">
           <div className="text-center space-y-4 mb-12">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Pricing that matches your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">exam timeline.</span>
@@ -436,7 +440,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
         <section
           id="reviews"
           ref={reviewsRef}
-          className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 pb-20"
+          className="relative w-full mt-24 border-t border-border/30 pb-20 pt-16 lg:mt-32"
         >
           <div className="text-center space-y-4 mb-16">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
@@ -484,7 +488,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
         </section>
 
-        <section className="relative z-10 w-full mt-0 border-t border-border/30 pt-2 pb-0 text-center flex flex-col items-center">
+        <section className="relative w-full border-t border-border/30 pt-12 text-center">
           <div className="max-w-3xl mx-auto space-y-6">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
