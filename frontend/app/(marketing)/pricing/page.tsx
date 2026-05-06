@@ -76,12 +76,15 @@ export default async function PricingPage() {
         />
       ))}
 
-      <div className="relative mx-auto max-w-[1600px] overflow-hidden">
-        <div className="w-full px-8 pt-12 pb-20 sm:px-12 lg:px-16 lg:pt-20 lg:pb-24">
-          <div className="absolute top-[-10%] left-[-10%] h-[40%] w-[40%] rounded-full bg-primary/10 blur-[120px] pointer-events-none" />
-          <div className="absolute bottom-[-10%] right-[-10%] h-[40%] w-[40%] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
+      <div className="relative isolate w-full overflow-hidden bg-background">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[34rem] bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_58%)]" />
+        <div className="pointer-events-none absolute inset-x-0 top-[24rem] h-[42rem] bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.08),transparent_52%)]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[28rem] bg-[radial-gradient(circle_at_bottom,hsl(var(--primary)/0.07),transparent_60%)]" />
+        <div className="pointer-events-none absolute left-[-8rem] top-16 h-72 w-72 rounded-full bg-primary/10 blur-[120px]" />
+        <div className="pointer-events-none absolute right-[-10rem] top-[28rem] h-80 w-80 rounded-full bg-primary/10 blur-[140px]" />
 
-          <div className="relative z-10 mx-auto w-full max-w-7xl space-y-20 lg:space-y-24">
+        <div className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-20 pt-12 sm:px-6 lg:px-8 lg:pt-20 lg:pb-24">
+          <div className="space-y-20 lg:space-y-24">
             <section className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
               <div className="space-y-8">
                 <div className="mt-2 animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
