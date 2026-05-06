@@ -4,8 +4,11 @@ import {
   ArrowUpRight,
   BarChart3,
   ClipboardCheck,
+  Clock3,
   ImageIcon,
+  FileText,
   PenSquare,
+  RotateCcw,
   Sparkles,
   Target,
   Trophy,
@@ -16,8 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getWritingDashboardSummary,
+  getWritingDrafts,
   getWritingHistory,
   type WritingDashboardSummary,
+  type WritingDraftListItem,
   type WritingHistoryItem,
 } from "@/lib/server-writing";
 import { cn } from "@/lib/utils";
@@ -26,12 +31,14 @@ import { CustomWritingPanel } from "./custom-writing-panel";
 export const dynamic = "force-dynamic";
 
 export default async function WritingPage() {
-  const [summary, history] = await Promise.all([
+  const [summary, history, draftList] = await Promise.all([
     getWritingDashboardSummary().catch(() => null as WritingDashboardSummary | null),
     getWritingHistory().catch(() => ({ items: [] as WritingHistoryItem[], total: 0 })),
+    getWritingDrafts().catch(() => ({ items: [] as WritingDraftListItem[] })),
   ]);
 
   const recent = history.items.slice(0, 5);
+  const drafts = draftList.items;
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
@@ -66,6 +73,8 @@ export default async function WritingPage() {
           href="/exam-preview/writing?task_type=task_2&mode=practice"
         />
       </div>
+
+      {drafts.length > 0 ? <DraftResumeCard drafts={drafts} /> : null}
 
       <CustomWritingPanel />
 
@@ -102,6 +111,79 @@ export default async function WritingPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function DraftResumeCard({ drafts }: { drafts: WritingDraftListItem[] }) {
+  return (
+    <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <div>
+          <CardTitle className="text-lg font-semibold tracking-tight text-foreground">Resume drafts</CardTitle>
+          <CardDescription className="text-sm text-muted-foreground">
+            Continue a writing task you already started.
+          </CardDescription>
+        </div>
+        <Badge tone="outline" className="border-border/60 bg-background/70 text-[10px] uppercase tracking-[0.18em]">
+          {drafts.length} saved
+        </Badge>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        {drafts.map((draft) => {
+          const href = draft.task_id
+            ? `/exam-preview/writing?taskId=${draft.task_id}&mode=practice`
+            : `/exam-preview/writing?task_type=${draft.task_type}&mode=practice`;
+          const taskLabel = draft.task_type === "task_1" ? "Task 1" : "Task 2";
+          const taskTone =
+            draft.task_type === "task_1"
+              ? "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400"
+              : "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400";
+          const preview = draft.topic.trim() || draft.task_title || draft.essay_text.trim().slice(0, 120) || "Untitled draft";
+          const words = draft.essay_text.trim() ? draft.essay_text.trim().split(/\s+/).filter(Boolean).length : 0;
+
+          return (
+            <div key={draft.draft_key} className="flex flex-col gap-4 rounded-2xl border border-border/50 bg-background/45 p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest", taskTone)}>
+                    {taskLabel}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <RotateCcw className="h-3 w-3" />
+                    {draft.started ? "In progress" : "Setup saved"}
+                  </span>
+                </div>
+                <p className="truncate text-base font-semibold text-foreground">
+                  {draft.task_title ?? preview}
+                </p>
+                <p className="line-clamp-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                  {preview}
+                </p>
+                <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <FileText className="h-3.5 w-3.5" />
+                    {words} words
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock3 className="h-3.5 w-3.5" />
+                    {formatRelative(draft.updated_at)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    {draft.time_spent_seconds > 0 ? `${Math.floor(draft.time_spent_seconds / 60)}m ${draft.time_spent_seconds % 60}s` : "not started"}
+                  </span>
+                </div>
+              </div>
+              <Button asChild className="rounded-xl px-5">
+                <Link href={href}>
+                  Resume
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 

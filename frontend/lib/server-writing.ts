@@ -103,6 +103,23 @@ export interface WritingSubmissionResult {
   roast?: WritingRoastFeedback | null;
 }
 
+export interface WritingDraftListItem {
+  draft_key: string;
+  task_id?: string | null;
+  task_type: WritingTaskType;
+  task_title?: string | null;
+  topic: string;
+  essay_text: string;
+  image_data_url?: string | null;
+  started: boolean;
+  time_spent_seconds: number;
+  updated_at: string;
+}
+
+export interface WritingDraftListResponse {
+  items: WritingDraftListItem[];
+}
+
 export interface WritingHistoryItem {
   submission_id: string;
   task_id: string;
@@ -163,6 +180,10 @@ export async function getWritingHistory(): Promise<WritingHistoryResponse> {
 
 export async function getWritingDashboardSummary(): Promise<WritingDashboardSummary> {
   return requestServerUserApi<WritingDashboardSummary>(`/writing/dashboard-summary`);
+}
+
+export async function getWritingDrafts(): Promise<WritingDraftListResponse> {
+  return requestServerUserApi<WritingDraftListResponse>(`/writing/drafts`);
 }
 
 const STORAGE_PREFIX = "/api/storage/";

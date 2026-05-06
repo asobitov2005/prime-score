@@ -82,6 +82,25 @@ class WritingDraftRead(BaseModel):
     updated_at: datetime
 
 
+class WritingDraftListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    draft_key: str
+    task_id: UUID | None = None
+    task_type: WritingTaskType
+    task_title: str | None = None
+    topic: str = ""
+    essay_text: str = ""
+    image_data_url: str | None = None
+    started: bool = False
+    time_spent_seconds: int = 0
+    updated_at: datetime
+
+
+class WritingDraftListResponse(BaseModel):
+    items: list[WritingDraftListItem]
+
+
 class AdminWritingTaskCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     task_type: WritingTaskType

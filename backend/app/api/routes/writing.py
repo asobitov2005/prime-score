@@ -24,6 +24,8 @@ from app.schemas.writing import (
     WritingCriterionFeedback,
     WritingDashboardSummary,
     WritingEvaluationRead,
+    WritingDraftListItem,
+    WritingDraftListResponse,
     WritingDraftRead,
     WritingDraftUpsertRequest,
     WritingHistoryItem,
@@ -83,6 +85,22 @@ def _serialize_draft(draft: WritingDraft) -> WritingDraftRead:
         draft_key=draft.draft_key,
         task_id=draft.task_id,
         task_type=draft.task_type,
+        topic=str(payload.get("topic") or ""),
+        essay_text=str(payload.get("essay") or ""),
+        image_data_url=payload.get("imageDataUrl") if isinstance(payload, dict) else None,
+        started=bool(payload.get("started", False)) if isinstance(payload, dict) else False,
+        time_spent_seconds=int(draft.time_spent_seconds or 0),
+        updated_at=draft.updated_at,
+    )
+
+
+def _serialize_draft_list_item(draft: WritingDraft, task_title: str | None = None) -> WritingDraftListItem:
+    payload = draft.payload or {}
+    return WritingDraftListItem(
+        draft_key=draft.draft_key,
+        task_id=draft.task_id,
+        task_type=draft.task_type,
+        task_title=task_title,
         topic=str(payload.get("topic") or ""),
         essay_text=str(payload.get("essay") or ""),
         image_data_url=payload.get("imageDataUrl") if isinstance(payload, dict) else None,
@@ -256,6 +274,27 @@ async def get_writing_draft(
     if draft is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found.")
     return _serialize_draft(draft)
+
+
+@router.get("/drafts", response_model=WritingDraftListResponse)
+async def list_writing_drafts(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> WritingDraftListResponse:
+    rows = (
+        await session.execute(
+            select(WritingDraft, WritingTask.title)
+            .outerjoin(WritingTask, WritingTask.id == WritingDraft.task_id)
+            .where(WritingDraft.user_id == current_user.id)
+            .order_by(WritingDraft.updated_at.desc())
+        )
+    ).all()
+
+    items = [
+        _serialize_draft_list_item(draft, task_title)
+        for draft, task_title in rows
+    ]
+    return WritingDraftListResponse(items=items)
 
 
 @router.put("/drafts/{draft_key}", response_model=WritingDraftRead)
