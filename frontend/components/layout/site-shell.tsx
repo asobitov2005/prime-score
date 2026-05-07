@@ -47,7 +47,6 @@ export function SiteShell({ children }: SiteShellProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<{ id: string; type: string; title: string; body: string; is_read: boolean; created_at: string }[]>([]);
@@ -85,21 +84,6 @@ export function SiteShell({ children }: SiteShellProps) {
   // Fix hydration
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const nextScrollY = window.scrollY;
-      setIsHeaderCompact((current) => {
-        if (current) {
-          return nextScrollY > 12;
-        }
-        return nextScrollY > 72;
-      });
-    };
-    handleScroll();
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   // Load theme from localStorage on mount
@@ -202,9 +186,9 @@ export function SiteShell({ children }: SiteShellProps) {
 
   return (
     <div
-      className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative bg-noise"
+      className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative"
       style={{
-        "--app-shell-sticky-top": isHeaderCompact ? "5rem" : "6.5rem",
+        "--app-shell-sticky-top": "5.5rem",
       } as CSSProperties}
     >
       {/* Global Grid Background Added here */}
@@ -214,27 +198,20 @@ export function SiteShell({ children }: SiteShellProps) {
         <NavigationTransitionOverlay />
       </Suspense>
 
-      <header className={cn(
-        "sticky top-0 z-50 border-b border-primary/10 bg-[linear-gradient(180deg,hsl(var(--background)/0.96),hsl(var(--background)/0.88))] shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all duration-300 flex items-center shrink-0",
-        isHeaderCompact ? "h-14 md:h-16" : "h-[4.5rem] md:h-24"
-      )}>
+      <header 
+        className="sticky top-0 z-50 border-b border-primary/10 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] flex items-center shrink-0 h-16 md:h-20"
+      >
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2 group focus-visible:outline-none rounded-xl">
-            <div className={cn(
-              "relative transition-all duration-300 group-hover:scale-105 flex items-center justify-center",
-              isHeaderCompact ? "h-9 md:h-10" : "h-11 md:h-14"
-            )}>
+            <div className="relative flex items-center justify-center h-10 md:h-12 transition-transform duration-300 group-hover:scale-105">
               <img src={theme === "light" ? "/logo-light.svg" : "/logo.svg"} alt="PrimeScore" className="relative z-10 h-full w-auto object-contain drop-shadow-sm" />
             </div>
           </Link>
 
           {!isAppRoute ? (
-          <nav className={cn(
-            "hidden items-center md:flex ml-auto mr-6 transition-all duration-300",
-            isHeaderCompact ? "gap-4" : "gap-6"
-          )}>
+          <nav className="hidden items-center md:flex ml-auto mr-6 gap-5">
             <div 
-              className={cn("relative group transition-all duration-300", isHeaderCompact ? "py-2" : "py-4")}
+              className="relative group py-3"
               onClick={(e) => e.stopPropagation()}
               onMouseEnter={() => setIsMockTestsOpen(true)}
               onMouseLeave={() => {
@@ -476,10 +453,7 @@ export function SiteShell({ children }: SiteShellProps) {
           onClick={() => setIsMobileNavOpen(false)}
         >
           <div
-            className={cn(
-              "absolute left-3 right-3 rounded-2xl border border-border bg-card shadow-2xl p-3 animate-in slide-in-from-top-4 duration-200",
-              isHeaderCompact ? "top-[4.5rem]" : "top-[5.5rem]"
-            )}
+            className="absolute left-3 right-3 rounded-2xl border border-border bg-card shadow-2xl p-3 animate-in slide-in-from-top-4 duration-200 top-[5rem]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col gap-1">

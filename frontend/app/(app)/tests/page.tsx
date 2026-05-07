@@ -154,8 +154,8 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       <TestsRefreshOnMount />
       
       {/* Filters Container */}
-      <SmartFilterShell className="sticky top-[var(--app-shell-sticky-top,5rem)] z-40 transition-[top] duration-300 ease-out">
-        <div className="space-y-4 bg-background/95 pb-4 backdrop-blur-md">
+      <SmartFilterShell className="sticky top-[var(--app-shell-sticky-top,5.5rem)] z-40">
+        <div className="space-y-4 bg-background pb-4 pt-2">
           {/* Primary Filter (Reading / Listening) */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex gap-1.5 bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">

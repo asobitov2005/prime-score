@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  Plus,
   ArrowRight,
   ArrowUpRight,
   BarChart3,
@@ -66,9 +67,9 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-      <Card className="relative overflow-hidden rounded-2xl border border-border/50 bg-background shadow-sm">
+      <Card className="relative overflow-hidden rounded-2xl border border-border/50 bg-background shadow-sm dark:border-slate-800 dark:bg-slate-950">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
-        <CardHeader className="space-y-1 border-b border-border/40 bg-muted/5 p-5 lg:px-6">
+        <CardHeader className="space-y-1 border-b border-border/40 bg-muted/5 p-5 lg:px-6 dark:border-slate-800 dark:bg-slate-900/50">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
               <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Writing</CardTitle>
@@ -84,7 +85,7 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
       </Card>
 
       <div className="-mt-3 space-y-3">
-        <div className="flex w-full gap-3 rounded-2xl border border-border/50 bg-muted/40 p-1.5 shadow-inner">
+        <div className="flex w-full gap-3 rounded-2xl border border-border/50 bg-muted/40 p-1.5 shadow-inner dark:border-slate-800 dark:bg-slate-950/80">
           {[
             { id: "task_1", label: "Academic Task 1" },
             { id: "task_2", label: "Academic Task 2" },
@@ -98,8 +99,8 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
                 className={cn(
                   "h-10 flex-1 rounded-xl border font-semibold text-sm transition-all duration-300",
                   isActive
-                    ? "z-10 scale-[1.01] border-[#cbd6ea] bg-[#edf3ff] text-[#244067] shadow-sm hover:bg-[#edf3ff] dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-100 dark:hover:bg-slate-800"
-                    : "border-slate-200 bg-slate-50/70 text-slate-700 hover:border-[#d8e0ef] hover:bg-[#f6f8fc] hover:text-[#29456f] dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/50 dark:hover:text-slate-100"
+                    ? "z-10 scale-[1.01] border-[#cbd6ea] bg-[#edf3ff] text-[#244067] shadow-sm hover:bg-[#edf3ff] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-800"
+                    : "border-slate-200 bg-slate-50/70 text-slate-700 hover:border-[#d8e0ef] hover:bg-[#f6f8fc] hover:text-[#29456f] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 )}
               >
                 <Link href={`/writing?task_type=${task.id}`}>
@@ -125,7 +126,7 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
 
 function DraftResumeCard({ drafts }: { drafts: WritingDraftListItem[] }) {
   return (
-    <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
+    <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm dark:border-slate-800 dark:bg-slate-950">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <div>
           <CardTitle className="text-lg font-semibold tracking-tight text-foreground">Resume drafts</CardTitle>
@@ -133,7 +134,7 @@ function DraftResumeCard({ drafts }: { drafts: WritingDraftListItem[] }) {
             Continue a writing task you already started.
           </CardDescription>
         </div>
-        <Badge tone="outline" className="border-border/60 bg-background/70 text-[10px] uppercase tracking-[0.18em]">
+        <Badge tone="outline" className="border-border/60 bg-background/70 text-[10px] uppercase tracking-[0.18em] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
           {drafts.length} saved
         </Badge>
       </CardHeader>
@@ -151,13 +152,13 @@ function DraftResumeCard({ drafts }: { drafts: WritingDraftListItem[] }) {
           const words = draft.essay_text.trim() ? draft.essay_text.trim().split(/\s+/).filter(Boolean).length : 0;
 
           return (
-            <div key={draft.draft_key} className="flex flex-col gap-4 rounded-2xl border border-border/50 bg-background/45 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div key={draft.draft_key} className="flex flex-col gap-4 rounded-2xl border border-border/50 bg-background/45 p-5 lg:flex-row lg:items-center lg:justify-between dark:border-slate-800 dark:bg-slate-900/80">
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest", taskTone)}>
                     {taskLabel}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                     <RotateCcw className="h-3 w-3" />
                     {draft.started ? "In progress" : "Setup saved"}
                   </span>
@@ -217,15 +218,15 @@ function TaskQuickStartCard({
     <Link href={href} className="group block">
       <Card
         className={cn(
-          "relative overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md",
+          "relative overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700",
         )}
       >
         <CardContent className="relative z-10 flex flex-col gap-5 p-6">
           <div className="flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-foreground shadow-sm">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-foreground shadow-sm dark:border-slate-700 dark:bg-slate-900">
               {icon}
             </div>
-            <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em]">
+            <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               Task {taskNumber}
             </Badge>
           </div>
@@ -236,11 +237,11 @@ function TaskQuickStartCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
               <ClockDot />
               {minutes} min
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
               <Target className="h-3 w-3" />
               {words}+ words
             </span>
@@ -259,17 +260,21 @@ function TaskQuickStartCard({
 function CustomTaskCard({ activeTaskType }: { activeTaskType: WritingTaskType }) {
   return (
     <Link href={`/writing/tasks?task_type=${activeTaskType}`} className="group block">
-      <Card className="relative overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+      <Card className="relative overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700">
         <CardContent className="relative z-10 flex flex-col gap-4 p-6">
           <div className="flex items-center justify-between">
-            <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-foreground shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                <Plus className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Add Custom Task</p>
+                <p className="text-sm font-medium tracking-tight text-muted-foreground">Add a question you've found elsewhere</p>
+              </div>
+            </div>
+            <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               Custom
             </Badge>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Add Custom Task</p>
-            <p className="text-xl font-semibold tracking-tight text-foreground">Paste your own prompt and get it graded</p>
           </div>
         </CardContent>
       </Card>
@@ -322,72 +327,73 @@ function SummaryCard({
   );
   const badgeLabel = activeTaskType === "task_1" ? "Task 1" : "Task 2";
   const badgeTone = activeTaskType === "task_1"
-    ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
-    : "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300";
+    ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-sky-200"
+    : "border-violet-200 bg-violet-50 text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-violet-200";
 
   const tiles = [
     {
       label: "Submissions",
       value: String(totalSubmissions),
       icon: BarChart3,
-      tone: "text-sky-500",
-      bg: "bg-sky-500/10",
+      tone: "text-sky-600 dark:text-sky-200",
+      iconWrap: "bg-sky-100/80 ring-sky-200/70 dark:bg-slate-800 dark:ring-slate-700",
+      surface: "border-sky-200/70 bg-sky-50/60 dark:border-slate-800 dark:bg-slate-900",
     },
     {
       label: "Average band",
       value: averageBand,
       icon: Sparkles,
-      tone: "text-violet-500",
-      bg: "bg-violet-500/10",
+      tone: "text-violet-600 dark:text-violet-200",
+      iconWrap: "bg-violet-100/80 ring-violet-200/70 dark:bg-slate-800 dark:ring-slate-700",
+      surface: "border-violet-200/70 bg-violet-50/60 dark:border-slate-800 dark:bg-slate-900",
     },
     {
       label: "Best band",
       value: bestBand,
       icon: Trophy,
-      tone: "text-amber-500",
-      bg: "bg-amber-500/10",
+      tone: "text-amber-600 dark:text-amber-200",
+      iconWrap: "bg-amber-100/80 ring-amber-200/70 dark:bg-slate-800 dark:ring-slate-700",
+      surface: "border-amber-200/70 bg-amber-50/60 dark:border-slate-800 dark:bg-slate-900",
     },
     {
       label: "Last band",
       value: lastBand,
       icon: Target,
-      tone: "text-emerald-500",
-      bg: "bg-emerald-500/10",
+      tone: "text-emerald-600 dark:text-emerald-200",
+      iconWrap: "bg-emerald-100/80 ring-emerald-200/70 dark:bg-slate-800 dark:ring-slate-700",
+      surface: "border-emerald-200/70 bg-emerald-50/60 dark:border-slate-800 dark:bg-slate-900",
     },
   ];
 
   return (
-    <Card className="rounded-2xl border-border/60 bg-card/60 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2 pt-3">
+    <Card className="overflow-hidden rounded-2xl border-border/60 bg-card/70 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/40 bg-background/40 pb-2 pt-3 dark:border-slate-800 dark:bg-slate-900/50">
         <div className="flex items-center gap-2">
           <CardTitle className="text-base font-semibold tracking-tight text-foreground">Your Writing Performance</CardTitle>
           <Badge tone="outline" className={cn("text-[10px] uppercase tracking-[0.18em]", badgeTone)}>
             {badgeLabel}
           </Badge>
         </div>
-        <Button asChild size="sm" variant="outline" className="h-7 rounded-lg px-3">
+        <Button asChild size="sm" variant="outline" className="h-7 rounded-lg border-border/60 bg-background/70 px-3 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800">
           <Link href={`/writing/history?task_type=${activeTaskType}`}>
             View history
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <CardContent className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 pt-4">
         {tiles.map((tile) => {
           const Icon = tile.icon;
           return (
             <div
               key={tile.label}
               className={cn(
-                "flex min-h-[78px] items-center justify-center rounded-xl border px-3 py-3 shadow-sm",
-                tile.label === "Submissions" && "border-sky-200/70 bg-sky-50/60 dark:border-sky-500/15 dark:bg-sky-500/8",
-                tile.label === "Average band" && "border-violet-200/70 bg-violet-50/60 dark:border-violet-500/15 dark:bg-violet-500/8",
-                tile.label === "Best band" && "border-amber-200/70 bg-amber-50/60 dark:border-amber-500/15 dark:bg-amber-500/8",
-                tile.label === "Last band" && "border-emerald-200/70 bg-emerald-50/60 dark:border-emerald-500/15 dark:bg-emerald-500/8"
+                "flex min-h-[78px] items-center justify-center rounded-xl border px-3 py-3 shadow-sm shadow-black/5 dark:shadow-none",
+                tile.surface
               )}
             >
               <div className="flex items-center justify-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background/80 shadow-sm ring-1 ring-black/5 dark:bg-background/20 dark:ring-white/10">
+                <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", tile.iconWrap)}>
                   <Icon className={cn("h-4.5 w-4.5", tile.tone)} />
                 </div>
                 <div className="min-w-0 space-y-0.5">

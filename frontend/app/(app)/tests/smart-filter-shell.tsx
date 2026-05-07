@@ -14,11 +14,9 @@ interface SmartFilterShellProps {
 
 export function SmartFilterShell({ children, className }: SmartFilterShellProps) {
   const [isHidden, setIsHidden] = useState(false);
-  const [contentHeight, setContentHeight] = useState(0);
   const lastScrollY = useRef(0);
   const downwardDistance = useRef(0);
   const isTicking = useRef(false);
-  const contentRef = useRef<HTMLDivElement | null>(null);
   const isHiddenRef = useRef(false);
 
   const updateHidden = (nextHidden: boolean) => {
@@ -67,37 +65,13 @@ export function SmartFilterShell({ children, className }: SmartFilterShellProps)
     };
   }, []);
 
-  useEffect(() => {
-    const node = contentRef.current;
-    if (!node) {
-      return;
-    }
-
-    const updateHeight = () => {
-      setContentHeight(node.scrollHeight);
-    };
-
-    updateHeight();
-
-    const observer = new ResizeObserver(() => {
-      updateHeight();
-    });
-
-    observer.observe(node);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [children]);
-
   return (
-    <div className={cn("relative isolate", className)}>
+    <div className={cn("relative isolate z-40 transform-gpu", className)}>
       <div
         className={cn(
-          "relative overflow-hidden transition-[max-height,transform,opacity] duration-500 ease-out will-change-[max-height,transform,opacity] motion-reduce:transition-none",
-          isHidden ? "-translate-y-3 opacity-0" : "translate-y-0 opacity-100",
+          "relative transition-transform duration-300 ease-out will-change-transform transform-gpu bg-background",
+          isHidden ? "-translate-y-full opacity-0 pointer-events-none absolute" : "translate-y-0 opacity-100 relative",
         )}
-        style={{ maxHeight: isHidden ? 0 : contentHeight || undefined }}
       >
         <div
           aria-hidden="true"
@@ -107,7 +81,7 @@ export function SmartFilterShell({ children, className }: SmartFilterShellProps)
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-b from-background/0 via-background/90 to-background"
         />
-        <div ref={contentRef} className={cn("relative z-20", isHidden && "pointer-events-none")}>
+        <div className="relative z-20">
           {children}
         </div>
       </div>
