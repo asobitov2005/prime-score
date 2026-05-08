@@ -91,7 +91,9 @@ function EntryRow({
       )}
     >
       <div className="flex items-center justify-center">
-        {trophyIcon ? (
+        {entry.rank === 0 || (isCurrentUser && entry.attempts === 0) ? (
+          <span className="text-xs font-semibold text-muted-foreground">—</span>
+        ) : trophyIcon ? (
           trophyIcon
         ) : (
           <span className={cn("text-sm font-bold", isCurrentUser ? "text-primary" : "text-muted-foreground")}>
@@ -120,10 +122,19 @@ function EntryRow({
       </div>
 
       <div className="flex flex-col items-end justify-center md:items-center">
-        <p className={cn("text-lg font-black tracking-tight md:text-xl", percentileTone)}>
-          {formatPercentile(entry.percentile)}
-        </p>
-        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">percentile</p>
+        {isCurrentUser && entry.attempts === 0 ? (
+          <>
+            <p className="text-sm font-bold text-muted-foreground">Unranked</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">no tests yet</p>
+          </>
+        ) : (
+          <>
+            <p className={cn("text-lg font-black tracking-tight md:text-xl", percentileTone)}>
+              {formatPercentile(entry.percentile)}
+            </p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">percentile</p>
+          </>
+        )}
       </div>
 
       <div className="flex items-center justify-end md:justify-center">
@@ -249,7 +260,7 @@ export default function LeaderboardPage() {
           {currentUser ? (
             <div className="relative overflow-hidden border-t-2 border-primary/20 bg-primary/[0.03]">
               <div className="absolute bottom-0 left-0 top-0 w-1 bg-primary" />
-              {currentUser.rank > 10 ? (
+              {currentUser.rank > 10 && currentUser.attempts > 0 ? (
                 <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border/50 bg-background px-2 py-0.5 text-muted-foreground shadow-sm">
                   <Minus className="h-4 w-4" />
                 </div>
@@ -259,7 +270,7 @@ export default function LeaderboardPage() {
               </div>
               <div className="flex items-center justify-center gap-1.5 pb-3 text-[10px] font-bold uppercase tracking-widest text-primary/70">
                 <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-                Current
+                {currentUser.attempts === 0 ? "Complete a test to get ranked" : "Current"}
               </div>
             </div>
           ) : null}
