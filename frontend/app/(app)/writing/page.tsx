@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  Plus,
   ArrowRight,
   ArrowUpRight,
   BarChart3,
@@ -27,12 +26,15 @@ import {
   type WritingTaskType,
 } from "@/lib/server-writing";
 import { cn } from "@/lib/utils";
+import { CustomTaskCard } from "./custom-task-card";
+import { WritingQuestionFilters } from "./writing-question-filters";
 
 export const dynamic = "force-dynamic";
 
 interface WritingPageProps {
   searchParams?: {
     task_type?: string;
+    question_subtype?: string;
   };
 }
 
@@ -49,7 +51,7 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
     ? {
         taskNumber: 1 as const,
         title: "Academic Task 1",
-        subtitle: "Describe a chart, graph, or diagram",
+        subtitle: "Describe a chart, graph, map, or process",
         minutes: 20,
         words: 150,
         icon: <ImageIcon className="h-5 w-5" />,
@@ -110,6 +112,8 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
             );
           })}
         </div>
+
+        <WritingQuestionFilters activeTaskType={activeTaskType} />
 
         <SummaryCard summary={summary} history={history.items} activeTaskType={activeTaskType} />
       </div>
@@ -250,31 +254,6 @@ function TaskQuickStartCard({
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-foreground">Start task</span>
             <ArrowUpRight className="h-5 w-5 text-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
-function CustomTaskCard({ activeTaskType }: { activeTaskType: WritingTaskType }) {
-  return (
-    <Link href={`/writing/tasks?task_type=${activeTaskType}`} className="group block">
-      <Card className="relative overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700">
-        <CardContent className="relative z-10 flex flex-col gap-4 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-foreground shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                <Plus className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Add Custom Task</p>
-                <p className="text-sm font-medium tracking-tight text-muted-foreground">Add a question you've found elsewhere</p>
-              </div>
-            </div>
-            <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              Custom
-            </Badge>
           </div>
         </CardContent>
       </Card>

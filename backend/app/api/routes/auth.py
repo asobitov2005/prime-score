@@ -141,7 +141,7 @@ async def verify_code(
 
     code_data = await store.get_code(str(payload.code))
     if not code_data or code_data.get("used"):
-        raise HTTPException(status_code=400, detail="Noto'g'ri yoki eskirgan kod.")
+        raise HTTPException(status_code=400, detail="Invalid or expired code.")
 
     telegram_id: int = code_data["telegram_id"]
     phone: str = code_data["phone"]

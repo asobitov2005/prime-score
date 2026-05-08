@@ -205,7 +205,7 @@ export function CustomWritingPanel({ initialTaskType = null }: { initialTaskType
                     ) : (
                       <label className="flex cursor-pointer flex-col items-center justify-center gap-2 px-3 py-6 text-center text-sm text-muted-foreground">
                         <UploadCloud className="h-6 w-6" />
-                        <span className="font-medium text-foreground">Upload chart or diagram</span>
+                        <span className="font-medium text-foreground">Upload chart, map, or process image</span>
                         <span className="text-xs">PNG, JPG, or WebP under 10 MB</span>
                         <Input
                           id="finished-writing-image"

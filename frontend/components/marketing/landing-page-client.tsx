@@ -96,7 +96,7 @@ const sectionPages = [
     id: "writing",
     title: "Writing Feedback",
     desc: "Submit Task 1 & 2. Our AI highlights grammar issues, suggests C1/C2 vocabulary, and calculates Band Score.",
-    href: "/ielts-writing-mock-online",
+    href: "/writing",
     icon: <PenSquare className="w-6 h-6 text-violet-500" />,
     boxFrom: { x: -100, y: 100, rotate: 5 },
     className: "bg-gradient-to-br from-card/80 to-card/40 border-violet-500/20",
@@ -214,7 +214,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
     <div className="relative mx-auto max-w-[1600px] overflow-hidden">
       <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 sm:pb-0 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto md:-mb-[12%] xl:-mb-[8%]">
         <section className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
-          <div className="space-y-8 md:space-y-10">
+          <div className="space-y-8 md:space-y-10 min-w-0">
             <div className="space-y-4">
               <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
                 <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-md backdrop-blur-sm">
@@ -229,7 +229,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 ease-out fill-mode-both flex flex-col">
-                <span>Master IELTS mock</span>
+                <span>Master Your IELTS</span>
                 <span className="relative h-[1.15em] overflow-hidden inline-block w-full">
                   {skills.map((skill, index) => (
                     <span
@@ -308,7 +308,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
             </div>
           </div>
 
-          <div className="relative w-full max-w-lg mx-auto mt-0 lg:-mt-6 xl:ml-auto animate-in fade-in slide-in-from-right-10 duration-1000 delay-300 ease-out fill-mode-both">
+          <div className="relative w-full max-w-lg min-w-0 mx-auto mt-0 lg:-mt-6 lg:mx-0 animate-in fade-in slide-in-from-right-10 duration-1000 delay-300 ease-out fill-mode-both">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.08)_0%,transparent_70%)] pointer-events-none transform-gpu -z-10" />
 
             <div className="relative rounded-3xl border border-border/50 bg-card shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.4)] transition-all duration-700 overflow-hidden flex flex-col transform-gpu">
@@ -414,9 +414,9 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
         </section>
 
         <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
-          <div className="max-w-3xl space-y-4 mb-10">
-            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground leading-[1.08]">
-              Online IELTS mock practice for every section.
+          <div className="max-w-6xl mx-auto space-y-6 mb-12 text-center">
+            <h2 className="whitespace-nowrap text-[15px] min-[380px]:text-lg sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
+              Online IELTS mock practice for <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">every section.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-base md:text-lg leading-relaxed">
               Start with a full mock, or focus on Reading, Listening, Writing feedback, or Speaking preparation.
@@ -552,7 +552,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
         </section>
 
-        <section className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-20 text-center flex flex-col items-center overflow-hidden">
+        <section className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-3 text-center flex flex-col items-center overflow-hidden">
           <div className="max-w-3xl mx-auto space-y-6 relative z-10">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>

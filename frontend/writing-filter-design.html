@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrimeScore Writing – Question Type Filters Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a1929;--bg2:#0d2137;--bg3:#122a42;--card:#0f2335;--card2:#132d45;
+    --border:#1e3a5f;--border2:#264a6a;--text:#e8edf4;--muted:#7a8fa6;
+    --primary:#f59e0b;--primary2:#d97706;--accent:#3b82f6;
+    --sky:#0ea5e9;--violet:#8b5cf6;--emerald:#10b981;--rose:#f43f5e;--amber:#f59e0b;
+    --radius:16px;--radius-sm:10px;--radius-xs:8px;
+  }
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:24px;line-height:1.5}
+
+  .container{max-width:860px;margin:0 auto}
+
+  /* ─── Header Card ─── */
+  .header-card{
+    position:relative;overflow:hidden;border-radius:var(--radius);
+    border:1px solid var(--border);background:var(--card);padding:20px 24px;
+  }
+  .header-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,rgba(245,158,11,.3),#f59e0b,rgba(245,158,11,.3))}
+  .header-card h1{font-size:22px;font-weight:700;letter-spacing:-0.3px}
+  .header-card p{font-size:13px;color:var(--muted);margin-top:4px}
+  .header-icon{width:40px;height:40px;border-radius:12px;background:rgba(245,158,11,.1);display:flex;align-items:center;justify-content:center;color:var(--primary)}
+  .header-row{display:flex;justify-content:space-between;align-items:flex-start}
+
+  /* ─── Tab Switcher (Task 1 / Task 2) ─── */
+  .tab-bar{
+    display:flex;gap:10px;border-radius:var(--radius);border:1px solid var(--border);
+    background:rgba(13,33,55,.7);padding:6px;margin-top:12px;
+  }
+  .tab-btn{
+    flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid transparent;
+    font-size:13px;font-weight:600;text-align:center;cursor:pointer;
+    background:transparent;color:var(--muted);transition:all .25s;
+  }
+  .tab-btn.active{background:#edf3ff;color:#244067;border-color:#cbd6ea;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  .tab-btn:not(.active):hover{background:var(--bg3);color:var(--text);border-color:var(--border2)}
+
+  /* ═══════════════════════════════════════════════
+     ★ QUESTION TYPE FILTERS — Bu yerda turadi! ★
+     Tab switcher OSTIDA, Performance card USTIDA
+     ═══════════════════════════════════════════════ */
+  .filter-section{margin-top:12px}
+  .filter-label{
+    font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;
+    color:var(--muted);margin-bottom:8px;padding-left:4px;
+  }
+  .filter-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;
+    border:1px solid var(--border);background:var(--card);color:var(--muted);
+    cursor:pointer;transition:all .25s;user-select:none;position:relative;overflow:hidden;
+  }
+  .chip::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .25s}
+  .chip:hover{border-color:var(--border2);color:var(--text);transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.2)}
+  .chip.active{color:#fff;border-color:transparent}
+  .chip.active::before{opacity:1}
+
+  /* Color variants */
+  .chip[data-color="all"].active{background:linear-gradient(135deg,var(--primary),var(--primary2));border-color:var(--primary)}
+  .chip[data-color="sky"].active{background:linear-gradient(135deg,#0ea5e9,#0284c7);border-color:var(--sky)}
+  .chip[data-color="violet"].active{background:linear-gradient(135deg,#8b5cf6,#7c3aed);border-color:var(--violet)}
+  .chip[data-color="emerald"].active{background:linear-gradient(135deg,#10b981,#059669);border-color:var(--emerald)}
+  .chip[data-color="rose"].active{background:linear-gradient(135deg,#f43f5e,#e11d48);border-color:var(--rose)}
+  .chip[data-color="amber"].active{background:linear-gradient(135deg,#f59e0b,#d97706);border-color:var(--amber)}
+  .chip[data-color="blue"].active{background:linear-gradient(135deg,#3b82f6,#2563eb);border-color:var(--accent)}
+  .chip[data-color="teal"].active{background:linear-gradient(135deg,#14b8a6,#0d9488);border-color:#14b8a6}
+  .chip[data-color="pink"].active{background:linear-gradient(135deg,#ec4899,#db2777);border-color:#ec4899}
+
+  .chip .count{
+    font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;
+    background:rgba(255,255,255,.15);min-width:18px;text-align:center;
+  }
+  .chip.active .count{background:rgba(255,255,255,.25)}
+  .chip svg{width:14px;height:14px;flex-shrink:0}
+
+  /* ─── Performance Card ─── */
+  .perf-card{
+    margin-top:12px;border-radius:var(--radius);border:1px solid var(--border);
+    background:var(--card);overflow:hidden;
+  }
+  .perf-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 20px;border-bottom:1px solid var(--border);background:rgba(10,25,41,.5);
+  }
+  .perf-header-left{display:flex;align-items:center;gap:8px}
+  .perf-title{font-size:14px;font-weight:600}
+  .badge{
+    font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;
+    padding:3px 8px;border-radius:6px;border:1px solid;
+  }
+  .badge-sky{border-color:rgba(14,165,233,.3);background:rgba(14,165,233,.08);color:var(--sky)}
+  .view-btn{
+    font-size:12px;font-weight:600;color:var(--text);background:var(--bg3);
+    border:1px solid var(--border);padding:4px 12px;border-radius:8px;
+    cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:4px;
+  }
+  .view-btn:hover{background:var(--card2);border-color:var(--border2)}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px}
+  .stat-tile{
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    padding:14px;border-radius:var(--radius-sm);border:1px solid;min-height:72px;
+  }
+  .stat-tile.sky{border-color:rgba(14,165,233,.2);background:rgba(14,165,233,.04)}
+  .stat-tile.violet{border-color:rgba(139,92,246,.2);background:rgba(139,92,246,.04)}
+  .stat-tile.amber{border-color:rgba(245,158,11,.2);background:rgba(245,158,11,.04)}
+  .stat-tile.emerald{border-color:rgba(16,185,129,.2);background:rgba(16,185,129,.04)}
+  .stat-icon{
+    width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  }
+  .stat-icon.sky{background:rgba(14,165,233,.12);color:var(--sky)}
+  .stat-icon.violet{background:rgba(139,92,246,.12);color:var(--violet)}
+  .stat-icon.amber{background:rgba(245,158,11,.12);color:var(--amber)}
+  .stat-icon.emerald{background:rgba(16,185,129,.12);color:var(--emerald)}
+  .stat-value{font-size:20px;font-weight:700;line-height:1}
+  .stat-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-top:2px}
+
+  /* ─── Task Cards Grid ─── */
+  .task-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:16px}
+  .task-card{
+    border-radius:var(--radius);border:1px solid var(--border);background:var(--card);
+    overflow:hidden;cursor:pointer;transition:all .3s;
+  }
+  .task-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.25);border-color:var(--border2)}
+  .task-card-body{padding:20px}
+  .task-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .task-icon-box{
+    width:44px;height:44px;border-radius:12px;border:1px solid var(--border);
+    background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text);
+  }
+  .task-type-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
+  .task-title{font-size:17px;font-weight:600;letter-spacing:-0.2px;margin-bottom:4px}
+  .task-meta{display:flex;gap:8px;margin-top:10px}
+  .task-meta-pill{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:5px 10px;border-radius:20px;font-size:11px;font-weight:500;
+    border:1px solid var(--border);background:var(--bg2);color:var(--muted);
+  }
+  .task-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+  .start-label{font-size:13px;font-weight:600;color:var(--text)}
+
+  /* ─── Annotation ─── */
+  .annotation{
+    margin-top:20px;padding:16px 20px;border-radius:var(--radius);
+    border:1px solid rgba(245,158,11,.25);background:rgba(245,158,11,.04);
+  }
+  .annotation h3{font-size:14px;font-weight:700;color:var(--primary);margin-bottom:6px}
+  .annotation p{font-size:12px;color:var(--muted);line-height:1.7}
+  .annotation code{background:rgba(245,158,11,.12);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--primary)}
+
+  @media(max-width:640px){
+    .stat-grid{grid-template-columns:repeat(2,1fr)}
+    .filter-chips{gap:6px}
+    .chip{padding:6px 10px;font-size:11px}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header-card">
+    <div class="header-row">
+      <div>
+        <h1>Writing</h1>
+        <p>Practice in an IELTS-style writing workspace, or check an answer you already wrote.</p>
+      </div>
+      <div class="header-icon">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Type Tabs -->
+  <div class="tab-bar">
+    <div class="tab-btn active" onclick="setTab(this)">Academic Task 1</div>
+    <div class="tab-btn" onclick="setTab(this)">Academic Task 2</div>
+  </div>
+
+  <!-- ★★★ QUESTION TYPE FILTERS ★★★ -->
+  <div class="filter-section">
+    <div class="filter-label">Question type</div>
+    <div class="filter-chips" id="task1Filters">
+      <div class="chip active" data-color="all" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        All types <span class="count">8</span>
+      </div>
+      <div class="chip" data-color="sky" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Bar Chart <span class="count">12</span>
+      </div>
+      <div class="chip" data-color="violet" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Line Graph <span class="count">8</span>
+      </div>
+      <div class="chip" data-color="amber" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+        Pie Chart <span class="count">6</span>
+      </div>
+      <div class="chip" data-color="emerald" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        Table <span class="count">5</span>
+      </div>
+      <div class="chip" data-color="rose" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v6h6"/></svg>
+        Process / Map <span class="count">4</span>
+      </div>
+      <div class="chip" data-color="teal" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Two Charts <span class="count">3</span>
+      </div>
+      <div class="chip" data-color="blue" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        Diagram <span class="count">2</span>
+      </div>
+    </div>
+
+    <!-- Task 2 filters (hidden by default) -->
+    <div class="filter-chips" id="task2Filters" style="display:none">
+      <div class="chip active" data-color="all" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        All types <span class="count">6</span>
+      </div>
+      <div class="chip" data-color="violet" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>
+        Opinion Essay <span class="count">14</span>
+      </div>
+      <div class="chip" data-color="sky" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+        Advantages & Disadvantages <span class="count">10</span>
+      </div>
+      <div class="chip" data-color="emerald" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        Discussion Essay <span class="count">8</span>
+      </div>
+      <div class="chip" data-color="amber" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v.01M12 8a2 2 0 0 1 1.7 3.1l-1.7 2.4"/></svg>
+        Problem & Solution <span class="count">6</span>
+      </div>
+      <div class="chip" data-color="rose" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+        Two-Part Question <span class="count">5</span>
+      </div>
+      <div class="chip" data-color="pink" onclick="toggleChip(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Causes & Effects <span class="count">3</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Card -->
+  <div class="perf-card">
+    <div class="perf-header">
+      <div class="perf-header-left">
+        <span class="perf-title">Your Writing Performance</span>
+        <span class="badge badge-sky">Task 1</span>
+      </div>
+      <button class="view-btn">View history →</button>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-tile sky"><div class="stat-icon sky"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="4" height="12" rx="1"/><rect x="8" y="2" width="4" height="14" rx="1"/></svg></div><div><div class="stat-value">3</div><div class="stat-label">Submissions</div></div></div>
+      <div class="stat-tile violet"><div class="stat-icon violet"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 1l2 4 4.5.7-3.2 3.2.8 4.6L8 11.2 3.9 13.5l.8-4.6L1.5 5.7 6 5z"/></svg></div><div><div class="stat-value">6.5</div><div class="stat-label">Average band</div></div></div>
+      <div class="stat-tile amber"><div class="stat-icon amber"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2l1.5 3h3.5l-2.8 2.2 1 3.3L8 8.7l-3.2 1.8 1-3.3L3 5h3.5z"/></svg></div><div><div class="stat-value">7.0</div><div class="stat-label">Best band</div></div></div>
+      <div class="stat-tile emerald"><div class="stat-icon emerald"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg></div><div><div class="stat-value">6.0</div><div class="stat-label">Last band</div></div></div>
+    </div>
+  </div>
+
+  <!-- Task Cards -->
+  <div class="task-grid">
+    <div class="task-card">
+      <div class="task-card-body">
+        <div class="task-card-top">
+          <div class="task-icon-box"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 7h14M7 17V7"/></svg></div>
+          <span class="badge badge-sky">Task 1</span>
+        </div>
+        <div class="task-type-label">Academic Task 1 · Bar Chart</div>
+        <div class="task-title">Describe a chart, graph, or diagram</div>
+        <div class="task-meta">
+          <span class="task-meta-pill">● 20 min</span>
+          <span class="task-meta-pill">⊕ 150+ words</span>
+        </div>
+        <div class="task-bottom">
+          <span class="start-label">Start task</span>
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7l10 0M17 7l0 10"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Annotation: WHERE these filters go in code -->
+  <div class="annotation">
+    <h3>📍 Filterlar qayerda turadi (code joylashuvi)</h3>
+    <p>
+      <strong>Fayl:</strong> <code>frontend/app/(app)/writing/page.tsx</code><br>
+      <strong>Pozitsiya:</strong> Tab switcher (<code>Academic Task 1 | Task 2</code>) OSTIDA, <code>&lt;SummaryCard&gt;</code> USTIDA — ya'ni <strong>87-115 qatorlar orasida</strong>.<br><br>
+      <strong>Task 1 uchun filter turlari:</strong> Bar Chart, Line Graph, Pie Chart, Table, Process/Map, Two Charts, Diagram<br>
+      <strong>Task 2 uchun filter turlari:</strong> Opinion Essay, Advantages & Disadvantages, Discussion Essay, Problem & Solution, Two-Part Question, Causes & Effects<br><br>
+      Filterlar <code>searchParams</code> orqali <code>?task_type=task_1&question_type=bar_chart</code> shaklida ishlaydi.
+      Backend <code>listWritingTasks()</code> ga yangi <code>question_type</code> param qo'shiladi.
+    </p>
+  </div>
+
+</div>
+
+<script>
+function setTab(el){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  const isTask1=el.textContent.includes('Task 1');
+  document.getElementById('task1Filters').style.display=isTask1?'flex':'none';
+  document.getElementById('task2Filters').style.display=isTask1?'none':'flex';
+}
+function toggleChip(el){
+  const parent=el.parentElement;
+  const isAll=el.dataset.color==='all';
+  if(isAll){
+    parent.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+  } else {
+    parent.querySelector('[data-color="all"]')?.classList.remove('active');
+    el.classList.toggle('active');
+    if(!parent.querySelector('.chip.active')){
+      parent.querySelector('[data-color="all"]')?.classList.add('active');
+    }
+  }
+}
+</script>
+</body>
+</html>

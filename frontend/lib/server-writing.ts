@@ -2,6 +2,11 @@ import { requestServerUserApi } from "@/lib/server-user-auth";
 
 export type WritingTaskType = "task_1" | "task_2";
 export type WritingDifficulty = "easy" | "medium" | "hard";
+export type WritingQuestionSubtype =
+  | "bar_chart" | "line_graph" | "pie_chart" | "table"
+  | "process" | "map" | "two_charts"
+  | "opinion" | "advantages_disadvantages" | "discussion"
+  | "problem_solution" | "two_part" | "causes_effects";
 export type WritingSubmissionStatus =
   | "queued"
   | "QUEUED"
@@ -20,6 +25,7 @@ export interface WritingTaskListItem {
   word_minimum: number;
   time_limit_seconds: number;
   difficulty?: WritingDifficulty | null;
+  question_subtype?: WritingQuestionSubtype | null;
   source?: string | null;
   description?: string | null;
 }
@@ -150,12 +156,14 @@ export interface WritingDashboardSummary {
 export async function listWritingTasks(params: {
   task_type?: WritingTaskType;
   difficulty?: WritingDifficulty;
+  question_subtype?: WritingQuestionSubtype;
   page?: number;
   page_size?: number;
 }): Promise<WritingTaskListResponse> {
   const search = new URLSearchParams();
   if (params.task_type) search.set("task_type", params.task_type);
   if (params.difficulty) search.set("difficulty", params.difficulty);
+  if (params.question_subtype) search.set("question_subtype", params.question_subtype);
   if (params.page) search.set("page", String(params.page));
   if (params.page_size) search.set("page_size", String(params.page_size));
   const qs = search.toString();
@@ -206,3 +214,22 @@ export function resolveWritingAssetUrl(url: string | null | undefined): string |
   }
   return `${base}/${url}`;
 }
+
+export const QUESTION_SUBTYPES_TASK1: { value: WritingQuestionSubtype; label: string }[] = [
+  { value: "bar_chart", label: "Bar Chart" },
+  { value: "line_graph", label: "Line Graph" },
+  { value: "pie_chart", label: "Pie Chart" },
+  { value: "table", label: "Table" },
+  { value: "process", label: "Process" },
+  { value: "map", label: "Map" },
+  { value: "two_charts", label: "Two Charts" },
+];
+
+export const QUESTION_SUBTYPES_TASK2: { value: WritingQuestionSubtype; label: string }[] = [
+  { value: "opinion", label: "Opinion Essay" },
+  { value: "advantages_disadvantages", label: "Advantages & Disadvantages" },
+  { value: "discussion", label: "Discussion Essay" },
+  { value: "problem_solution", label: "Problem & Solution" },
+  { value: "two_part", label: "Two-Part Question" },
+  { value: "causes_effects", label: "Causes & Effects" },
+];

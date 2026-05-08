@@ -62,11 +62,11 @@ export function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     if (pathname.startsWith("/tests")) {
-      setIsTestsSubmenuOpen(Boolean(activeSource));
+      setIsTestsSubmenuOpen(true);
       return;
     }
     setIsTestsSubmenuOpen(false);
-  }, [pathname, activeSource]);
+  }, [pathname]);
 
   useEffect(() => {
     if (isMobileOpen) {
@@ -113,6 +113,11 @@ export function AppShell({ children }: AppShellProps) {
                   ) : (
                     <Link
                       href={item.href}
+                      onClick={() => {
+                        if (item.href === "/tests") {
+                          setIsTestsSubmenuOpen(true);
+                        }
+                      }}
                       className={cn(
                         "flex items-center gap-3 rounded-lg px-3 py-2.5 pr-11 text-sm font-semibold transition-all duration-200",
                         active

@@ -39,7 +39,7 @@ function SkeletonCard({ children, className }: { children: ReactNode; className?
 
 function TestsSkeleton() {
   return (
-    <div className="w-full max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-6xl space-y-5">
       <div className="space-y-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex w-full gap-2 rounded-2xl border border-border/45 bg-muted/35 p-1 md:w-[18rem]">
@@ -79,7 +79,7 @@ function TestsSkeleton() {
 
 function DashboardSkeleton() {
   return (
-    <div className="w-full max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-6xl space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
           <SkeletonCard key={index} className="space-y-4">
@@ -117,7 +117,7 @@ function DashboardSkeleton() {
 
 function HistorySkeleton() {
   return (
-    <div className="w-full max-w-5xl space-y-4">
+    <div className="mx-auto w-full max-w-5xl space-y-4">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <SkeletonBlock className="h-6 w-36" />
@@ -144,7 +144,7 @@ function HistorySkeleton() {
 
 function FormSkeleton() {
   return (
-    <div className="w-full max-w-4xl space-y-4">
+    <div className="mx-auto w-full max-w-4xl space-y-4">
       <SkeletonCard className="space-y-4">
         <div className="flex items-center gap-3">
           <SkeletonBlock className="h-11 w-11 rounded-xl" />
@@ -168,7 +168,7 @@ function FormSkeleton() {
 
 function MarketingSkeleton() {
   return (
-    <div className="w-full max-w-6xl space-y-8">
+    <div className="mx-auto w-full max-w-6xl space-y-8">
       <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div className="space-y-4">
           <SkeletonBlock className="h-4 w-32 rounded-full" />
@@ -195,7 +195,7 @@ function GenericSkeleton({ isOverlay }: { isOverlay: boolean }) {
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-2xl border border-border/55 bg-card/55 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.12)] backdrop-blur-md",
+        "relative mx-auto w-full overflow-hidden rounded-2xl border border-border/55 bg-card/55 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.12)] backdrop-blur-md",
         isOverlay ? "max-w-md" : "max-w-3xl"
       )}
     >
@@ -337,7 +337,7 @@ export function AppRouteLoadingFrame({
       </aside>
 
       <main className="w-full min-w-0 flex-1">
-        <AppLoadingPlaceholder className={cn("min-h-[50vh] justify-start px-0 py-0", className)} />
+        <AppLoadingPlaceholder className={cn("min-h-[50vh] px-0 py-0", className)} />
       </main>
     </div>
   );
@@ -346,7 +346,7 @@ export function AppRouteLoadingFrame({
 export function MarketingRouteLoadingFrame({ className }: RouteLoadingFrameProps) {
   return (
     <div className={cn("mx-auto w-full max-w-7xl px-4 py-8 md:px-6 md:py-10 lg:px-8 lg:py-12", className)}>
-      <AppLoadingPlaceholder className="min-h-[50vh] justify-start px-0 py-0" />
+      <AppLoadingPlaceholder className="min-h-[50vh] px-0 py-0" />
     </div>
   );
 }
@@ -354,7 +354,7 @@ export function MarketingRouteLoadingFrame({ className }: RouteLoadingFrameProps
 export function GenericRouteLoadingFrame({ className }: RouteLoadingFrameProps) {
   return (
     <div className={cn("mx-auto w-full max-w-7xl px-4 py-10 md:px-6 lg:px-8", className)}>
-      <AppLoadingPlaceholder className="min-h-[50vh] justify-start px-0 py-0" />
+      <AppLoadingPlaceholder className="min-h-[50vh] px-0 py-0" />
     </div>
   );
 }
@@ -368,7 +368,7 @@ export function AdminRouteLoadingFrame({ className }: RouteLoadingFrameProps) {
 
       <main className="flex-1 overflow-auto">
         <div className={cn("mx-auto max-w-7xl p-8", className)}>
-          <AppLoadingPlaceholder className="min-h-[50vh] justify-start px-0 py-0" />
+          <AppLoadingPlaceholder className="min-h-[50vh] px-0 py-0" />
         </div>
       </main>
     </div>

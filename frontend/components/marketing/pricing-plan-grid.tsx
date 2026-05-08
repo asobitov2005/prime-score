@@ -455,8 +455,7 @@ export function PricingPlanGrid({
                         onClick={() => onChoosePlan?.(plan)}
                         variant={isFeatured ? "default" : "outline"}
                         className={cn(
-                          "h-12 w-full rounded-xl text-sm transition-all",
-                          compact ? "font-semibold" : "font-black",
+                          "h-12 w-full rounded-xl text-sm font-medium transition-all",
                           denseCards && "h-9 text-[11px]",
                           !isFeatured && "border-border/60 bg-muted/20 hover:bg-muted/40",
                         )}
@@ -620,7 +619,7 @@ export function PricingPlanGrid({
                       onClick={() => onChoosePlan?.(plan)}
                       variant={isFeatured ? "default" : "outline"}
                       className={cn(
-                        "h-12 w-full rounded-xl text-sm font-semibold transition-all",
+                        "h-12 w-full rounded-xl text-sm font-medium transition-all",
                         denseCards && "h-10 text-[12px]",
                         !isFeatured && "border-border/60 bg-muted/20 hover:bg-muted/40",
                       )}
@@ -633,7 +632,7 @@ export function PricingPlanGrid({
                       asChild
                       variant={isFeatured ? "default" : "outline"}
                       className={cn(
-                        "h-12 w-full rounded-xl text-sm font-semibold transition-all",
+                        "h-12 w-full rounded-xl text-sm font-medium transition-all",
                         denseCards && "h-10 text-[12px]",
                         !isFeatured && "border-border/60 bg-muted/20 hover:bg-muted/40",
                       )}

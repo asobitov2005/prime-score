@@ -154,7 +154,6 @@ export const seoLandingPages: SeoLandingPage[] = [
     relatedSlugs: [
       "ielts-reading-mock-online",
       "ielts-listening-mock-online",
-      "ielts-writing-mock-online",
       "ielts-speaking-mock-online",
     ],
   },
@@ -217,7 +216,7 @@ export const seoLandingPages: SeoLandingPage[] = [
     relatedSlugs: [
       "ielts-mock-test-tashkent",
       "ielts-mock-test-online",
-      "ielts-writing-mock-online",
+      "ielts-speaking-mock-online",
     ],
   },
   {
@@ -345,7 +344,6 @@ export const seoLandingPages: SeoLandingPage[] = [
     ],
     relatedSlugs: [
       "ielts-listening-mock-online",
-      "ielts-writing-mock-online",
       "ielts-mock-test-online",
     ],
   },
@@ -412,76 +410,8 @@ export const seoLandingPages: SeoLandingPage[] = [
     ],
     relatedSlugs: [
       "ielts-reading-mock-online",
-      "ielts-writing-mock-online",
-      "ielts-mock-test-online",
-    ],
-  },
-  {
-    slug: "ielts-writing-mock-online",
-    path: "/ielts-writing-mock-online",
-    metaTitle: "IELTS Writing Mock Online | Task 1 & Task 2 Feedback",
-    title: "IELTS Writing mock online with Task 1 and Task 2 feedback",
-    description:
-      "Submit IELTS Writing Task 1 or Task 2 online and get band-score focused feedback, inline error review, improved version, and focused IELTS writing practice.",
-    badge: "Writing mock online",
-    lead:
-      "PrimeScore lets you paste your own IELTS Writing topic and essay, then get structured feedback for Task 1 or Task 2 online.",
-    primaryCta: { label: "Open Writing checker", href: "/writing" },
-    secondaryCta: { label: "See full IELTS mock", href: "/ielts-mock-test-online" },
-    highlights: [
-      "IELTS Writing Task 1 feedback",
-      "IELTS Writing Task 2 feedback",
-      "Inline grammar and vocabulary issues",
-      "Custom topic and essay submission",
-    ],
-    sections: [
-      {
-        title: "IELTS Writing feedback online",
-        body:
-          "Writing is where many IELTS learners need direct correction. PrimeScore supports custom topics and essays, so users can review their own work instead of only using fixed prompts.",
-      },
-      {
-        title: "Task 1 and Task 2 support",
-        body:
-          "Learners can prepare chart descriptions, letters, reports, and essays with band-score focused feedback and practical next steps.",
-      },
-      {
-        title: "Useful after every mock attempt",
-        body:
-          "Writing feedback connects with full IELTS mock preparation by showing errors, weak patterns, and a better version to study.",
-      },
-    ],
-    benefits: [
-      "Paste your own question and essay.",
-      "Get feedback without manually choosing a level.",
-      "Review highlighted mistakes inside your text.",
-      "Use feedback without affecting Reading or Listening scores.",
-    ],
-    faqs: [
-      ...coreFaqs,
-      {
-        question: "Can I submit my own IELTS Writing topic?",
-        answer:
-          "Yes. PrimeScore supports custom Writing topics and essays, so users can paste their own Task 1 or Task 2 question and submit the response for feedback.",
-      },
-    ],
-    searchIntents: [
-      "Task 1 feedback",
-      "Task 2 feedback",
-      "Custom essay review",
-      "Inline corrections",
-    ],
-    keywords: [
-      "IELTS writing mock online",
-      "IELTS writing checker",
-      "IELTS writing Task 1 feedback",
-      "IELTS writing Task 2 feedback",
-      "IELTS writing online Uzbekistan",
-    ],
-    relatedSlugs: [
-      "ielts-reading-mock-online",
-      "ielts-listening-mock-online",
       "ielts-speaking-mock-online",
+      "ielts-mock-test-online",
     ],
   },
   {
@@ -546,7 +476,6 @@ export const seoLandingPages: SeoLandingPage[] = [
       "Tashkent speaking mock online",
     ],
     relatedSlugs: [
-      "ielts-writing-mock-online",
       "ielts-mock-test-tashkent",
       "ielts-mock-test-online",
     ],

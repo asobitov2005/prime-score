@@ -135,6 +135,24 @@ class WritingDifficulty(StrEnum):
     HARD = "hard"
 
 
+class WritingQuestionSubtype(StrEnum):
+    # Task 1 — visual description
+    BAR_CHART = "bar_chart"
+    LINE_GRAPH = "line_graph"
+    PIE_CHART = "pie_chart"
+    TABLE = "table"
+    PROCESS = "process"
+    MAP = "map"
+    TWO_CHARTS = "two_charts"
+    # Task 2 — essay types
+    OPINION = "opinion"
+    ADVANTAGES_DISADVANTAGES = "advantages_disadvantages"
+    DISCUSSION = "discussion"
+    PROBLEM_SOLUTION = "problem_solution"
+    TWO_PART = "two_part"
+    CAUSES_EFFECTS = "causes_effects"
+
+
 class WritingErrorCategory(StrEnum):
     SPELLING = "spelling"
     GRAMMAR = "grammar"

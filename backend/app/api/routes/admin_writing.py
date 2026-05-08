@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_admin
 from app.db.session import get_db_session
-from app.models.enums import WritingSubmissionStatus, WritingTaskStatus, WritingTaskType
+from app.models.enums import WritingQuestionSubtype, WritingSubmissionStatus, WritingTaskStatus, WritingTaskType
 from app.models.user import User
 from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
 from app.schemas.common import AdminPrincipal
@@ -67,6 +67,7 @@ def _serialize_task_read(task: WritingTask) -> WritingTaskRead:
         difficulty=task.difficulty,
         status=task.status,
         source=task.source,
+        question_subtype=task.question_subtype.value if task.question_subtype else None,
         description=task.description,
         sample_band=task.sample_band,
         created_at=task.created_at,
@@ -93,6 +94,7 @@ def _enqueue_image_summary(task_id: UUID) -> None:
 async def list_tasks(
     status_filter: WritingTaskStatus | None = Query(default=None, alias="status"),
     task_type: WritingTaskType | None = Query(default=None),
+    question_subtype: WritingQuestionSubtype | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     search: str | None = Query(default=None),
@@ -105,6 +107,8 @@ async def list_tasks(
         filters.append(WritingTask.status == status_filter)
     if task_type is not None:
         filters.append(WritingTask.task_type == task_type)
+    if question_subtype is not None:
+        filters.append(WritingTask.question_subtype == question_subtype)
     if search:
         like = f"%{search.strip()}%"
         filters.append(WritingTask.title.ilike(like))
@@ -167,6 +171,7 @@ async def create_task(
         difficulty=payload.difficulty,
         status=payload.status,
         source=payload.source,
+        question_subtype=payload.question_subtype,
         description=payload.description,
         sample_band=payload.sample_band,
         sample_answer=payload.sample_answer,

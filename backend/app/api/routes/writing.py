@@ -14,6 +14,7 @@ from app.core.deps import get_current_user
 from app.db.session import get_db_session
 from app.models.enums import (
     WritingDifficulty,
+    WritingQuestionSubtype,
     WritingSubmissionStatus,
     WritingTaskStatus,
     WritingTaskType,
@@ -59,6 +60,7 @@ def _serialize_task_read(task: WritingTask) -> WritingTaskRead:
         difficulty=task.difficulty,
         status=task.status,
         source=task.source,
+        question_subtype=task.question_subtype.value if task.question_subtype else None,
         description=task.description,
         sample_band=task.sample_band,
         created_at=task.created_at,
@@ -75,6 +77,7 @@ def _serialize_task_list_item(task: WritingTask) -> WritingTaskListItem:
         time_limit_seconds=task.time_limit_seconds,
         difficulty=task.difficulty,
         source=task.source,
+        question_subtype=task.question_subtype.value if task.question_subtype else None,
         description=task.description,
     )
 
@@ -213,6 +216,7 @@ async def upload_image(
 async def list_published_tasks(
     task_type: WritingTaskType | None = Query(default=None),
     difficulty: WritingDifficulty | None = Query(default=None),
+    question_subtype: WritingQuestionSubtype | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -225,6 +229,8 @@ async def list_published_tasks(
         filters.append(WritingTask.task_type == task_type)
     if difficulty is not None:
         filters.append(WritingTask.difficulty == difficulty)
+    if question_subtype is not None:
+        filters.append(WritingTask.question_subtype == question_subtype)
 
     total = await session.scalar(
         select(func.count()).select_from(WritingTask).where(*filters)

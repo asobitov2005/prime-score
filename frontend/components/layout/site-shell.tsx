@@ -266,7 +266,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   </div>
                 </Link>
                 <Link
-                  href="/ielts-writing-mock-online"
+                  href="/writing"
                   onClick={() => setIsMockTestsOpen(false)}
                   className="flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
@@ -439,7 +439,7 @@ export function SiteShell({ children }: SiteShellProps) {
               </div>
               </div>
             ) : (
-              <Button asChild size="lg" className="hidden md:inline-flex rounded-xl h-11 px-8 text-sm font-black shadow-lg shadow-primary/20 hover:shadow-xl transition-all hover:-translate-y-0.5 bg-primary text-background border-none">
+              <Button asChild size="lg" className="hidden md:inline-flex rounded-xl h-11 px-8 text-sm font-medium shadow-lg shadow-primary/20 hover:shadow-xl transition-all hover:-translate-y-0.5 bg-primary text-background border-none">
                 <Link href="/login">Login</Link>
               </Button>
             )}
@@ -479,7 +479,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 <span className="text-sm font-semibold text-foreground">Listening</span>
               </Link>
               <Link
-                href="/ielts-writing-mock-online"
+                href="/writing"
                 onClick={() => setIsMobileNavOpen(false)}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
               >
@@ -556,7 +556,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 <Link
                   href="/login"
                   onClick={() => setIsMobileNavOpen(false)}
-                  className="mt-1 flex items-center justify-center px-3 h-11 rounded-xl bg-primary text-background text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
+                  className="mt-1 flex items-center justify-center px-3 h-11 rounded-xl bg-primary text-background text-sm font-medium shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
                 >
                   Login
                 </Link>

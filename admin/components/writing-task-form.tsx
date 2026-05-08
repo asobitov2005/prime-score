@@ -29,12 +29,18 @@ import {
 } from "@/components/ui";
 import type {
   WritingDifficulty,
+  WritingQuestionSubtype,
   WritingTask,
   WritingTaskCreateInput,
   WritingTaskStatus,
   WritingTaskType
 } from "@/lib/writing-api";
-import { formatImageSummaryStatus, writingApi } from "@/lib/writing-api";
+import {
+  formatImageSummaryStatus,
+  QUESTION_SUBTYPES_TASK1,
+  QUESTION_SUBTYPES_TASK2,
+  writingApi
+} from "@/lib/writing-api";
 
 interface WritingTaskFormProps {
   mode: "create" | "edit";
@@ -53,6 +59,7 @@ interface FormState {
   description: string;
   sample_band: string;
   sample_answer: string;
+  question_subtype: WritingQuestionSubtype | null;
   status: Exclude<WritingTaskStatus, "archived">;
 }
 
@@ -76,6 +83,7 @@ function buildInitialState(task: WritingTask | null | undefined): FormState {
       description: task.description ?? "",
       sample_band: task.sample_band != null ? String(task.sample_band) : "",
       sample_answer: task.sample_answer ?? "",
+      question_subtype: task.question_subtype ?? null,
       status: task.status === "archived" ? "draft" : task.status
     };
   }
@@ -92,6 +100,7 @@ function buildInitialState(task: WritingTask | null | undefined): FormState {
     description: "",
     sample_band: "",
     sample_answer: "",
+    question_subtype: null,
     status: "draft"
   };
 }
@@ -142,6 +151,8 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
       setImageSummary(null);
       setImageSummaryStatus("not_required");
     }
+    // Reset subtype when switching task type
+    setState((s) => ({ ...s, question_subtype: null }));
   }
 
   function validate(): boolean {
@@ -228,6 +239,7 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
       time_limit_seconds: state.time_limit_minutes * 60,
       difficulty: state.difficulty,
       source: state.source.trim() || null,
+      question_subtype: state.question_subtype || null,
       description: state.description.trim() || null,
       sample_band: state.sample_band ? Number(state.sample_band) : null,
       sample_answer: state.sample_answer.trim() || null,
@@ -314,13 +326,32 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {t === "task_1"
-                        ? "Visual description (chart, graph, diagram). 150 words, 20 minutes."
+                        ? "Visual description (chart, graph, map, or process). 150 words, 20 minutes."
                         : "Argumentative essay. 250 words, 40 minutes."}
                     </span>
                   </button>
                 );
               })}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="question_subtype">Question Subtype</Label>
+            <Select
+              id="question_subtype"
+              value={state.question_subtype ?? ""}
+              onChange={(e) => patchState({ question_subtype: (e.target.value || null) as WritingQuestionSubtype | null })}
+            >
+              <option value="">— None —</option>
+              {(state.task_type === "task_1" ? QUESTION_SUBTYPES_TASK1 : QUESTION_SUBTYPES_TASK2).map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {state.task_type === "task_1"
+                ? "Type of visual: bar chart, line graph, pie chart, etc."
+                : "Essay type: opinion, discussion, problem & solution, etc."}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -361,7 +392,7 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ImageIcon className="h-4 w-4" />
-              Diagram / Chart Image
+              Visual / Chart Image
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -374,7 +405,7 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
                 <div className="overflow-hidden rounded-2xl border border-border bg-muted/30">
                   <img
                     src={state.image_url}
-                    alt="Task 1 diagram"
+                    alt="Task 1 visual"
                     className="max-h-[400px] w-full object-contain"
                   />
                 </div>

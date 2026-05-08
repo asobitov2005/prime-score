@@ -6,6 +6,11 @@ const baseUrl = ADMIN_PUBLIC_API_BASE_URL;
 export type WritingTaskType = "task_1" | "task_2";
 export type WritingTaskStatus = "draft" | "published" | "archived";
 export type WritingDifficulty = "easy" | "medium" | "hard";
+export type WritingQuestionSubtype =
+  | "bar_chart" | "line_graph" | "pie_chart" | "table"
+  | "process" | "map" | "two_charts"
+  | "opinion" | "advantages_disadvantages" | "discussion"
+  | "problem_solution" | "two_part" | "causes_effects";
 export type WritingImageSummaryStatus =
   | "not_required"
   | "pending"
@@ -25,6 +30,7 @@ export interface WritingTask {
   difficulty: WritingDifficulty;
   status: WritingTaskStatus;
   source: string | null;
+  question_subtype: WritingQuestionSubtype | null;
   description: string | null;
   sample_band: number | null;
   sample_answer: string | null;
@@ -46,6 +52,7 @@ export interface WritingTaskCreateInput {
   time_limit_seconds: number;
   difficulty: WritingDifficulty;
   source?: string | null;
+  question_subtype?: WritingQuestionSubtype | null;
   description?: string | null;
   sample_band?: number | null;
   sample_answer?: string | null;
@@ -296,3 +303,22 @@ export function formatImageSummaryStatus(s: string | null | undefined): string {
   if (s === "failed") return "Failed";
   return s;
 }
+
+export const QUESTION_SUBTYPES_TASK1: { value: WritingQuestionSubtype; label: string }[] = [
+  { value: "bar_chart", label: "Bar Chart" },
+  { value: "line_graph", label: "Line Graph" },
+  { value: "pie_chart", label: "Pie Chart" },
+  { value: "table", label: "Table" },
+  { value: "process", label: "Process" },
+  { value: "map", label: "Map" },
+  { value: "two_charts", label: "Two Charts" },
+];
+
+export const QUESTION_SUBTYPES_TASK2: { value: WritingQuestionSubtype; label: string }[] = [
+  { value: "opinion", label: "Opinion Essay" },
+  { value: "advantages_disadvantages", label: "Advantages & Disadvantages" },
+  { value: "discussion", label: "Discussion Essay" },
+  { value: "problem_solution", label: "Problem & Solution" },
+  { value: "two_part", label: "Two-Part Question" },
+  { value: "causes_effects", label: "Causes & Effects" },
+];

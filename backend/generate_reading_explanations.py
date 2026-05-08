@@ -74,10 +74,12 @@ async def generate_explanations():
                     return data
             except Exception as e:
                 logger.error(f"Failed to generate for Q{question.number}: {e}")
+                # Fallback delay for rate limit errors
+                await asyncio.sleep(2)
             return None
 
         # Semaphores for concurrent rate limiting
-        sem = asyncio.Semaphore(50)
+        sem = asyncio.Semaphore(15)
         
         async def bounded_process(question, passage_text, accepted_answers):
             async with sem:
@@ -114,12 +116,17 @@ async def generate_explanations():
         logger.info(f"Found {len(pending_questions)} questions to process.")
         
         # Process in batches to save to DB occasionally
-        batch_size = 50
+        batch_size = 30
         for i in range(0, len(pending_questions), batch_size):
             batch = pending_questions[i:i+batch_size]
             coroutines = [bounded_process(q, p, a) for q, p, a in batch]
             results = await asyncio.gather(*coroutines, return_exceptions=True)
             updated_count += sum(1 for r in results if r is True)
+            
+            # Print exceptions if any
+            for r in results:
+                if isinstance(r, Exception):
+                    logger.error(f"Gather exception: {r}")
             
             # Add to session and commit batch
             for q, _, _ in batch:

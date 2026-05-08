@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.enums import (
     WritingDifficulty,
+    WritingQuestionSubtype,
     WritingSubmissionStatus,
     WritingTaskStatus,
     WritingTaskType,
@@ -40,6 +41,9 @@ class WritingTask(UUIDMixin, TimestampMixin, Base):
         index=True,
     )
     source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    question_subtype: Mapped[WritingQuestionSubtype | None] = mapped_column(
+        Enum(WritingQuestionSubtype, native_enum=False), nullable=True, index=True
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     sample_band: Mapped[float | None] = mapped_column(Float, nullable=True)
     sample_answer: Mapped[str | None] = mapped_column(Text, nullable=True)

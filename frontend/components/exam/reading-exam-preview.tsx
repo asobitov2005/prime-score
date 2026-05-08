@@ -1,6 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Check, CheckCircle2, ChevronDown, Eraser, Expand, GripVertical, Highlighter, Lightbulb, Minus, Moon, MoveHorizontal, Plus, SendHorizontal, Shrink, SunMedium } from "lucide-react";
 import {
@@ -840,6 +850,26 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       activeQuestionId: examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "",
     },
   });
+
+  function handlePaneWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    const pane = event.currentTarget;
+    const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+
+    if (!Number.isFinite(delta) || delta === 0) {
+      return;
+    }
+
+    const canScrollDown = delta > 0 && pane.scrollTop + pane.clientHeight < pane.scrollHeight - 1;
+    const canScrollUp = delta < 0 && pane.scrollTop > 0;
+
+    if (!canScrollDown && !canScrollUp) {
+      return;
+    }
+
+    pane.scrollTop += delta;
+    event.preventDefault();
+    event.stopPropagation();
+  }
   const headingDragStateRef = useRef<{
     startX: number;
     startY: number;
@@ -3388,8 +3418,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   return (
     <div
+      data-lenis-prevent
       className={cn(
-        "min-h-screen font-sans text-foreground",
+        "fixed inset-0 flex flex-col overflow-hidden font-sans text-foreground",
         theme === "light" ? "bg-[#FBFCFD]" : "bg-background"
       )}
       style={examToneStyle}
@@ -3553,7 +3584,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         </div>
       ) : null}
 
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/95 text-foreground shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+      <header className="z-40 shrink-0 border-b border-border/80 bg-background/95 text-foreground shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
         <div className={cn(
           "mx-auto grid min-h-[68px] max-w-[1800px] grid-cols-1 gap-3 px-4 py-3 lg:items-center lg:px-6",
           isSinglePaneListeningMode
@@ -3728,18 +3759,21 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       <main
         ref={containerRef}
         style={layoutStyle}
-        className="relative mx-auto flex max-w-[1800px] flex-col lg:h-[calc(100vh-68px-64px)] lg:flex-row"
+        className="relative mx-auto flex min-h-0 w-full max-w-[1800px] flex-1 flex-col overflow-hidden lg:flex-row"
       >
         {!isSinglePaneListeningMode ? (
         <section
           className={cn(
-            "border-b border-border/70 lg:w-[var(--reading-pane)] lg:flex-none lg:border-b-0 lg:border-r lg:border-border/80",
+            "min-h-0 flex-1 overflow-hidden border-b border-border/70 lg:flex lg:w-[var(--reading-pane)] lg:flex-none lg:flex-col lg:border-b-0 lg:border-r lg:border-border/80",
             theme === "light" ? "bg-[#FBFCFD]" : "bg-card/40"
           )}
         >
           <div
             ref={readingPaneRef}
-            className="h-full overflow-y-auto px-5 py-4 [scrollbar-width:none] lg:px-8 lg:py-5 [&::-webkit-scrollbar]:hidden"
+            data-lenis-prevent
+            data-lenis-prevent-wheel
+            onWheelCapture={handlePaneWheel}
+            className="h-full min-h-0 overflow-y-auto px-5 py-4 overscroll-contain lg:flex-1 lg:px-8 lg:py-5"
             style={{ scrollbarGutter: "stable" }}
           >
             <div className="mb-3">
@@ -3862,13 +3896,17 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
         <section
           className={cn(
+            "min-h-0 flex-1 overflow-hidden lg:flex lg:flex-col",
             isSinglePaneListeningMode || (isReviewMode && isListeningPreview) ? "lg:w-full lg:flex-1" : "lg:w-[var(--question-pane)] lg:flex-none",
             theme === "light" ? "bg-[#FBFCFD]" : "bg-muted/15"
           )}
         >
           <div
             ref={questionPaneRef}
-            className="h-full overflow-y-auto px-4 py-5 [scrollbar-width:none] lg:px-6 lg:py-6 [&::-webkit-scrollbar]:hidden"
+            data-lenis-prevent
+            data-lenis-prevent-wheel
+            onWheelCapture={handlePaneWheel}
+            className="h-full min-h-0 overflow-y-auto px-4 py-5 overscroll-contain lg:flex-1 lg:px-6 lg:py-6"
             style={{ scrollbarGutter: "stable" }}
           >
             <div className="space-y-8">
@@ -4008,7 +4046,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         ) : null}
       </main>
 
-      <footer className="sticky bottom-0 z-30 border-t border-border/80 bg-background/95 backdrop-blur-xl">
+      <footer className="z-30 shrink-0 border-t border-border/80 bg-background/95 backdrop-blur-xl">
         <div className="mx-auto max-w-[1800px] px-4 py-2 lg:px-6">
           <div className="flex w-full flex-col gap-2">
             <div className="flex min-h-[2.25rem] items-center justify-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

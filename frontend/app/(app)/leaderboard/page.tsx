@@ -202,7 +202,7 @@ export default function LeaderboardPage() {
               key={tab.id}
               onClick={() => setTypeFilter(tab.id as TypeFilter)}
               className={cn(
-                "flex-1 whitespace-nowrap rounded-xl px-5 py-2.5 text-[14px] font-black transition-all sm:flex-none",
+                "flex-1 whitespace-nowrap rounded-xl px-5 py-2.5 text-[14px] font-semibold transition-all sm:flex-none",
                 typeFilter === tab.id
                   ? "scale-[1.02] bg-primary text-primary-foreground shadow-[0_4px_14px_-2px_rgba(var(--primary),0.4)]"
                   : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -215,7 +215,7 @@ export default function LeaderboardPage() {
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-border/50 bg-card/50 shadow-lg shadow-black/5 backdrop-blur-xl">
-        <div className="grid grid-cols-[44px_minmax(0,1.2fr)_92px_78px] gap-3 border-b border-border/50 bg-muted/20 px-4 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground md:grid-cols-[56px_minmax(0,1.8fr)_112px_96px_108px_108px_72px_92px_86px] md:px-6">
+        <div className="grid grid-cols-[44px_minmax(0,1.2fr)_92px_78px] gap-3 border-b border-border/50 bg-muted/20 px-4 py-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground md:grid-cols-[56px_minmax(0,1.8fr)_112px_96px_108px_108px_72px_92px_86px] md:px-6">
           <div className="text-center">Rank</div>
           <div>Candidate</div>
           <div className="text-right md:text-center">Percentile</div>
@@ -234,16 +234,16 @@ export default function LeaderboardPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : query.isError ? (
-              <div className="p-12 text-center text-sm font-bold text-muted-foreground">
+              <div className="p-12 text-center text-sm font-medium text-muted-foreground">
                 Unable to load live leaderboard right now.
               </div>
             ) : top10.length > 0 ? (
               top10.map((entry) => <EntryRow key={`${entry.rank}-${entry.userId}`} entry={entry} />)
-            ) : (
-              <div className="p-12 text-center text-sm font-bold text-muted-foreground">
+            ) : !currentUser ? (
+              <div className="p-12 text-center text-sm font-medium text-muted-foreground">
                 No ranking data available yet.
               </div>
-            )}
+            ) : null}
           </div>
 
           {currentUser ? (

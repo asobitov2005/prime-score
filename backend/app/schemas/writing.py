@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.models.enums import (
     WritingDifficulty,
     WritingErrorCategory,
+    WritingQuestionSubtype,
     WritingSubmissionStatus,
     WritingTaskStatus,
     WritingTaskType,
@@ -30,6 +31,7 @@ class WritingTaskRead(BaseModel):
     difficulty: WritingDifficulty
     status: WritingTaskStatus
     source: str | None = None
+    question_subtype: str | None = None
     description: str | None = None
     sample_band: float | None = None
     created_at: datetime
@@ -46,6 +48,7 @@ class WritingTaskListItem(BaseModel):
     time_limit_seconds: int
     difficulty: WritingDifficulty
     source: str | None = None
+    question_subtype: str | None = None
     description: str | None = None
 
 
@@ -110,6 +113,7 @@ class AdminWritingTaskCreateRequest(BaseModel):
     time_limit_seconds: int = Field(default=2400, ge=300, le=10800)
     difficulty: WritingDifficulty = WritingDifficulty.MEDIUM
     source: str | None = None
+    question_subtype: WritingQuestionSubtype | None = None
     description: str | None = None
     sample_band: float | None = Field(default=None, ge=0, le=9)
     sample_answer: str | None = None
@@ -124,6 +128,7 @@ class AdminWritingTaskUpdateRequest(BaseModel):
     time_limit_seconds: int | None = Field(default=None, ge=300, le=10800)
     difficulty: WritingDifficulty | None = None
     source: str | None = None
+    question_subtype: WritingQuestionSubtype | None = None
     description: str | None = None
     sample_band: float | None = Field(default=None, ge=0, le=9)
     sample_answer: str | None = None
