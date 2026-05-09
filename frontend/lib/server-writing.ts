@@ -1,3 +1,4 @@
+import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 import { requestServerUserApi } from "@/lib/server-user-auth";
 
 export type WritingTaskType = "task_1" | "task_2";
@@ -154,6 +155,30 @@ export interface WritingDashboardSummary {
   task_2_average?: number | null;
 }
 
+async function requestPublicWritingApi<T>(path: string): Promise<T> {
+  const baseUrl = getFrontendServerApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed for ${path}`);
+    }
+
+    return (await response.json()) as T;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function listWritingTasks(params: {
   task_type?: WritingTaskType;
   difficulty?: WritingDifficulty;
@@ -168,11 +193,11 @@ export async function listWritingTasks(params: {
   if (params.page) search.set("page", String(params.page));
   if (params.page_size) search.set("page_size", String(params.page_size));
   const qs = search.toString();
-  return requestServerUserApi<WritingTaskListResponse>(`/writing/tasks${qs ? `?${qs}` : ""}`);
+  return requestPublicWritingApi<WritingTaskListResponse>(`/writing/tasks${qs ? `?${qs}` : ""}`);
 }
 
 export async function getWritingTask(taskId: string): Promise<WritingTaskDetail> {
-  return requestServerUserApi<WritingTaskDetail>(`/writing/tasks/${taskId}`);
+  return requestPublicWritingApi<WritingTaskDetail>(`/writing/tasks/${taskId}`);
 }
 
 export async function getWritingSubmission(submissionId: string): Promise<WritingSubmissionRecord> {
