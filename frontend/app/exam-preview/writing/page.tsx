@@ -1,5 +1,4 @@
-import { notFound } from "next/navigation";
-
+import { ExamPreviewAccessGate } from "@/components/exam/exam-preview-access-gate";
 import { getWritingTask, resolveWritingAssetUrl, type WritingTaskType } from "@/lib/server-writing";
 import { WritingExamClient } from "./writing-exam-client";
 
@@ -24,7 +23,7 @@ export default async function WritingExamPreviewPage({ searchParams }: WritingEx
   const task = taskId ? await getWritingTask(taskId).catch(() => null) : null;
 
   if (taskId && !task) {
-    notFound();
+    return <ExamPreviewAccessGate kind="writing" backHref="/writing" />;
   }
 
   return (

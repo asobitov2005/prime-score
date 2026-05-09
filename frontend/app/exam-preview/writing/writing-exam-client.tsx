@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type WheelEvent as R
 import { AlertTriangle, Expand, FileText, ImageIcon, Loader2, Moon, SendHorizontal, Shrink, SunMedium, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ExamPreviewAccessGate } from "@/components/exam/exam-preview-access-gate";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -126,6 +127,7 @@ export function WritingExamClient({
   const draftPersistedRef = useRef(false);
   const storedCandidateName = useAuthStore((state) => state.name);
   const hasHydratedAuth = useAuthStore((state) => state.hasHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const candidateName = hasHydratedAuth ? (storedCandidateName || "Guest Candidate") : "Guest Candidate";
 
   const updateTheme = useCallback((nextTheme: "light" | "dark") => {
@@ -409,6 +411,10 @@ export function WritingExamClient({
       setIsSubmitting(false);
     }
   }, [canSubmit, draftImageDataUrl, elapsed, essay, imageFile, isStarted, isSubmitting, resolvedTaskType, router, storageKey, task, topic]);
+
+  if (hasHydratedAuth && !isAuthenticated) {
+    return <ExamPreviewAccessGate kind="writing" backHref="/writing" />;
+  }
 
   return (
     <div data-lenis-prevent className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">

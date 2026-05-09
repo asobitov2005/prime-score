@@ -1,5 +1,4 @@
-import { notFound } from "next/navigation";
-
+import { ExamPreviewAccessGate } from "@/components/exam/exam-preview-access-gate";
 import { ReadingExamPreview, type ReadingExamPreviewData } from "@/components/exam/reading-exam-preview";
 import { getBackendAttempt, getBackendAttemptReview } from "@/lib/server-attempts";
 
@@ -303,12 +302,12 @@ export default async function ListeningExamPreviewPage({ searchParams }: Listeni
   const attemptId = searchParams?.attemptId;
 
   if (!attemptId) {
-    notFound();
+    return <ExamPreviewAccessGate kind="listening" backHref="/tests?type=listening" />;
   }
 
   const data = await buildAttemptPreviewData(attemptId);
   if (!data) {
-    notFound();
+    return <ExamPreviewAccessGate kind="listening" backHref="/tests?type=listening" />;
   }
 
   return <ReadingExamPreview mode={mode} data={data} />;
