@@ -219,11 +219,8 @@ async def list_published_tasks(
     question_subtype: WritingQuestionSubtype | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> WritingTaskListResponse:
-    _ = current_user
-
     filters = [WritingTask.status == WritingTaskStatus.PUBLISHED]
     if task_type is not None:
         filters.append(WritingTask.task_type == task_type)
@@ -255,10 +252,8 @@ async def list_published_tasks(
 @router.get("/tasks/{task_id}", response_model=WritingTaskRead)
 async def get_published_task(
     task_id: UUID,
-    current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> WritingTaskRead:
-    _ = current_user
     task = await session.get(WritingTask, task_id)
     if task is None or task.status != WritingTaskStatus.PUBLISHED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
