@@ -6,6 +6,9 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMyPayments } from "@/lib/server-payments";
 import { getPublicPlans } from "@/lib/server-plans";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function SubscriptionPage() {
   const [plans, payments] = await Promise.all([getPublicPlans(), getMyPayments()]);
 

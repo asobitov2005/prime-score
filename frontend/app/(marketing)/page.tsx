@@ -13,7 +13,8 @@ import {
   landingKeywords,
 } from "@/lib/seo";
 
-export const revalidate = 75;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Free IELTS Mock Tests Online | Reading, Listening, Writing & Speaking",

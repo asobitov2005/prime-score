@@ -1,7 +1,5 @@
 import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 
-const baseUrl = getFrontendServerApiBaseUrl();
-
 type BackendPublicPlan = {
   id: string;
   name: string;
@@ -78,15 +76,13 @@ function mapBackendPlan(payload: BackendPublicPlan): MarketingPlan {
 
 export async function getPublicPlans(): Promise<MarketingPlan[]> {
   try {
+    const baseUrl = getFrontendServerApiBaseUrl();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
     let response: Response;
     try {
       response = await fetch(`${baseUrl}/plans`, {
-        next: {
-          revalidate: 3600,
-          tags: ["public-plans"],
-        },
+        cache: "no-store",
         signal: controller.signal,
       });
     } finally {

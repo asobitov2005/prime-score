@@ -17,7 +17,8 @@ import {
   pricingKeywords,
 } from "@/lib/seo";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "PrimeScore Pricing for IELTS Mock Online Practice",
