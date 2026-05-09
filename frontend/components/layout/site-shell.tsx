@@ -43,7 +43,7 @@ const highlights = [
 export function SiteShell({ children }: SiteShellProps) {
   // This shell owns the authenticated navigation frame for the user-facing app.
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const { isAuthenticated, name, phoneNumber, sessionId, refreshToken, clearSession, syncSession, hasHydrated } = useAuthStore();
+  const { isAuthenticated, name, phoneNumber, avatarUrl, sessionId, refreshToken, clearSession, syncSession, hasHydrated } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -142,7 +142,8 @@ export function SiteShell({ children }: SiteShellProps) {
           userId: response.user.id,
           sessionId: response.session_id,
           name: buildUserDisplayName(response.user.first_name, response.user.last_name),
-          phoneNumber: response.user.username ?? null,
+          phoneNumber: response.user.phone ?? response.user.username ?? null,
+          avatarUrl: response.user.avatar_url ?? null,
           isPremium: Boolean(response.user.is_premium),
           premiumUntil: response.user.premium_until ?? null,
         });
@@ -402,8 +403,15 @@ export function SiteShell({ children }: SiteShellProps) {
                   className="flex items-center gap-2.5 p-1.5 pl-3 rounded-2xl border border-border bg-muted/40 hover:bg-muted transition-all active:scale-95 group outline-none"
                 >
                   <span className="text-xs font-bold text-foreground opacity-80 group-hover:opacity-100">{name}</span>
-                  <div className="w-8 h-8 rounded-xl bg-primary text-black dark:text-primary-foreground flex items-center justify-center text-sm font-medium shadow-sm">
-                    {name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
+                  <div className="w-8 h-8 overflow-hidden rounded-xl bg-primary text-black dark:text-primary-foreground flex items-center justify-center text-sm font-medium shadow-sm">
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarUrl} alt={name} draggable={false} className="h-full w-full object-cover" />
+                    ) : name ? (
+                      name.charAt(0).toUpperCase()
+                    ) : (
+                      <User className="h-4 w-4" />
+                    )}
                   </div>
                   <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-300", isMenuOpen && "rotate-180")} />
                 </button>

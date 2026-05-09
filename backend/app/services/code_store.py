@@ -28,15 +28,19 @@ class CodeStore:
         *,
         telegram_id: int,
         phone: str,
+        username: str | None,
         first_name: str,
         last_name: str | None = None,
+        avatar_url: str | None = None,
     ) -> None:
         payload = json.dumps(
             {
                 "telegram_id": telegram_id,
                 "phone": phone,
+                "username": username,
                 "first_name": first_name,
                 "last_name": last_name,
+                "avatar_url": avatar_url,
             }
         )
         await self._r.set(f"{_CONTACT_PFX}{telegram_id}", payload, ex=_CONTACT_TTL)
@@ -55,16 +59,20 @@ class CodeStore:
         *,
         telegram_id: int,
         phone: str,
+        username: str | None,
         first_name: str,
         last_name: str | None = None,
+        avatar_url: str | None = None,
     ) -> str:
         code = generate_login_code()
         payload = json.dumps(
             {
                 "telegram_id": telegram_id,
                 "phone": phone,
+                "username": username,
                 "first_name": first_name,
                 "last_name": last_name,
+                "avatar_url": avatar_url,
                 "used": False,
             }
         )

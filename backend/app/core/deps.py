@@ -28,6 +28,8 @@ async def get_current_user(
     x_debug_first_name: str = Header(default="Prime", alias="X-Debug-First-Name"),
     x_debug_last_name: str | None = Header(default=None, alias="X-Debug-Last-Name"),
     x_debug_username: str | None = Header(default=None, alias="X-Debug-Username"),
+    x_debug_phone: str | None = Header(default=None, alias="X-Debug-Phone"),
+    x_debug_avatar_url: str | None = Header(default=None, alias="X-Debug-Avatar-Url"),
     x_debug_role: str = Header(default="user", alias="X-Debug-Role"),
     x_debug_is_premium: str | None = Header(default=None, alias="X-Debug-Is-Premium"),
     x_debug_show_on_leaderboard: str | None = Header(
@@ -76,12 +78,14 @@ async def get_current_user(
             id=user.id,
             first_name=user.first_name,
             last_name=user.last_name,
-            username=user.username or user.phone,
+            username=user.username,
+            phone=user.phone,
             role=UserRole.user,
             is_premium=user.is_premium,
             premium_until=user.premium_until,
             show_on_leaderboard=user.show_on_leaderboard,
             telegram_id=user.telegram_id,
+            avatar_url=user.avatar_url,
         )
 
     if not x_debug_user_id:
@@ -105,6 +109,8 @@ async def get_current_user(
         first_name=x_debug_first_name,
         last_name=x_debug_last_name,
         username=x_debug_username,
+        phone=x_debug_phone,
+        avatar_url=x_debug_avatar_url,
         role=role,
         is_premium=_parse_bool(x_debug_is_premium, default=False),
         show_on_leaderboard=_parse_bool(x_debug_show_on_leaderboard, default=True),

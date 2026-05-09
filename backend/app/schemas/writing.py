@@ -113,7 +113,7 @@ class AdminWritingTaskCreateRequest(BaseModel):
     time_limit_seconds: int = Field(default=2400, ge=300, le=10800)
     difficulty: WritingDifficulty = WritingDifficulty.MEDIUM
     source: str | None = None
-    question_subtype: WritingQuestionSubtype | None = None
+    question_subtype: WritingQuestionSubtype
     description: str | None = None
     sample_band: float | None = Field(default=None, ge=0, le=9)
     sample_answer: str | None = None
@@ -231,6 +231,7 @@ class WritingHistoryItem(BaseModel):
     task_title: str
     task_type: WritingTaskType
     word_count: int
+    time_spent_seconds: int = 0
     overall_band: float | None = None
     status: WritingSubmissionStatus
     submitted_at: datetime

@@ -25,6 +25,8 @@ from app.services.test_content_repo import build_test_snapshot_from_db
 
 
 def _principal_phone(principal: DebugPrincipal) -> str:
+    if principal.phone is not None:
+        return principal.phone
     return f"dbg-{principal.id.hex[:16]}"
 
 
@@ -128,6 +130,7 @@ async def ensure_debug_user(session: AsyncSession, principal: DebugPrincipal) ->
             first_name=principal.first_name,
             last_name=principal.last_name,
             username=principal.username,
+            telegram_contact_updated_at=datetime.now(timezone.utc),
             is_premium=principal.is_premium,
             show_on_leaderboard=principal.show_on_leaderboard,
             last_active_at=datetime.now(timezone.utc),
@@ -136,7 +139,9 @@ async def ensure_debug_user(session: AsyncSession, principal: DebugPrincipal) ->
     else:
         user.first_name = principal.first_name
         user.last_name = principal.last_name
+        user.phone = _principal_phone(principal)
         user.username = principal.username
+        user.telegram_contact_updated_at = datetime.now(timezone.utc)
         user.is_premium = principal.is_premium
         user.show_on_leaderboard = principal.show_on_leaderboard
         user.last_active_at = datetime.now(timezone.utc)

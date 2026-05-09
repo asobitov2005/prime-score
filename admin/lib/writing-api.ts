@@ -52,7 +52,7 @@ export interface WritingTaskCreateInput {
   time_limit_seconds: number;
   difficulty: WritingDifficulty;
   source?: string | null;
-  question_subtype?: WritingQuestionSubtype | null;
+  question_subtype: WritingQuestionSubtype;
   description?: string | null;
   sample_band?: number | null;
   sample_answer?: string | null;

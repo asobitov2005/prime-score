@@ -1,15 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  BarChart3,
   CheckCircle2,
+  CircleDot,
+  FileQuestion,
   Image as ImageIcon,
+  LayoutPanelTop,
+  LineChart,
   Loader2,
+  Map,
+  MessageSquareText,
+  PieChart,
   RefreshCcw,
+  Route,
   Sparkles,
+  SplitSquareHorizontal,
+  Table2,
   Trash2,
   Upload
 } from "lucide-react";
@@ -22,7 +33,6 @@ import {
   CardTitle,
   Input,
   Label,
-  Select,
   Textarea,
   buttonClassName,
   cn
@@ -50,7 +60,6 @@ interface WritingTaskFormProps {
 interface FormState {
   title: string;
   task_type: WritingTaskType;
-  prompt_html: string;
   image_url: string | null;
   word_minimum: number;
   time_limit_minutes: number;
@@ -63,6 +72,22 @@ interface FormState {
   status: Exclude<WritingTaskStatus, "archived">;
 }
 
+const subtypeIcons: Record<WritingQuestionSubtype, typeof BarChart3> = {
+  bar_chart: BarChart3,
+  line_graph: LineChart,
+  pie_chart: PieChart,
+  table: Table2,
+  process: Route,
+  map: Map,
+  two_charts: LayoutPanelTop,
+  opinion: CircleDot,
+  advantages_disadvantages: SplitSquareHorizontal,
+  discussion: MessageSquareText,
+  problem_solution: FileQuestion,
+  two_part: LayoutPanelTop,
+  causes_effects: Route,
+};
+
 function defaultsForType(t: WritingTaskType): { word_minimum: number; time_limit_minutes: number } {
   return t === "task_1"
     ? { word_minimum: 150, time_limit_minutes: 20 }
@@ -74,7 +99,6 @@ function buildInitialState(task: WritingTask | null | undefined): FormState {
     return {
       title: task.title,
       task_type: task.task_type,
-      prompt_html: task.prompt_html,
       image_url: task.image_url ?? null,
       word_minimum: task.word_minimum,
       time_limit_minutes: Math.max(1, Math.round(task.time_limit_seconds / 60)),
@@ -91,7 +115,6 @@ function buildInitialState(task: WritingTask | null | undefined): FormState {
   return {
     title: "",
     task_type: "task_2",
-    prompt_html: "",
     image_url: null,
     word_minimum: defaults.word_minimum,
     time_limit_minutes: defaults.time_limit_minutes,
@@ -118,6 +141,7 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
   const [imageSummaryStatus, setImageSummaryStatus] = useState<string>(
     task?.image_summary_status ?? "not_required"
   );
+  const [localImagePreviewUrl, setLocalImagePreviewUrl] = useState<string | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,7 +154,16 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
     }
   }, [task]);
 
+  useEffect(() => {
+    return () => {
+      if (localImagePreviewUrl) {
+        URL.revokeObjectURL(localImagePreviewUrl);
+      }
+    };
+  }, [localImagePreviewUrl]);
+
   const isTask1 = state.task_type === "task_1";
+  const previewImageUrl = localImagePreviewUrl ?? state.image_url;
 
   function patchState(patch: Partial<FormState>) {
     setState((s) => ({ ...s, ...patch }));
@@ -159,7 +192,7 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
     const next: Record<string, string> = {};
     if (!state.title.trim()) next.title = "Title is required.";
     if (state.title.length > 255) next.title = "Title must be 255 characters or fewer.";
-    if (!state.prompt_html.trim()) next.prompt_html = "Prompt is required.";
+    if (!state.question_subtype) next.question_subtype = "Question subtype is required.";
     if (state.word_minimum < 50 || state.word_minimum > 1000) {
       next.word_minimum = "Word minimum must be between 50 and 1000.";
     }
@@ -187,6 +220,11 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
       setUploadError("File size must be 10 MB or less.");
       return;
     }
+    const previewUrl = URL.createObjectURL(file);
+    setLocalImagePreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return previewUrl;
+    });
     setUploading(true);
     try {
       const result = await writingApi.uploadImage(file);
@@ -209,6 +247,13 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
     if (file) handleFileUpload(file);
   }
 
+  function onPaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const file = Array.from(e.clipboardData.files).find((item) => item.type.startsWith("image/"));
+    if (!file) return;
+    e.preventDefault();
+    void handleFileUpload(file);
+  }
+
   async function regenerateSummary() {
     if (!task) return;
     setRegenLoading(true);
@@ -229,17 +274,18 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
     setSubmitError(null);
     setSuccessMsg(null);
     if (!validate()) return;
+    if (!state.question_subtype) return;
 
     const payload: WritingTaskCreateInput = {
       title: state.title.trim(),
       task_type: state.task_type,
-      prompt_html: state.prompt_html,
+      prompt_html: state.title.trim(),
       image_url: isTask1 && state.image_url ? state.image_url : null,
       word_minimum: state.word_minimum,
       time_limit_seconds: state.time_limit_minutes * 60,
       difficulty: state.difficulty,
       source: state.source.trim() || null,
-      question_subtype: state.question_subtype || null,
+      question_subtype: state.question_subtype,
       description: state.description.trim() || null,
       sample_band: state.sample_band ? Number(state.sample_band) : null,
       sample_answer: state.sample_answer.trim() || null,
@@ -265,8 +311,6 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
       setSubmitting(false);
     }
   }
-
-  const previewHtml = useMemo(() => state.prompt_html, [state.prompt_html]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -336,53 +380,47 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="question_subtype">Question Subtype</Label>
-            <Select
-              id="question_subtype"
-              value={state.question_subtype ?? ""}
-              onChange={(e) => patchState({ question_subtype: (e.target.value || null) as WritingQuestionSubtype | null })}
-            >
-              <option value="">— None —</option>
-              {(state.task_type === "task_1" ? QUESTION_SUBTYPES_TASK1 : QUESTION_SUBTYPES_TASK2).map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {state.task_type === "task_1"
-                ? "Type of visual: bar chart, line graph, pie chart, etc."
-                : "Essay type: opinion, discussion, problem & solution, etc."}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>Prompt</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            HTML supported. Wrap paragraphs in &lt;p&gt;…&lt;/p&gt;.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="prompt_html">Source <span className="text-danger">*</span></Label>
-              <Textarea
-                id="prompt_html"
-                value={state.prompt_html}
-                onChange={(e) => patchState({ prompt_html: e.target.value })}
-                rows={16}
-                className="min-h-[400px] font-mono text-[13px] leading-6"
-                placeholder={`<p>The chart below shows ...</p>\n<p>Summarise the information by selecting and reporting the main features.</p>`}
-              />
-              {errors.prompt_html ? <p className="text-xs text-danger">{errors.prompt_html}</p> : null}
+            <Label htmlFor="question_subtype">Question Subtype <span className="text-danger">*</span></Label>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {(state.task_type === "task_1" ? QUESTION_SUBTYPES_TASK1 : QUESTION_SUBTYPES_TASK2).map((opt) => {
+                const active = state.question_subtype === opt.value;
+                const Icon = subtypeIcons[opt.value];
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      patchState({ question_subtype: opt.value });
+                      setErrors((current) => {
+                        const next = { ...current };
+                        delete next.question_subtype;
+                        return next;
+                      });
+                    }}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition-all",
+                      active
+                        ? "border-primary bg-primary/8 text-foreground shadow-sm ring-1 ring-primary/25"
+                        : errors.question_subtype
+                          ? "border-danger/60 bg-danger/5 text-foreground hover:border-danger hover:bg-danger/8"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    <Icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} />
+                    <span className="whitespace-nowrap">{opt.label}</span>
+                  </button>
+                );
+              })}
             </div>
-            <div className="space-y-2">
-              <Label>Preview</Label>
-              <div className="prose prose-sm dark:prose-invert max-w-none min-h-[400px] rounded-xl border border-border bg-muted/30 p-4 text-sm leading-7"
-                dangerouslySetInnerHTML={{ __html: previewHtml || "<p class=\"text-muted-foreground italic\">Preview will appear here...</p>" }}
-              />
-            </div>
+            {errors.question_subtype ? (
+              <p className="text-xs font-semibold text-danger">{errors.question_subtype}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {state.task_type === "task_1"
+                  ? "Type of visual: bar chart, line graph, pie chart, etc."
+                  : "Essay type: opinion, discussion, problem & solution, etc."}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -400,11 +438,11 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
               After saving, the AI will automatically extract a detailed description of your chart/graph used for grading. This usually takes 10-20 seconds.
             </p>
 
-            {state.image_url ? (
+            {previewImageUrl ? (
               <div className="space-y-3">
                 <div className="overflow-hidden rounded-2xl border border-border bg-muted/30">
                   <img
-                    src={state.image_url}
+                    src={previewImageUrl}
                     alt="Task 1 visual"
                     className="max-h-[400px] w-full object-contain"
                   />
@@ -422,6 +460,10 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
                     type="button"
                     onClick={() => {
                       patchState({ image_url: null });
+                      setLocalImagePreviewUrl((current) => {
+                        if (current) URL.revokeObjectURL(current);
+                        return null;
+                      });
                       setImageSummary(null);
                       setImageSummaryStatus("not_required");
                     }}
@@ -434,15 +476,22 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
               </div>
             ) : (
               <div
+                role="button"
+                tabIndex={0}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragActive(true);
                 }}
                 onDragLeave={() => setDragActive(false)}
                 onDrop={onDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onPaste={onPaste}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                  }
+                }}
                 className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors",
+                  "flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center outline-none transition-colors focus-visible:border-primary focus-visible:bg-primary/5 focus-visible:ring-2 focus-visible:ring-primary/15",
                   dragActive
                     ? "border-primary bg-primary/5"
                     : "border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/40"
@@ -455,10 +504,18 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
                 )}
                 <div>
                   <p className="text-sm font-semibold text-foreground">
-                    {uploading ? "Uploading…" : "Drag and drop, or click to upload"}
+                    {uploading ? "Uploading…" : "Drag and drop, or paste image here"}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">PNG, JPEG, or WEBP, up to 10 MB</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Click this area to focus, then paste. PNG, JPEG, or WEBP, up to 10 MB</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={buttonClassName({ variant: "outline", size: "sm" })}
+                >
+                  <Upload className="h-4 w-4" />
+                  Choose file
+                </button>
               </div>
             )}
 
@@ -514,103 +571,6 @@ export function WritingTaskForm({ mode, task }: WritingTaskFormProps) {
           </CardContent>
         </Card>
       ) : null}
-
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle>Constraints</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-5 md:grid-cols-3">
-          <div className="space-y-2">
-            <Label htmlFor="word_minimum">Word minimum</Label>
-            <Input
-              id="word_minimum"
-              type="number"
-              min={50}
-              max={1000}
-              value={state.word_minimum}
-              onChange={(e) => patchState({ word_minimum: Number(e.target.value) })}
-            />
-            {errors.word_minimum ? <p className="text-xs text-danger">{errors.word_minimum}</p> : null}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="time_limit_minutes">Time limit (minutes)</Label>
-            <Input
-              id="time_limit_minutes"
-              type="number"
-              min={5}
-              max={180}
-              value={state.time_limit_minutes}
-              onChange={(e) => patchState({ time_limit_minutes: Number(e.target.value) })}
-            />
-            {errors.time_limit_minutes ? <p className="text-xs text-danger">{errors.time_limit_minutes}</p> : null}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="difficulty">Difficulty</Label>
-            <Select
-              id="difficulty"
-              value={state.difficulty}
-              onChange={(e) => patchState({ difficulty: e.target.value as WritingDifficulty })}
-            >
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle>Reference</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="source">Source</Label>
-              <Input
-                id="source"
-                value={state.source}
-                onChange={(e) => patchState({ source: e.target.value })}
-                placeholder="e.g. Cambridge IELTS 18 Test 3"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sample_band">Sample band</Label>
-              <Input
-                id="sample_band"
-                type="number"
-                min={0}
-                max={9}
-                step={0.5}
-                value={state.sample_band}
-                onChange={(e) => patchState({ sample_band: e.target.value })}
-                placeholder="e.g. 7.5"
-              />
-              {errors.sample_band ? <p className="text-xs text-danger">{errors.sample_band}</p> : null}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description (internal notes)</Label>
-            <Textarea
-              id="description"
-              rows={3}
-              value={state.description}
-              onChange={(e) => patchState({ description: e.target.value })}
-              placeholder="Internal notes for moderators (not shown to students)."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sample_answer">Sample answer</Label>
-            <Textarea
-              id="sample_answer"
-              rows={8}
-              value={state.sample_answer}
-              onChange={(e) => patchState({ sample_answer: e.target.value })}
-              placeholder="Reference answer for moderators."
-            />
-          </div>
-        </CardContent>
-      </Card>
 
       <Card className="rounded-2xl">
         <CardHeader>

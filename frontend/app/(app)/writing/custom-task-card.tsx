@@ -11,7 +11,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { saveWritingDraftClient } from "@/lib/client-writing";
 import { emitNavigationStart } from "@/lib/navigation-transition";
 import { cn } from "@/lib/utils";
 import type { WritingTaskType } from "@/lib/server-writing";
@@ -83,6 +82,7 @@ export function CustomTaskCard({ activeTaskType }: { activeTaskType: WritingTask
 function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
   const [prompt, setPrompt] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
@@ -160,7 +160,7 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
       topic: prompt.trim(),
       essay: "",
       imageDataUrl,
-      started: false,
+      started: true,
       timeSpentSeconds: 0,
     };
 
@@ -168,17 +168,7 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
       window.localStorage.setItem(CUSTOM_TASK_1_DRAFT_KEY, JSON.stringify(payload));
     } catch {}
 
-    await saveWritingDraftClient(CUSTOM_TASK_1_DRAFT_KEY, {
-      task_id: null,
-      task_type: "task_1",
-      topic: prompt.trim(),
-      essay_text: "",
-      image_data_url: imageDataUrl,
-      started: false,
-      time_spent_seconds: 0,
-    }).catch(() => null);
-
-    const href = "/exam-preview/writing?task_type=task_1&mode=practice";
+    const href = "/exam-preview/writing?task_type=task_1";
     emitNavigationStart(href);
     router.push(href);
   }, [canContinue, imageDataUrl, isStarting, prompt, router]);
@@ -191,7 +181,7 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
       description="Upload or paste the chart image, then enter the exact essay prompt before opening the workspace."
       className="max-w-4xl rounded-3xl"
     >
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]" onPaste={handlePaste}>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="custom-task-1-prompt" className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
@@ -208,8 +198,8 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/20 bg-violet-500/[0.04] px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Ready for Task 1 setup</p>
-              <p className="text-xs leading-5 text-muted-foreground">The prompt and visual will be saved as a draft before the timer starts.</p>
+              <p className="text-sm font-semibold text-foreground">Ready for Task 1 workspace</p>
+              <p className="text-xs leading-5 text-muted-foreground">The prompt and visual will be saved, then the timer starts in the workspace.</p>
             </div>
             <Button type="button" onClick={() => void startWorkspace()} disabled={!canContinue || isStarting} className="h-10 rounded-xl px-4">
               {isStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
@@ -221,9 +211,11 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
         <div className="space-y-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Chart image</p>
           <div
+            ref={dropZoneRef}
             role="button"
             tabIndex={0}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => dropZoneRef.current?.focus()}
+            onPaste={handlePaste}
             onDragEnter={(event) => {
               event.preventDefault();
               setIsDragging(true);
@@ -231,8 +223,14 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
             onDragOver={(event) => event.preventDefault()}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                dropZoneRef.current?.focus();
+              }
+            }}
             className={cn(
-              "min-h-[300px] cursor-pointer rounded-3xl border border-dashed border-border/70 bg-background/60 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "min-h-[300px] rounded-3xl border border-dashed border-border/70 bg-background/60 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isDragging && "border-violet-500/60 bg-violet-500/10",
               imageDataUrl && "border-solid bg-background",
             )}
@@ -269,8 +267,8 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
                   <ImageIcon className="h-7 w-7" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-foreground">Drop chart image here</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">Upload from your computer, paste with Ctrl+V, or use clipboard.</p>
+                  <p className="text-base font-semibold text-foreground">Drop or paste chart image here</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">Click this area to focus, then press Ctrl+V. Use Upload to choose a file.</p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button type="button" variant="outline" className="h-10 rounded-xl" onClick={(event) => {

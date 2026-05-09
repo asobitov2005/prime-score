@@ -85,7 +85,43 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
       occurredAt: item.occurred_at,
       reading: item.reading ?? null,
       listening: item.listening ?? null
-    }))
+    })),
+    accuracyTrend: (response.accuracy_trend ?? []).map((p) => ({
+      date: p.date,
+      accuracy: p.accuracy,
+      band: p.band ?? null,
+      testType: p.test_type ?? null,
+    })),
+    weeklyActivity: (response.weekly_activity ?? []).map((p) => ({
+      weekLabel: p.week_label,
+      attemptsCount: p.attempts_count,
+      timeSpentMin: p.time_spent_min,
+    })),
+    scoreDistribution: {
+      band1To3: response.score_distribution?.band_1_to_3 ?? 0,
+      band3_5To5: response.score_distribution?.band_3_5_to_5 ?? 0,
+      band5To6_5: response.score_distribution?.band_5_to_6_5 ?? 0,
+      band6_5To7_5: response.score_distribution?.band_6_5_to_7_5 ?? 0,
+      band7_5To9: response.score_distribution?.band_7_5_to_9 ?? 0,
+    },
+    personalBests: {
+      bestBand: response.personal_bests?.best_band ?? null,
+      bestAccuracy: response.personal_bests?.best_accuracy ?? null,
+      longestStreak: response.personal_bests?.longest_streak ?? 0,
+      currentStreak: response.personal_bests?.current_streak ?? 0,
+      fastestFullTestSec: response.personal_bests?.fastest_full_test_sec ?? null,
+    },
+    speedMetrics: {
+      avgTimePerQuestionSec: response.speed_metrics?.avg_time_per_question_sec ?? null,
+      readingAvgSecPerQuestion: response.speed_metrics?.reading_avg_sec_per_question ?? null,
+      listeningAvgSecPerQuestion: response.speed_metrics?.listening_avg_sec_per_question ?? null,
+    },
+    improvementRate: {
+      last5AvgBand: response.improvement_rate?.last_5_avg_band ?? null,
+      prev5AvgBand: response.improvement_rate?.prev_5_avg_band ?? null,
+      delta: response.improvement_rate?.delta ?? null,
+      percentChange: response.improvement_rate?.percent_change ?? null,
+    },
   };
 }
 

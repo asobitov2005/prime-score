@@ -546,6 +546,7 @@ async def list_history(
                 task_title=task.title,
                 task_type=submission.task_type,
                 word_count=submission.word_count,
+                time_spent_seconds=int(submission.time_spent_seconds or 0),
                 overall_band=evaluation.overall_band if evaluation is not None else None,
                 status=submission.status,
                 submitted_at=submission.submitted_at,

@@ -10,8 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.enums import AccessType, NotificationType, PaymentMethod, PaymentStatus, TestSource, TestStatus, TestType, UserRole
 
 
+class AdminQuickStatsRead(BaseModel):
+    fastest_completion_min: float | None = None
+    average_accuracy: float = 0
+    highest_band_achieved: float | None = None
+
 class AdminDashboardRead(BaseModel):
     users_total: int = 0
+    users_new_today: int = 0
+    active_users_7d: int = 0
     premium_users: int = 0
     tests_total: int = 0
     tests_published: int = 0
@@ -19,9 +26,107 @@ class AdminDashboardRead(BaseModel):
     tests_archived: int = 0
     attempts_total: int = 0
     attempts_completed: int = 0
+    attempts_today: int = 0
     payments_pending: int = 0
-    revenue_total: Decimal = Decimal("0")
+    payments_completed: int = 0
+    revenue_total: float = 0
     average_band: float | None = None
+    completion_rate: float = 0
+    premium_rate: float = 0
+    recent_activity: list[str] = Field(default_factory=list)
+    revenue_trend: list["AdminTrendPointRead"] = Field(default_factory=list)
+    registration_trend: list["AdminTrendPointRead"] = Field(default_factory=list)
+    attempts_by_day: list["AdminTrendPointRead"] = Field(default_factory=list)
+    type_split: "AdminTypeSplitRead | None" = None
+    band_distribution: list["AdminBandDistributionPointRead"] = Field(default_factory=list)
+    top_active_users: list["AdminTopActiveUserRead"] = Field(default_factory=list)
+    avg_time_per_test: "AdminAvgTimePerTestRead | None" = None
+    payment_method_split: list["AdminLabelValuePointRead"] = Field(default_factory=list)
+    attempt_status_split: list["AdminLabelValuePointRead"] = Field(default_factory=list)
+    quick_stats: AdminQuickStatsRead | None = None
+
+class AdminTrendPointRead(BaseModel):
+    date: str
+    value: float = 0
+
+
+class AdminTypeSplitRead(BaseModel):
+    reading: int = 0
+    listening: int = 0
+
+
+class AdminBandDistributionPointRead(BaseModel):
+    band: str
+    count: int = 0
+
+
+class AdminTopActiveUserRead(BaseModel):
+    name: str
+    attempt_count: int = 0
+    last_active: str | None = None
+
+
+class AdminAvgTimePerTestRead(BaseModel):
+    reading_avg_min: float | None = None
+    listening_avg_min: float | None = None
+
+
+class AdminAnalyticsPointRead(BaseModel):
+    label: str
+    value: float
+
+class AdminLabelValuePointRead(BaseModel):
+    label: str
+    value: float
+
+
+class AdminAnalyticsTopTestRead(BaseModel):
+    title: str
+    count: int
+
+
+class AdminAnalyticsQuestionTypeRead(BaseModel):
+    type: str
+    error_rate: str
+
+
+class AdminAnalyticsReportRead(BaseModel):
+    dau: int = 0
+    wau: int = 0
+    mau: int = 0
+    conversion_rate: str = "0%"
+    churn_rate: str = "0%"
+    activity_points: list[AdminAnalyticsPointRead] = Field(default_factory=list)
+    top_tests: list[AdminAnalyticsTopTestRead] = Field(default_factory=list)
+    hardest_question_types: list[AdminAnalyticsQuestionTypeRead] = Field(default_factory=list)
+    dau_trend: list[AdminTrendPointRead] = Field(default_factory=list)
+    completion_funnel: "AdminCompletionFunnelRead | None" = None
+    avg_score_by_test: list["AdminAvgScoreByTestRead"] = Field(default_factory=list)
+    hourly_distribution: list[AdminAnalyticsPointRead] = Field(default_factory=list)
+    user_segmentation: "AdminUserSegmentationRead | None" = None
+    weekday_activity: list[AdminAnalyticsPointRead] = Field(default_factory=list)
+
+
+class AdminCompletionFunnelRead(BaseModel):
+    started: int = 0
+    completed: int = 0
+    rate: float = 0
+
+
+class AdminAvgScoreByTestRead(BaseModel):
+    test_title: str
+    avg_band: float
+    attempt_count: int = 0
+
+
+class AdminUserSegmentRead(BaseModel):
+    count: int = 0
+    avg_attempts: float = 0
+
+
+class AdminUserSegmentationRead(BaseModel):
+    free: AdminUserSegmentRead = Field(default_factory=AdminUserSegmentRead)
+    premium: AdminUserSegmentRead = Field(default_factory=AdminUserSegmentRead)
 
 
 class AdminTestUpsertRequest(BaseModel):
@@ -76,12 +181,23 @@ class AdminUploadedAssetResponse(BaseModel):
 
 class AdminUserRead(BaseModel):
     id: UUID
-    telegram_id: int
+    telegram_id: int = 0
     first_name: str
     last_name: str | None = None
     username: str | None = None
+    email: str | None = None
+    role: Literal["super_admin", "admin"] | None = None
     is_premium: bool = False
     show_on_leaderboard: bool = True
+    is_active: bool = True
+
+
+class AdminAccountCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    role: Literal["super_admin", "admin"] = "admin"
+    is_active: bool = True
 
 
 class AdminPlanRead(BaseModel):
@@ -160,6 +276,15 @@ class AdminPromoCodeRead(BaseModel):
     discount_percent: int
     max_uses: int | None = None
     current_uses: int = 0
+    is_active: bool = True
+    expires_at: datetime | None = None
+
+
+class AdminPromoCodeCreateRequest(BaseModel):
+    code: str = Field(min_length=3, max_length=50)
+    discount_percent: int = Field(ge=1, le=100)
+    max_uses: int = Field(default=1, ge=1, le=5000)
+    expires_at: datetime | None = None
     is_active: bool = True
 
 

@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchWritingSubmissionResult, pollWritingSubmission } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 import type {
   WritingCriterionEvaluation,
@@ -593,22 +594,12 @@ export function WritingResultClient({
 
     const poll = async () => {
       try {
-        const res = await fetch(`/internal-api/writing/submissions/${submissionId}`, {
-          credentials: "include",
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(String(res.status));
-        const data = (await res.json()) as { status: string; error_message?: string | null };
+        const data = await pollWritingSubmission(submissionId);
         const status = String(data.status ?? "").toLowerCase();
         if (cancelled) return;
         if (status === "completed") {
           setStage("loading_result");
-          const r = await fetch(`/internal-api/writing/submissions/${submissionId}/result`, {
-            credentials: "include",
-            cache: "no-store",
-          });
-          if (!r.ok) throw new Error(String(r.status));
-          const payload = (await r.json()) as WritingSubmissionResult;
+          const payload = await fetchWritingSubmissionResult(submissionId);
           if (!cancelled) {
             setResult(payload);
             setStage("ready");

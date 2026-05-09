@@ -1,13 +1,10 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  ArrowUpRight,
   BarChart3,
   Clock3,
   ImageIcon,
-  FileText,
   PenSquare,
-  RotateCcw,
   Sparkles,
   Target,
   Trophy,
@@ -18,11 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getWritingDashboardSummary,
-  getWritingDrafts,
   getWritingHistory,
+  listWritingTasks,
+  resolveWritingAssetUrl,
+  QUESTION_SUBTYPES_TASK1,
+  QUESTION_SUBTYPES_TASK2,
   type WritingDashboardSummary,
-  type WritingDraftListItem,
   type WritingHistoryItem,
+  type WritingQuestionSubtype,
+  type WritingTaskListItem,
   type WritingTaskType,
 } from "@/lib/server-writing";
 import { cn } from "@/lib/utils";
@@ -40,33 +41,17 @@ interface WritingPageProps {
 
 export default async function WritingPage({ searchParams }: WritingPageProps) {
   const activeTaskType = searchParams?.task_type === "task_2" ? "task_2" : "task_1";
-  const [summary, history, draftList] = await Promise.all([
+  const activeSubtype = normalizeSubtype(searchParams?.question_subtype, activeTaskType);
+  const [summary, history, taskList, allTaskList] = await Promise.all([
     getWritingDashboardSummary().catch(() => null as WritingDashboardSummary | null),
     getWritingHistory().catch(() => ({ items: [] as WritingHistoryItem[], total: 0 })),
-    getWritingDrafts().catch(() => ({ items: [] as WritingDraftListItem[] })),
+    listWritingTasks({ task_type: activeTaskType, question_subtype: activeSubtype, page_size: 100 }).catch(() => ({ items: [] as WritingTaskListItem[], total: 0 })),
+    listWritingTasks({ task_type: activeTaskType, page_size: 100 }).catch(() => ({ items: [] as WritingTaskListItem[], total: 0 })),
   ]);
 
-  const drafts = draftList.items;
-  const activeTaskCard = activeTaskType === "task_1"
-    ? {
-        taskNumber: 1 as const,
-        title: "Academic Task 1",
-        subtitle: "Describe a chart, graph, map, or process",
-        minutes: 20,
-        words: 150,
-        icon: <ImageIcon className="h-5 w-5" />,
-        href: "/exam-preview/writing?task_type=task_1&mode=practice",
-      }
-    : {
-        taskNumber: 2 as const,
-        title: "Academic Task 2",
-        subtitle: "Write a 250-word academic essay",
-        minutes: 40,
-        words: 250,
-        icon: <PenSquare className="h-5 w-5" />,
-        href: "/exam-preview/writing?task_type=task_2&mode=practice",
-      };
-
+  const publishedTasks = taskList.items;
+  const subtypeCounts = buildSubtypeCounts(allTaskList.items);
+  const allSubtypeCount = allTaskList.total || allTaskList.items.length;
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <Card className="relative overflow-hidden rounded-2xl border border-border/50 bg-background shadow-sm dark:border-slate-800 dark:bg-slate-950">
@@ -113,156 +98,144 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
           })}
         </div>
 
-        <WritingQuestionFilters activeTaskType={activeTaskType} />
+        <WritingQuestionFilters activeTaskType={activeTaskType} counts={subtypeCounts} totalCount={allSubtypeCount} />
 
         <SummaryCard summary={summary} history={history.items} activeTaskType={activeTaskType} />
       </div>
 
       <div className="space-y-4">
         <CustomTaskCard activeTaskType={activeTaskType} />
-        <TaskQuickStartCard {...activeTaskCard} />
       </div>
 
-      {drafts.length > 0 ? <DraftResumeCard drafts={drafts} /> : null}
+      <PublishedTasksSection
+        activeTaskType={activeTaskType}
+        activeSubtype={activeSubtype}
+        tasks={publishedTasks}
+      />
     </div>
   );
 }
 
-function DraftResumeCard({ drafts }: { drafts: WritingDraftListItem[] }) {
-  return (
-    <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <div>
-          <CardTitle className="text-lg font-semibold tracking-tight text-foreground">Resume drafts</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">
-            Continue a writing task you already started.
-          </CardDescription>
-        </div>
-        <Badge tone="outline" className="border-border/60 bg-background/70 text-[10px] uppercase tracking-[0.18em] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-          {drafts.length} saved
-        </Badge>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-0">
-        {drafts.map((draft) => {
-          const href = draft.task_id
-            ? `/exam-preview/writing?taskId=${draft.task_id}&mode=practice`
-            : `/exam-preview/writing?task_type=${draft.task_type}&mode=practice`;
-          const taskLabel = draft.task_type === "task_1" ? "Task 1" : "Task 2";
-          const taskTone =
-            draft.task_type === "task_1"
-              ? "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400"
-              : "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400";
-          const preview = draft.topic.trim() || draft.task_title || draft.essay_text.trim().slice(0, 120) || "Untitled draft";
-          const words = draft.essay_text.trim() ? draft.essay_text.trim().split(/\s+/).filter(Boolean).length : 0;
+function normalizeSubtype(value: string | undefined, taskType: WritingTaskType): WritingQuestionSubtype | undefined {
+  const options = taskType === "task_1" ? QUESTION_SUBTYPES_TASK1 : QUESTION_SUBTYPES_TASK2;
+  return options.some((item) => item.value === value) ? value as WritingQuestionSubtype : undefined;
+}
 
-          return (
-            <div key={draft.draft_key} className="flex flex-col gap-4 rounded-2xl border border-border/50 bg-background/45 p-5 lg:flex-row lg:items-center lg:justify-between dark:border-slate-800 dark:bg-slate-900/80">
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest", taskTone)}>
-                    {taskLabel}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                    <RotateCcw className="h-3 w-3" />
-                    {draft.started ? "In progress" : "Setup saved"}
-                  </span>
-                </div>
-                <p className="truncate text-base font-semibold text-foreground">
-                  {draft.task_title ?? preview}
-                </p>
-                <p className="line-clamp-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                  {preview}
-                </p>
-                <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <FileText className="h-3.5 w-3.5" />
-                    {words} words
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    {formatRelative(draft.updated_at)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    {draft.time_spent_seconds > 0 ? `${Math.floor(draft.time_spent_seconds / 60)}m ${draft.time_spent_seconds % 60}s` : "not started"}
-                  </span>
-                </div>
-              </div>
-              <Button asChild className="rounded-xl px-5">
-                <Link href={href}>
-                  Resume
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
+function buildSubtypeCounts(tasks: WritingTaskListItem[]): Partial<Record<WritingQuestionSubtype, number>> {
+  return tasks.reduce<Partial<Record<WritingQuestionSubtype, number>>>((acc, task) => {
+    if (task.question_subtype) {
+      acc[task.question_subtype] = (acc[task.question_subtype] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
+}
+
+function PublishedTasksSection({
+  activeTaskType,
+  activeSubtype,
+  tasks,
+}: {
+  activeTaskType: WritingTaskType;
+  activeSubtype?: WritingQuestionSubtype;
+  tasks: WritingTaskListItem[];
+}) {
+  const taskLabel = activeTaskType === "task_1" ? "Task 1" : "Task 2";
+  const subtypeLabel = [...QUESTION_SUBTYPES_TASK1, ...QUESTION_SUBTYPES_TASK2]
+    .find((item) => item.value === activeSubtype)?.label;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            Published prompts
+          </p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+            {subtypeLabel ? `${taskLabel} · ${subtypeLabel}` : `${taskLabel} prompts`}
+          </h2>
+        </div>
+      </div>
+
+      {tasks.length === 0 ? (
+        <Card className="rounded-2xl border-border/60 bg-card/70 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+          <CardContent className="px-5 py-8 text-center">
+            <p className="text-sm font-semibold text-foreground">No published prompts yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Admin published tasks for this filter will appear here.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {tasks.map((task) => (
+            <PublishedTaskCard key={task.id} task={task} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
-function TaskQuickStartCard({
-  taskNumber,
-  title,
-  subtitle,
-  minutes,
-  words,
-  icon,
-  href,
-}: {
-  taskNumber: 1 | 2;
-  title: string;
-  subtitle: string;
-  minutes: number;
-  words: number;
-  icon: React.ReactNode;
-  href: string;
-}) {
+function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
+  const stripped = stripHtml(task.description ?? "").slice(0, 120);
+  const imgSrc = task.task_type === "task_1" ? resolveWritingAssetUrl(task.image_url) : null;
+  const minutes = Math.round((task.time_limit_seconds ?? 0) / 60);
+
   return (
-    <Link href={href} className="group block">
-      <Card
-        className={cn(
-          "relative overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700",
-        )}
-      >
-        <CardContent className="relative z-10 flex flex-col gap-5 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-foreground shadow-sm dark:border-slate-700 dark:bg-slate-900">
-              {icon}
-            </div>
-            <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              Task {taskNumber}
+    <Link href={`/exam-preview/writing?taskId=${task.id}`} className="group block">
+      <Card className="flex h-full flex-col overflow-hidden rounded-2xl border-border/60 bg-card/75 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
+        {imgSrc ? (
+          <div className="relative h-40 w-full overflow-hidden bg-white p-2 dark:bg-slate-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imgSrc}
+              alt={task.title}
+              className="h-full w-full object-contain"
+            />
+          </div>
+        ) : task.task_type === "task_1" ? (
+          <div className="flex h-40 items-center justify-center bg-muted/30 text-muted-foreground">
+            <ImageIcon className="h-8 w-8 opacity-50" />
+          </div>
+        ) : null}
+
+        <CardContent className="flex flex-1 flex-col gap-3 p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="outline" className="border-border/60 bg-background/80 text-[10px] uppercase tracking-[0.18em]">
+              {task.task_type === "task_1" ? "Task 1" : "Task 2"}
             </Badge>
+            {task.question_subtype ? (
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                {task.question_subtype.replace(/_/g, " ")}
+              </span>
+            ) : null}
           </div>
 
-          <div className="space-y-1">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">{title}</p>
-            <p className="text-xl font-semibold tracking-tight text-foreground">{subtitle}</p>
-          </div>
+          <p className="line-clamp-2 text-base font-semibold tracking-tight text-foreground">{task.title}</p>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-              <ClockDot />
-              {minutes} min
+          {stripped ? (
+            <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{stripped}{stripped.length === 120 ? "..." : ""}</p>
+          ) : null}
+
+          <div className="mt-auto flex items-center justify-between pt-2">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Target className="h-3.5 w-3.5" />
+                {task.word_minimum}+ words
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5" />
+                {minutes} min
+              </span>
+            </div>
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-opacity group-hover:opacity-100">
+              Start <ArrowRight className="h-4 w-4" />
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 font-medium text-muted-foreground dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-              <Target className="h-3 w-3" />
-              {words}+ words
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-foreground">Start task</span>
-            <ArrowUpRight className="h-5 w-5 text-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </div>
         </CardContent>
       </Card>
     </Link>
   );
-}
-
-function ClockDot() {
-  return <span className="h-1.5 w-1.5 rounded-full bg-foreground/60" />;
 }
 
 function SummaryCard({
@@ -396,22 +369,14 @@ function formatBand(value: number | string | null | undefined, fallback = "—")
   return Number.isFinite(numeric) ? numeric.toFixed(1) : fallback;
 }
 
-function formatRelative(value: string | null | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  const diffMs = Date.now() - date.getTime();
-  const seconds = Math.round(diffMs / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
 }

@@ -113,6 +113,7 @@ class NotificationType(StrEnum):
     premium_expired = "premium_expired"
     new_test = "new_test"
     gift_received = "gift_received"
+    system_alert = "system_alert"
 
 
 class ReviewSource(StrEnum):

@@ -118,6 +118,8 @@ export interface MeProfileRead {
   first_name: string;
   last_name?: string | null;
   username?: string | null;
+  phone?: string | null;
+  avatar_url?: string | null;
   role: string;
   is_premium: boolean;
   premium_until?: string | null;
@@ -147,6 +149,8 @@ export interface AuthSessionStatusResponse {
     first_name: string;
     last_name?: string | null;
     username?: string | null;
+    phone?: string | null;
+    avatar_url?: string | null;
     is_premium: boolean;
     premium_until?: string | null;
     telegram_id?: number | null;
@@ -222,4 +226,10 @@ export interface DashboardAnalyticsResponse {
   comparison: DashboardAnalyticsQuestionTypeComparisonRead;
   error_distribution: DashboardAnalyticsErrorDistributionRead[];
   progress_series: DashboardAnalyticsBandProgressRead[];
+  accuracy_trend?: Array<{ date: string; accuracy: number; band?: number | null; test_type?: string | null }>;
+  weekly_activity?: Array<{ week_label: string; attempts_count: number; time_spent_min: number }>;
+  score_distribution?: { band_1_to_3: number; band_3_5_to_5: number; band_5_to_6_5: number; band_6_5_to_7_5: number; band_7_5_to_9: number };
+  personal_bests?: { best_band?: number | null; best_accuracy?: number | null; longest_streak: number; current_streak: number; fastest_full_test_sec?: number | null };
+  speed_metrics?: { avg_time_per_question_sec?: number | null; reading_avg_sec_per_question?: number | null; listening_avg_sec_per_question?: number | null };
+  improvement_rate?: { last_5_avg_band?: number | null; prev_5_avg_band?: number | null; delta?: number | null; percent_change?: number | null };
 }

@@ -29,6 +29,41 @@ from sqlalchemy import select
 router = APIRouter()
 
 
+def _upsert_user_from_login(
+    user: User | None,
+    *,
+    telegram_id: int,
+    phone: str,
+    username: str | None,
+    first_name: str,
+    last_name: str | None,
+    avatar_url: str | None,
+    now: datetime,
+) -> User:
+    if user is None:
+        return User(
+            telegram_id=telegram_id,
+            phone=phone,
+            first_name=first_name,
+            last_name=last_name,
+            username=username,
+            avatar_url=avatar_url,
+            telegram_contact_updated_at=now,
+            is_premium=False,
+        )
+
+    user.telegram_id = telegram_id
+    user.phone = phone
+    user.first_name = first_name
+    user.last_name = last_name
+    if username is not None or user.username is None:
+        user.username = username
+    if avatar_url is not None:
+        user.avatar_url = avatar_url
+    user.telegram_contact_updated_at = now
+    return user
+
+
 async def _enforce_active_session_limit(
     db: AsyncSession,
     *,
@@ -145,26 +180,28 @@ async def verify_code(
 
     telegram_id: int = code_data["telegram_id"]
     phone: str = code_data["phone"]
+    username: str | None = code_data.get("username")
+    avatar_url: str | None = code_data.get("avatar_url")
     first_name, last_name = resolve_login_name_parts(code_data)
+    now = datetime.now(UTC)
 
-    result = await db.execute(
-        select(User).where((User.telegram_id == telegram_id) | (User.phone == phone))
-    )
+    result = await db.execute(select(User).where(User.telegram_id == telegram_id))
     db_user = result.scalars().first()
-
     if db_user is None:
-        db_user = User(
-            telegram_id=telegram_id,
-            phone=phone,
-            first_name=first_name,
-            last_name=last_name,
-            is_premium=False,
-        )
-        db.add(db_user)
-    else:
-        db_user.first_name = first_name
-        db_user.last_name = last_name
-        db_user.telegram_id = telegram_id
+        result = await db.execute(select(User).where(User.phone == phone))
+        db_user = result.scalars().first()
+
+    db_user = _upsert_user_from_login(
+        db_user,
+        telegram_id=telegram_id,
+        phone=phone,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        avatar_url=avatar_url,
+        now=now,
+    )
+    db.add(db_user)
 
     try:
         await db.commit()
@@ -201,8 +238,10 @@ async def verify_code(
         id=db_user.id,
         first_name=db_user.first_name,
         last_name=db_user.last_name or "",
-        username=db_user.phone,
+        username=db_user.username,
+        phone=db_user.phone,
         telegram_id=db_user.telegram_id,
+        avatar_url=db_user.avatar_url,
         is_premium=db_user.is_premium,
         premium_until=db_user.premium_until,
     )
@@ -322,8 +361,10 @@ async def get_session_status(
         id=user.id,
         first_name=user.first_name,
         last_name=user.last_name or "",
-        username=user.phone,
+        username=user.username,
+        phone=user.phone,
         telegram_id=user.telegram_id,
+        avatar_url=user.avatar_url,
         is_premium=user.is_premium,
         premium_until=user.premium_until,
     )

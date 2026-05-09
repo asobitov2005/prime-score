@@ -18,6 +18,7 @@ TEST_USER = DebugPrincipal(
     first_name="Azizbek",
     last_name="Prime",
     username="azizbek",
+    phone="+998901234567",
     role="user",
     is_premium=True,
     show_on_leaderboard=True,

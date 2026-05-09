@@ -211,6 +211,74 @@ export function createApiClient(config: ApiClientConfig = {}) {
     return (await response.json()) as T;
   }
 
+  async function requestForm<T>(path: string, init?: RequestInit): Promise<T> {
+    const performRequest = async (accessTokenOverride?: string | null) => {
+      const authToken = accessTokenOverride ?? useAuthStore.getState().accessToken;
+      return fetchImpl(`${baseUrl}${path}`, {
+        ...init,
+        signal: init?.signal ?? controller?.signal,
+        headers: {
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...(init?.headers ?? {})
+        }
+      });
+    };
+
+    const controller = init?.signal ? null : new AbortController();
+    const timeoutId = controller
+      ? setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS)
+      : null;
+
+    let response: Response;
+    try {
+      response = await performRequest();
+    } catch (error) {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ApiError("PrimeScore server is not responding.", 504);
+      }
+      throw error;
+    }
+
+    if (response.status === 401) {
+      try {
+        const nextAccessToken = await tryRefreshAccessToken();
+        if (nextAccessToken) {
+          response = await performRequest(nextAccessToken);
+        }
+      } catch {}
+    }
+
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        useAuthStore.getState().clearSession();
+      }
+
+      let message = `Request failed for ${path}`;
+      try {
+        const payload = (await response.json()) as { detail?: string; message?: string };
+        message = payload.detail ?? payload.message ?? message;
+      } catch {
+        try {
+          const text = await response.text();
+          if (text.trim()) {
+            message = text.trim();
+          }
+        } catch {}
+      }
+
+      throw new ApiError(message, response.status);
+    }
+
+    return (await response.json()) as T;
+  }
+
   return {
     requestCode: (body: AuthRequestCodeBody) => request<{ ok: true }>("/auth/request-code", {
       method: "POST",
@@ -227,6 +295,8 @@ export function createApiClient(config: ApiClientConfig = {}) {
         first_name: string;
         last_name?: string | null;
         username?: string | null;
+        phone?: string | null;
+        avatar_url?: string | null;
         is_premium: boolean;
         premium_until?: string | null;
         telegram_id?: number | null;
@@ -250,10 +320,20 @@ export function createApiClient(config: ApiClientConfig = {}) {
     listSessions: () => request<AuthSessionListResponse>("/auth/sessions", { method: "GET" }),
     getSessionStatus: (sessionId: string) => request<AuthSessionStatusResponse>(`/auth/sessions/${sessionId}/status`, { method: "GET" }),
     revokeSession: (sessionId: string) => request<{ message: string }>(`/auth/sessions/${sessionId}`, { method: "DELETE" }),
+    getMe: () => request<MeProfileRead>("/me", { method: "GET" }),
     updateMe: (body: MeProfileUpdateBody) => request<MeProfileRead>("/me", {
       method: "PATCH",
       body: JSON.stringify(body)
     }),
+    uploadMyAvatar: (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return requestForm<MeProfileRead>("/me/avatar", {
+        method: "POST",
+        body: formData
+      });
+    },
+    deleteMyAvatar: () => request<MeProfileRead>("/me/avatar", { method: "DELETE" }),
     listNotifications: () => request<NotificationItem[]>("/me/notifications", { method: "GET" }),
     markAllNotificationsRead: () => request<{ message: string }>("/me/notifications/read-all", { method: "PATCH" }),
     listTests: (query: TestListQuery = {}) => request<{ data: TestCatalogItem[] }>("/tests", { method: "GET" }).catch(() => ({

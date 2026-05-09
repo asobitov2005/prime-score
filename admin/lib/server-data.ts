@@ -9,6 +9,7 @@ import type {
   AdminAnalyticsPoint,
   AdminIdentity,
   AdminAuditEntry,
+  AdminDashboardOverview,
   AdminDashboardKpi,
   AdminPaymentCardSummary,
   AdminPaymentSettingsSummary,
@@ -407,6 +408,8 @@ export async function getAdminTestDraft(testId?: string, type: TestType = "readi
 
 type BackendDashboard = {
   users_total: number;
+  users_new_today?: number;
+  active_users_7d?: number;
   premium_users: number;
   tests_total: number;
   tests_published: number;
@@ -414,7 +417,21 @@ type BackendDashboard = {
   tests_archived: number;
   attempts_total: number;
   attempts_completed: number;
+  attempts_today?: number;
   payments_pending: number;
+  payments_completed?: number;
+  revenue_total?: number | string;
+  average_band?: number | null;
+  completion_rate?: number;
+  premium_rate?: number;
+  recent_activity?: string[];
+  revenue_trend?: Array<{ date: string; value: number }>;
+  registration_trend?: Array<{ date: string; value: number }>;
+  attempts_by_day?: Array<{ date: string; value: number }>;
+  type_split?: { reading: number; listening: number };
+  band_distribution?: Array<{ band: string; count: number }>;
+  top_active_users?: Array<{ name: string; attempt_count: number; last_active?: string | null }>;
+  avg_time_per_test?: { reading_avg_min?: number | null; listening_avg_min?: number | null };
 };
 
 type BackendUser = {
@@ -451,11 +468,15 @@ type BackendPromoCode = {
 
 type BackendAudit = {
   id: string;
-  actor_user_id: string;
+  admin_id?: string;
+  actor_user_id?: string;
   action: string;
-  entity_type: string;
-  entity_id: string;
-  meta: Record<string, unknown>;
+  entity_type?: string;
+  target_type?: string;
+  entity_id?: string;
+  target_id?: string;
+  changes?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
   created_at: string;
 };
 
@@ -496,14 +517,97 @@ type BackendPaymentSettings = {
   poll_fallback_enabled: boolean;
 };
 
-export async function getAdminDashboardKpis(): Promise<AdminDashboardKpi[]> {
+function emptyDashboardOverview(): AdminDashboardOverview {
+  return {
+    usersTotal: 0,
+    usersNewToday: 0,
+    activeUsers7d: 0,
+    premiumUsers: 0,
+    testsTotal: 0,
+    testsPublished: 0,
+    testsDraft: 0,
+    testsArchived: 0,
+    attemptsTotal: 0,
+    attemptsCompleted: 0,
+    attemptsToday: 0,
+    paymentsPending: 0,
+    paymentsCompleted: 0,
+    revenueTotal: 0,
+    averageBand: null,
+    completionRate: 0,
+    premiumRate: 0,
+    recentActivity: [],
+    revenueTrend: [],
+    registrationTrend: [],
+    attemptsByDay: [],
+    typeSplit: null,
+    bandDistribution: [],
+    topActiveUsers: [],
+    avgTimePerTest: null,
+    paymentMethodSplit: [],
+    attemptStatusSplit: [],
+    quickStats: null,
+  };
+}
+
+function mapDashboardOverview(dashboard: BackendDashboard): AdminDashboardOverview {
+  return {
+    usersTotal: dashboard.users_total,
+    usersNewToday: dashboard.users_new_today ?? 0,
+    activeUsers7d: dashboard.active_users_7d ?? 0,
+    premiumUsers: dashboard.premium_users,
+    testsTotal: dashboard.tests_total,
+    testsPublished: dashboard.tests_published,
+    testsDraft: dashboard.tests_draft,
+    testsArchived: dashboard.tests_archived,
+    attemptsTotal: dashboard.attempts_total,
+    attemptsCompleted: dashboard.attempts_completed,
+    attemptsToday: dashboard.attempts_today ?? 0,
+    paymentsPending: dashboard.payments_pending,
+    paymentsCompleted: dashboard.payments_completed ?? 0,
+    revenueTotal: typeof dashboard.revenue_total === "number"
+      ? dashboard.revenue_total
+      : Number(String(dashboard.revenue_total ?? 0).replace(/[^\d.-]/g, "")) || 0,
+    averageBand: dashboard.average_band ?? null,
+    completionRate: dashboard.completion_rate ?? 0,
+    premiumRate: dashboard.premium_rate ?? 0,
+    recentActivity: Array.isArray(dashboard.recent_activity) ? dashboard.recent_activity.map(String) : [],
+    revenueTrend: (dashboard.revenue_trend ?? []).map(p => ({ date: p.date, value: p.value })),
+    registrationTrend: (dashboard.registration_trend ?? []).map(p => ({ date: p.date, value: p.value })),
+    attemptsByDay: (dashboard.attempts_by_day ?? []).map(p => ({ date: p.date, value: p.value })),
+    typeSplit: dashboard.type_split ? { reading: dashboard.type_split.reading, listening: dashboard.type_split.listening } : null,
+    bandDistribution: (dashboard.band_distribution ?? []).map(p => ({ band: p.band, count: p.count })),
+    topActiveUsers: (dashboard.top_active_users ?? []).map(u => ({ name: u.name, attemptCount: u.attempt_count, lastActive: u.last_active ?? null })),
+    avgTimePerTest: dashboard.avg_time_per_test ? { readingAvgMin: dashboard.avg_time_per_test.reading_avg_min ?? null, listeningAvgMin: dashboard.avg_time_per_test.listening_avg_min ?? null } : null,
+    paymentMethodSplit: (dashboard.payment_method_split ?? []).map(p => ({ label: p.label, value: p.value })),
+    attemptStatusSplit: (dashboard.attempt_status_split ?? []).map(s => ({ label: s.label, value: s.value })),
+    quickStats: dashboard.quick_stats ? {
+      fastestCompletionMin: dashboard.quick_stats.fastest_completion_min ?? null,
+      averageAccuracy: dashboard.quick_stats.average_accuracy ?? 0,
+      highestBandAchieved: dashboard.quick_stats.highest_band_achieved ?? null,
+    } : null,
+  };
+}
+
+export async function getAdminDashboardOverview(params?: Record<string, string>): Promise<AdminDashboardOverview> {
   try {
-    const dashboard = await requestAdmin<BackendDashboard>("/dashboard");
+    const qs = params ? new URLSearchParams(params).toString() : "";
+    const endpoint = qs ? `/dashboard?${qs}` : "/dashboard";
+    const dashboard = await requestAdmin<BackendDashboard>(endpoint);
+    return mapDashboardOverview(dashboard);
+  } catch {
+    return emptyDashboardOverview();
+  }
+}
+
+export async function getAdminDashboardKpis(params?: Record<string, string>): Promise<AdminDashboardKpi[]> {
+  try {
+    const dashboard = await getAdminDashboardOverview(params);
     return [
-      { label: "Users", value: dashboard.users_total.toString(), delta: `${dashboard.attempts_total} attempts`, tone: "neutral" },
-      { label: "Premium", value: dashboard.premium_users.toString(), delta: "Active subscribers", tone: "success" },
-      { label: "Tests", value: dashboard.tests_total.toString(), delta: `${dashboard.tests_published} published / ${dashboard.tests_draft} draft`, tone: "warning" },
-      { label: "Payments Pending", value: dashboard.payments_pending.toString(), delta: "Awaiting settlement", tone: dashboard.payments_pending > 0 ? "warning" : "neutral" }
+      { label: "Users", value: dashboard.usersTotal.toString(), delta: `${dashboard.activeUsers7d} active in 7 days`, tone: "neutral" },
+      { label: "Premium", value: dashboard.premiumUsers.toString(), delta: `${dashboard.premiumRate}% conversion`, tone: "success" },
+      { label: "Tests", value: dashboard.testsTotal.toString(), delta: `${dashboard.testsPublished} published / ${dashboard.testsDraft} draft`, tone: "warning" },
+      { label: "Payments Pending", value: dashboard.paymentsPending.toString(), delta: "Awaiting settlement", tone: dashboard.paymentsPending > 0 ? "warning" : "neutral" }
     ];
   } catch {
     return [];
@@ -517,7 +621,7 @@ export async function getAdminUsers(): Promise<AdminUserSummary[]> {
       id: item.id,
       name: `${item.first_name}${item.last_name ? ` ${item.last_name}` : ""}`.trim(),
       email: item.username ? `@${item.username}` : "No username",
-      premiumState: item.premium_expires_at ? "active" : "free",
+      premiumState: item.premium_until ? "active" : "free",
       attempts: 0,
       band: "-",
       lastActiveAt: item.created_at ?? new Date().toISOString(),
@@ -629,11 +733,11 @@ export async function getAdminAuditEntries(): Promise<AdminAuditEntry[]> {
     const entries = await requestAdmin<BackendAudit[]>("/audit-log");
     return entries.map((entry) => ({
       id: entry.id,
-      actor: entry.actor_user_id,
+      actor: entry.actor_user_id ?? entry.admin_id ?? "admin",
       action: entry.action,
-      resource: `${entry.entity_type}:${entry.entity_id}`,
+      resource: `${entry.entity_type ?? entry.target_type ?? "resource"}:${entry.entity_id ?? entry.target_id ?? "-"}`,
       createdAt: entry.created_at,
-      meta: Object.keys(entry.meta ?? {}).length > 0 ? JSON.stringify(entry.meta) : "-"
+      meta: Object.keys(entry.meta ?? entry.changes ?? {}).length > 0 ? JSON.stringify(entry.meta ?? entry.changes) : "-"
     }));
   } catch {
     return [];
@@ -645,16 +749,9 @@ export async function getAdminActivityFeed(): Promise<string[]> {
   return entries.slice(0, 4).map((entry) => `${entry.action} • ${entry.resource}`);
 }
 
-export async function getAdminAnalyticsPoints(): Promise<AdminAnalyticsPoint[]> {
-  return [
-    { label: "Mon", value: 45 },
-    { label: "Tue", value: 52 },
-    { label: "Wed", value: 48 },
-    { label: "Thu", value: 70 },
-    { label: "Fri", value: 65 },
-    { label: "Sat", value: 85 },
-    { label: "Sun", value: 92 }
-  ];
+export async function getAdminAnalyticsPoints(params?: Record<string, string>): Promise<AdminAnalyticsPoint[]> {
+  const report = await getAdminAnalyticsReport(params);
+  return report.activityPoints;
 }
 
 export interface AdminAnalyticsReport {
@@ -663,26 +760,77 @@ export interface AdminAnalyticsReport {
   mau: number;
   conversionRate: string;
   churnRate: string;
+  activityPoints: AdminAnalyticsPoint[];
   topTests: { title: string; count: number }[];
   hardestTypes: { type: string; errorRate: string }[];
+  dauTrend: { date: string; value: number }[];
+  completionFunnel: { started: number; completed: number; rate: number } | null;
+  avgScoreByTest: { testTitle: string; avgBand: number; attemptCount: number }[];
+  hourlyDistribution: { label: string; value: number }[];
+  userSegmentation: { free: { count: number; avgAttempts: number }; premium: { count: number; avgAttempts: number } } | null;
+  weekdayActivity: { label: string; value: number }[];
 }
 
-export async function getAdminAnalyticsReport(): Promise<AdminAnalyticsReport> {
-  return {
-    dau: 124,
-    wau: 850,
-    mau: 3200,
-    conversionRate: "12.4%",
-    churnRate: "2.1%",
-    topTests: [
-      { title: "Cambridge 16 - Reading Test 1", count: 450 },
-      { title: "History of Glass - Practice", count: 320 },
-      { title: "Listening Part 3 - Academic", count: 280 }
-    ],
-    hardestTypes: [
-      { type: "Matching Headings", errorRate: "64%" },
-      { type: "True/False/Not Given", errorRate: "42%" },
-      { type: "Multiple Choice", errorRate: "38%" }
-    ]
-  };
+export async function getAdminAnalyticsReport(params?: Record<string, string>): Promise<AdminAnalyticsReport> {
+  try {
+    const qs = params ? new URLSearchParams(params).toString() : "";
+    const endpoint = qs ? `/analytics?${qs}` : "/analytics";
+    const report = await requestAdmin<{
+      dau: number;
+      wau: number;
+      mau: number;
+      conversion_rate: string;
+      churn_rate: string;
+      activity_points: Array<{ label: string; value: number }>;
+      top_tests: Array<{ title: string; count: number }>;
+      hardest_question_types: Array<{ type: string; error_rate: string }>;
+      dau_trend?: Array<{ date: string; value: number }>;
+      completion_funnel?: { started: number; completed: number; rate: number } | null;
+      avg_score_by_test?: Array<{ test_title: string; avg_band: number; attempt_count: number }>;
+      hourly_distribution?: Array<{ label: string; value: number }>;
+      user_segmentation?: { free: { count: number; avg_attempts: number }; premium: { count: number; avg_attempts: number } } | null;
+      weekday_activity?: Array<{ label: string; value: number }>;
+    }>("/analytics");
+    return {
+      dau: report.dau,
+      wau: report.wau,
+      mau: report.mau,
+      conversionRate: report.conversion_rate,
+      churnRate: report.churn_rate,
+      activityPoints: report.activity_points.map((point) => ({ label: point.label, value: point.value })),
+      topTests: report.top_tests.map((item) => ({ title: item.title, count: item.count })),
+      hardestTypes: report.hardest_question_types.map((item) => ({ type: item.type, errorRate: item.error_rate })),
+      dauTrend: (report.dau_trend ?? []).map(p => ({ date: p.date, value: p.value })),
+      completionFunnel: report.completion_funnel ? { started: report.completion_funnel.started, completed: report.completion_funnel.completed, rate: report.completion_funnel.rate } : null,
+      avgScoreByTest: (report.avg_score_by_test ?? []).map(t => ({ testTitle: t.test_title, avgBand: t.avg_band, attemptCount: t.attempt_count })),
+      hourlyDistribution: (report.hourly_distribution ?? []).map(h => ({ label: h.label, value: h.value })),
+      userSegmentation: report.user_segmentation ? { free: { count: report.user_segmentation.free.count, avgAttempts: report.user_segmentation.free.avg_attempts }, premium: { count: report.user_segmentation.premium.count, avgAttempts: report.user_segmentation.premium.avg_attempts } } : null,
+      weekdayActivity: (report.weekday_activity ?? []).map(w => ({ label: w.label, value: w.value })),
+    };
+  } catch {
+    return {
+      dau: 0,
+      wau: 0,
+      mau: 0,
+      conversionRate: "0%",
+      churnRate: "0%",
+      activityPoints: [
+        { label: "Mon", value: 0 },
+        { label: "Tue", value: 0 },
+        { label: "Wed", value: 0 },
+        { label: "Thu", value: 0 },
+        { label: "Fri", value: 0 },
+        { label: "Sat", value: 0 },
+        { label: "Sun", value: 0 }
+      ],
+      topTests: [],
+      hardestTypes: [],
+      dauTrend: [],
+      completionFunnel: null,
+      avgScoreByTest: [],
+      hourlyDistribution: [],
+      userSegmentation: null,
+      weekdayActivity: [],
+    };
+  }
 }

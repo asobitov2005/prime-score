@@ -143,9 +143,57 @@ class MePerformanceSummaryRead(BaseModel):
     listening: MePerformanceTestCountBucketRead = Field(default_factory=MePerformanceTestCountBucketRead)
 
 
+class MeAccuracyTrendPointRead(BaseModel):
+    date: str
+    accuracy: float
+    band: float | None = None
+    test_type: str | None = None
+
+
+class MeWeeklyActivityPointRead(BaseModel):
+    week_label: str
+    attempts_count: int = 0
+    time_spent_min: int = 0
+
+
+class MeScoreDistributionRead(BaseModel):
+    band_1_to_3: int = 0
+    band_3_5_to_5: int = 0
+    band_5_to_6_5: int = 0
+    band_6_5_to_7_5: int = 0
+    band_7_5_to_9: int = 0
+
+
+class MePersonalBestsRead(BaseModel):
+    best_band: float | None = None
+    best_accuracy: float | None = None
+    longest_streak: int = 0
+    current_streak: int = 0
+    fastest_full_test_sec: int | None = None
+
+
+class MeSpeedMetricsRead(BaseModel):
+    avg_time_per_question_sec: float | None = None
+    reading_avg_sec_per_question: float | None = None
+    listening_avg_sec_per_question: float | None = None
+
+
+class MeImprovementRateRead(BaseModel):
+    last_5_avg_band: float | None = None
+    prev_5_avg_band: float | None = None
+    delta: float | None = None
+    percent_change: float | None = None
+
+
 class MeDashboardAnalyticsRead(BaseModel):
     performance_summary: MePerformanceSummaryRead = Field(default_factory=MePerformanceSummaryRead)
     question_type_analysis: list[MeQuestionTypeAnalysisItemRead] = Field(default_factory=list)
     comparison: MeQuestionTypeComparisonRead = Field(default_factory=MeQuestionTypeComparisonRead)
     error_distribution: list[MeErrorDistributionItemRead] = Field(default_factory=list)
     progress_series: list[MeBandProgressPointRead] = Field(default_factory=list)
+    accuracy_trend: list[MeAccuracyTrendPointRead] = Field(default_factory=list)
+    weekly_activity: list[MeWeeklyActivityPointRead] = Field(default_factory=list)
+    score_distribution: MeScoreDistributionRead = Field(default_factory=MeScoreDistributionRead)
+    personal_bests: MePersonalBestsRead = Field(default_factory=MePersonalBestsRead)
+    speed_metrics: MeSpeedMetricsRead = Field(default_factory=MeSpeedMetricsRead)
+    improvement_rate: MeImprovementRateRead = Field(default_factory=MeImprovementRateRead)

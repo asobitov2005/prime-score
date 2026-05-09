@@ -11,6 +11,7 @@ type UserRow = {
   name: string;
   username: string | null;
   phone: string | null;
+  avatarUrl: string | null;
   premiumState: "active" | "expired" | "free";
   premiumUntil: string | null;
   leaderboardVisible: boolean;
@@ -70,6 +71,7 @@ function FilterDropdown({ label, value, options, onChange }: {
 export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [actionsOpen, setActionsOpen] = useState(false);
   const [bulkMsg, setBulkMsg] = useState("");
@@ -91,11 +93,23 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const token = getClientAdminAccessToken();
-      if (!token) { setLoading(false); return; }
+      if (!token) {
+        setLoadError("Admin session topilmadi. Qayta login qiling.");
+        setLoading(false);
+        return;
+      }
       const res = await fetch(`${API_BASE}/users`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        let message = "Users listini yuklab bo'lmadi.";
+        try {
+          const payload = await res.json();
+          message = payload?.detail ?? payload?.message ?? message;
+        } catch {}
+        throw new Error(message);
+      }
       const data = await res.json();
       setUsers(data.map((u: any) => {
         const isPremium = u.is_premium || false;
@@ -108,6 +122,7 @@ export default function UsersPage() {
           name: [u.first_name, u.last_name].filter(Boolean).join(" "),
           username: u.username ?? null,
           phone: u.phone ?? null,
+          avatarUrl: u.avatar_url ?? null,
           premiumState,
           premiumUntil,
           leaderboardVisible: u.show_on_leaderboard ?? true,
@@ -118,7 +133,10 @@ export default function UsersPage() {
           createdAt: u.created_at ?? new Date().toISOString(),
         };
       }));
-    } catch { setUsers([]); }
+    } catch (error) {
+      setUsers([]);
+      setLoadError(error instanceof Error ? error.message : "Users listini yuklab bo'lmadi.");
+    }
     finally { setLoading(false); }
   };
 
@@ -234,6 +252,10 @@ export default function UsersPage() {
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-3 text-sm font-medium text-emerald-600">{bulkMsg}</div>
       )}
 
+      {loadError && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-600">{loadError}</div>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="overflow-x-auto p-0">
@@ -265,9 +287,21 @@ export default function UsersPage() {
                       <input type="checkbox" checked={selectedIds.has(user.id)} onChange={() => toggle(user.id)} className="accent-primary h-4 w-4 rounded cursor-pointer" />
                     </td>
                     <td className="border-b border-border/50 px-3 py-4">
-                      <div className="font-medium text-foreground">{user.name}</div>
-                      <div className="mt-1 text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
-                        {user.username ? `@${user.username}` : user.phone ?? "—"}
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-sm font-black text-primary">
+                          {user.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={user.avatarUrl} alt={user.name || "User"} className="h-full w-full object-cover" />
+                          ) : (
+                            (user.name || user.username || "?").charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-foreground">{user.name || "Unnamed user"}</div>
+                          <div className="mt-1 truncate text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            {user.username ? `@${user.username}` : user.phone ?? "—"}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="border-b border-border/50 px-3 py-4 text-sm font-semibold text-foreground">

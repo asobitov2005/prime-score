@@ -57,6 +57,9 @@ async function clientFetch<T>(path: string, init?: RequestInit): Promise<T> {
     err.status = response.status;
     throw err;
   }
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return (await response.json()) as T;
 }
 

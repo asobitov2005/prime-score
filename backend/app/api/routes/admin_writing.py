@@ -200,6 +200,11 @@ async def update_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
 
     data = payload.model_dump(exclude_unset=True)
+    if "question_subtype" in payload.model_fields_set and payload.question_subtype is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Question subtype is required.",
+        )
 
     image_changed = False
     new_image_url = data.pop("image_url", None) if "image_url" in data else None
@@ -212,6 +217,12 @@ async def update_task(
     for field, value in data.items():
         if hasattr(task, field):
             setattr(task, field, value)
+
+    if task.question_subtype is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Question subtype is required.",
+        )
 
     should_regen = (
         image_changed
@@ -271,6 +282,11 @@ async def publish_task(
     task = await session.get(WritingTask, task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
+    if task.question_subtype is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Question subtype is required before publishing.",
+        )
     task.status = WritingTaskStatus.PUBLISHED
     await session.commit()
     await session.refresh(task)

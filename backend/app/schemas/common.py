@@ -25,11 +25,13 @@ class DebugPrincipal(BaseModel):
     first_name: str
     last_name: str | None = None
     username: str | None = None
+    phone: str | None = None
     role: UserRole = UserRole.user
     is_premium: bool = False
     premium_until: datetime | None = None
     show_on_leaderboard: bool = True
     telegram_id: int | None = None
+    avatar_url: str | None = None
 
     @property
     def display_name(self) -> str:

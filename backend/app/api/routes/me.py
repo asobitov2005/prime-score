@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -20,14 +20,17 @@ from app.models.user import User
 from app.schemas.common import DebugPrincipal, MessageResponse
 from app.schemas.me import (
     FavoriteTestRead,
+    MeAccuracyTrendPointRead,
     MeActivityPointRead,
     MeAttemptSummaryRead,
     MeBandProgressPointRead,
     MeDashboardAnalyticsRead,
     MeErrorDistributionItemRead,
+    MeImprovementRateRead,
     MePerformanceStudyTimeRead,
     MePerformanceTestCountBucketRead,
     MePerformanceSummaryRead,
+    MePersonalBestsRead,
     MeProfileRead,
     MeProfileUpdateRequest,
     MeRedeemCodeRequest,
@@ -36,7 +39,10 @@ from app.schemas.me import (
     MeQuestionTypeComparisonItemRead,
     MeQuestionTypeComparisonRead,
     MeQuestionTypeComparisonTestRead,
+    MeScoreDistributionRead,
+    MeSpeedMetricsRead,
     MeStatsRead,
+    MeWeeklyActivityPointRead,
 )
 from app.schemas.payments import (
     MePaymentCancelResponse,
@@ -46,6 +52,7 @@ from app.schemas.payments import (
 )
 from app.services.attempt_repo import iter_user_attempts_from_db
 from app.services.notification_sender import create_and_send_notification
+from app.services.object_storage import upload_user_avatar_image
 from app.services.payment_service import (
     PENDING_PAYMENT_STATUSES,
     create_plan_payment,
@@ -57,6 +64,7 @@ from app.services.user_names import normalize_user_name_parts
 from app.services.payment_events import payment_event_bus
 
 router = APIRouter()
+MAX_AVATAR_IMAGE_BYTES = 5 * 1024 * 1024
 
 READING_QUESTION_TYPE_LABELS = {
     "reading_mc_single": "Multiple Choice (Single)",
@@ -337,10 +345,12 @@ def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
         first_name=principal.first_name,
         last_name=principal.last_name,
         username=principal.username,
+        phone=principal.phone,
         role=principal.role,
         is_premium=principal.is_premium,
         show_on_leaderboard=principal.show_on_leaderboard,
         telegram_id=principal.telegram_id,
+        avatar_url=principal.avatar_url,
     )
 
 
@@ -350,10 +360,12 @@ def _profile_from_user(user: User) -> MeProfileRead:
         first_name=user.first_name,
         last_name=user.last_name,
         username=user.username,
+        phone=user.phone,
         is_premium=user.is_premium,
         premium_until=user.premium_until,
         show_on_leaderboard=user.show_on_leaderboard,
         telegram_id=user.telegram_id,
+        avatar_url=user.avatar_url,
         last_active_at=user.last_active_at,
     )
 
@@ -415,6 +427,59 @@ async def update_me(
     for field_name, value in updates.items():
         setattr(user, field_name, value)
 
+    await session.commit()
+    await session.refresh(user)
+    return _profile_from_user(user)
+
+
+async def _read_avatar_upload(file: UploadFile) -> bytes:
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only image files are allowed.")
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty.")
+    if len(payload) > MAX_AVATAR_IMAGE_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Avatar image must be under 5 MB.")
+    return payload
+
+
+@router.post("/avatar", response_model=MeProfileRead)
+async def upload_my_avatar(
+    file: UploadFile = File(...),
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MeProfileRead:
+    user = await session.get(User, current_user.id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
+
+    payload = await _read_avatar_upload(file)
+    try:
+        user.avatar_url = upload_user_avatar_image(
+            content=payload,
+            filename=file.filename or "avatar-image",
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    await session.commit()
+    await session.refresh(user)
+    return _profile_from_user(user)
+
+
+@router.delete("/avatar", response_model=MeProfileRead)
+async def delete_my_avatar(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MeProfileRead:
+    user = await session.get(User, current_user.id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
+
+    user.avatar_url = None
     await session.commit()
     await session.refresh(user)
     return _profile_from_user(user)
@@ -818,26 +883,202 @@ async def get_attempts(
     return items
 
 
+def _build_accuracy_trend(attempts) -> list[MeAccuracyTrendPointRead]:
+    scored = sorted(
+        [a for a in attempts if a.raw_score is not None and getattr(a, "total_questions", 0)],
+        key=lambda a: a.completed_at or a.started_at,
+    )
+    items: list[MeAccuracyTrendPointRead] = []
+    for attempt in scored[-20:]:
+        total_q = max(1, int(getattr(attempt, "total_questions", 0) or 1))
+        accuracy = round((int(attempt.raw_score) / total_q) * 100, 1)
+        occurred = attempt.completed_at or attempt.started_at
+        items.append(MeAccuracyTrendPointRead(
+            date=occurred.strftime("%d %b"),
+            accuracy=accuracy,
+            band=float(attempt.band_score) if attempt.band_score is not None else None,
+            test_type=attempt.test_snapshot.get("test_type"),
+        ))
+    return items
+
+
+def _build_weekly_activity(attempts) -> list[MeWeeklyActivityPointRead]:
+    now = datetime.now(UTC)
+    items: list[MeWeeklyActivityPointRead] = []
+    for week_offset in range(11, -1, -1):
+        week_end = now - timedelta(days=week_offset * 7)
+        week_start = week_end - timedelta(days=7)
+        week_attempts = [
+            a for a in attempts
+            if (a.started_at and week_start <= a.started_at <= week_end)
+        ]
+        total_time = sum(max(0, int(getattr(a, "time_spent_sec", 0) or 0)) for a in week_attempts)
+        label = week_start.strftime("%d %b")
+        items.append(MeWeeklyActivityPointRead(
+            week_label=label,
+            attempts_count=len(week_attempts),
+            time_spent_min=total_time // 60,
+        ))
+    return items
+
+
+def _build_score_distribution(attempts) -> MeScoreDistributionRead:
+    dist = MeScoreDistributionRead()
+    for attempt in attempts:
+        band = attempt.band_score
+        if band is None:
+            continue
+        b = float(band)
+        if b < 3.5:
+            dist.band_1_to_3 += 1
+        elif b < 5.0:
+            dist.band_3_5_to_5 += 1
+        elif b < 6.5:
+            dist.band_5_to_6_5 += 1
+        elif b < 7.5:
+            dist.band_6_5_to_7_5 += 1
+        else:
+            dist.band_7_5_to_9 += 1
+    return dist
+
+
+def _build_personal_bests(all_attempts, completed_attempts) -> MePersonalBestsRead:
+    bands = [float(a.band_score) for a in completed_attempts if a.band_score is not None]
+    accuracies = [
+        round((int(a.raw_score) / max(1, int(getattr(a, "total_questions", 0) or 1))) * 100, 1)
+        for a in completed_attempts if a.raw_score is not None
+    ]
+
+    # Streak calculation
+    dates_set: set[str] = set()
+    for a in all_attempts:
+        d = a.started_at
+        if d:
+            dates_set.add(d.strftime("%Y-%m-%d"))
+
+    today = datetime.now(UTC).date()
+    current_streak = 0
+    longest_streak = 0
+    streak = 0
+    check_date = today
+    while True:
+        if check_date.isoformat() in dates_set:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+    current_streak = streak
+
+    # Longest streak from all dates
+    if dates_set:
+        sorted_dates = sorted(dates_set)
+        streak = 1
+        for i in range(1, len(sorted_dates)):
+            prev = datetime.strptime(sorted_dates[i - 1], "%Y-%m-%d").date()
+            curr = datetime.strptime(sorted_dates[i], "%Y-%m-%d").date()
+            if (curr - prev).days == 1:
+                streak += 1
+            else:
+                longest_streak = max(longest_streak, streak)
+                streak = 1
+        longest_streak = max(longest_streak, streak)
+
+    # Fastest full test
+    full_times = [
+        int(getattr(a, "time_spent_sec", 0) or 0)
+        for a in completed_attempts
+        if (a.test_snapshot.get("scope") or "") == "full" and int(getattr(a, "time_spent_sec", 0) or 0) > 0
+    ]
+
+    return MePersonalBestsRead(
+        best_band=max(bands) if bands else None,
+        best_accuracy=max(accuracies) if accuracies else None,
+        longest_streak=longest_streak,
+        current_streak=current_streak,
+        fastest_full_test_sec=min(full_times) if full_times else None,
+    )
+
+
+def _build_speed_metrics(completed_attempts) -> MeSpeedMetricsRead:
+    reading_times: list[float] = []
+    listening_times: list[float] = []
+    all_times: list[float] = []
+
+    for a in completed_attempts:
+        time_sec = max(0, int(getattr(a, "time_spent_sec", 0) or 0))
+        total_q = max(1, int(getattr(a, "total_questions", 0) or 1))
+        if time_sec <= 0:
+            continue
+        tpq = time_sec / total_q
+        all_times.append(tpq)
+        test_type = a.test_snapshot.get("test_type")
+        if test_type == TestType.reading:
+            reading_times.append(tpq)
+        elif test_type == TestType.listening:
+            listening_times.append(tpq)
+
+    return MeSpeedMetricsRead(
+        avg_time_per_question_sec=round(sum(all_times) / len(all_times), 1) if all_times else None,
+        reading_avg_sec_per_question=round(sum(reading_times) / len(reading_times), 1) if reading_times else None,
+        listening_avg_sec_per_question=round(sum(listening_times) / len(listening_times), 1) if listening_times else None,
+    )
+
+
+def _build_improvement_rate(completed_attempts) -> MeImprovementRateRead:
+    banded = sorted(
+        [a for a in completed_attempts if a.band_score is not None],
+        key=lambda a: a.completed_at or a.started_at,
+    )
+    if len(banded) < 2:
+        return MeImprovementRateRead()
+
+    last_5 = banded[-5:]
+    prev_start = max(0, len(banded) - 10)
+    prev_end = max(0, len(banded) - 5)
+    prev_5 = banded[prev_start:prev_end] if prev_end > prev_start else []
+
+    last_avg = sum(float(a.band_score) for a in last_5) / len(last_5)
+    if not prev_5:
+        return MeImprovementRateRead(last_5_avg_band=round(last_avg, 2))
+
+    prev_avg = sum(float(a.band_score) for a in prev_5) / len(prev_5)
+    delta = round(last_avg - prev_avg, 2)
+    pct = round((delta / prev_avg) * 100, 1) if prev_avg > 0 else 0.0
+
+    return MeImprovementRateRead(
+        last_5_avg_band=round(last_avg, 2),
+        prev_5_avg_band=round(prev_avg, 2),
+        delta=delta,
+        percent_change=pct,
+    )
+
+
 @router.get("/analytics", response_model=MeDashboardAnalyticsRead)
 async def get_dashboard_analytics(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
     test_type: TestType | None = Query(default=None),
 ) -> MeDashboardAnalyticsRead:
-    attempts = await _load_attempts(current_user, session)
+    all_attempts = await _load_attempts(current_user, session)
     completed = [
         attempt
-        for attempt in attempts
+        for attempt in all_attempts
         if attempt.status in {AttemptStatus.completed, AttemptStatus.auto_submitted}
     ]
-    completed = _filter_attempts_by_type(completed, test_type)
-    analysis = _build_question_type_analysis(completed, test_type)
+    filtered_completed = _filter_attempts_by_type(completed, test_type)
+    analysis = _build_question_type_analysis(filtered_completed, test_type)
     return MeDashboardAnalyticsRead(
-        performance_summary=_build_performance_summary(completed),
+        performance_summary=_build_performance_summary(filtered_completed),
         question_type_analysis=analysis,
-        comparison=_build_comparison(completed, test_type),
+        comparison=_build_comparison(filtered_completed, test_type),
         error_distribution=_build_error_distribution(analysis),
-        progress_series=_build_progress_series(completed),
+        progress_series=_build_progress_series(filtered_completed),
+        accuracy_trend=_build_accuracy_trend(filtered_completed),
+        weekly_activity=_build_weekly_activity(all_attempts),
+        score_distribution=_build_score_distribution(filtered_completed),
+        personal_bests=_build_personal_bests(all_attempts, filtered_completed),
+        speed_metrics=_build_speed_metrics(filtered_completed),
+        improvement_rate=_build_improvement_rate(filtered_completed),
     )
 
 

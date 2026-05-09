@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, Clock, PenSquare } from "lucide-react";
+import { ArrowRight, BookOpenText, Headphones, Play, BrainCircuit, Target, Clock, PenSquare, Trophy, Zap, Flame, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -157,6 +157,42 @@ export default async function DashboardPage() {
             </div>
 
             <DashboardAverageCards initialAnalytics={analytics} />
+
+            {/* Personal Bests + Improvement Rate */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card className="bg-gradient-to-br from-amber-500/10 to-transparent border-amber-500/20 rounded-2xl p-3.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="bg-amber-500/20 p-1.5 rounded-lg"><Trophy className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" /></div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Best Band</p>
+                </div>
+                <p className="text-2xl font-black tracking-tight text-foreground">{analytics.personalBests.bestBand?.toFixed(1) ?? "—"}</p>
+              </Card>
+              <Card className="bg-gradient-to-br from-emerald-500/10 to-transparent border-emerald-500/20 rounded-2xl p-3.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="bg-emerald-500/20 p-1.5 rounded-lg"><Zap className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /></div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Best Accuracy</p>
+                </div>
+                <p className="text-2xl font-black tracking-tight text-foreground">{analytics.personalBests.bestAccuracy !== null ? `${analytics.personalBests.bestAccuracy.toFixed(0)}%` : "—"}</p>
+              </Card>
+              <Card className="bg-gradient-to-br from-orange-500/10 to-transparent border-orange-500/20 rounded-2xl p-3.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="bg-orange-500/20 p-1.5 rounded-lg"><Flame className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" /></div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400">Streak</p>
+                </div>
+                <p className="text-2xl font-black tracking-tight text-foreground">{analytics.personalBests.currentStreak}<span className="text-sm font-bold text-muted-foreground ml-1">days</span></p>
+              </Card>
+              <Card className={cn("bg-gradient-to-br rounded-2xl p-3.5", analytics.improvementRate.delta !== null && analytics.improvementRate.delta >= 0 ? "from-emerald-500/10 to-transparent border-emerald-500/20" : "from-rose-500/10 to-transparent border-rose-500/20")}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={cn("p-1.5 rounded-lg", analytics.improvementRate.delta !== null && analytics.improvementRate.delta >= 0 ? "bg-emerald-500/20" : "bg-rose-500/20")}>
+                    <TrendingUp className={cn("h-3.5 w-3.5", analytics.improvementRate.delta !== null && analytics.improvementRate.delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")} />
+                  </div>
+                  <p className={cn("text-[9px] font-black uppercase tracking-widest", analytics.improvementRate.delta !== null && analytics.improvementRate.delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>Improvement</p>
+                </div>
+                <p className="text-2xl font-black tracking-tight text-foreground">
+                  {analytics.improvementRate.delta !== null ? `${analytics.improvementRate.delta > 0 ? "+" : ""}${analytics.improvementRate.delta.toFixed(1)}` : "—"}
+                </p>
+              </Card>
+            </div>
 
             <Card className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20 shadow-sm relative overflow-hidden rounded-2xl group">
               <div className="absolute right-0 bottom-0 p-4 opacity-10 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500 pointer-events-none">

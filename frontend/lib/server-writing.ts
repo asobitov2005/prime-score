@@ -132,6 +132,7 @@ export interface WritingHistoryItem {
   task_title: string;
   task_type: WritingTaskType;
   word_count: number;
+  time_spent_seconds: number;
   overall_band: number | string | null;
   status: WritingSubmissionStatus;
   submitted_at: string;

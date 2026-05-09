@@ -22,7 +22,6 @@ function asTaskType(value: string | undefined): WritingTaskType {
 export default async function WritingExamPreviewPage({ searchParams }: WritingExamPreviewPageProps) {
   const taskId = searchParams?.taskId?.trim();
   const task = taskId ? await getWritingTask(taskId).catch(() => null) : null;
-  const writingMode = searchParams?.mode === "exam" ? "exam" : "practice";
 
   if (taskId && !task) {
     notFound();
@@ -45,7 +44,6 @@ export default async function WritingExamPreviewPage({ searchParams }: WritingEx
           : null
       }
       taskType={task?.task_type ?? asTaskType(searchParams?.task_type)}
-      writingMode={writingMode}
     />
   );
 }

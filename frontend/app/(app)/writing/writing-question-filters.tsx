@@ -47,7 +47,15 @@ const TASK_2_FILTERS: FilterItem[] = [
   { value: "causes_effects", label: "Causes & Effects", icon: TrendingUp, gradient: "from-pink-500 to-pink-600", border: "border-pink-500/40" },
 ];
 
-export function WritingQuestionFilters({ activeTaskType }: { activeTaskType: WritingTaskType }) {
+export function WritingQuestionFilters({
+  activeTaskType,
+  counts,
+  totalCount = 0,
+}: {
+  activeTaskType: WritingTaskType;
+  counts?: Partial<Record<WritingQuestionSubtype, number>>;
+  totalCount?: number;
+}) {
   const searchParams = useSearchParams();
   const activeSubtype = searchParams.get("question_subtype") || null;
   const filters = activeTaskType === "task_1" ? TASK_1_FILTERS : TASK_2_FILTERS;
@@ -76,7 +84,7 @@ export function WritingQuestionFilters({ activeTaskType }: { activeTaskType: Wri
           )}
         >
           <Circle className="h-3 w-3" />
-          All types
+          All types ({totalCount})
         </Link>
 
         {filters.map((filter) => {
@@ -94,7 +102,7 @@ export function WritingQuestionFilters({ activeTaskType }: { activeTaskType: Wri
               )}
             >
               <Icon className="h-3 w-3" />
-              {filter.label}
+              {filter.label} ({counts?.[filter.value] ?? 0})
             </Link>
           );
         })}

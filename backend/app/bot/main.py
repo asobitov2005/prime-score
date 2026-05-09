@@ -4,18 +4,28 @@ import asyncio
 import logging
 import os
 import socket
+from datetime import UTC, datetime, timedelta
+from io import BytesIO
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiohttp.abc import AbstractResolver, ResolveResult
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import (
+    CopyTextButton,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.db.session import get_session_maker
 from app.models import ops as _ops_models
 from app.models.user import User
+from app.services.object_storage import upload_user_avatar_image
 from app.services.code_store import get_code_store
 from app.services.user_names import normalize_user_name_parts
 
@@ -27,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 _CODE_TTL = 180
 _TICK = 30
+_CONTACT_REFRESH_INTERVAL = timedelta(days=30)
 
 
 class _TelegramIPv4Resolver(AbstractResolver):
@@ -96,21 +107,84 @@ def _login_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def _code_copy_keyboard(code: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Copy", copy_text=CopyTextButton(text=code))],
+        ],
+    )
+
+
+def _is_contact_refresh_due(last_verified_at: datetime | None, *, now: datetime | None = None) -> bool:
+    if last_verified_at is None:
+        return True
+
+    current_time = now or datetime.now(UTC)
+    return current_time - last_verified_at >= _CONTACT_REFRESH_INTERVAL
+
+
+def _merge_current_telegram_profile(contact: dict, telegram_user: types.User | None) -> dict:
+    if telegram_user is None:
+        return contact
+
+    first_name, last_name = normalize_user_name_parts(
+        telegram_user.first_name or telegram_user.username or contact.get("first_name") or "User",
+        telegram_user.last_name,
+    )
+    return {
+        **contact,
+        "telegram_id": telegram_user.id,
+        "username": telegram_user.username or contact.get("username"),
+        "first_name": first_name,
+        "last_name": last_name,
+        "avatar_url": contact.get("avatar_url"),
+    }
+
+
+async def _fetch_telegram_avatar_url(bot: Bot, telegram_id: int) -> str | None:
+    try:
+        photos = await bot.get_user_profile_photos(telegram_id, limit=1)
+        if not photos.photos:
+            return None
+
+        photo = photos.photos[0][-1]
+        file = await bot.get_file(photo.file_id)
+        if not file.file_path:
+            return None
+
+        buffer = BytesIO()
+        await bot.download_file(file.file_path, destination=buffer)
+        payload = buffer.getvalue()
+        if not payload:
+            return None
+
+        return upload_user_avatar_image(
+            content=payload,
+            filename=f"telegram-{telegram_id}.jpg",
+            content_type="image/jpeg",
+        )
+    except (TelegramAPIError, RuntimeError):
+        logger.exception("Failed to fetch Telegram avatar for %s", telegram_id)
+        return None
+
+
 async def _get_saved_contact(telegram_id: int) -> dict | None:
     session_maker = get_session_maker()
     async with session_maker() as session:
         result = await session.execute(select(User).where(User.telegram_id == telegram_id))
         user = result.scalars().first()
 
-    if user is None:
+    if user is None or _is_contact_refresh_due(user.telegram_contact_updated_at):
         return None
 
     first_name, last_name = normalize_user_name_parts(user.first_name, user.last_name)
     return {
         "telegram_id": user.telegram_id,
         "phone": user.phone,
+        "username": user.username,
         "first_name": first_name,
         "last_name": last_name,
+        "avatar_url": user.avatar_url,
     }
 
 
@@ -129,13 +203,16 @@ async def run_bot() -> None:
         contact = await store.get_contact(message.from_user.id)
         if contact is None:
             contact = await _get_saved_contact(message.from_user.id)
-            if contact is not None:
-                await store.save_contact(
-                    telegram_id=contact["telegram_id"],
-                    phone=contact["phone"],
-                    first_name=contact["first_name"],
-                    last_name=contact.get("last_name"),
-                )
+        if contact is not None:
+            contact = _merge_current_telegram_profile(contact, message.from_user)
+            await store.save_contact(
+                telegram_id=contact["telegram_id"],
+                phone=contact["phone"],
+                username=contact.get("username"),
+                first_name=contact["first_name"],
+                last_name=contact.get("last_name"),
+                avatar_url=contact.get("avatar_url"),
+            )
 
         if contact is not None:
             await message.answer(
@@ -173,8 +250,10 @@ async def run_bot() -> None:
         await store.save_contact(
             telegram_id=message.from_user.id,
             phone=phone,
+            username=message.from_user.username,
             first_name=first_name,
             last_name=last_name,
+            avatar_url=None,
         )
         await message.answer(
             "✅ <b>Phone number received.</b>\n\n"
@@ -188,13 +267,16 @@ async def run_bot() -> None:
         contact = await store.get_contact(message.from_user.id)
         if not contact:
             contact = await _get_saved_contact(message.from_user.id)
-            if contact is not None:
-                await store.save_contact(
-                    telegram_id=contact["telegram_id"],
-                    phone=contact["phone"],
-                    first_name=contact["first_name"],
-                    last_name=contact.get("last_name"),
-                )
+        if contact is not None:
+            contact = _merge_current_telegram_profile(contact, message.from_user)
+            await store.save_contact(
+                telegram_id=contact["telegram_id"],
+                phone=contact["phone"],
+                username=contact.get("username"),
+                first_name=contact["first_name"],
+                last_name=contact.get("last_name"),
+                avatar_url=contact.get("avatar_url"),
+            )
 
         if not contact:
             await message.answer(
@@ -203,11 +285,25 @@ async def run_bot() -> None:
             )
             return
 
+        avatar_url = await _fetch_telegram_avatar_url(bot, contact["telegram_id"])
+        if avatar_url:
+            contact["avatar_url"] = avatar_url
+            await store.save_contact(
+                telegram_id=contact["telegram_id"],
+                phone=contact["phone"],
+                username=contact.get("username"),
+                first_name=contact["first_name"],
+                last_name=contact.get("last_name"),
+                avatar_url=avatar_url,
+            )
+
         code = await store.create_code(
             telegram_id=contact["telegram_id"],
             phone=contact["phone"],
+            username=contact.get("username"),
             first_name=contact["first_name"],
             last_name=contact.get("last_name"),
+            avatar_url=contact.get("avatar_url"),
         )
 
         sent = await message.answer(
@@ -215,6 +311,7 @@ async def run_bot() -> None:
             f"<code>{code}</code>\n\n"
             f"Code is valid for <b>3 minutes</b>.",
             parse_mode="HTML",
+            reply_markup=_code_copy_keyboard(code),
         )
 
         asyncio.create_task(_countdown(store, code, sent))
@@ -224,13 +321,16 @@ async def run_bot() -> None:
         contact = await store.get_contact(message.from_user.id)
         if not contact:
             contact = await _get_saved_contact(message.from_user.id)
-            if contact is not None:
-                await store.save_contact(
-                    telegram_id=contact["telegram_id"],
-                    phone=contact["phone"],
-                    first_name=contact["first_name"],
-                    last_name=contact.get("last_name"),
-                )
+        if contact is not None:
+            contact = _merge_current_telegram_profile(contact, message.from_user)
+            await store.save_contact(
+                telegram_id=contact["telegram_id"],
+                phone=contact["phone"],
+                username=contact.get("username"),
+                first_name=contact["first_name"],
+                last_name=contact.get("last_name"),
+                avatar_url=contact.get("avatar_url"),
+            )
 
         if contact:
             await message.answer(
@@ -283,6 +383,7 @@ async def _countdown(store, code: str, sent: types.Message) -> None:
                     f"<code>{code}</code>\n\n"
                     f"Code expires in <b>{label}</b>.",
                     parse_mode="HTML",
+                    reply_markup=_code_copy_keyboard(code),
                 )
             except Exception as exc:
                 logger.debug("Countdown edit skipped: %s", exc)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from uuid import uuid4
 from uuid import UUID
 
 import pytest
@@ -12,6 +13,8 @@ USER_HEADERS = {
     "X-Debug-First-Name": "Azizbek",
     "X-Debug-Last-Name": "Prime",
     "X-Debug-Username": "azizbek",
+    "X-Debug-Phone": "+998901234567",
+    "X-Debug-Avatar-Url": "/api/storage/test-assets/user-avatars/debug-avatar.jpg",
     "X-Debug-Role": "user",
     "X-Debug-Is-Premium": "true",
     "X-Debug-Show-On-Leaderboard": "true",
@@ -62,6 +65,7 @@ async def test_me_and_admin_routes(app):
         me = await client.get("/api/me", headers=USER_HEADERS)
         assert me.status_code == 200
         assert me.json()["role"] == "user"
+        assert me.json()["avatar_url"] == USER_HEADERS["X-Debug-Avatar-Url"]
 
         admin_headers = await login_admin_headers(client)
 
@@ -77,6 +81,87 @@ async def test_me_and_admin_routes(app):
         assert draft.status_code == 200
         assert draft.json()["metadata"]["type"] == "reading"
         assert draft.json()["decisions"]["question_bank"]["state"] == "not_supported"
+
+
+@pytest.mark.asyncio
+async def test_admin_dashboard_and_analytics_use_real_backend_data(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        admin_headers = await login_admin_headers(client)
+
+        dashboard = await client.get("/api/admin/dashboard", headers=admin_headers)
+        assert dashboard.status_code == 200
+        dashboard_payload = dashboard.json()
+        assert "payments_completed" in dashboard_payload
+        assert "attempts_today" in dashboard_payload
+        assert "completion_rate" in dashboard_payload
+        assert "recent_activity" in dashboard_payload
+        assert dashboard_payload["users_total"] >= 0
+        assert dashboard_payload["revenue_total"] >= 0
+
+        analytics = await client.get("/api/admin/analytics", headers=admin_headers)
+        assert analytics.status_code == 200
+        analytics_payload = analytics.json()
+        assert len(analytics_payload["activity_points"]) == 7
+        assert all("value" in point for point in analytics_payload["activity_points"])
+        assert isinstance(analytics_payload["top_tests"], list)
+        assert isinstance(analytics_payload["hardest_question_types"], list)
+
+
+@pytest.mark.asyncio
+async def test_admin_promo_codes_persist_and_write_audit_log(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        admin_headers = await login_admin_headers(client)
+        code = f"T{uuid4().hex[:10]}".upper()
+
+        created = await client.post(
+            "/api/admin/promo-codes",
+            headers=admin_headers,
+            json={
+                "code": code,
+                "discount_percent": 15,
+                "max_uses": 25,
+                "is_active": True,
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["code"] == code
+
+        listed = await client.get("/api/admin/promo-codes", headers=admin_headers)
+        assert listed.status_code == 200
+        assert any(item["code"] == code for item in listed.json())
+
+        audit = await client.get("/api/admin/audit-log", headers=admin_headers)
+        assert audit.status_code == 200
+        assert any(item["action"] == "promo_code.create" and item["changes"]["code"] == code for item in audit.json())
+
+
+@pytest.mark.asyncio
+async def test_super_admin_can_list_and_create_admin_accounts(app):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        super_headers = await login_admin_headers(client, login="test_super_admin", password="TestSuperAdmin123!")
+        username = f"ops_{uuid4().hex[:8]}"
+
+        listed_before = await client.get("/api/admin/admins", headers=super_headers)
+        assert listed_before.status_code == 200
+        assert any(item["username"] == "test_super_admin" for item in listed_before.json())
+
+        created = await client.post(
+            "/api/admin/admins",
+            headers=super_headers,
+            json={
+                "username": username,
+                "email": f"{username}@primescore.local",
+                "password": "NewAdmin123!",
+                "role": "admin",
+                "is_active": True,
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["username"] == username
+        assert created.json()["role"] == "admin"
+
+        listed_after = await client.get("/api/admin/admins", headers=super_headers)
+        assert any(item["username"] == username for item in listed_after.json())
 
 
 @pytest.mark.asyncio

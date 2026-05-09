@@ -5,7 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
+import {
+  getWritingDrafts,
+  getWritingHistory,
+  type WritingDraftListItem,
+  type WritingHistoryItem,
+} from "@/lib/server-writing";
+import { DraftRow } from "./draft-row";
 
 export const dynamic = "force-dynamic";
 
@@ -13,23 +19,30 @@ interface PageProps {
   searchParams: { task_type?: string };
 }
 
-function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    const then = new Date(iso).getTime();
-    const now = Date.now();
-    const diff = Math.max(0, now - then);
-    const min = Math.floor(diff / 60000);
-    if (min < 1) return "just now";
-    if (min < 60) return `${min}m ago`;
-    const h = Math.floor(min / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.floor(h / 24);
-    if (d < 7) return `${d}d ago`;
-    return new Date(iso).toLocaleDateString();
-  } catch {
-    return iso;
+function exactDateTime(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatDuration(seconds: number | null | undefined): string {
+  const safe = Math.max(0, Math.floor(Number(seconds ?? 0)));
+  const minutes = Math.floor(safe / 60);
+  const remainingSeconds = safe % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
+  if (minutes > 0) return `${minutes}m ${remainingSeconds}s`;
+  return `${remainingSeconds}s`;
 }
 
 function bandTone(band: number) {
@@ -71,9 +84,6 @@ function HistoryRow({ item }: { item: WritingHistoryItem }) {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold truncate">{item.task_title}</span>
-                <Badge tone="outline" className="border-border/60 bg-muted/40 text-foreground">
-                  {item.task_type === "task_1" ? "Task 1" : "Task 2"}
-                </Badge>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
@@ -81,25 +91,27 @@ function HistoryRow({ item }: { item: WritingHistoryItem }) {
                 </span>
                 <span>·</span>
                 <span className="inline-flex items-center gap-1">
-                  <Clock3 className="h-3 w-3" /> {relativeTime(item.submitted_at)}
+                  <Clock3 className="h-3 w-3" /> {formatDuration(item.time_spent_seconds)}
                 </span>
+                <span>·</span>
+                <span>{exactDateTime(item.submitted_at)}</span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             {isPending ? (
-              <span className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-700 dark:text-violet-300">
+              <span className="inline-flex whitespace-nowrap items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-700 dark:text-violet-300">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Grading…
               </span>
             ) : isFailed ? (
-              <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-600 dark:text-rose-300">
+              <span className="whitespace-nowrap rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-600 dark:text-rose-300">
                 Failed
               </span>
             ) : band !== null ? (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold tabular-nums",
+                  "inline-flex whitespace-nowrap items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold tabular-nums",
                   bandTone(band),
                 )}
               >
@@ -116,30 +128,38 @@ function HistoryRow({ item }: { item: WritingHistoryItem }) {
   );
 }
 
+function draftWordCount(text: string): number {
+  return text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+}
+
 export default async function WritingHistoryPage({ searchParams }: PageProps) {
   const filter = searchParams?.task_type === "task_1" || searchParams?.task_type === "task_2"
     ? searchParams.task_type
     : null;
 
-  const history = await getWritingHistory().catch(() => ({ items: [], total: 0 }));
+  const [history, draftList] = await Promise.all([
+    getWritingHistory().catch(() => ({ items: [], total: 0 })),
+    getWritingDrafts().catch(() => ({ items: [] as WritingDraftListItem[] })),
+  ]);
   const items = filter ? history.items.filter((i) => i.task_type === filter) : history.items;
+  const visibleDrafts = draftList.items.filter((draft) => draftWordCount(draft.essay_text) >= 20);
+  const drafts = filter ? visibleDrafts.filter((i) => i.task_type === filter) : visibleDrafts;
+  const totalItems = items.length + drafts.length;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-700 dark:text-violet-300">
-            <PenSquare className="h-3.5 w-3.5" />
-            Writing history
-          </div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Your essays</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Your essays</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Every essay you've submitted with its AI band score and feedback.
           </p>
         </div>
-        <Button asChild>
+        <Button asChild className="h-11 rounded-2xl px-5 font-semibold shadow-sm shadow-primary/20">
           <Link href="/writing">
-            <PenSquare className="h-4 w-4" /> New essay
+            <PenSquare className="h-4 w-4" />
+            New essay
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
       </div>
@@ -154,7 +174,7 @@ export default async function WritingHistoryPage({ searchParams }: PageProps) {
               : "border-border/60 bg-card/40 text-muted-foreground hover:text-foreground",
           )}
         >
-          All ({history.items.length})
+          All ({history.items.length + visibleDrafts.length})
         </Link>
         <Link
           href="/writing/history?task_type=task_1"
@@ -180,7 +200,7 @@ export default async function WritingHistoryPage({ searchParams }: PageProps) {
         </Link>
       </div>
 
-      {items.length === 0 ? (
+      {totalItems === 0 ? (
         <Card className="rounded-3xl border-dashed border-border/60 bg-card/30">
           <CardContent className="p-12 text-center space-y-4">
             <div className="mx-auto h-14 w-14 rounded-2xl bg-violet-500/10 flex items-center justify-center">
@@ -199,6 +219,9 @@ export default async function WritingHistoryPage({ searchParams }: PageProps) {
         </Card>
       ) : (
         <div className="space-y-3">
+          {drafts.map((draft) => (
+            <DraftRow key={draft.draft_key} draft={draft} />
+          ))}
           {items.map((item) => (
             <HistoryRow key={item.submission_id} item={item} />
           ))}

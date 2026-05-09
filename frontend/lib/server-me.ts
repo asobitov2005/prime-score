@@ -108,6 +108,54 @@ type BackendDashboardAnalytics = {
   comparison: BackendQuestionTypeComparison;
   error_distribution: BackendErrorDistributionItem[];
   progress_series: BackendBandProgressPoint[];
+  accuracy_trend?: BackendAccuracyTrendPoint[];
+  weekly_activity?: BackendWeeklyActivityPoint[];
+  score_distribution?: BackendScoreDistribution;
+  personal_bests?: BackendPersonalBests;
+  speed_metrics?: BackendSpeedMetrics;
+  improvement_rate?: BackendImprovementRate;
+};
+
+type BackendAccuracyTrendPoint = {
+  date: string;
+  accuracy: number;
+  band?: number | null;
+  test_type?: string | null;
+};
+
+type BackendWeeklyActivityPoint = {
+  week_label: string;
+  attempts_count: number;
+  time_spent_min: number;
+};
+
+type BackendScoreDistribution = {
+  band_1_to_3: number;
+  band_3_5_to_5: number;
+  band_5_to_6_5: number;
+  band_6_5_to_7_5: number;
+  band_7_5_to_9: number;
+};
+
+type BackendPersonalBests = {
+  best_band?: number | null;
+  best_accuracy?: number | null;
+  longest_streak: number;
+  current_streak: number;
+  fastest_full_test_sec?: number | null;
+};
+
+type BackendSpeedMetrics = {
+  avg_time_per_question_sec?: number | null;
+  reading_avg_sec_per_question?: number | null;
+  listening_avg_sec_per_question?: number | null;
+};
+
+type BackendImprovementRate = {
+  last_5_avg_band?: number | null;
+  prev_5_avg_band?: number | null;
+  delta?: number | null;
+  percent_change?: number | null;
 };
 
 async function requestBackend<T>(path: string): Promise<T> {
@@ -321,12 +369,52 @@ export async function getLeaderboardRank(type: "combined" | TestType = "combined
 export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
   try {
     const analytics = await requestBackend<BackendDashboardAnalytics>("/me/analytics");
+    const sd = analytics.score_distribution;
+    const pb = analytics.personal_bests;
+    const sm = analytics.speed_metrics;
+    const ir = analytics.improvement_rate;
     return {
       performanceSummary: mapPerformanceSummary(analytics.performance_summary),
       questionTypeAnalysis: mapQuestionTypeAnalysis(analytics.question_type_analysis),
       comparison: mapComparison(analytics.comparison),
       errorDistribution: mapErrorDistribution(analytics.error_distribution),
-      progressSeries: mapProgressSeries(analytics.progress_series)
+      progressSeries: mapProgressSeries(analytics.progress_series),
+      accuracyTrend: (analytics.accuracy_trend ?? []).map((p) => ({
+        date: p.date,
+        accuracy: p.accuracy,
+        band: p.band ?? null,
+        testType: p.test_type ?? null,
+      })),
+      weeklyActivity: (analytics.weekly_activity ?? []).map((p) => ({
+        weekLabel: p.week_label,
+        attemptsCount: p.attempts_count,
+        timeSpentMin: p.time_spent_min,
+      })),
+      scoreDistribution: {
+        band1To3: sd?.band_1_to_3 ?? 0,
+        band3_5To5: sd?.band_3_5_to_5 ?? 0,
+        band5To6_5: sd?.band_5_to_6_5 ?? 0,
+        band6_5To7_5: sd?.band_6_5_to_7_5 ?? 0,
+        band7_5To9: sd?.band_7_5_to_9 ?? 0,
+      },
+      personalBests: {
+        bestBand: pb?.best_band ?? null,
+        bestAccuracy: pb?.best_accuracy ?? null,
+        longestStreak: pb?.longest_streak ?? 0,
+        currentStreak: pb?.current_streak ?? 0,
+        fastestFullTestSec: pb?.fastest_full_test_sec ?? null,
+      },
+      speedMetrics: {
+        avgTimePerQuestionSec: sm?.avg_time_per_question_sec ?? null,
+        readingAvgSecPerQuestion: sm?.reading_avg_sec_per_question ?? null,
+        listeningAvgSecPerQuestion: sm?.listening_avg_sec_per_question ?? null,
+      },
+      improvementRate: {
+        last5AvgBand: ir?.last_5_avg_band ?? null,
+        prev5AvgBand: ir?.prev_5_avg_band ?? null,
+        delta: ir?.delta ?? null,
+        percentChange: ir?.percent_change ?? null,
+      },
     };
   } catch {
     return {
@@ -345,7 +433,13 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
         items: []
       },
       errorDistribution: [],
-      progressSeries: []
+      progressSeries: [],
+      accuracyTrend: [],
+      weeklyActivity: [],
+      scoreDistribution: { band1To3: 0, band3_5To5: 0, band5To6_5: 0, band6_5To7_5: 0, band7_5To9: 0 },
+      personalBests: { bestBand: null, bestAccuracy: null, longestStreak: 0, currentStreak: 0, fastestFullTestSec: null },
+      speedMetrics: { avgTimePerQuestionSec: null, readingAvgSecPerQuestion: null, listeningAvgSecPerQuestion: null },
+      improvementRate: { last5AvgBand: null, prev5AvgBand: null, delta: null, percentChange: null },
     };
   }
 }

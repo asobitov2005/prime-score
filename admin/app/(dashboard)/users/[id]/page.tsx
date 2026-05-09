@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card, CardContent, CardHeader, CardTitle, SectionHeader, buttonClassName } from "@/components/ui";
@@ -17,6 +17,7 @@ type UserDetail = {
   last_name: string | null;
   username: string | null;
   phone: string | null;
+  avatar_url: string | null;
   is_premium: boolean;
   premium_until: string | null;
   show_on_leaderboard: boolean;
@@ -65,9 +66,9 @@ export default function UserDetailPage() {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const token = () => getClientAdminAccessToken();
+  const token = useCallback(() => getClientAdminAccessToken(), []);
 
-  const fetchUser = () => {
+  const fetchUser = useCallback(() => {
     if (!id) return;
     const t = token();
     if (!t) { setLoading(false); return; }
@@ -76,9 +77,9 @@ export default function UserDetailPage() {
       .then(setUser)
       .catch(() => setError("Foydalanuvchini yuklab bo'lmadi."))
       .finally(() => setLoading(false));
-  };
+  }, [id, token]);
 
-  useEffect(() => { fetchUser(); }, [id]);
+  useEffect(() => { fetchUser(); }, [fetchUser]);
 
   const doAction = async (fn: () => Promise<Response>, successMsg: string) => {
     setActionLoading(true); setActionMsg("");
@@ -154,8 +155,13 @@ export default function UserDetailPage() {
       <Card>
         <CardContent className="p-6">
           <div className="flex items-start gap-6">
-            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl font-black text-primary shrink-0">
-              {fullName.charAt(0).toUpperCase()}
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 text-2xl font-black text-primary">
+              {user.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatar_url} alt={fullName || "User"} className="h-full w-full object-cover" />
+              ) : (
+                (fullName || user.username || "?").charAt(0).toUpperCase()
+              )}
             </div>
             <div className="flex-1 min-w-0 space-y-3">
               <div className="flex items-center gap-3 flex-wrap">

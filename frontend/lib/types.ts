@@ -207,6 +207,54 @@ export interface DashboardAnalytics {
   comparison: DashboardQuestionTypeComparison;
   errorDistribution: DashboardErrorDistributionItem[];
   progressSeries: DashboardBandProgressPoint[];
+  accuracyTrend: DashboardAccuracyTrendPoint[];
+  weeklyActivity: DashboardWeeklyActivityPoint[];
+  scoreDistribution: DashboardScoreDistribution;
+  personalBests: DashboardPersonalBests;
+  speedMetrics: DashboardSpeedMetrics;
+  improvementRate: DashboardImprovementRate;
+}
+
+export interface DashboardAccuracyTrendPoint {
+  date: string;
+  accuracy: number;
+  band: number | null;
+  testType: string | null;
+}
+
+export interface DashboardWeeklyActivityPoint {
+  weekLabel: string;
+  attemptsCount: number;
+  timeSpentMin: number;
+}
+
+export interface DashboardScoreDistribution {
+  band1To3: number;
+  band3_5To5: number;
+  band5To6_5: number;
+  band6_5To7_5: number;
+  band7_5To9: number;
+}
+
+export interface DashboardPersonalBests {
+  bestBand: number | null;
+  bestAccuracy: number | null;
+  longestStreak: number;
+  currentStreak: number;
+  fastestFullTestSec: number | null;
+}
+
+export interface DashboardSpeedMetrics {
+  avgTimePerQuestionSec: number | null;
+  readingAvgSecPerQuestion: number | null;
+  listeningAvgSecPerQuestion: number | null;
+}
+
+export interface DashboardImprovementRate {
+  last5AvgBand: number | null;
+  prev5AvgBand: number | null;
+  delta: number | null;
+  percentChange: number | null;
 }
 
 export interface AttemptRow {

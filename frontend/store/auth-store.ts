@@ -14,15 +14,17 @@ export interface AuthSessionState {
   refreshToken: string | null;
   name: string;
   phoneNumber: string | null;
+  avatarUrl: string | null;
   isPremium: boolean;
   premiumUntil: string | null;
   isAuthenticated: boolean;
   hasHydrated: boolean;
   setHasHydrated: (hasHydrated: boolean) => void;
-  setSession: (session: { userId: string; sessionId: string; accessToken?: string | null; refreshToken?: string | null; name: string; phoneNumber: string | null; isPremium: boolean; premiumUntil?: string | null }) => void;
-  syncSession: (session: Partial<{ userId: string | null; sessionId: string | null; accessToken: string | null; refreshToken: string | null; name: string; phoneNumber: string | null; isPremium: boolean; premiumUntil: string | null }>) => void;
+  setSession: (session: { userId: string; sessionId: string; accessToken?: string | null; refreshToken?: string | null; name: string; phoneNumber: string | null; avatarUrl?: string | null; isPremium: boolean; premiumUntil?: string | null }) => void;
+  syncSession: (session: Partial<{ userId: string | null; sessionId: string | null; accessToken: string | null; refreshToken: string | null; name: string; phoneNumber: string | null; avatarUrl: string | null; isPremium: boolean; premiumUntil: string | null }>) => void;
   setTokens: (tokens: { accessToken?: string | null; refreshToken?: string | null }) => void;
   updateName: (newName: string) => void;
+  updateAvatar: (avatarUrl: string | null) => void;
   clearSession: () => void;
 }
 
@@ -35,6 +37,7 @@ export const useAuthStore = create<AuthSessionState>()(
       refreshToken: null,
       name: "Guest",
       phoneNumber: null,
+      avatarUrl: null,
       isPremium: false,
       premiumUntil: null,
       isAuthenticated: false,
@@ -43,7 +46,7 @@ export const useAuthStore = create<AuthSessionState>()(
         set({
           hasHydrated
         }),
-      setSession: ({ userId, sessionId, accessToken = null, refreshToken = null, name, phoneNumber, isPremium, premiumUntil = null }) =>
+      setSession: ({ userId, sessionId, accessToken = null, refreshToken = null, name, phoneNumber, avatarUrl = null, isPremium, premiumUntil = null }) =>
         set(() => {
           syncBrowserSessionCookies({ sessionId, accessToken, refreshToken });
           return {
@@ -53,6 +56,7 @@ export const useAuthStore = create<AuthSessionState>()(
             refreshToken,
             name,
             phoneNumber,
+            avatarUrl,
             isPremium,
             premiumUntil,
             isAuthenticated: true
@@ -66,6 +70,7 @@ export const useAuthStore = create<AuthSessionState>()(
           refreshToken: session.refreshToken === undefined ? state.refreshToken : session.refreshToken,
           name: session.name ?? state.name,
           phoneNumber: session.phoneNumber === undefined ? state.phoneNumber : session.phoneNumber,
+          avatarUrl: session.avatarUrl === undefined ? state.avatarUrl : session.avatarUrl,
           isPremium: session.isPremium ?? state.isPremium,
           premiumUntil: session.premiumUntil === undefined ? state.premiumUntil : session.premiumUntil,
           isAuthenticated:
@@ -89,8 +94,12 @@ export const useAuthStore = create<AuthSessionState>()(
           };
         }),
       updateName: (newName) =>
-        set((state) => ({
+        set(() => ({
           name: newName
+        })),
+      updateAvatar: (avatarUrl) =>
+        set(() => ({
+          avatarUrl
         })),
       clearSession: () =>
         set(() => {
@@ -102,6 +111,7 @@ export const useAuthStore = create<AuthSessionState>()(
             refreshToken: null,
             name: "Guest",
             phoneNumber: null,
+            avatarUrl: null,
             isPremium: false,
             premiumUntil: null,
             isAuthenticated: false
@@ -117,6 +127,7 @@ export const useAuthStore = create<AuthSessionState>()(
         refreshToken: state.refreshToken,
         name: state.name,
         phoneNumber: state.phoneNumber,
+        avatarUrl: state.avatarUrl,
         isPremium: state.isPremium,
         premiumUntil: state.premiumUntil,
         isAuthenticated: state.isAuthenticated

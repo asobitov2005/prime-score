@@ -1,270 +1,360 @@
 import Link from "next/link";
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, ProgressBar, SectionHeader, buttonClassName, cn } from "@/components/ui";
-import { ArrowRight, Activity, Users, Zap, TrendingUp, Clock, Flame, Target, Filter, ChevronRight, BarChart3, CreditCard } from "lucide-react";
+import type { ReactNode } from "react";
+import { Activity, BarChart3, CreditCard, FileText, ShieldCheck, TrendingUp, Users } from "lucide-react";
+import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, ProgressBar, SectionHeader, buttonClassName, cn } from "@/components/ui";
+import { getAdminDashboardOverview } from "@/lib/server-data";
+import { RevenueTrendChart, RegistrationTrendChart, AttemptsByDayChart, TypeSplitChart, BandDistributionChart, PaymentSplitChart, StatusSplitChart } from "@/components/dashboard-charts";
+import { AdminFilterBar } from "@/components/admin-filter-bar";
 
-export default async function DashboardPage() {
-  // Mocking the comprehensive data based on the requested metrics
-  const metrics = {
-    mrr: "$4,250",
-    dailyPurchases: 14,
-    conversionRate: "8.4%",
-    
-    users: {
-      new: { daily: 45, weekly: 310, monthly: 1250 },
-      active: { dau: 850, wau: 4200, mau: 12500 }
-    },
-    
-    engagement: {
-      testsTaken: { daily: 1200, weekly: 8500, monthly: 35000 },
-      avgTestsPerUser: 4.2,
-      avgSessionDuration: "24m 10s",
-      timeSpentPerDay: "45m"
-    },
-    
-    funnel: {
-      signupToFirst: 78, // %
-      firstToSecond: 65, // %
-      activeToPremium: 12 // %
-    },
-    
-    loyalty: {
-      retention7d: "42%",
-      retention30d: "24%",
-      returningUsers: "68%",
-      streaks: 340, // users with 3+ day streak
-      topScore10: "7.5 Band" // avg score of top 10%
-    }
-  };
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatMoney(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  icon,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: ReactNode;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  return (
+    <Card className="relative overflow-hidden border-border/70 bg-card/80">
+      <div
+        className={cn(
+          "absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full blur-2xl",
+          tone === "success" && "bg-success/20",
+          tone === "warning" && "bg-warning/20",
+          tone === "danger" && "bg-danger/20",
+          tone === "neutral" && "bg-primary/15"
+        )}
+      />
+      <CardHeader className="relative flex flex-row items-start justify-between space-y-0 pb-3">
+        <div>
+          <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">{label}</CardDescription>
+          <CardTitle className="mt-2 text-3xl font-black tracking-tight">{value}</CardTitle>
+        </div>
+        <div className="rounded-xl border border-border bg-background/70 p-2 text-primary">{icon}</div>
+      </CardHeader>
+      <CardContent className="relative">
+        <p className="text-xs font-semibold text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Record<string, string>;
+}) {
+  const metrics = await getAdminDashboardOverview(searchParams);
+  const hasActivity = metrics.recentActivity.length > 0;
 
   return (
     <div className="space-y-8 pb-10 animate-in fade-in duration-700">
+      <AdminFilterBar />
+      
       <SectionHeader
         eyebrow="Command Center"
         title="Platform Metrics"
-        description="Real-time pulse of your user growth, revenue, and product engagement."
+        description="Live operational numbers from the production database. Empty database states stay zero."
         actions={
-          <div className="flex gap-3">
-            <Button variant="outline" size="sm" className="font-bold border-border/60">
-              <Filter className="h-4 w-4 mr-2" />
-              Last 30 Days
-            </Button>
-            <Link href="/analytics" className={buttonClassName({ variant: "solid", size: "sm" })}>
-              View Full Report
-            </Link>
-          </div>
+          <Link href="/analytics" className={buttonClassName({ variant: "solid", size: "sm" })}>
+            <BarChart3 className="h-4 w-4" />
+            Open Analytics
+          </Link>
         }
       />
 
-      {/* Hero Stats: The Big 4 */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="bg-card/50 hover:bg-card transition-colors border-border/50 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-3 opacity-5"><CreditCard size={48} /></div>
-          <CardHeader className="p-4 pb-1">
-            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">MRR (Revenue)</CardDescription>
-            <CardTitle className="text-2xl font-bold text-foreground">{metrics.mrr}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1"><TrendingUp size={10}/> +12.5% vs last month</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-card/50 hover:bg-card transition-colors border-border/50 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-3 opacity-5"><Users size={48} /></div>
-          <CardHeader className="p-4 pb-1">
-            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Active Users (DAU)</CardDescription>
-            <CardTitle className="text-2xl font-bold text-foreground">{metrics.users.active.dau.toLocaleString()}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1"><TrendingUp size={10}/> +5.2% vs yesterday</p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Revenue"
+          value={`${formatMoney(metrics.revenueTotal)} UZS`}
+          detail={`${formatNumber(metrics.paymentsCompleted)} completed payments`}
+          icon={<CreditCard className="h-5 w-5" />}
+          tone="success"
+        />
+        <MetricCard
+          label="Users"
+          value={formatNumber(metrics.usersTotal)}
+          detail={`${formatNumber(metrics.usersNewToday)} new today, ${formatNumber(metrics.activeUsers7d)} active in 7 days`}
+          icon={<Users className="h-5 w-5" />}
+        />
+        <MetricCard
+          label="Attempts"
+          value={formatNumber(metrics.attemptsTotal)}
+          detail={`${formatNumber(metrics.attemptsToday)} started today, ${metrics.completionRate}% completed`}
+          icon={<Activity className="h-5 w-5" />}
+          tone="warning"
+        />
+        <MetricCard
+          label="Premium"
+          value={formatNumber(metrics.premiumUsers)}
+          detail={`${metrics.premiumRate}% of registered users`}
+          icon={<ShieldCheck className="h-5 w-5" />}
+          tone="success"
+        />
+      </div>
 
-        <Card className="bg-card/50 hover:bg-card transition-colors border-border/50 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-3 opacity-5"><Activity size={48} /></div>
-          <CardHeader className="p-4 pb-1">
-            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tests Taken (Daily)</CardDescription>
-            <CardTitle className="text-2xl font-bold text-foreground">{metrics.engagement.testsTaken.daily.toLocaleString()}</CardTitle>
+      {/* ---- NEW: Revenue + Registration + Attempts Trend Charts ---- */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/10 pb-3">
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">Revenue Trend</CardDescription>
+            <CardTitle className="text-lg font-semibold">30-day revenue</CardTitle>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <p className="text-[11px] font-medium text-emerald-500 flex items-center gap-1"><TrendingUp size={10}/> +8.4% vs yesterday</p>
+          <CardContent className="p-4">
+            <RevenueTrendChart data={metrics.revenueTrend} />
           </CardContent>
         </Card>
-
-        <Card className="bg-primary/5 hover:bg-primary/10 transition-colors border-primary/20 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-3 opacity-5 text-primary"><Zap size={48} /></div>
-          <CardHeader className="p-4 pb-1">
-            <CardDescription className="text-[10px] font-bold uppercase tracking-wider text-primary">Free → Paid Conversion</CardDescription>
-            <CardTitle className="text-2xl font-bold text-foreground">{metrics.conversionRate}</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/10 pb-3">
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">New Users</CardDescription>
+            <CardTitle className="text-lg font-semibold">30-day registrations</CardTitle>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <p className="text-[11px] font-medium text-primary/80">Avg. {metrics.dailyPurchases} daily purchases</p>
+          <CardContent className="p-4">
+            <RegistrationTrendChart data={metrics.registrationTrend} />
+          </CardContent>
+        </Card>
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/10 pb-3">
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">Daily Attempts</CardDescription>
+            <CardTitle className="text-lg font-semibold">30-day activity</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <AttemptsByDayChart data={metrics.attemptsByDay} />
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Column 1: Audience & Growth */}
-        <Card className="border-border/50 shadow-sm flex flex-col">
-          <CardHeader className="border-b border-border/40 bg-muted/10 p-5">
-            <CardTitle className="text-lg font-bold flex items-center gap-2"><Users className="h-5 w-5 text-primary"/> Audience & Growth</CardTitle>
+      {/* ---- NEW: Type Split + Band Distribution + Avg Time ---- */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/10 pb-3">
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">Test Type Split</CardDescription>
+            <CardTitle className="text-lg font-semibold">Reading vs Listening</CardTitle>
           </CardHeader>
-          <CardContent className="p-0 flex-1 flex flex-col">
-            <div className="p-5 border-b border-border/40">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">New Users</p>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-muted/30 rounded-lg p-2">
-                  <p className="text-lg font-black text-foreground">{metrics.users.new.daily}</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Daily</p>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-2">
-                  <p className="text-lg font-black text-foreground">{metrics.users.new.weekly}</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Weekly</p>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-2">
-                  <p className="text-lg font-black text-foreground">{metrics.users.new.monthly}</p>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Monthly</p>
-                </div>
-              </div>
+          <CardContent className="p-4">
+            <TypeSplitChart data={metrics.typeSplit} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Band Distribution</CardTitle>
+            <CardDescription>Historical performance spread.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BandDistributionChart data={metrics.bandDistribution} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Payments</CardTitle>
+            <CardDescription>Method distribution.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PaymentSplitChart data={metrics.paymentMethodSplit} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Attempt Status</CardTitle>
+            <CardDescription>Platform activity health.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <StatusSplitChart data={metrics.attemptStatusSplit} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/10 pb-3">
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">Avg Time Per Test</CardDescription>
+            <CardTitle className="text-lg font-semibold">By test type</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 p-6">
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-center">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Reading</p>
+              <p className="mt-1.5 text-3xl font-black text-foreground">
+                {metrics.avgTimePerTest?.readingAvgMin != null ? `${metrics.avgTimePerTest.readingAvgMin} min` : "—"}
+              </p>
             </div>
-            <div className="p-5 flex-1 bg-background/50">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Active Users (MAU/WAU)</p>
-              <div className="space-y-4">
-                <div className="flex justify-between items-end">
-                  <p className="text-sm font-bold">Monthly Active</p>
-                  <p className="text-xl font-black">{metrics.users.active.mau.toLocaleString()}</p>
-                </div>
-                <div className="flex justify-between items-end">
-                  <p className="text-sm font-bold">Weekly Active</p>
-                  <p className="text-xl font-black">{metrics.users.active.wau.toLocaleString()}</p>
-                </div>
-              </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-center">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Listening</p>
+              <p className="mt-1.5 text-3xl font-black text-foreground">
+                {metrics.avgTimePerTest?.listeningAvgMin != null ? `${metrics.avgTimePerTest.listeningAvgMin} min` : "—"}
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Column 2: The Funnel */}
-        <Card className="border-border/50 shadow-sm flex flex-col">
-          <CardHeader className="border-b border-border/40 bg-muted/10 p-5">
-            <CardTitle className="text-lg font-bold flex items-center gap-2"><Filter className="h-5 w-5 text-primary"/> User Journey Funnel</CardTitle>
-          </CardHeader>
-          <CardContent className="p-5 space-y-6 flex-1">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="font-bold text-foreground">Signup → 1st Test</span>
-                <span className="font-bold text-primary">{metrics.funnel.signupToFirst}%</span>
+        {metrics.quickStats && (
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b bg-muted/10 pb-3">
+              <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">Platform Highlights</CardDescription>
+              <CardTitle className="text-lg font-semibold">Quick Stats Snapshot</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 p-6">
+              <div className="flex items-center justify-between rounded-xl bg-primary/5 px-4 py-3 border border-primary/10">
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">Fastest Test</span>
+                <span className="text-lg font-black">{metrics.quickStats.fastestCompletionMin ? `${metrics.quickStats.fastestCompletionMin}m` : "—"}</span>
               </div>
-              <ProgressBar value={metrics.funnel.signupToFirst} />
-              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Activation Rate</p>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="font-bold text-foreground">1st Test → 2nd Test</span>
-                <span className="font-bold text-primary">{metrics.funnel.firstToSecond}%</span>
+              <div className="flex items-center justify-between rounded-xl bg-amber-500/5 px-4 py-3 border border-amber-500/10">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Avg Accuracy</span>
+                <span className="text-lg font-black">{metrics.quickStats.averageAccuracy}%</span>
               </div>
-              <ProgressBar value={metrics.funnel.firstToSecond} />
-              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Hooked Rate</p>
-            </div>
+              <div className="flex items-center justify-between rounded-xl bg-violet-500/5 px-4 py-3 border border-violet-500/10">
+                <span className="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Top Band Score</span>
+                <span className="text-lg font-black">{metrics.quickStats.highestBandAchieved ?? "—"}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="font-bold text-foreground">Active → Premium</span>
-                <span className="font-bold text-emerald-500">{metrics.funnel.activeToPremium}%</span>
-              </div>
-              {/* Custom colored progress bar for revenue */}
-              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                 <div className="h-full bg-emerald-500 transition-all" style={{ width: `${metrics.funnel.activeToPremium}%` }} />
-              </div>
-              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Monetization</p>
+      {/* ---- Top Active Users ---- */}
+      {metrics.topActiveUsers.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/10">
+            <CardDescription className="text-[10px] font-black uppercase tracking-[0.2em]">Top Active Users</CardDescription>
+            <CardTitle className="text-lg font-semibold">Most engaged users by attempt count</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/5">
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground">Name</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">Attempts</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">Last Active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.topActiveUsers.map((user, idx) => (
+                    <tr key={user.name + idx} className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3 font-black text-muted-foreground">{idx + 1}</td>
+                      <td className="px-4 py-3 font-semibold">{user.name}</td>
+                      <td className="px-4 py-3 text-right font-black">{user.attemptCount}</td>
+                      <td className="px-4 py-3 text-right text-xs text-muted-foreground">{user.lastActive ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>
+      )}
 
-        {/* Column 3: Engagement & Loyalty */}
-        <Card className="border-border/50 shadow-sm flex flex-col">
-          <CardHeader className="border-b border-border/40 bg-muted/10 p-5">
-            <CardTitle className="text-lg font-bold flex items-center gap-2"><Target className="h-5 w-5 text-primary"/> Engagement & Quality</CardTitle>
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/10">
+            <CardTitle>Operational Health</CardTitle>
+            <CardDescription>Live ratios derived from attempts, users, tests, and payments.</CardDescription>
           </CardHeader>
-          <CardContent className="p-0 flex-1 flex flex-col">
-            <div className="p-5 border-b border-border/40 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Time per day</p>
-                <p className="text-2xl font-black text-foreground flex items-center gap-1.5"><Clock size={18} className="text-primary"/> {metrics.engagement.timeSpentPerDay}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Avg Session</p>
-                <p className="text-2xl font-black text-foreground">{metrics.engagement.avgSessionDuration}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Avg Tests/User</p>
-                <p className="text-2xl font-black text-foreground">{metrics.engagement.avgTestsPerUser}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Returning</p>
-                <p className="text-2xl font-black text-foreground">{metrics.loyalty.returningUsers}</p>
-              </div>
-            </div>
-            
-            <div className="p-5 flex-1 bg-background/50 space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <div className="flex items-center gap-3">
-                  <Flame className="h-5 w-5 text-amber-500" />
-                  <div>
-                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">Active Streaks</p>
-                    <p className="text-[10px] uppercase font-bold text-amber-700/70 dark:text-amber-400/70">3+ consecutive days</p>
-                  </div>
-                </div>
-                <p className="text-xl font-black text-amber-600 dark:text-amber-400">{metrics.loyalty.streaks}</p>
-              </div>
-
+          <CardContent className="space-y-7 p-6">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-foreground">Top 10% Users</p>
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Average Score</p>
-                </div>
-                <Badge tone="info" className="text-sm font-black px-3 py-1">{metrics.loyalty.topScore10}</Badge>
+                <p className="text-sm font-bold">Attempt completion rate</p>
+                <Badge tone={metrics.completionRate >= 60 ? "success" : "warning"}>{metrics.completionRate}%</Badge>
+              </div>
+              <ProgressBar value={metrics.completionRate} />
+              <p className="text-xs font-medium text-muted-foreground">
+                {formatNumber(metrics.attemptsCompleted)} completed out of {formatNumber(metrics.attemptsTotal)} attempts.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold">Premium user share</p>
+                <Badge tone={metrics.premiumRate > 0 ? "success" : "neutral"}>{metrics.premiumRate}%</Badge>
+              </div>
+              <ProgressBar value={metrics.premiumRate} />
+              <p className="text-xs font-medium text-muted-foreground">
+                {formatNumber(metrics.premiumUsers)} premium users out of {formatNumber(metrics.usersTotal)} registered users.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-border bg-background/60 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Published</p>
+                <p className="mt-2 text-2xl font-black">{formatNumber(metrics.testsPublished)}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background/60 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Draft</p>
+                <p className="mt-2 text-2xl font-black">{formatNumber(metrics.testsDraft)}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background/60 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Archived</p>
+                <p className="mt-2 text-2xl font-black">{formatNumber(metrics.testsArchived)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Footer Metrics Row */}
-      <div className="grid gap-6 md:grid-cols-2">
-         <Card className="border-border/50 shadow-sm">
-           <CardHeader className="p-5 pb-0">
-             <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Retention Curve</CardTitle>
-           </CardHeader>
-           <CardContent className="p-5 flex gap-8">
-             <div className="flex-1">
-               <p className="text-3xl font-black text-foreground mb-1">{metrics.loyalty.retention7d}</p>
-               <p className="text-xs font-bold text-muted-foreground">Day 7 Retention</p>
-               <div className="h-1.5 w-full bg-muted rounded-full mt-2 overflow-hidden"><div className="h-full bg-primary w-[42%]" /></div>
-             </div>
-             <div className="flex-1">
-               <p className="text-3xl font-black text-foreground mb-1">{metrics.loyalty.retention30d}</p>
-               <p className="text-xs font-bold text-muted-foreground">Day 30 Retention</p>
-               <div className="h-1.5 w-full bg-muted rounded-full mt-2 overflow-hidden"><div className="h-full bg-primary w-[24%]" /></div>
-             </div>
-           </CardContent>
-         </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="border-b bg-muted/10">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Content Status
+              </CardTitle>
+              <CardDescription>Current test library state from DB.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-6">
+              <div className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-3">
+                <span className="text-sm font-semibold">Total tests</span>
+                <span className="text-xl font-black">{formatNumber(metrics.testsTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-3">
+                <span className="text-sm font-semibold">Average band</span>
+                <span className="text-xl font-black">{metrics.averageBand == null ? "0" : metrics.averageBand.toFixed(1)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-muted/30 px-4 py-3">
+                <span className="text-sm font-semibold">Pending payments</span>
+                <Badge tone={metrics.paymentsPending > 0 ? "warning" : "neutral"}>{formatNumber(metrics.paymentsPending)}</Badge>
+              </div>
+            </CardContent>
+          </Card>
 
-         <Card className="border-border/50 shadow-sm bg-muted/10">
-           <CardHeader className="p-5 pb-0">
-             <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Quick Insights</CardTitle>
-           </CardHeader>
-           <CardContent className="p-5 space-y-3">
-             <p className="text-sm font-medium text-foreground flex items-start gap-2">
-               <span className="text-emerald-500 font-bold mt-0.5">↑</span> 
-               Signup to 1st Test activation is strong (78%). Consider adding a small reward to push the &ldquo;1st to 2nd&rdquo; metric higher.
-             </p>
-             <p className="text-sm font-medium text-foreground flex items-start gap-2">
-               <span className="text-primary font-bold mt-0.5">!</span> 
-               Top users are averaging 7.5 Band. Generating advanced practice materials could drive more premium upgrades.
-             </p>
-           </CardContent>
-         </Card>
+          <Card>
+            <CardHeader className="border-b bg-muted/10">
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Recent Admin Activity
+              </CardTitle>
+              <CardDescription>Latest audit events written by admin actions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 p-6">
+              {hasActivity ? (
+                metrics.recentActivity.map((item) => (
+                  <div key={item} className="rounded-xl border border-border bg-background/60 px-4 py-3 text-sm font-semibold">
+                    {item}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm font-medium text-muted-foreground">
+                  No audit activity yet.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
 }
+

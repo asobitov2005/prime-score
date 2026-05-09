@@ -69,7 +69,7 @@ export function LoginPageClient() {
       }
 
       const data = await response.json();
-      const userData = data.user || { id: "user", first_name: "Candidate", username: "Phone" };
+      const userData = data.user || { id: "user", first_name: "Candidate", phone: "Phone" };
 
       setSession({
         userId: userData.id,
@@ -77,7 +77,8 @@ export function LoginPageClient() {
         accessToken: data.access_token ?? null,
         refreshToken: data.refresh_token ?? null,
         name: buildUserDisplayName(userData.first_name, userData.last_name),
-        phoneNumber: userData.username ?? null,
+        phoneNumber: userData.phone ?? userData.username ?? null,
+        avatarUrl: userData.avatar_url ?? null,
         isPremium: Boolean(userData.is_premium),
         premiumUntil: userData.premium_until ?? null,
       });

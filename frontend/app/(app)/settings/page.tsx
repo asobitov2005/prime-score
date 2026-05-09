@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
-import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2, Crown } from "lucide-react";
+import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2, Crown, Camera, ImageOff } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,13 @@ import type { AuthSessionRead } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const { name, phoneNumber, updateName, isPremium, sessionId: currentSessionId, isAuthenticated, hasHydrated } = useAuthStore();
+  const { name, phoneNumber, avatarUrl, updateName, updateAvatar, syncSession, isPremium, sessionId: currentSessionId, isAuthenticated, hasHydrated } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(name);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const [sessions, setSessions] = useState<AuthSessionRead[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -46,6 +48,35 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) {
+      return;
+    }
+
+    let cancelled = false;
+    void api.getMe()
+      .then((profile) => {
+        if (cancelled) {
+          return;
+        }
+        syncSession({
+          userId: profile.id,
+          name: buildUserDisplayName(profile.first_name, profile.last_name, name),
+          phoneNumber: profile.phone ?? profile.username ?? null,
+          avatarUrl: profile.avatar_url ?? null,
+          isPremium: Boolean(profile.is_premium),
+          premiumUntil: profile.premium_until ?? null,
+        });
+      })
+      .catch((error) => {
+        console.error("Failed to fetch profile:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, hasHydrated, isAuthenticated, name, syncSession]);
 
   useEffect(() => {
     setEditName(name);
@@ -106,6 +137,38 @@ export default function SettingsPage() {
     }
   };
 
+  const handleAvatarSelect = async (file: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    setIsSavingAvatar(true);
+    try {
+      const profile = await api.uploadMyAvatar(file);
+      updateAvatar(profile.avatar_url ?? null);
+      updateName(buildUserDisplayName(profile.first_name, profile.last_name, name));
+    } catch (error) {
+      console.error("Failed to upload avatar:", error);
+    } finally {
+      setIsSavingAvatar(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setIsSavingAvatar(true);
+    try {
+      const profile = await api.deleteMyAvatar();
+      updateAvatar(profile.avatar_url ?? null);
+    } catch (error) {
+      console.error("Failed to remove avatar:", error);
+    } finally {
+      setIsSavingAvatar(false);
+    }
+  };
+
   const handleCancel = () => {
     setEditName(name);
     setIsEditing(false);
@@ -117,7 +180,7 @@ export default function SettingsPage() {
     const now = new Date();
     const diffInMs = now.getTime() - date.getTime();
     const diffInMins = Math.floor(diffInMs / (1000 * 60));
-    
+
     if (diffInMins < 1) return "Just now";
     if (diffInMins < 60) return `${diffInMins}m ago`;
     if (diffInMins < 1440) return `${Math.floor(diffInMins / 60)}h ago`;
@@ -212,7 +275,54 @@ export default function SettingsPage() {
               </div>
             </CardHeader>
             <CardContent className="p-4">
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+              <div className="grid gap-4 md:grid-cols-[auto_minmax(0,1fr)_minmax(0,0.8fr)]">
+                <div className="flex items-center gap-3 md:block md:space-y-2">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 text-2xl font-black text-primary ring-1 ring-primary/10">
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarUrl} alt={name} draggable={false} className="h-full w-full object-cover" />
+                    ) : (
+                      (name || "U").charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 md:justify-center">
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        void handleAvatarSelect(event.target.files?.[0] ?? null);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs font-bold"
+                      disabled={isSavingAvatar}
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      {isSavingAvatar ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                      Change
+                    </Button>
+                    {avatarUrl ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs font-bold text-red-500 hover:bg-red-50 hover:text-red-600"
+                        disabled={isSavingAvatar}
+                        onClick={() => {
+                          void handleRemoveAvatar();
+                        }}
+                      >
+                        <ImageOff className="h-3.5 w-3.5" />
+                        Remove
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Full Name</p>

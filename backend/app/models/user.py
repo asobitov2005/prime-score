@@ -16,6 +16,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     username: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    telegram_contact_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -50,4 +51,3 @@ class TelegramLoginCode(UUIDMixin, TimestampMixin, Base):
     used: Mapped[bool] = mapped_column(Boolean, default=False)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
     blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-

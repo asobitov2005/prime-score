@@ -45,6 +45,43 @@ export interface AdminDashboardKpi {
   tone?: "neutral" | "success" | "warning" | "danger";
 }
 
+export interface AdminQuickStats {
+  fastestCompletionMin: number | null;
+  averageAccuracy: number;
+  highestBandAchieved: number | null;
+}
+
+export interface AdminDashboardOverview {
+  usersTotal: number;
+  usersNewToday: number;
+  activeUsers7d: number;
+  premiumUsers: number;
+  testsTotal: number;
+  testsPublished: number;
+  testsDraft: number;
+  testsArchived: number;
+  attemptsTotal: number;
+  attemptsCompleted: number;
+  attemptsToday: number;
+  paymentsPending: number;
+  paymentsCompleted: number;
+  revenueTotal: number;
+  averageBand: number | null;
+  completionRate: number;
+  premiumRate: number;
+  recentActivity: string[];
+  revenueTrend: { date: string; value: number }[];
+  registrationTrend: { date: string; value: number }[];
+  attemptsByDay: { date: string; value: number }[];
+  typeSplit: { reading: number; listening: number } | null;
+  bandDistribution: { band: string; count: number }[];
+  topActiveUsers: { name: string; attemptCount: number; lastActive: string | null }[];
+  avgTimePerTest: { readingAvgMin: number | null; listeningAvgMin: number | null } | null;
+  paymentMethodSplit: AdminAnalyticsPoint[];
+  attemptStatusSplit: AdminAnalyticsPoint[];
+  quickStats: AdminQuickStats | null;
+}
+
 export interface AdminTestSummary {
   id: string;
   title: string;
@@ -147,6 +184,23 @@ export interface QuestionTypeOption {
 export interface AdminAnalyticsPoint {
   label: string;
   value: number;
+}
+
+export interface AdminAnalyticsReport {
+  dau: number;
+  wau: number;
+  mau: number;
+  conversionRate: string;
+  churnRate: string;
+  activityPoints: AdminAnalyticsPoint[];
+  topTests: { title: string; count: number }[];
+  hardestTypes: { type: string; errorRate: string }[];
+  dauTrend: { date: string; value: number }[];
+  completionFunnel: { started: number; completed: number; rate: number } | null;
+  avgScoreByTest: { testTitle: string; avgBand: number | null; attemptCount: number }[];
+  hourlyDistribution: { label: string; value: number }[];
+  userSegmentation: { free: { count: number; avgAttempts: number }; premium: { count: number; avgAttempts: number } } | null;
+  weekdayActivity: AdminAnalyticsPoint[];
 }
 
 export interface AdminPreviewSection {
