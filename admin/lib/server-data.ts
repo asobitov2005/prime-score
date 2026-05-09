@@ -432,6 +432,13 @@ type BackendDashboard = {
   band_distribution?: Array<{ band: string; count: number }>;
   top_active_users?: Array<{ name: string; attempt_count: number; last_active?: string | null }>;
   avg_time_per_test?: { reading_avg_min?: number | null; listening_avg_min?: number | null };
+  payment_method_split?: Array<{ label: string; value: number }>;
+  attempt_status_split?: Array<{ label: string; value: number }>;
+  quick_stats?: {
+    fastest_completion_min?: number | null;
+    average_accuracy?: number | null;
+    highest_band_achieved?: number | null;
+  };
 };
 
 type BackendUser = {
@@ -439,6 +446,7 @@ type BackendUser = {
   first_name: string;
   last_name?: string | null;
   username?: string | null;
+  premium_until?: string | null;
   premium_expires_at?: string | null;
   show_on_leaderboard: boolean;
   created_at?: string | null;

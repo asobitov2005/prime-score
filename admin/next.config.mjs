@@ -16,6 +16,7 @@ function resolveAdminApiBaseUrl() {
 }
 
 const adminApiBaseUrl = resolveAdminApiBaseUrl();
+const adminApiRootBaseUrl = adminApiBaseUrl.replace(/\/admin$/, "");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -24,7 +25,7 @@ const nextConfig = {
     return [
       {
         source: "/api/storage/:path*",
-        destination: "http://127.0.0.1:8000/api/storage/:path*",
+        destination: `${adminApiRootBaseUrl}/storage/:path*`,
       },
       {
         source: "/api/admin/:path*",

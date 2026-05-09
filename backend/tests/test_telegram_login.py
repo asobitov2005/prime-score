@@ -27,6 +27,7 @@ def test_upsert_user_from_login_keeps_telegram_username_and_phone() -> None:
         username="new_handle",
         first_name="New",
         last_name="Name",
+        avatar_url=None,
         now=now,
     )
 
