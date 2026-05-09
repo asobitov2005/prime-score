@@ -24,7 +24,7 @@ except ModuleNotFoundError:
 from app.core.config import get_settings
 from app.core.enums import AttemptStatus, TestMode, TestScope, TestType
 from app.services.fixtures import build_test_snapshot, get_question_fixture
-from app.services.scoring import is_answer_correct, mc_multiple_question_weight
+from app.services.scoring import score_answer
 
 
 READING_BAND_TABLE = [
@@ -537,16 +537,16 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
         if fixture is None:
             continue
         answer_value = attempt.answers.get(str(question_id))
-        is_correct = bool(answer_value) and is_answer_correct(answer_value, list(fixture["accepted_answers"]))
-        question_weight = (
-            mc_multiple_question_weight(
-                question_label=str(snapshot_question.get("label") or fixture["question_number"]),
-                accepted_answers=list(fixture["accepted_answers"]),
-            )
-            if "mc_multiple" in str(fixture["question_type"])
-            else 1
+        answer_score = score_answer(
+            answer_value,
+            list(fixture["accepted_answers"]),
+            question_type=str(fixture["question_type"]),
+            question_label=str(snapshot_question.get("label") or fixture["question_number"]),
         )
-        raw_score += question_weight if is_correct else 0
+        is_correct = answer_score.is_correct
+        question_weight = answer_score.max_score
+        awarded_score = answer_score.awarded_score
+        raw_score += awarded_score
 
         scoring_item = {
             "question_id": str(question_id),
@@ -562,6 +562,7 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
             ),
             "answer_value": answer_value,
             "is_correct": is_correct,
+            "awarded_score": awarded_score,
             "correct_answers": list(fixture.get("accepted_answers", [])),
             "explanation": fixture.get("explanation"),
             "explanation_reference": fixture.get("explanation_reference", {}),
@@ -574,7 +575,7 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
             {"title": fixture["section_title"], "correct": 0, "total": 0},
         )
         section_state["total"] += question_weight
-        section_state["correct"] += question_weight if is_correct else 0
+        section_state["correct"] += awarded_score
 
         type_key = str(fixture["question_type"])
         type_state = type_counts.setdefault(
@@ -582,7 +583,7 @@ def submit_attempt(attempt_id: UUID) -> AttemptRuntime:
             {"question_type": str(fixture["question_type"]), "correct": 0, "total": 0},
         )
         type_state["total"] += question_weight
-        type_state["correct"] += question_weight if is_correct else 0
+        type_state["correct"] += awarded_score
 
     attempt.scoring_items = sorted(scoring_items, key=lambda item: item["question_number"])
     attempt.section_breakdown = list(section_counts.values())

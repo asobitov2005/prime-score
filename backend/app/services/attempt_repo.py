@@ -19,7 +19,7 @@ from app.models.enums import TestType as ModelTestType
 from app.models.user import User
 from app.services.fixtures import build_test_snapshot, get_question_fixture
 from app.services.runtime_store import AttemptRuntime, _band_for_raw_score
-from app.services.scoring import is_answer_correct, mc_multiple_question_weight
+from app.services.scoring import score_answer
 from app.services.snapshots import freeze_test_snapshot
 from app.services.test_content_repo import build_test_snapshot_from_db
 
@@ -583,16 +583,16 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
         accepted_answers = [str(item) for item in answer_key.get("accepted_answers", [])]
         explanation = str(answer_key.get("explanation") or "")
         explanation_reference = answer_key.get("explanation_reference") or {}
-        is_correct = bool(answer_value) and is_answer_correct(answer_value, accepted_answers)
-        question_weight = (
-            mc_multiple_question_weight(
-                question_label=str(snapshot_question.get("label") or question_payload["question_number"]),
-                accepted_answers=accepted_answers,
-            )
-            if "mc_multiple" in str(question_payload["question_type"])
-            else 1
+        answer_score = score_answer(
+            answer_value,
+            accepted_answers,
+            question_type=str(question_payload["question_type"]),
+            question_label=str(snapshot_question.get("label") or question_payload["question_number"]),
         )
-        raw_score += question_weight if is_correct else 0
+        is_correct = answer_score.is_correct
+        question_weight = answer_score.max_score
+        awarded_score = answer_score.awarded_score
+        raw_score += awarded_score
 
         scoring_item = {
             "question_id": str(question_id),
@@ -605,6 +605,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             "options": question_payload["options"],
             "answer_value": answer_value,
             "is_correct": is_correct,
+            "awarded_score": awarded_score,
             "correct_answers": accepted_answers,
             "explanation": explanation,
             "explanation_reference": explanation_reference,
@@ -617,7 +618,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             {"title": question_payload["section_title"], "correct": 0, "total": 0},
         )
         section_state["total"] += question_weight
-        section_state["correct"] += question_weight if is_correct else 0
+        section_state["correct"] += awarded_score
 
         type_key = str(question_payload["question_type"])
         type_state = type_counts.setdefault(
@@ -625,7 +626,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             {"question_type": question_payload["question_type"], "correct": 0, "total": 0},
         )
         type_state["total"] += question_weight
-        type_state["correct"] += question_weight if is_correct else 0
+        type_state["correct"] += awarded_score
 
     band_score = (
         _band_for_raw_score(TestType(str(snapshot["test_type"])), raw_score)
