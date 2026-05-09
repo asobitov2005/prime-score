@@ -130,6 +130,10 @@ function expandAnswerItems(items: AnswerItem[], questionOffset: number): Expande
     const userParts = normalizeAnswerParts(item.answer_value, count);
     const correctParts = normalizeAnswerParts(item.correct_answers.join(","), count);
 
+    if (shouldMatchAsUnorderedOptions(userParts, correctParts)) {
+      return expandUnorderedOptionItems(item, range, count, userParts, correctParts);
+    }
+
     return Array.from({ length: count }, (_, index) => ({
       question_id: `${item.question_id}-${index}`,
       display_number: range.start + index,
@@ -137,6 +141,41 @@ function expandAnswerItems(items: AnswerItem[], questionOffset: number): Expande
       is_correct: item.is_correct ? true : compareAnswerParts(userParts[index], correctParts[index]),
       correct_answers: correctParts[index] ? [correctParts[index] as string] : [],
     }));
+  });
+}
+
+function expandUnorderedOptionItems(
+  item: AnswerItem,
+  range: { start: number; end: number },
+  count: number,
+  userParts: string[],
+  correctParts: string[]
+): ExpandedAnswerItem[] {
+  const remainingUsers = userParts.filter(Boolean);
+  const drafts = correctParts.slice(0, count).map((correctPart) => {
+    if (!correctPart) {
+      return { answerValue: null as string | null, correctPart, isCorrect: false };
+    }
+
+    const matchIndex = remainingUsers.findIndex((userPart) => compareAnswerParts(userPart, correctPart));
+    if (matchIndex === -1) {
+      return { answerValue: null as string | null, correctPart, isCorrect: false };
+    }
+
+    const [answerValue] = remainingUsers.splice(matchIndex, 1);
+    return { answerValue, correctPart, isCorrect: true };
+  });
+
+  return drafts.map((draft, index) => {
+    const fallbackAnswer = draft.answerValue ?? remainingUsers.shift() ?? null;
+
+    return {
+      question_id: `${item.question_id}-${index}`,
+      display_number: range.start + index,
+      answer_value: fallbackAnswer,
+      is_correct: item.is_correct ? true : draft.isCorrect,
+      correct_answers: draft.correctPart ? [draft.correctPart] : [],
+    };
   });
 }
 
@@ -170,6 +209,11 @@ function normalizeAnswerParts(value: string | null | undefined, targetLength: nu
   }
 
   return normalizedParts.slice(0, targetLength);
+}
+
+function shouldMatchAsUnorderedOptions(userParts: string[], correctParts: string[]) {
+  const filledParts = [...userParts, ...correctParts].filter(Boolean);
+  return filledParts.length > 0 && filledParts.every((part) => /^[A-Za-z]$/.test(part));
 }
 
 function compareAnswerParts(left: string | undefined, right: string | undefined) {
