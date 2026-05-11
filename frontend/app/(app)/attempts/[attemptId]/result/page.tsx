@@ -117,7 +117,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
         />
       </div>
 
-      <AnswersOverviewCard items={review?.items ?? []} testFormat={result.test_format ?? "full"} />
+      <AnswersOverviewCard items={review?.items ?? []} />
 
       {result.diagram_groups.length > 0 ? (
         <div className="space-y-4">

@@ -85,6 +85,7 @@ export function getClientAdminAccessToken(): string | null {
   if (typeof document === "undefined") {
     return null;
   }
+  // Test comment: admin auth reads access token from cookies first.
   const accessToken = parseCookieValue(document.cookie, ADMIN_ACCESS_COOKIE);
   if (accessToken) {
     return accessToken;

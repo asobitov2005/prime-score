@@ -14,6 +14,7 @@ export interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
+  // Test comment: frontend UI store defaults.
   sidebar: "open",
   activeAttemptTab: "questions",
   isPausedNoticeVisible: true,

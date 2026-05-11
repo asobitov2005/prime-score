@@ -14,14 +14,11 @@ type AnswerItem = {
 
 export function AnswersOverviewCard({
   items,
-  testFormat,
 }: {
   items: AnswerItem[];
-  testFormat: string;
 }) {
   const [showAnswers, setShowAnswers] = useState(false);
-  const questionOffset = getQuestionNumberOffset(testFormat);
-  const expandedItems = expandAnswerItems(items, questionOffset);
+  const expandedItems = expandAnswerItems(items);
   const midpoint = Math.ceil(expandedItems.length / 2);
   const columns = [expandedItems.slice(0, midpoint), expandedItems.slice(midpoint)].filter((column) => column.length > 0);
   const ToggleIcon = showAnswers ? Eye : EyeOff;
@@ -113,13 +110,13 @@ type ExpandedAnswerItem = {
   correct_answers: string[];
 };
 
-function expandAnswerItems(items: AnswerItem[], questionOffset: number): ExpandedAnswerItem[] {
+function expandAnswerItems(items: AnswerItem[]): ExpandedAnswerItem[] {
   return items.flatMap((item) => {
-    const range = parseQuestionRange(item.question_label, questionOffset);
+    const range = parseQuestionRange(item.question_label, item.question_number);
     if (!range || range.start === range.end) {
       return [{
         question_id: item.question_id,
-        display_number: item.question_number + questionOffset,
+        display_number: item.question_number,
         answer_value: item.answer_value,
         is_correct: item.is_correct,
         correct_answers: item.correct_answers,
@@ -179,18 +176,23 @@ function expandUnorderedOptionItems(
   });
 }
 
-function parseQuestionRange(label: string | null | undefined, questionOffset: number) {
+function parseQuestionRange(label: string | null | undefined, questionNumber: number) {
   const match = String(label || "").trim().match(/^(\d+)\s*-\s*(\d+)$/);
   if (!match) {
     return null;
   }
 
-  let start = Number(match[1]);
-  let end = Number(match[2]);
-  if (questionOffset > 0 && start <= 13 && end <= 13) {
-    start += questionOffset;
-    end += questionOffset;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const count = Math.max(1, end - start + 1);
+
+  if (questionNumber > 0 && questionNumber !== start) {
+    return {
+      start: questionNumber,
+      end: questionNumber + count - 1,
+    };
   }
+
   return { start, end };
 }
 
@@ -218,17 +220,6 @@ function shouldMatchAsUnorderedOptions(userParts: string[], correctParts: string
 
 function compareAnswerParts(left: string | undefined, right: string | undefined) {
   return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
-}
-
-function getQuestionNumberOffset(testFormat: string): number {
-  switch (testFormat) {
-    case "passage_2":
-      return 13;
-    case "passage_3":
-      return 26;
-    default:
-      return 0;
-  }
 }
 
 function formatAnswerValue(value: string | null | undefined): string {
