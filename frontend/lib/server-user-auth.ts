@@ -65,6 +65,10 @@ async function getServerAccessToken(): Promise<string | null> {
   return refreshServerAccessToken(refreshToken);
 }
 
+function isUserAuthFailureStatus(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
 export async function requestServerUserApi<T>(path: string, init?: RequestInit): Promise<T> {
   const performRequest = async (accessToken: string | null) => {
     const { controller, timeoutId } = createTimeoutSignal();
@@ -91,7 +95,7 @@ export async function requestServerUserApi<T>(path: string, init?: RequestInit):
   }
 
   let response = await performRequest(accessToken);
-  if (response.status === 401) {
+  if (isUserAuthFailureStatus(response.status)) {
     const refreshToken = cookies().get(USER_REFRESH_TOKEN_COOKIE)?.value ?? null;
     const refreshedAccessToken = refreshToken ? await refreshServerAccessToken(refreshToken) : null;
     if (!refreshedAccessToken) {

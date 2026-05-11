@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     telegram_bot_token: str = "change-me"
     jwt_secret: str = "change-me"
     jwt_refresh_secret: str = "change-me-too"
-    access_token_expire_minutes: int = 21600
-    refresh_token_expire_days: int = 30
+    access_token_expire_minutes: int = 43200
+    refresh_token_expire_days: int = 90
     cors_origins: list[str] = Field(
         default_factory=lambda: ["*"]
     )

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Bell, PanelLeft } from "lucide-react";
+import { AdminSessionGuard } from "@/components/admin-session-guard";
 import { LogoutButton } from "@/components/logout-button";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { Badge } from "@/components/ui";
@@ -47,6 +48,7 @@ export function AdminShell({
 
   return (
     <div className="flex min-h-screen bg-background bg-[radial-gradient(circle_at_top_left,hsl(var(--accent)/0.26),transparent_42%)]">
+      <AdminSessionGuard />
       <SidebarNav collapsed={sidebarCollapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/85 px-6 backdrop-blur-md">

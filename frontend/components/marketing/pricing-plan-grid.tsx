@@ -1,8 +1,10 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, Crown, Lock, ShieldCheck, Sparkles } from "lucide-react";
+import { useInView } from "@/hooks/use-in-view";
+import { ArrowRight, CheckCircle2, Gem, User, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +21,7 @@ interface PricingPlanGridProps {
   denseCards?: boolean;
   mode?: "grid" | "subscription";
   showSubscriptionHeader?: boolean;
+  animateInView?: boolean;
   onChoosePlan?: (plan: MarketingPlan) => void;
   paymentBusyPlanId?: string | null;
 }
@@ -46,7 +49,7 @@ function getStateCopy(state: ViewerState) {
       description: "You already have full access. Come back here later if you want to extend your plan.",
       href: "/dashboard",
       action: "Open dashboard",
-      icon: Crown,
+      icon: PrimePremiumIcon,
     };
   }
 
@@ -57,7 +60,7 @@ function getStateCopy(state: ViewerState) {
       description: "Keep using free tests, or upgrade when you want premium sets and explanations.",
       href: "/dashboard",
       action: "Go to dashboard",
-      icon: ShieldCheck,
+      icon: User,
     };
   }
 
@@ -67,7 +70,7 @@ function getStateCopy(state: ViewerState) {
     description: "Login with Telegram to save progress, compare plans, and unlock premium practice.",
     href: "/login",
     action: "Login with Telegram",
-    icon: Lock,
+    icon: User,
   };
 }
 
@@ -191,6 +194,24 @@ function resolveActivePlanId(plans: MarketingPlan[], premiumUntil: string | null
   return matchedPlan?.id ?? null;
 }
 
+function AnimatedItem({ children, animateInView, index = 0, className }: { children: React.ReactNode, animateInView: boolean, index?: number, className?: string }) {
+  const [ref, inView] = useInView({ threshold: 0.1 });
+  if (!animateInView) return <div className={className}>{children}</div>;
+  return (
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      className={cn(
+        className,
+        "transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        inView ? "opacity-100 translate-y-0 translate-x-0 scale-100" : "opacity-0 translate-y-12 scale-[0.95]"
+      )}
+      style={{ transitionDelay: `${index * 150}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function PricingStateCard({
   compact,
   stateCopy,
@@ -248,6 +269,7 @@ export function PricingPlanGrid({
   denseCards = false,
   mode = "grid",
   showSubscriptionHeader = true,
+  animateInView = false,
   onChoosePlan,
   paymentBusyPlanId = null,
 }: PricingPlanGridProps) {
@@ -272,6 +294,7 @@ export function PricingPlanGrid({
     () => (viewerState === "premium" ? resolveActivePlanId(plans, premiumUntil) : null),
     [plans, premiumUntil, viewerState],
   );
+  const revealViewport = { once: true, amount: 0.42 } as const;
 
   const emptyState = (
     <Card className="rounded-[2rem] border border-border/50 bg-card/80 shadow-sm">
@@ -284,7 +307,11 @@ export function PricingPlanGrid({
   if (mode === "subscription") {
     return (
       <div className="space-y-4">
-        {showStateCard ? <PricingStateCard compact={compact} stateCopy={stateCopy} /> : null}
+        {showStateCard ? (
+          <AnimatedItem animateInView={animateInView}>
+            <PricingStateCard compact={compact} stateCopy={stateCopy} />
+          </AnimatedItem>
+        ) : null}
 
         {showSubscriptionHeader ? (
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -301,7 +328,7 @@ export function PricingPlanGrid({
 
         {plans.length === 0 ? emptyState : (
         <div className={cn("grid gap-4", planGridClassName)}>
-          {plans.map((plan) => {
+          {plans.map((plan, index) => {
             const isFeatured = plan.isFeatured;
             const isCurrentPlan = activePlanId === plan.id;
             const action = getPlanAction(viewerState, isCurrentPlan);
@@ -317,9 +344,8 @@ export function PricingPlanGrid({
                   : "Upgrade"
               : action.label;
 
-            return (
+            const card = (
               <Card
-                key={plan.id}
                 className={cn(
                   "group relative flex h-full flex-col overflow-hidden rounded-[2rem] border-border/50 bg-card transition-all duration-300 hover:-translate-y-1 hover:shadow-xl",
                   denseCards && "rounded-[1.4rem]",
@@ -353,7 +379,7 @@ export function PricingPlanGrid({
                             "flex h-8 w-8 items-center justify-center rounded-lg shadow-inner",
                             isFeatured ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
                           )}>
-                            {isFeatured ? <Crown className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                            {isFeatured ? <PrimePremiumIcon className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                           </div>
                         </div>
                       </div>
@@ -384,7 +410,7 @@ export function PricingPlanGrid({
                           "flex h-12 w-12 items-center justify-center rounded-2xl shadow-inner",
                           isFeatured ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
                         )}>
-                          {isFeatured ? <Crown className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+                          {isFeatured ? <PrimePremiumIcon className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
                         </div>
                       </div>
                     </div>
@@ -491,6 +517,12 @@ export function PricingPlanGrid({
                 </CardContent>
               </Card>
             );
+
+            return (
+              <AnimatedItem key={plan.id} index={index} animateInView={animateInView}>
+                {card}
+              </AnimatedItem>
+            );
           })}
         </div>
         )}
@@ -500,11 +532,15 @@ export function PricingPlanGrid({
  
   return (
     <div className="space-y-6">
-      {showStateCard ? <PricingStateCard compact={compact} stateCopy={stateCopy} /> : null}
+      {showStateCard ? (
+        <AnimatedItem animateInView={animateInView}>
+          <PricingStateCard compact={compact} stateCopy={stateCopy} />
+        </AnimatedItem>
+      ) : null}
 
       {plans.length === 0 ? emptyState : (
       <div className={cn("grid gap-5", planGridClassName)}>
-        {plans.map((plan) => {
+        {plans.map((plan, index) => {
           const isFeatured = plan.isFeatured;
           const isCurrentPlan = activePlanId === plan.id;
           const action = getPlanAction(viewerState, isCurrentPlan);
@@ -520,9 +556,8 @@ export function PricingPlanGrid({
                 : "Upgrade"
             : action.label;
 
-          return (
+          const card = (
             <Card
-              key={plan.id}
               className={cn(
                 "group relative flex h-full flex-col overflow-hidden rounded-[2rem] border-border/50 bg-card transition-all duration-300 hover:-translate-y-1 hover:shadow-xl",
                 denseCards && "rounded-[1.4rem]",
@@ -557,7 +592,7 @@ export function PricingPlanGrid({
                       denseCards && "h-9 w-9 rounded-lg",
                       isFeatured ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
                     )}>
-                      {isFeatured ? <Crown className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+                      {isFeatured ? <PrimePremiumIcon className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
                     </div>
                   </div>
                 </div>
@@ -653,6 +688,12 @@ export function PricingPlanGrid({
                 </div>
               </CardContent>
             </Card>
+          );
+
+          return (
+            <AnimatedItem key={plan.id} index={index} animateInView={animateInView}>
+              {card}
+            </AnimatedItem>
           );
         })}
       </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
-import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2, Crown, Camera, ImageOff } from "lucide-react";
+import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Smartphone, Globe, Trash2, Loader2, Camera, ImageOff } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,7 @@ export default function SettingsPage() {
           avatarUrl: profile.avatar_url ?? null,
           isPremium: Boolean(profile.is_premium),
           premiumUntil: profile.premium_until ?? null,
+          createdAt: profile.created_at ?? null,
         });
       })
       .catch((error) => {
@@ -227,37 +228,17 @@ export default function SettingsPage() {
       <Card className="overflow-hidden bg-background border border-border/50 relative rounded-2xl shadow-sm">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
         <CardHeader className="space-y-1 relative z-10 p-4 lg:px-5 border-b border-border/40 bg-muted/5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="hidden md:flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Settings2 className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Account Settings</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm font-medium">
-                  Manage your profile, preferences, and active sessions.
-                </CardDescription>
-              </div>
+          <div className="flex items-start gap-4">
+            <div className="hidden md:flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Settings2 className="h-5 w-5" />
             </div>
-
-            {isPremium ? (
-              <div className="hidden shrink-0 md:flex flex-col items-end gap-1 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-right">
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary">
-                  <Crown className="h-3.5 w-3.5" />
-                  Premium Active
-                </div>
-              </div>
-            ) : null}
+            <div>
+              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Account Settings</CardTitle>
+              <CardDescription className="text-muted-foreground text-sm font-medium">
+                Manage your profile, preferences, and active sessions.
+              </CardDescription>
+            </div>
           </div>
-
-          {isPremium ? (
-            <div className="md:hidden pt-2">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary">
-                <Crown className="h-3.5 w-3.5" />
-                Premium Active
-              </div>
-            </div>
-          ) : null}
         </CardHeader>
         
         <CardContent className="p-4 lg:p-5 space-y-4">

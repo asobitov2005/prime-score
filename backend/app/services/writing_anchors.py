@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 ANCHORS_VERSION = "v1"
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 
 ANCHORS: dict[str, list[dict[str, Any]]] = {

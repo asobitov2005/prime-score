@@ -12,8 +12,7 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install .
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh \
     && useradd --create-home --shell /bin/bash --uid 10001 appuser \
-    && chown -R appuser:appuser /app
-
-USER appuser
+    && mkdir -p /var/lib/primescore/telegram \
+    && chown -R appuser:appuser /app /var/lib/primescore
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

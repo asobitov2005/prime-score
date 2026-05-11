@@ -49,19 +49,19 @@ export function Dialog({ open, title, description, onOpenChange, children, class
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-card/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-card/55 p-3 backdrop-blur-sm sm:p-4">
       <button aria-label="Close dialog" className="absolute inset-0" onClick={() => onOpenChange(false)} type="button" />
-      <Card className={cn("relative z-10 w-full max-w-3xl overflow-hidden", className)}>
-        <div className="flex items-start justify-between gap-4 border-b border-border/70 px-6 py-5">
+      <Card className={cn("relative z-10 w-full max-h-[90vh] overflow-hidden", className)}>
+        <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-6 sm:py-5">
           <div className="space-y-1">
-            <h2 className=" text-2xl font-semibold">{title}</h2>
+            <h2 className="text-xl font-semibold sm:text-2xl">{title}</h2>
             {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
           </div>
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} aria-label="Close">
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">{children}</div>
       </Card>
     </div>,
     document.body

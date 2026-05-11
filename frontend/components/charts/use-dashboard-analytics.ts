@@ -34,7 +34,8 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
       studyTime: {
         totalTimeSec: response.performance_summary.study_time.total_time_sec,
         readingTimeSec: response.performance_summary.study_time.reading_time_sec,
-        listeningTimeSec: response.performance_summary.study_time.listening_time_sec
+        listeningTimeSec: response.performance_summary.study_time.listening_time_sec,
+        writingTimeSec: response.performance_summary.study_time.writing_time_sec
       },
       reading: {
         fullCount: response.performance_summary.reading.full_count,
@@ -49,8 +50,21 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
         section2Count: response.performance_summary.listening.section_2_count,
         section3Count: response.performance_summary.listening.section_3_count,
         section4Count: response.performance_summary.listening.section_4_count
-      }
+      },
+      writing: response.performance_summary.writing ? {
+        fullCount: response.performance_summary.writing.full_count,
+        section1Count: response.performance_summary.writing.section_1_count,
+        section2Count: response.performance_summary.writing.section_2_count,
+        section3Count: response.performance_summary.writing.section_3_count,
+        section4Count: response.performance_summary.writing.section_4_count
+      } : undefined
     },
+    writingCriteria: response.writing_criteria ? {
+      taskAchievement: response.writing_criteria.task_achievement ?? null,
+      coherenceCohesion: response.writing_criteria.coherence_cohesion ?? null,
+      lexicalResource: response.writing_criteria.lexical_resource ?? null,
+      grammaticalRangeAccuracy: response.writing_criteria.grammatical_range_accuracy ?? null,
+    } : null,
     questionTypeAnalysis: response.question_type_analysis.map((item) => ({
       label: item.label,
       workedCount: item.worked_count,
@@ -84,7 +98,8 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
       label: item.label,
       occurredAt: item.occurred_at,
       reading: item.reading ?? null,
-      listening: item.listening ?? null
+      listening: item.listening ?? null,
+      writing: item.writing ?? null
     })),
     accuracyTrend: (response.accuracy_trend ?? []).map((p) => ({
       date: p.date,
@@ -127,7 +142,7 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
 
 export function getAverageBand(analytics: DashboardAnalytics, type: TestType): number | null {
   const values = analytics.progressSeries
-    .map((point) => (type === "reading" ? point.reading : point.listening))
+    .map((point) => (type === "reading" ? point.reading : type === "listening" ? point.listening : point.writing))
     .filter((value): value is number => value !== null && value !== undefined);
 
   if (values.length === 0) {

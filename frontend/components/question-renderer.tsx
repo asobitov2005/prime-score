@@ -55,9 +55,10 @@ export function QuestionRenderer({ question, compact = false, value = "", onValu
           {sharedOptions.map((opt: string, index: number) => {
             const optionView = getMatchingOptionViewModel(opt, index, typeIdStr);
             const isAutoLettered = shouldAutoLetterMatchingOptions(typeIdStr);
+            const isMatchingHeadings = typeIdStr.includes("matching_headings");
             return (
               <option key={opt} value={optionView.value}>
-                {isAutoLettered ? optionView.label : optionView.value}
+                {isAutoLettered || isMatchingHeadings ? optionView.label : optionView.value}
               </option>
             );
           })}

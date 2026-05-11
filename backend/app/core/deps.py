@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import UserRole
 from app.core.security import decode_token
-from app.db.session import get_async_session
+from app.db.session import get_async_session, get_db_session
 from app.models.user import Session as UserSession
 from app.models.user import User
 from app.schemas.common import AdminPrincipal, DebugPrincipal
@@ -35,7 +35,7 @@ async def get_current_user(
     x_debug_show_on_leaderboard: str | None = Header(
         default=None, alias="X-Debug-Show-On-Leaderboard"
     ),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> DebugPrincipal:
     if authorization:
         token = _extract_bearer_token(authorization)
@@ -86,6 +86,7 @@ async def get_current_user(
             show_on_leaderboard=user.show_on_leaderboard,
             telegram_id=user.telegram_id,
             avatar_url=user.avatar_url,
+            created_at=user.created_at,
         )
 
     if not x_debug_user_id:
@@ -134,7 +135,7 @@ def _extract_bearer_token(authorization: str | None) -> str:
 
 async def get_current_admin(
     authorization: str | None = Header(default=None, alias="Authorization"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> AdminPrincipal:
     token = _extract_bearer_token(authorization)
     try:

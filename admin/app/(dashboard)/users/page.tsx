@@ -1,4 +1,6 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
+import { Gem } from "lucide-react";
 
 import { useEffect, useRef, useState } from "react";
 import { Badge, Card, CardContent, SectionHeader, buttonClassName, formatDate } from "@/components/ui";
@@ -204,13 +206,13 @@ export default function UsersPage() {
             {actionsOpen && !noneSelected && (
               <div className="absolute left-0 top-full mt-1 w-52 rounded-lg border border-border bg-card shadow-xl z-50 overflow-hidden py-1">
                 <button onClick={() => grantPremium(30)} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3">
-                  <IconCrown /> Premium 30 kun
+                  <PrimePremiumIcon className="h-4 w-4" /> Premium 30 kun
                 </button>
                 <button onClick={() => grantPremium(90)} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30">
-                  <IconCrown /> Premium 90 kun
+                  <PrimePremiumIcon className="h-4 w-4" /> Premium 90 kun
                 </button>
                 <button onClick={() => grantPremium(365)} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30">
-                  <IconCrown /> Premium 1 yil
+                  <PrimePremiumIcon className="h-4 w-4" /> Premium 1 yil
                 </button>
               </div>
             )}

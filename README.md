@@ -10,7 +10,7 @@ PrimeScore — IELTS Reading va Listening practice platformasi. Repo hozir uchta
 
 - User frontend hybrid ishlaydi: imkon bo'lsa backenddan o'qiydi, bo'lmasa ayrim sahifalarda mock/fallback data ishlatadi.
 - User auth flow Telegram code bilan boshlanadi, lekin user-protected backend route'lar hozir ham `X-Debug-*` headerlar orqali himoyalangan. Ya'ni user auth end-to-end hali to'liq bearer-token flow emas.
-- Admin auth alohida va ancha realroq: `admin/` app bearer cookie orqali `/api/admin/*` endpointlarga ulanadi.
+- Admin auth alohida va ancha realroq: `admin/` app phone/password + Telegram OTPdan keyin bearer cookie orqali `/api/admin/*` endpointlarga ulanadi.
 - Attempt flow, snapshot, scoring va test publish logikasi backendda realroq ishlaydi.
 - Celery configure qilingan, lekin tasklarning ko'pi hali stub return bilan turibdi.
 - Frontend/admin automated tests deyarli yo'q; asosiy testlar `backend/tests/` ichida.
@@ -94,7 +94,7 @@ cd backend
 ./.venv/bin/primescore-payment-detector
 ```
 
-Detector `admin` ichidagi `Payments` sahifasida saqlanadigan `Telegram API ID/hash`, `phone`, `active bot`, va active payment card bilan ishlaydi.
+Detector `admin` ichidagi `Payments` sahifasida saqlanadigan `Telegram API ID/hash`, `phone`, `active bot`, va active payment card bilan ishlaydi. Docker compose orqali ishga tushirilsa Telegram session fayli `telegram_session_data` volume ichida, login/contact kabi Redis holati esa `redis_data` volume ichida saqlanadi.
 
 Frontend:
 
@@ -114,11 +114,13 @@ npm run dev
 
 ## Seeded local accounts
 
-`backend/app/db/seed.py` local debug ma'lumotlarni yaratadi. Admin loginlar:
+`backend/app/db/seed.py` local debug ma'lumotlarni yaratadi. Admin login identifier endi phone number, OTP esa bog'langan Telegram accountga yuboriladi. Seeded adminlar:
 
-- `admin / admin`
-- `test_admin / TestAdmin123!`
-- `test_super_admin / TestSuperAdmin123!`
+- `+998900000001 / admin` (`admin`, telegram_id `900000001`)
+- `+998900000002 / TestAdmin123!` (`test_admin`, telegram_id `900000002`)
+- `+998900000003 / TestSuperAdmin123!` (`test_super_admin`, telegram_id `900000003`)
+
+Real local login uchun admin recorddagi `phone_number` va `telegram_id` bot orqali ulangan haqiqiy Telegram accountga mos bo'lishi kerak.
 
 ## Hujjatlar
 

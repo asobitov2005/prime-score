@@ -1,4 +1,5 @@
-import { Crown } from "lucide-react";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
+import { Gem } from "lucide-react";
 import { RedeemCodePanel } from "@/components/subscription/redeem-code-panel";
 import { SubscriptionHeroStatus } from "@/components/subscription/subscription-hero-status";
 import { SubscriptionWorkspace } from "@/components/subscription/subscription-workspace";
@@ -20,15 +21,23 @@ export default async function SubscriptionPage() {
         <CardHeader className="relative z-10 space-y-1 bg-muted/5 p-3.5 lg:px-4">
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
-              <CardTitle className="text-base font-semibold tracking-tight text-foreground md:text-lg">
-                Subscription
-              </CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-base font-semibold tracking-tight text-foreground md:text-lg">
+                  Subscription
+                </CardTitle>
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white">
+                  1
+                </span>
+              </div>
+              <p className="text-[11px] font-medium text-muted-foreground md:text-xs">
+                Spin after choosing a plan to reveal your discounted final amount.
+              </p>
               <SubscriptionHeroStatus />
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Crown className="h-4 w-4" />
+                <PrimePremiumIcon className="h-4 w-4" />
               </div>
               <RedeemCodePanel buttonClassName="h-9 rounded-lg px-3.5 text-[12px] font-semibold" />
             </div>

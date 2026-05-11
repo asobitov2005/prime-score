@@ -26,6 +26,24 @@ function normalizePrefix(prefix: string) {
   return prefix.trim().toUpperCase();
 }
 
+function isRomanPrefix(prefix: string) {
+  return /^(?:M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))$/i.test(prefix.trim());
+}
+
+function isValidExplicitMatchingPrefix(prefix: string, typeId: string) {
+  const normalized = normalizePrefix(prefix);
+
+  if (shouldAutoRomanMatchingOptions(typeId)) {
+    return isRomanPrefix(normalized);
+  }
+
+  if (shouldAutoLetterMatchingOptions(typeId)) {
+    return /^[A-Z]$/.test(normalized);
+  }
+
+  return /^[A-Z0-9]{1,3}$/.test(normalized) || isRomanPrefix(normalized);
+}
+
 function romanNumeralFromIndex(index: number) {
   const numerals: Array<[number, string]> = [
     [1000, "m"],
@@ -75,7 +93,7 @@ export function getMatchingOptionViewModel(
   const shouldAutoLetter = shouldAutoLetterMatchingOptions(typeId);
   const shouldAutoRoman = shouldAutoRomanMatchingOptions(typeId);
 
-  if (explicitMatch) {
+  if (explicitMatch && isValidExplicitMatchingPrefix(explicitMatch[1], typeId)) {
     const prefix = normalizePrefix(explicitMatch[1]);
     const text = explicitMatch[2].trim();
     return {
@@ -103,13 +121,13 @@ export function getMatchingOptionViewModel(
   }
 
   if (shouldAutoRoman) {
-    const prefix = romanNumeralFromIndex(index);
+    const prefix = normalizePrefix(romanNumeralFromIndex(index));
     return {
       raw: option,
       value: prefix,
       prefix,
       text: optionBody,
-      label: optionBody,
+      label: optionBody ? `${prefix}. ${optionBody}` : prefix,
       hasExplicitPrefix: false,
       fixedParagraphLabel,
     };

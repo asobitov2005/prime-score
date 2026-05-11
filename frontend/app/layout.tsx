@@ -4,7 +4,7 @@ import { Suspense, type ReactNode } from "react";
 import { Providers } from "@/app/providers";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
 import { SiteShell } from "@/components/layout/site-shell";
-import { SmoothScroll } from "@/components/layout/smooth-scroll";
+import { SmoothScroll } from "@/components/smooth-scroll";
 import { buildDefaultMetadata } from "@/lib/seo";
 import "@/app/globals.css";
 
@@ -39,7 +39,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         </Script>
       </head>
       <body>
-        <SmoothScroll />
         <noscript>
           <iframe
             src={`https://www.googletagmanager.com/ns.html?id=${GTM_ID}`}
@@ -52,7 +51,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           <PageViewTracker />
         </Suspense>
         <Providers>
-          <SiteShell>{children}</SiteShell>
+          <SmoothScroll>
+            <SiteShell>{children}</SiteShell>
+          </SmoothScroll>
         </Providers>
       </body>
     </html>

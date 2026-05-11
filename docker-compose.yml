@@ -19,8 +19,11 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -161,6 +164,36 @@ services:
         condition: service_healthy
     command: ["python", "-m", "app.bot.main"]
 
+  payment-detector:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-primescore}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-too}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+      CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_TEST_ASSETS: test-assets
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      RUN_APP_BOOTSTRAP: "0"
+      TELEGRAM_SESSION_PATH: /var/lib/primescore/telegram/payment_detector
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - telegram_session_data:/var/lib/primescore/telegram
+    command: ["python", "-m", "app.scripts.payment_detector"]
+
   frontend:
     build:
       context: ./frontend
@@ -209,4 +242,6 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   minio_data:
+  telegram_session_data:

@@ -1,4 +1,5 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
 import { useEffect, useState } from "react";
 import { useAdminStore } from "@/store/admin-store";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   ChevronDown,
   Globe,
-  Crown,
+  Gem,
   BookOpen,
   Headphones,
   CheckSquare,
@@ -303,7 +304,7 @@ export default function AdminTestsPage() {
                       onClick={() => handleBulkAccess("premium")}
                       className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left hover:bg-muted/50 transition-colors border-t border-border/40"
                     >
-                      <Crown className="h-4 w-4 text-amber-500" />
+                      <PrimePremiumIcon className="h-4 w-4 text-amber-500" />
                       Premium qilish
                     </button>
                   </div>

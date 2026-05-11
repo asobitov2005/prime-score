@@ -321,7 +321,7 @@ async def test_admin_draft_write_flow_and_attempt_runtime(app):
                 "accepted_answers": ["beta"],
                 "explanation": "The second gap resolves to beta.",
                 "variants": [],
-            },
+            }
         ],
     }
 

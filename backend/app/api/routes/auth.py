@@ -54,12 +54,8 @@ def _upsert_user_from_login(
 
     user.telegram_id = telegram_id
     user.phone = phone
-    user.first_name = first_name
-    user.last_name = last_name
     if username is not None or user.username is None:
         user.username = username
-    if avatar_url is not None:
-        user.avatar_url = avatar_url
     user.telegram_contact_updated_at = now
     return user
 
@@ -244,6 +240,7 @@ async def verify_code(
         avatar_url=db_user.avatar_url,
         is_premium=db_user.is_premium,
         premium_until=db_user.premium_until,
+        created_at=db_user.created_at,
     )
 
     return AuthLoginResponse(
@@ -367,6 +364,7 @@ async def get_session_status(
         avatar_url=user.avatar_url,
         is_premium=user.is_premium,
         premium_until=user.premium_until,
+        created_at=user.created_at,
     )
     return AuthSessionStatusResponse(session_id=session.id, user=principal)
 

@@ -24,7 +24,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchWritingSubmissionResult, pollWritingSubmission } from "@/lib/client-writing";
+import {
+  fetchWritingSubmissionResult,
+  pollWritingSubmission,
+  retryWritingSubmission,
+} from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 import type {
   WritingCriterionEvaluation,
@@ -69,8 +73,8 @@ const CATEGORY_STYLE: Record<
     underline: "decoration-red-500",
     chip: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30",
     dot: "bg-red-500",
-    fill: "bg-red-500/15 hover:bg-red-500/25",
-    fillActive: "bg-red-500/35 ring-2 ring-red-500/60",
+    fill: "bg-red-500/25 hover:bg-red-500/35 dark:bg-red-500/20 dark:hover:bg-red-500/30 shadow-[inset_0_-1px_0_rgba(239,68,68,0.2)]",
+    fillActive: "bg-red-500/40 ring-2 ring-red-500/70 dark:bg-red-500/35 shadow-[inset_0_-1px_0_rgba(239,68,68,0.35)]",
     text: "text-red-700 dark:text-red-300",
   },
   grammar: {
@@ -78,8 +82,8 @@ const CATEGORY_STYLE: Record<
     underline: "decoration-orange-500",
     chip: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30",
     dot: "bg-orange-500",
-    fill: "bg-orange-500/15 hover:bg-orange-500/25",
-    fillActive: "bg-orange-500/35 ring-2 ring-orange-500/60",
+    fill: "bg-orange-500/25 hover:bg-orange-500/35 dark:bg-orange-500/20 dark:hover:bg-orange-500/30 shadow-[inset_0_-1px_0_rgba(249,115,22,0.2)]",
+    fillActive: "bg-orange-500/40 ring-2 ring-orange-500/70 dark:bg-orange-500/35 shadow-[inset_0_-1px_0_rgba(249,115,22,0.35)]",
     text: "text-orange-700 dark:text-orange-300",
   },
   lexical: {
@@ -87,8 +91,8 @@ const CATEGORY_STYLE: Record<
     underline: "decoration-violet-500",
     chip: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30",
     dot: "bg-violet-500",
-    fill: "bg-violet-500/15 hover:bg-violet-500/25",
-    fillActive: "bg-violet-500/35 ring-2 ring-violet-500/60",
+    fill: "bg-violet-500/25 hover:bg-violet-500/35 dark:bg-violet-500/20 dark:hover:bg-violet-500/30 shadow-[inset_0_-1px_0_rgba(139,92,246,0.2)]",
+    fillActive: "bg-violet-500/40 ring-2 ring-violet-500/70 dark:bg-violet-500/35 shadow-[inset_0_-1px_0_rgba(139,92,246,0.35)]",
     text: "text-violet-700 dark:text-violet-300",
   },
   cohesion: {
@@ -96,8 +100,8 @@ const CATEGORY_STYLE: Record<
     underline: "decoration-sky-500",
     chip: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30",
     dot: "bg-sky-500",
-    fill: "bg-sky-500/15 hover:bg-sky-500/25",
-    fillActive: "bg-sky-500/35 ring-2 ring-sky-500/60",
+    fill: "bg-sky-500/25 hover:bg-sky-500/35 dark:bg-sky-500/20 dark:hover:bg-sky-500/30 shadow-[inset_0_-1px_0_rgba(14,165,233,0.2)]",
+    fillActive: "bg-sky-500/40 ring-2 ring-sky-500/70 dark:bg-sky-500/35 shadow-[inset_0_-1px_0_rgba(14,165,233,0.35)]",
     text: "text-sky-700 dark:text-sky-300",
   },
   style: {
@@ -105,8 +109,8 @@ const CATEGORY_STYLE: Record<
     underline: "decoration-amber-500",
     chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30",
     dot: "bg-amber-500",
-    fill: "bg-amber-500/15 hover:bg-amber-500/25",
-    fillActive: "bg-amber-500/35 ring-2 ring-amber-500/60",
+    fill: "bg-amber-500/25 hover:bg-amber-500/35 dark:bg-amber-500/20 dark:hover:bg-amber-500/30 shadow-[inset_0_-1px_0_rgba(245,158,11,0.2)]",
+    fillActive: "bg-amber-500/40 ring-2 ring-amber-500/70 dark:bg-amber-500/35 shadow-[inset_0_-1px_0_rgba(245,158,11,0.35)]",
     text: "text-amber-700 dark:text-amber-300",
   },
   punctuation: {
@@ -114,8 +118,8 @@ const CATEGORY_STYLE: Record<
     underline: "decoration-pink-500",
     chip: "bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/30",
     dot: "bg-pink-500",
-    fill: "bg-pink-500/15 hover:bg-pink-500/25",
-    fillActive: "bg-pink-500/35 ring-2 ring-pink-500/60",
+    fill: "bg-pink-500/25 hover:bg-pink-500/35 dark:bg-pink-500/20 dark:hover:bg-pink-500/30 shadow-[inset_0_-1px_0_rgba(236,72,153,0.2)]",
+    fillActive: "bg-pink-500/40 ring-2 ring-pink-500/70 dark:bg-pink-500/35 shadow-[inset_0_-1px_0_rgba(236,72,153,0.35)]",
     text: "text-pink-700 dark:text-pink-300",
   },
 };
@@ -155,6 +159,87 @@ function formatDuration(totalSeconds: number) {
   if (m === 0) return `${s}s`;
   if (s === 0) return `${m}m`;
   return `${m}m ${s}s`;
+}
+
+function normalizedEssayText(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function buildAnnotationTooltip(annotation: WritingInlineAnnotation): string {
+  const lines: string[] = [];
+  if (annotation.short_message) lines.push(annotation.short_message);
+  if (annotation.replacements?.[0]) lines.push(`Fix: ${annotation.replacements[0]}`);
+  if (annotation.explanation) lines.push(annotation.explanation);
+  if (annotation.band_impact) lines.push(`Band impact: ${annotation.band_impact}`);
+  if (annotation.examiner_tip) lines.push(`Tip: ${annotation.examiner_tip}`);
+  return lines.join("\n");
+}
+
+function findSentenceStart(text: string, offset: number): number {
+  let start = Math.max(0, Math.min(offset, text.length));
+  for (let i = start - 1; i >= 0; i -= 1) {
+    const ch = text[i];
+    if (ch === "\n" || ch === "\r") {
+      start = i + 1;
+      break;
+    }
+    if (/[.!?]/.test(ch)) {
+      start = i + 1;
+      break;
+    }
+    start = i;
+  }
+  while (start < text.length && /\s/.test(text[start])) {
+    start += 1;
+  }
+  return start;
+}
+
+function findSentenceEnd(text: string, offset: number): number {
+  let end = Math.max(0, Math.min(offset, text.length));
+  for (let i = end; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === "\n" || ch === "\r") {
+      end = i;
+      break;
+    }
+    end = i + 1;
+    if (/[.!?]/.test(ch)) {
+      break;
+    }
+  }
+  while (end > 0 && /\s/.test(text[end - 1])) {
+    end -= 1;
+  }
+  return end;
+}
+
+function buildAnnotationSentencePreview(
+  essay: string,
+  annotation: WritingInlineAnnotation,
+): { originalSentence: string; improvedSentence: string } {
+  const start = findSentenceStart(essay, annotation.offset);
+  const end = findSentenceEnd(essay, annotation.offset + annotation.length);
+  const originalSentence = essay.slice(start, end).trim();
+  if (annotation.improved_sentence?.trim()) {
+    return {
+      originalSentence,
+      improvedSentence: annotation.improved_sentence.trim(),
+    };
+  }
+  const replacement = annotation.replacements?.[0] ?? "";
+  if (!originalSentence || !replacement) {
+    return { originalSentence, improvedSentence: originalSentence };
+  }
+  const relativeStart = Math.max(0, annotation.offset - start);
+  const relativeEnd = Math.min(originalSentence.length, relativeStart + annotation.length);
+  return {
+    originalSentence,
+    improvedSentence:
+      originalSentence.slice(0, relativeStart)
+      + replacement
+      + originalSentence.slice(relativeEnd),
+  };
 }
 
 type AnnotatedSegment =
@@ -203,7 +288,7 @@ function ScoreGauge({ band }: { band: number }) {
   const offset = circumference * (1 - pct);
   return (
     <div className="relative flex flex-col items-center justify-center">
-      <svg viewBox="0 0 200 200" className="h-44 w-44 -rotate-90">
+      <svg viewBox="0 0 200 200" className="h-40 w-40 -rotate-90">
         <circle cx="100" cy="100" r={radius} className="fill-none stroke-muted/40" strokeWidth="14" />
         <circle
           cx="100"
@@ -217,7 +302,7 @@ function ScoreGauge({ band }: { band: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className={cn("text-5xl font-semibold tabular-nums", tone.text)}>
+        <div className={cn("text-[2.7rem] font-semibold tabular-nums", tone.text)}>
           {band.toFixed(1)}
         </div>
         <div className="text-xs uppercase tracking-wider text-muted-foreground mt-1">/ 9.0</div>
@@ -364,16 +449,7 @@ function CriterionCard({
   );
 }
 
-function GradingScreen({ stage }: { stage: LoadingStage }) {
-  const [activeStep, setActiveStep] = useState(0);
-  useEffect(() => {
-    if (stage !== "polling" && stage !== "loading_result") return;
-    const id = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % GRADING_STEPS.length);
-    }, 4000);
-    return () => clearInterval(id);
-  }, [stage]);
-
+function GradingScreen({ stage, activeStep }: { stage: LoadingStage; activeStep: number }) {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <Card className="rounded-3xl border-border/60 bg-gradient-to-br from-violet-500/5 via-card to-card overflow-hidden">
@@ -457,7 +533,15 @@ function GradingScreen({ stage }: { stage: LoadingStage }) {
   );
 }
 
-function FailedScreen({ message }: { message: string | null }) {
+function FailedScreen({
+  message,
+  onRetry,
+  retrying,
+}: {
+  message: string | null;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
   return (
     <Card className="rounded-3xl border-rose-500/30 bg-rose-500/5">
       <CardContent className="p-8 text-center space-y-4">
@@ -470,9 +554,15 @@ function FailedScreen({ message }: { message: string | null }) {
             {message || "Something went wrong while grading your essay. Please try again."}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/writing">Try again</Link>
-        </Button>
+        <div className="flex items-center justify-center gap-2">
+          <Button onClick={onRetry} disabled={retrying}>
+            {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Try again
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/writing">Back to writing</Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -583,11 +673,71 @@ export function WritingResultClient({
   const [result, setResult] = useState<WritingSubmissionResult | null>(initialResult);
   const [errorMessage, setErrorMessage] = useState<string | null>(initialErrorMessage);
   const [activeAnnotation, setActiveAnnotation] = useState<number | null>(null);
+  const [hoveredAnnotation, setHoveredAnnotation] = useState<number | null>(null);
   const [activeVersion, setActiveVersion] = useState<"original" | "improved">("improved");
+  const [activeStep, setActiveStep] = useState(0);
+  const [sseAvailable, setSseAvailable] = useState(true);
+  const [retrying, setRetrying] = useState(false);
   const annotatedRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (stage === "ready" || stage === "failed") return;
+    if (stage === "ready" || stage === "failed" || !sseAvailable) return;
+    if (typeof window === "undefined" || typeof EventSource === "undefined") {
+      setSseAvailable(false);
+      return;
+    }
+
+    const events = new EventSource(`/internal-api/writing/submissions/${submissionId}/events`);
+
+    events.onmessage = async (event) => {
+      const payload = JSON.parse(event.data) as {
+        status?: string;
+        stepIndex?: number;
+        errorMessage?: string | null;
+      };
+      const status = String(payload.status ?? "").toLowerCase();
+      if (typeof payload.stepIndex === "number") {
+        setActiveStep(Math.max(0, Math.min(payload.stepIndex, GRADING_STEPS.length - 1)));
+      }
+
+      if (status === "completed") {
+        setStage("loading_result");
+        try {
+          const resultPayload = await fetchWritingSubmissionResult(submissionId);
+          setResult(resultPayload);
+          setStage("ready");
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : "Failed to load writing result.");
+          setStage("failed");
+        } finally {
+          events.close();
+        }
+        return;
+      }
+
+      if (status === "failed") {
+        setErrorMessage(payload.errorMessage ?? "Writing evaluation failed.");
+        setStage("failed");
+        events.close();
+        return;
+      }
+
+      setStage(status === "queued" ? "polling" : "loading_result");
+    };
+
+    events.onerror = () => {
+      events.close();
+      setSseAvailable(false);
+      setStage((current) => (current === "ready" || current === "failed" ? current : "polling"));
+    };
+
+    return () => {
+      events.close();
+    };
+  }, [stage, submissionId, sseAvailable]);
+
+  useEffect(() => {
+    if (sseAvailable || stage === "ready" || stage === "failed") return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -599,6 +749,7 @@ export function WritingResultClient({
         if (cancelled) return;
         if (status === "completed") {
           setStage("loading_result");
+          setActiveStep(GRADING_STEPS.length - 1);
           const payload = await fetchWritingSubmissionResult(submissionId);
           if (!cancelled) {
             setResult(payload);
@@ -613,6 +764,7 @@ export function WritingResultClient({
           }
           return;
         }
+        setActiveStep((prev) => Math.min(GRADING_STEPS.length - 1, prev + 1));
         timer = setTimeout(poll, 3000);
       } catch (err) {
         if (cancelled) return;
@@ -626,7 +778,7 @@ export function WritingResultClient({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [stage, submissionId]);
+  }, [sseAvailable, stage, submissionId]);
 
   const annotations = result?.inline_annotations ?? [];
   const segments = useMemo(
@@ -646,10 +798,28 @@ export function WritingResultClient({
     }
   }, [activeAnnotation]);
 
+  const handleRetry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    setErrorMessage(null);
+    try {
+      await retryWritingSubmission(submissionId);
+      setResult(null);
+      setActiveStep(0);
+      setSseAvailable(true);
+      setStage("polling");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Retry failed.");
+      setStage("failed");
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   if (stage === "failed") {
     return (
       <div className="mx-auto max-w-3xl py-8">
-        <FailedScreen message={errorMessage} />
+        <FailedScreen message={errorMessage} onRetry={handleRetry} retrying={retrying} />
       </div>
     );
   }
@@ -657,7 +827,7 @@ export function WritingResultClient({
   if (stage !== "ready" || !result) {
     return (
       <div className="mx-auto max-w-3xl py-8">
-        <GradingScreen stage={stage} />
+        <GradingScreen stage={stage} activeStep={activeStep} />
       </div>
     );
   }
@@ -670,7 +840,15 @@ export function WritingResultClient({
 
   const wordPenalty = toBandNumber(result.word_count_penalty);
   const errorCount = annotations.length;
-  const activeAnno = activeAnnotation !== null ? annotations[activeAnnotation] ?? null : null;
+  const focusedAnnotationIndex = hoveredAnnotation ?? activeAnnotation ?? (annotations.length ? 0 : null);
+  const activeAnno = focusedAnnotationIndex !== null ? annotations[focusedAnnotationIndex] ?? null : null;
+  const activeAnnoSentencePreview = activeAnno
+    ? buildAnnotationSentencePreview(result.essay_text, activeAnno)
+    : null;
+  const hasImprovedTextChanges = Boolean(
+    result.improved_version
+      && normalizedEssayText(result.improved_version) !== normalizedEssayText(result.essay_text)
+  );
   const taskBadgeLabel = result.task_type === "task_1" ? "Task 1" : "Task 2";
   const delta = potential !== null ? potential - overall : 0;
 
@@ -704,7 +882,7 @@ export function WritingResultClient({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.62fr)_minmax(0,1.38fr)]">
         <Card className="rounded-3xl border-border/60 bg-card/40">
-          <CardContent className="p-8 flex flex-col items-center gap-3">
+          <CardContent className="flex h-full flex-col items-center justify-center gap-2.5 px-6 py-6">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Overall band</div>
             <ScoreGauge band={overall} />
             <div className={cn("text-sm font-medium", overallTone.text)}>
@@ -717,7 +895,7 @@ export function WritingResultClient({
         </Card>
 
         <Card className="rounded-3xl border-border/60 bg-card/40">
-          <CardContent className="p-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <CardContent className="grid h-full auto-rows-fr content-center grid-cols-2 gap-3 p-6 sm:grid-cols-3">
             <StatTile
               icon={FileText}
               label="Word count"
@@ -797,39 +975,52 @@ export function WritingResultClient({
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center gap-3">
               <Sparkles className="h-5 w-5 text-emerald-600" />
               <div className="text-sm text-emerald-700 dark:text-emerald-300">
-                No issues detected — well done!
+                No inline annotations were generated for this essay.
               </div>
             </div>
           ) : null}
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className={cn("grid gap-4", errorCount > 0 && "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]")}>
             <div
               ref={annotatedRef}
-              className="rounded-2xl border border-border/40 bg-muted/20 p-5 leading-8 text-[15px] whitespace-pre-wrap max-h-[560px] overflow-y-auto"
+              className={cn(
+                "rounded-2xl border border-border/40 bg-muted/20 p-5 leading-8 text-[15px] whitespace-pre-wrap",
+                errorCount > 0 && "max-h-[560px] overflow-y-auto"
+              )}
             >
               {segments.map((seg, i) => {
                 if (seg.kind === "text") {
                   return <span key={`t-${i}`}>{seg.text}</span>;
                 }
                 const style = categoryStyle(seg.category);
-                const isActive = activeAnnotation === seg.index;
+                const isActive = focusedAnnotationIndex === seg.index;
+                const replacement = annotations[seg.index]?.replacements?.[0];
                 return (
-                  <mark
-                    key={`m-${seg.index}`}
-                    data-anno-idx={seg.index}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveAnnotation((prev) => (prev === seg.index ? null : seg.index));
-                    }}
-                    className={cn(
-                      "rounded-md px-0.5 mx-px cursor-pointer scroll-mt-24 transition-all duration-200",
-                      "underline decoration-wavy decoration-2 underline-offset-[5px]",
-                      style.underline,
-                      isActive ? style.fillActive : style.fill,
-                    )}
-                  >
-                    {seg.text}
-                  </mark>
+                  <span key={`m-${seg.index}`} className="inline-flex items-center gap-1 align-baseline">
+                    <mark
+                      data-anno-idx={seg.index}
+                      title={buildAnnotationTooltip(annotations[seg.index] ?? { offset: 0, length: 0, original: "", replacements: [], category: seg.category })}
+                      onMouseEnter={() => setHoveredAnnotation(seg.index)}
+                      onMouseLeave={() => setHoveredAnnotation(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveAnnotation((prev) => (prev === seg.index ? null : seg.index));
+                      }}
+                      className={cn(
+                        "rounded-md px-1 mx-px cursor-pointer scroll-mt-24 transition-all duration-200",
+                        "underline decoration-wavy decoration-2 underline-offset-[5px]",
+                        style.underline,
+                        isActive ? style.fillActive : style.fill,
+                      )}
+                    >
+                      {seg.text}
+                    </mark>
+                    {isActive && replacement ? (
+                      <span className="inline-flex items-center rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-emerald-700 dark:text-emerald-300">
+                        {replacement}
+                      </span>
+                    ) : null}
+                  </span>
                 );
               })}
             </div>
@@ -851,11 +1042,14 @@ export function WritingResultClient({
                 <ul className="divide-y divide-border/30">
                   {annotations.map((a, i) => {
                     const s = categoryStyle(a.category);
-                    const isActive = activeAnnotation === i;
+                    const isActive = focusedAnnotationIndex === i;
                     return (
                       <li key={i}>
                         <button
                           type="button"
+                          title={buildAnnotationTooltip(a)}
+                          onMouseEnter={() => setHoveredAnnotation(i)}
+                          onMouseLeave={() => setHoveredAnnotation(null)}
                           onClick={() =>
                             setActiveAnnotation((prev) => (prev === i ? null : i))
                           }
@@ -878,6 +1072,11 @@ export function WritingResultClient({
                               #{i + 1}
                             </span>
                           </div>
+                          {a.short_message ? (
+                            <div className="text-sm font-medium text-foreground/90">
+                              {a.short_message}
+                            </div>
+                          ) : null}
                           <div className="flex flex-wrap items-center gap-1.5 text-sm">
                             <span className={cn("font-medium line-through", s.text)}>
                               {a.original}
@@ -891,9 +1090,9 @@ export function WritingResultClient({
                               </>
                             ) : null}
                           </div>
-                          {a.short_message ? (
+                          {a.band_impact ? (
                             <div className="text-xs text-muted-foreground line-clamp-2">
-                              {a.short_message}
+                              {a.band_impact}
                             </div>
                           ) : null}
                         </button>
@@ -906,7 +1105,7 @@ export function WritingResultClient({
           </div>
 
           {activeAnno ? (
-            <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
@@ -922,34 +1121,94 @@ export function WritingResultClient({
                     {activeAnno.severity}
                   </span>
                 ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="line-through text-rose-600 dark:text-rose-400">{activeAnno.original}</span>
-                {activeAnno.replacements?.length ? (
-                  <>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeAnno.replacements.map((rep, i) => (
-                        <span
-                          key={i}
-                          className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-emerald-700 dark:text-emerald-300 font-medium"
-                        >
-                          {rep}
-                        </span>
-                      ))}
-                    </div>
-                  </>
+                {focusedAnnotationIndex !== null ? (
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Issue #{focusedAnnotationIndex + 1}
+                  </span>
                 ) : null}
               </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                    Original
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-foreground/90 line-through decoration-rose-500 decoration-2">
+                    {activeAnno.original}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Better version
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                    {activeAnno.replacements?.length
+                      ? activeAnno.replacements.map((rep, i) => (
+                        <span key={i} className="rounded-md bg-emerald-500/10 px-2 py-0.5">
+                          {rep}
+                        </span>
+                      ))
+                      : <span>No direct replacement provided</span>}
+                  </div>
+                </div>
+              </div>
               {activeAnno.explanation ? (
-                <p className="text-sm text-muted-foreground">{activeAnno.explanation}</p>
+                <div className="space-y-1">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Why this is wrong
+                  </div>
+                  <p className="text-sm text-foreground/85 leading-relaxed">{activeAnno.explanation}</p>
+                </div>
+              ) : null}
+              {activeAnnoSentencePreview?.originalSentence ? (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Your sentence
+                    </div>
+                    <div className="rounded-2xl border border-border/40 bg-muted/25 p-3 text-sm leading-7 whitespace-pre-wrap">
+                      {activeAnnoSentencePreview.originalSentence}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      Corrected sentence
+                    </div>
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm leading-7 whitespace-pre-wrap text-foreground/90">
+                      {activeAnnoSentencePreview.improvedSentence}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {(activeAnno.band_impact || activeAnno.examiner_tip) ? (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {activeAnno.band_impact ? (
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                        Band impact
+                      </div>
+                      <p className="mt-2 text-sm text-foreground/85 leading-relaxed">
+                        {activeAnno.band_impact}
+                      </p>
+                    </div>
+                  ) : null}
+                  {activeAnno.examiner_tip ? (
+                    <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                        Examiner tip
+                      </div>
+                      <p className="mt-2 text-sm text-foreground/85 leading-relaxed">
+                        {activeAnno.examiner_tip}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           ) : null}
         </CardContent>
       </Card>
 
-      {result.improved_version ? (
+      {result.improved_version && hasImprovedTextChanges ? (
         <Card className="rounded-3xl border-border/60 bg-card/40 mt-2">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-3">

@@ -1,4 +1,5 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,7 +11,7 @@ import {
   ArrowLeft,
   User,
   Phone,
-  Crown,
+  Gem,
   Activity,
   Calendar,
   Clock,
@@ -136,7 +137,7 @@ export default function AdminUserDetailPage() {
                 <h1 className="text-2xl font-black text-foreground">{fullName}</h1>
                 {user.is_premium && (
                   <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 bg-amber-500/10 text-amber-600 rounded-full border border-amber-500/20">
-                    <Crown className="h-3 w-3" /> Premium
+                    <PrimePremiumIcon className="h-3 w-3" /> Premium
                   </span>
                 )}
               </div>

@@ -1,9 +1,11 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Play, TimerReset, X, ArrowRight, Check, Crown, Lock, Sparkles } from "lucide-react";
+import { Play, TimerReset, X, ArrowRight, Check, Gem, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TestCardAttemptSummary, TestCatalogItem } from "@/lib/types";
@@ -122,7 +124,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
         <div className="p-8 space-y-6">
           <div className="text-center space-y-4">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
-              <Crown className="h-8 w-8 text-white" />
+              <PrimePremiumIcon className="h-8 w-8 text-white" />
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-black tracking-tight text-foreground">Unlock Premium</h2>
@@ -134,8 +136,8 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
 
           <div className="bg-card/50 rounded-xl border border-border/50 p-4 space-y-3">
             <div className="flex items-center gap-3 text-sm">
-              <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                <Lock className="h-4 w-4 text-amber-500" />
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
+                <PrimePremiumIcon className="h-4 w-4 text-amber-500" />
               </div>
               <div>
                 <p className="font-semibold text-foreground">{test.title}</p>
@@ -162,16 +164,11 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
           </div>
 
           <div className="space-y-3 pt-2">
-            <Button
-              onClick={() => {
-                setShowPremiumModal(false);
-                emitNavigationStart("/pricing");
-                router.push("/pricing");
-              }}
-              className="w-full h-12 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/25 transition-all hover:-translate-y-0.5 border-0"
-            >
-              <Crown className="h-4 w-4 mr-2" />
-              Get Premium
+            <Button asChild className="h-11 w-full rounded-xl bg-amber-500 font-bold text-white dark:text-slate-950 hover:bg-amber-600 hover:shadow-xl hover:shadow-amber-500/20 active:scale-95 transition-all">
+              <Link href="/pricing">
+                <PrimePremiumIcon className="mr-1.5 h-3.5 w-3.5" />
+                Unlock Premium
+              </Link>
             </Button>
             <button
               onClick={() => setShowPremiumModal(false)}
@@ -234,7 +231,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
                   <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Review with less pressure</li>
                   <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Best for learning</li>
                 </ul>
-                <Button disabled={isSubmitting} onClick={() => startTest("practice")} className="w-full h-10 rounded-lg font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
+                <Button disabled={isSubmitting} onClick={() => startTest("practice")} className="w-full h-10 rounded-lg font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white dark:text-slate-950 shadow-md shadow-emerald-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
                   {isSubmitting ? "Starting..." : "Start Practice"}
                 </Button>
               </CardContent>
@@ -302,7 +299,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
         )}>
           {test.accessType === "premium" && !isPremium ? (
             <>
-              <Lock className="mr-1.5 h-3.5 w-3.5" />
+              <PrimePremiumIcon className="mr-1.5 h-3.5 w-3.5" />
               Unlock Premium
             </>
           ) : (

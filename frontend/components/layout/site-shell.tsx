@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { createApiClient } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/client";
 import { buildUserDisplayName } from "@/lib/user-name";
 import { useRouter, usePathname } from "next/navigation";
 import { NavigationTransitionOverlay } from "@/components/layout/navigation-transition-overlay";
 import { emitNavigationStart, setPendingPublicRedirect } from "@/lib/navigation-transition";
+import { refreshClientUserAccessToken } from "@/lib/user-auth-client";
 
 interface SiteShellProps {
   children: ReactNode;
@@ -126,6 +128,32 @@ export function SiteShell({ children }: SiteShellProps) {
   }, [hasHydrated, isAuthenticated]);
 
   useEffect(() => {
+    if (!hasHydrated || !isAuthenticated || !refreshToken) {
+      return;
+    }
+
+    let cancelled = false;
+    void refreshClientUserAccessToken(undefined, fetch, { clearOnFailure: true })
+      .then((accessToken) => {
+        if (cancelled || !accessToken) {
+          return;
+        }
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          clearSession();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearSession, hasHydrated, isAuthenticated, refreshToken]);
+
+  useEffect(() => {
     if (!isAuthenticated || !sessionId) {
       return;
     }
@@ -146,10 +174,14 @@ export function SiteShell({ children }: SiteShellProps) {
           avatarUrl: response.user.avatar_url ?? null,
           isPremium: Boolean(response.user.is_premium),
           premiumUntil: response.user.premium_until ?? null,
+          createdAt: response.user.created_at ?? null,
         });
       })
-      .catch(() => {
-        if (!cancelled) {
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
           clearSession();
         }
       });
@@ -189,22 +221,22 @@ export function SiteShell({ children }: SiteShellProps) {
     <div
       className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative"
       style={{
-        "--app-shell-sticky-top": "5.5rem",
+        "--app-shell-sticky-top": "4.5rem",
       } as CSSProperties}
     >
       {/* Global Grid Background Added here */}
-      <div className="absolute inset-0 z-0 bg-grid pointer-events-none" />
+      <div className="fixed inset-0 z-0 bg-grid pointer-events-none" />
 
       <Suspense fallback={null}>
         <NavigationTransitionOverlay />
       </Suspense>
 
       <header 
-        className="sticky top-0 z-50 border-b border-primary/10 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] flex items-center shrink-0 h-16 md:h-20"
+        className="sticky top-0 z-50 border-b border-primary/10 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] flex items-center shrink-0 h-14 md:h-16"
       >
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2 group focus-visible:outline-none rounded-xl">
-            <div className="relative flex items-center justify-center h-10 md:h-12 transition-transform duration-300 group-hover:scale-105">
+            <div className="relative flex items-center justify-center h-9 md:h-10 transition-transform duration-300 group-hover:scale-105">
               <img src={theme === "light" ? "/logo-light.svg" : "/logo.svg"} alt="PrimeScore" className="relative z-10 h-full w-auto object-contain drop-shadow-sm" />
             </div>
           </Link>
@@ -461,7 +493,7 @@ export function SiteShell({ children }: SiteShellProps) {
           onClick={() => setIsMobileNavOpen(false)}
         >
           <div
-            className="absolute left-3 right-3 rounded-2xl border border-border bg-card shadow-2xl p-3 animate-in slide-in-from-top-4 duration-200 top-[5rem]"
+            className="absolute left-3 right-3 rounded-2xl border border-border bg-card shadow-2xl p-3 animate-in slide-in-from-top-4 duration-200 top-[4.25rem]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col gap-1">

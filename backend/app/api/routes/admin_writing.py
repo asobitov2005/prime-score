@@ -451,10 +451,9 @@ async def regrade_submission(
     submission.error_message = None
     await session.commit()
 
-    from app.tasks.tasks import evaluate_writing_submission_task
+    from app.services.writing_dispatch import dispatch_writing_grading
 
-    result = evaluate_writing_submission_task.delay(str(submission.id))
-    submission.celery_task_id = result.id
+    submission.celery_task_id = await dispatch_writing_grading(submission.id)
     await session.commit()
 
     return Response(status_code=status.HTTP_202_ACCEPTED)

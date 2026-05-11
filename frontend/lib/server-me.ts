@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "@/lib/date-time";
 import { requestServerUserApi } from "@/lib/server-user-auth";
 import type {
   AttemptRow,
@@ -80,12 +81,14 @@ type BackendBandProgressPoint = {
   occurred_at: string;
   reading?: number | null;
   listening?: number | null;
+  writing?: number | null;
 };
 
 type BackendPerformanceStudyTime = {
   total_time_sec: number;
   reading_time_sec: number;
   listening_time_sec: number;
+  writing_time_sec?: number | null;
 };
 
 type BackendPerformanceTestCountBucket = {
@@ -100,10 +103,19 @@ type BackendPerformanceSummary = {
   study_time: BackendPerformanceStudyTime;
   reading: BackendPerformanceTestCountBucket;
   listening: BackendPerformanceTestCountBucket;
+  writing?: BackendPerformanceTestCountBucket | null;
+};
+
+type BackendWritingCriteria = {
+  task_achievement?: number | null;
+  coherence_cohesion?: number | null;
+  lexical_resource?: number | null;
+  grammatical_range_accuracy?: number | null;
 };
 
 type BackendDashboardAnalytics = {
   performance_summary: BackendPerformanceSummary;
+  writing_criteria?: BackendWritingCriteria | null;
   question_type_analysis: BackendQuestionTypeAnalysisItem[];
   comparison: BackendQuestionTypeComparison;
   error_distribution: BackendErrorDistributionItem[];
@@ -160,25 +172,6 @@ type BackendImprovementRate = {
 
 async function requestBackend<T>(path: string): Promise<T> {
   return requestServerUserApi<T>(path);
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  }).format(new Date(value));
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(new Date(value));
 }
 
 function formatAttemptDuration(totalSeconds: number | null | undefined): string {
@@ -287,7 +280,8 @@ function mapProgressSeries(
     label: item.label,
     occurredAt: item.occurred_at,
     reading: item.reading ?? null,
-    listening: item.listening ?? null
+    listening: item.listening ?? null,
+    writing: item.writing ?? null
   }));
 }
 
@@ -298,7 +292,8 @@ function mapPerformanceSummary(
     studyTime: {
       totalTimeSec: summary.study_time.total_time_sec,
       readingTimeSec: summary.study_time.reading_time_sec,
-      listeningTimeSec: summary.study_time.listening_time_sec
+      listeningTimeSec: summary.study_time.listening_time_sec,
+      writingTimeSec: summary.study_time.writing_time_sec ?? 0
     },
     reading: {
       fullCount: summary.reading.full_count,
@@ -313,7 +308,14 @@ function mapPerformanceSummary(
       section2Count: summary.listening.section_2_count,
       section3Count: summary.listening.section_3_count,
       section4Count: summary.listening.section_4_count
-    }
+    },
+    writing: summary.writing ? {
+      fullCount: summary.writing.full_count,
+      section1Count: summary.writing.section_1_count,
+      section2Count: summary.writing.section_2_count,
+      section3Count: summary.writing.section_3_count,
+      section4Count: summary.writing.section_4_count
+    } : undefined
   };
 }
 
@@ -375,6 +377,12 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
     const ir = analytics.improvement_rate;
     return {
       performanceSummary: mapPerformanceSummary(analytics.performance_summary),
+      writingCriteria: analytics.writing_criteria ? {
+        taskAchievement: analytics.writing_criteria.task_achievement ?? null,
+        coherenceCohesion: analytics.writing_criteria.coherence_cohesion ?? null,
+        lexicalResource: analytics.writing_criteria.lexical_resource ?? null,
+        grammaticalRangeAccuracy: analytics.writing_criteria.grammatical_range_accuracy ?? null,
+      } : null,
       questionTypeAnalysis: mapQuestionTypeAnalysis(analytics.question_type_analysis),
       comparison: mapComparison(analytics.comparison),
       errorDistribution: mapErrorDistribution(analytics.error_distribution),
@@ -419,10 +427,12 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
   } catch {
     return {
       performanceSummary: {
-        studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0 },
+        studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0, writingTimeSec: 0 },
         reading: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
-        listening: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 }
+        listening: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
+        writing: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 }
       },
+      writingCriteria: null,
       questionTypeAnalysis: [],
       comparison: {
         previousTestTitle: null,

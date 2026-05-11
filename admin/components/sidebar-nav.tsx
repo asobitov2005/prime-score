@@ -20,30 +20,6 @@ export function SidebarNav({
         collapsed ? "w-20" : "w-64"
       )}
     >
-      <div
-        className={cn(
-          "flex items-center border-b border-border bg-background/50 transition-all duration-300",
-          collapsed ? "h-20 justify-center px-3" : "h-28 px-6 md:h-36"
-        )}
-      >
-        <Link
-          href="/"
-          className={cn(
-            "group flex items-center transition-transform duration-300 hover:scale-[1.02] focus-visible:outline-none",
-            collapsed ? "justify-center" : "gap-2"
-          )}
-        >
-          <div className={cn(collapsed ? "h-10" : "h-16 md:h-24")}>
-            <img src="/logo.svg" alt="PrimeScore Admin" className="h-full w-auto object-contain" />
-          </div>
-          {!collapsed ? (
-            <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100">
-              Admin
-            </span>
-          ) : null}
-        </Link>
-      </div>
-
       <div className={cn("flex-1 overflow-y-auto py-6 transition-all duration-300", collapsed ? "px-2" : "px-4")}>
         <nav className="space-y-8">
           {adminNavGroups.map((group) => (

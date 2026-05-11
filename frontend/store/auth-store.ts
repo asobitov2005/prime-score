@@ -17,11 +17,12 @@ export interface AuthSessionState {
   avatarUrl: string | null;
   isPremium: boolean;
   premiumUntil: string | null;
+  createdAt: string | null;
   isAuthenticated: boolean;
   hasHydrated: boolean;
   setHasHydrated: (hasHydrated: boolean) => void;
-  setSession: (session: { userId: string; sessionId: string; accessToken?: string | null; refreshToken?: string | null; name: string; phoneNumber: string | null; avatarUrl?: string | null; isPremium: boolean; premiumUntil?: string | null }) => void;
-  syncSession: (session: Partial<{ userId: string | null; sessionId: string | null; accessToken: string | null; refreshToken: string | null; name: string; phoneNumber: string | null; avatarUrl: string | null; isPremium: boolean; premiumUntil: string | null }>) => void;
+  setSession: (session: { userId: string; sessionId: string; accessToken?: string | null; refreshToken?: string | null; name: string; phoneNumber: string | null; avatarUrl?: string | null; isPremium: boolean; premiumUntil?: string | null; createdAt?: string | null }) => void;
+  syncSession: (session: Partial<{ userId: string | null; sessionId: string | null; accessToken: string | null; refreshToken: string | null; name: string; phoneNumber: string | null; avatarUrl: string | null; isPremium: boolean; premiumUntil: string | null; createdAt: string | null }>) => void;
   setTokens: (tokens: { accessToken?: string | null; refreshToken?: string | null }) => void;
   updateName: (newName: string) => void;
   updateAvatar: (avatarUrl: string | null) => void;
@@ -40,13 +41,14 @@ export const useAuthStore = create<AuthSessionState>()(
       avatarUrl: null,
       isPremium: false,
       premiumUntil: null,
+      createdAt: null,
       isAuthenticated: false,
       hasHydrated: false,
       setHasHydrated: (hasHydrated) =>
         set({
           hasHydrated
         }),
-      setSession: ({ userId, sessionId, accessToken = null, refreshToken = null, name, phoneNumber, avatarUrl = null, isPremium, premiumUntil = null }) =>
+      setSession: ({ userId, sessionId, accessToken = null, refreshToken = null, name, phoneNumber, avatarUrl = null, isPremium, premiumUntil = null, createdAt = null }) =>
         set(() => {
           syncBrowserSessionCookies({ sessionId, accessToken, refreshToken });
           return {
@@ -59,6 +61,7 @@ export const useAuthStore = create<AuthSessionState>()(
             avatarUrl,
             isPremium,
             premiumUntil,
+            createdAt,
             isAuthenticated: true
           };
         }),
@@ -73,6 +76,7 @@ export const useAuthStore = create<AuthSessionState>()(
           avatarUrl: session.avatarUrl === undefined ? state.avatarUrl : session.avatarUrl,
           isPremium: session.isPremium ?? state.isPremium,
           premiumUntil: session.premiumUntil === undefined ? state.premiumUntil : session.premiumUntil,
+          createdAt: session.createdAt === undefined ? state.createdAt : session.createdAt,
           isAuthenticated:
             state.isAuthenticated
             || Boolean(session.userId ?? state.userId)
@@ -114,6 +118,7 @@ export const useAuthStore = create<AuthSessionState>()(
             avatarUrl: null,
             isPremium: false,
             premiumUntil: null,
+            createdAt: null,
             isAuthenticated: false
           };
         })
@@ -130,6 +135,7 @@ export const useAuthStore = create<AuthSessionState>()(
         avatarUrl: state.avatarUrl,
         isPremium: state.isPremium,
         premiumUntil: state.premiumUntil,
+        createdAt: state.createdAt,
         isAuthenticated: state.isAuthenticated
       }),
       onRehydrateStorage: () => (state) => {

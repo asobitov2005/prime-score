@@ -4,9 +4,10 @@ from datetime import datetime
 from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.common import AdminPrincipal, DebugPrincipal
+from app.services.admin_auth import ADMIN_LOGIN_OTP_TTL_SECONDS, normalize_phone_number
 
 
 class AuthRequestCodeRequest(BaseModel):
@@ -70,8 +71,24 @@ class AuthSessionStatusResponse(BaseModel):
 
 
 class AdminAuthLoginRequest(BaseModel):
-    login: str = Field(min_length=3, max_length=255)
+    phone_number: str = Field(min_length=6, max_length=32)
     password: str = Field(min_length=1, max_length=255)
+
+    @field_validator("phone_number")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        return normalize_phone_number(value)
+
+
+class AdminAuthChallengeResponse(BaseModel):
+    challenge_id: UUID
+    expires_in_seconds: int = ADMIN_LOGIN_OTP_TTL_SECONDS
+    delivery: str = "telegram"
+
+
+class AdminAuthVerifyOtpRequest(BaseModel):
+    challenge_id: UUID
+    otp_code: str = Field(min_length=5, max_length=5, pattern=r"^\d{5}$")
 
 
 class AdminAuthRefreshRequest(BaseModel):

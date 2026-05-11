@@ -186,6 +186,7 @@ class AdminUserRead(BaseModel):
     last_name: str | None = None
     username: str | None = None
     email: str | None = None
+    phone_number: str | None = None
     role: Literal["super_admin", "admin"] | None = None
     is_premium: bool = False
     show_on_leaderboard: bool = True
@@ -195,6 +196,8 @@ class AdminUserRead(BaseModel):
 class AdminAccountCreateRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     email: str = Field(min_length=5, max_length=255)
+    phone_number: str = Field(min_length=6, max_length=32)
+    telegram_id: int = Field(gt=0)
     password: str = Field(min_length=8, max_length=128)
     role: Literal["super_admin", "admin"] = "admin"
     is_active: bool = True

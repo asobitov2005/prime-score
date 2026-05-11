@@ -14,6 +14,8 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create a PrimeScore admin account.")
     parser.add_argument("--username", required=True, help="Admin username.")
     parser.add_argument("--email", required=True, help="Admin email.")
+    parser.add_argument("--phone-number", required=True, help="Admin phone number linked through the Telegram bot.")
+    parser.add_argument("--telegram-id", required=True, type=int, help="Telegram chat/user ID linked to this admin.")
     parser.add_argument(
         "--role",
         default=AdminRole.ADMIN.value,
@@ -43,6 +45,8 @@ async def _create_admin(args: argparse.Namespace) -> None:
             session,
             username=args.username,
             email=args.email,
+            phone_number=args.phone_number,
+            telegram_id=args.telegram_id,
             password=password,
             role=AdminRole(args.role),
         )

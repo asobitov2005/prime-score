@@ -32,6 +32,7 @@ class DebugPrincipal(BaseModel):
     show_on_leaderboard: bool = True
     telegram_id: int | None = None
     avatar_url: str | None = None
+    created_at: datetime | None = None
 
     @property
     def display_name(self) -> str:
@@ -47,6 +48,8 @@ class AdminPrincipal(BaseModel):
     id: UUID
     username: str
     email: str
+    phone_number: str | None = None
+    telegram_id: int | None = None
     role: UserRole
     is_active: bool = True
 

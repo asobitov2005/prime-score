@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { ArrowDown } from "lucide-react";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Notice, ProgressBar, SectionHeader, Select, Textarea } from "@/components/ui";
 import { createEmptyDraft } from "@/lib/draft-template";
@@ -50,6 +51,7 @@ const defaultInstructions: Record<string, string> = {
   "reading_summary_completion_wordbank": "Complete the summary using the list of words, A-G, below.\n\nWrite the correct letter, A-G, in boxes on your answer sheet.",
   "reading_summary_completion_freetext": "Complete the summary below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_note_completion": "Complete the notes below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
+  "reading_flowchart_completion": "Complete the flow-chart below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_diagram_labeling": "Label the diagram below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_short_answer": "Answer the questions below.\n\nChoose {NO MORE THAN TWO WORDS AND/OR A NUMBER} from the passage for each answer.",
 
@@ -61,6 +63,7 @@ const defaultInstructions: Record<string, string> = {
   "listening_matching": "What does the speaker say about each of the following items?\n\nChoose the correct letter, A, B or C, and write them next to Questions.",
   "listening_plan_map_labeling": "Label the map below.\n\nWrite the correct letter, A-H, next to Questions.",
   "listening_plan_map_labeling_free_text": "Label the map below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
+  "listening_flowchart_completion": "Complete the flow-chart below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
   "listening_short_answer": "Answer the questions below.\n\nWrite {NO MORE THAN THREE WORDS AND/OR A NUMBER} for each answer."
 };
 
@@ -137,6 +140,10 @@ function extractMatchingOptionValue(option: string) {
 
 function stripMatchingOptionPrefix(option: string) {
   return option.trim().replace(/^([a-z0-9ivxlcdm]+)[.)]\s*/i, "").trim();
+}
+
+function normalizeMatchingPrefix(prefix: string) {
+  return prefix.trim().toUpperCase();
 }
 
 function resolveChoiceAnswerText(
@@ -270,7 +277,7 @@ function romanNumeralFromIndex(index: number) {
       value -= amount;
     }
   }
-  return result;
+  return normalizeMatchingPrefix(result);
 }
 
 function shouldAutoLetterMatchingOptions(typeId: string) {
@@ -284,9 +291,10 @@ function getMatchingOptionPreview(option: string, index: number, typeId: string)
   const explicitText = stripMatchingOptionPrefix(optionBody);
 
   if (explicitValue !== optionBody.trim()) {
+    const normalizedValue = normalizeMatchingPrefix(explicitValue);
     return {
-      value: explicitValue.toUpperCase(),
-      label: explicitText ? `${explicitValue.toUpperCase()}. ${explicitText}` : explicitValue.toUpperCase(),
+      value: normalizedValue,
+      label: explicitText ? `${normalizedValue}. ${explicitText}` : normalizedValue,
     };
   }
 
@@ -430,7 +438,7 @@ function parseMatchingHeadingEntry(line: string, index: number) {
   const explicitValue = extractMatchingOptionValue(headingBody);
   const explicitText = stripMatchingOptionPrefix(headingBody) || headingBody;
   const hasExplicitValue = explicitValue !== headingBody;
-  const answerValue = hasExplicitValue ? explicitValue : romanNumeralFromIndex(index);
+  const answerValue = hasExplicitValue ? normalizeMatchingPrefix(explicitValue) : romanNumeralFromIndex(index);
   const headingText = hasExplicitValue ? explicitText : headingBody;
 
   return {
@@ -571,9 +579,14 @@ function isBracketCompletionType(typeId: string) {
     typeId.includes("sentence_completion")
     || typeId.includes("summary_completion")
     || typeId.includes("note_completion")
+    || typeId.includes("flowchart_completion")
     || typeId.includes("form_completion")
     || typeId.includes("short_answer")
   );
+}
+
+function hasFlowChartSeparators(text: string) {
+  return /\r?\n\s*\\+\s*\r?\n/.test(text);
 }
 
 function isListeningMapLabelingType(typeId: string) {
@@ -1681,7 +1694,8 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
   const [publishState, setPublishState] = useState<"idle" | "publishing" | "published" | "error">("idle");
   const activeStepIndex = stepOrder.indexOf(activeStep);
   const completionRatio = ((activeStepIndex + 1) / stepOrder.length) * 100;
-  const isPublishedEdit = mode === "edit" && draft.metadata.status === "published";
+  const [editSourceStatus, setEditSourceStatus] = useState<AdminTestDraftState["metadata"]["status"]>(draftSeed.metadata.status);
+  const isPublishedEdit = mode === "edit" && editSourceStatus === "published";
 
   // Auto-Save Effect (Debounced)
   const [lastSavedDraftStr, setLastSavedDraftStr] = useState<string>("");
@@ -1723,6 +1737,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
     lastHydratedDraftSeedRef.current = draftSeedStr;
     setDraft(draftSeed);
     setLastSavedDraftStr(draftSeedStr);
+    setEditSourceStatus(draftSeed.metadata.status);
   }, [draftSeed, draftSeedStr]);
 
   useEffect(() => {
@@ -1766,7 +1781,9 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
       const currentDraftToSave = prepareDraftForSave(draft);
       
       const saved = resolvedTestId
-        ? await adminApi.updateDraft(resolvedTestId, currentDraftToSave)
+        ? await adminApi.updateDraft(resolvedTestId, currentDraftToSave, {
+            allowNewVersion: isPublishedEdit && !isAutoSave,
+          })
         : await adminApi.createDraft(currentDraftToSave);
 
       const syncedDraft = {
@@ -1781,6 +1798,7 @@ export function TestEditorWizard({ mode, testId, initialDraft }: Props) {
       };
 
       setResolvedTestId(saved.id);
+      setEditSourceStatus(saved.status);
       setDraft((current) => ({
         ...current,
         metadata: {
@@ -4431,7 +4449,6 @@ function EditorPreviewSection({
 
   function renderCompletionPreview(group: AdminTestDraftState["questionGroups"][number]) {
     const questionBlock = group.questionBlock ?? "";
-    const segments = questionBlock.split("[]");
     const isWordBankCompletion = group.typeId.includes("wordbank");
 
     function renderCompletionAnswer(question: AdminTestDraftQuestion, index: number, key: string) {
@@ -4479,6 +4496,61 @@ function EditorPreviewSection({
       );
     }
 
+    function renderFlowChartCompletionPreview(group: AdminTestDraftState["questionGroups"][number]) {
+      const flowLines = questionBlock.split(/\r?\n\s*\\+\s*\r?\n/).map((line) => line.trim()).filter(Boolean);
+      let questionIndex = 0;
+
+      return (
+        <div className="px-2 py-2">
+          {group.title ? (
+            <p className={cn("mb-4 text-center font-bold tracking-tight text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
+              {renderBraceBoldText(group.title, `${group.id}-completion-title`)}
+            </p>
+          ) : null}
+          <div className="mx-auto flex max-w-3xl flex-col items-center gap-2 text-center">
+            {flowLines.map((line, lineIndex) => {
+              const segments = line.split("[]");
+
+              return (
+                <div key={`${group.id}-flow-line-${lineIndex}`} className="flex w-full flex-col items-center gap-2">
+                  <div className="w-full text-center">
+                    <div className={cn("whitespace-pre-wrap font-sans text-foreground text-center", compact ? "text-[14px] leading-[1.55]" : "text-[15px] leading-[1.7]")}>
+                      {segments.map((segment, segmentIndex) => {
+                        const question = segmentIndex < segments.length - 1
+                          ? group.questions[questionIndex]
+                          : null;
+                        const currentIndex = questionIndex;
+                        if (question) {
+                          questionIndex += 1;
+                        }
+
+                        return (
+                          <span key={`${group.id}-flow-fragment-${lineIndex}-${segmentIndex}`}>
+                            {segment ? renderBraceBoldText(segment, `${group.id}-flow-segment-${lineIndex}-${segmentIndex}`) : null}
+                            {question ? renderCompletionAnswer(question, currentIndex, `${group.id}-flow-answer-${question.id}`) : null}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {lineIndex < flowLines.length - 1 ? (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm">
+                      <ArrowDown className="h-4 w-4" />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (hasFlowChartSeparators(questionBlock)) {
+      return renderFlowChartCompletionPreview(group);
+    }
+
+    const segments = questionBlock.split("[]");
     const tableLayout = parseCompletionTableLayout(questionBlock);
     if (tableLayout) {
       const questionIndexRef = { current: 0 };
@@ -4784,7 +4856,7 @@ function previewTypeLabel(typeId: string) {
   if (typeId.includes("yes_no")) return "Yes / No / Not Given";
   if (typeId.includes("mc_")) return "Multiple Choice";
   if (typeId.includes("matching")) return "Matching";
-  if (typeId.includes("summary") || typeId.includes("sentence_completion") || typeId.includes("note_completion")) return "Completion";
+  if (typeId.includes("summary") || typeId.includes("sentence_completion") || typeId.includes("note_completion") || typeId.includes("flowchart_completion") || typeId.includes("form_completion")) return "Completion";
   if (isListeningMapOptionType(typeId)) return "Map Labeling";
   if (isListeningMapFreeTextType(typeId)) return "Map Labeling (free text)";
   if (typeId.includes("diagram")) return "Diagram Labeling";

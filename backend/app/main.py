@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app import models  # noqa: F401
+from app.api.routes.admin import start_admin_otp_expiry_sweeper
 from app.services.admin_ai_agent import resume_pending_admin_ai_jobs
 
 
@@ -62,6 +63,10 @@ def create_app() -> FastAPI:
             await resume_pending_admin_ai_jobs()
         except Exception:
             logger.exception("Failed to reconcile pending admin AI jobs")
+
+    @app.on_event("startup")
+    async def startup_admin_otp_expiry_sweeper() -> None:
+        start_admin_otp_expiry_sweeper()
 
     app.include_router(api_router, prefix="/api")
     return app

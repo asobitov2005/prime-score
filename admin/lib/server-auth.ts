@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { AdminIdentity } from "@/lib/types";
-import { ADMIN_ACCESS_COOKIE } from "@/lib/auth";
+import { getAdminServerApiBaseUrl } from "@/lib/admin-api-base";
+import { ADMIN_ACCESS_COOKIE, ADMIN_REFRESH_COOKIE } from "@/lib/auth";
 
 type AdminJwtPayload = {
   sub?: string;
@@ -9,6 +10,8 @@ type AdminJwtPayload = {
   exp?: number;
   username?: string;
   email?: string;
+  phone_number?: string;
+  telegram_id?: number;
 };
 
 function decodeJwtPayload(token: string): AdminJwtPayload | null {
@@ -25,8 +28,50 @@ function decodeJwtPayload(token: string): AdminJwtPayload | null {
   }
 }
 
+export async function refreshServerAdminAccessToken(refreshToken: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${getAdminServerApiBaseUrl()}/auth/refresh`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const payload = (await response.json()) as { access_token?: string | null };
+    return payload.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getServerAdminAccessToken(): Promise<string | null> {
+  const cookieStore = cookies();
+  const accessToken = cookieStore.get(ADMIN_ACCESS_COOKIE)?.value ?? null;
+  const payload = accessToken ? decodeJwtPayload(accessToken) : null;
+  if (
+    accessToken
+    && payload
+    && payload.scope === "admin"
+    && payload.sub
+    && (typeof payload.exp !== "number" || payload.exp * 1000 > Date.now())
+  ) {
+    return accessToken;
+  }
+
+  const refreshToken = cookieStore.get(ADMIN_REFRESH_COOKIE)?.value ?? null;
+  if (!refreshToken) {
+    return null;
+  }
+
+  return refreshServerAdminAccessToken(refreshToken);
+}
+
 export async function getAuthenticatedAdmin(): Promise<AdminIdentity | null> {
-  const token = cookies().get(ADMIN_ACCESS_COOKIE)?.value;
+  const token = await getServerAdminAccessToken();
   if (!token) {
     return null;
   }

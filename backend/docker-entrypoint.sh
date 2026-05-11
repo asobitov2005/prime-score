@@ -42,4 +42,14 @@ if [ "$RUN_APP_SEED" = "1" ]; then
   python -m app.db.seed
 fi
 
+if [ -n "${TELEGRAM_SESSION_PATH:-}" ]; then
+  SESSION_DIR="$(dirname "$TELEGRAM_SESSION_PATH")"
+  mkdir -p "$SESSION_DIR"
+  chown -R appuser:appuser "$SESSION_DIR"
+fi
+
+if [ "$(id -u)" = "0" ] && [ "${RUN_AS_APPUSER:-1}" = "1" ]; then
+  exec su -s /bin/sh appuser -c "cd /app && exec $*"
+fi
+
 exec "$@"

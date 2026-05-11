@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.core.enums import AttemptStatus, NotificationType, PaymentMethod, TestScope, TestType
+from app.core.enums import AttemptStatus, NotificationType, PaymentMethod, TestMode, TestScope, TestType
 from app.db.session import get_db_session
 from app.models.commerce import GiftCode, GiftCodeRedemption, Payment, Plan
 from app.models.enums import PaymentStatus
@@ -43,6 +44,7 @@ from app.schemas.me import (
     MeSpeedMetricsRead,
     MeStatsRead,
     MeWeeklyActivityPointRead,
+    MeWritingCriteriaRead,
 )
 from app.schemas.payments import (
     MePaymentCancelResponse,
@@ -159,6 +161,7 @@ def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
                 occurred_at=occurred_at,
                 reading=None,
                 listening=None,
+                writing=None,
             ),
         )
         point.occurred_at = occurred_at
@@ -168,6 +171,8 @@ def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
             point.reading = band_value
         elif test_type == TestType.listening:
             point.listening = band_value
+        elif test_type == "writing":
+            point.writing = band_value
 
     return sorted(grouped.values(), key=lambda item: item.occurred_at)
 
@@ -285,13 +290,21 @@ def _build_error_distribution(analysis: list[MeQuestionTypeAnalysisItemRead]) ->
 def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
     reading = MePerformanceTestCountBucketRead()
     listening = MePerformanceTestCountBucketRead()
+    writing = MePerformanceTestCountBucketRead()
     study_time = MePerformanceStudyTimeRead()
     seen_test_keys: set[tuple[str, str, str]] = set()
 
     for attempt in attempts:
         test_type = attempt.test_snapshot.get("test_type")
         scope = attempt.test_snapshot.get("scope") or getattr(attempt, "scope", None)
-        bucket = reading if test_type == TestType.reading else listening if test_type == TestType.listening else None
+        bucket = None
+        if test_type == TestType.reading:
+            bucket = reading
+        elif test_type == TestType.listening:
+            bucket = listening
+        elif test_type == "writing":
+            bucket = writing
+
         if bucket is None:
             continue
 
@@ -301,6 +314,8 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
             study_time.reading_time_sec += time_spent_sec
         elif test_type == TestType.listening:
             study_time.listening_time_sec += time_spent_sec
+        elif test_type == "writing":
+            study_time.writing_time_sec += time_spent_sec
 
         sections = list(attempt.test_snapshot.get("sections") or [])
         section_number = 0
@@ -336,7 +351,7 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
             elif section_number == 4:
                 bucket.section_4_count += 1
 
-    return MePerformanceSummaryRead(study_time=study_time, reading=reading, listening=listening)
+    return MePerformanceSummaryRead(study_time=study_time, reading=reading, listening=listening, writing=writing)
 
 
 def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
@@ -351,6 +366,7 @@ def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
         show_on_leaderboard=principal.show_on_leaderboard,
         telegram_id=principal.telegram_id,
         avatar_url=principal.avatar_url,
+        created_at=principal.created_at,
     )
 
 
@@ -367,12 +383,14 @@ def _profile_from_user(user: User) -> MeProfileRead:
         telegram_id=user.telegram_id,
         avatar_url=user.avatar_url,
         last_active_at=user.last_active_at,
+        created_at=user.created_at,
     )
 
 
 def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
     payment_method_values = {item.value for item in PaymentMethod}
     method_value = payment.provider if payment.provider in payment_method_values else PaymentMethod.card_transfer.value
+    exposes_card_details = str(payment.status or "") in PENDING_PAYMENT_STATUSES
     return MePaymentRead(
         id=payment.id,
         invoice_code=payment.invoice_code,
@@ -386,8 +404,8 @@ def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
         amount=payment.amount,
         discount_amount=payment.discount_amount,
         currency=payment.currency,
-        card_label=payment.card_label,
-        card_number=payment.card_number,
+        card_label=payment.card_label if exposes_card_details else None,
+        card_number=payment.card_number if exposes_card_details else None,
         wheel_options=serialize_wheel_options(payment.wheel_options or []),
         expires_at=payment.expires_at,
         matched_at=payment.matched_at,
@@ -620,7 +638,7 @@ async def list_my_payments(
             .outerjoin(Plan, Payment.plan_id == Plan.id)
             .where(
                 Payment.user_id == current_user.id,
-                Payment.status.in_(("pending", "matched", "completed", "expired", "canceled", "review", "failed")),
+                Payment.status.in_(("pending", "matched", "expired", "canceled", "review", "failed")),
             )
             .order_by(Payment.created_at.desc())
             .limit(20)
@@ -789,6 +807,66 @@ def _filter_attempts_by_type(attempts, test_type: TestType | None):
     ]
 
 
+async def _load_writing_attempts(current_user: DebugPrincipal, session: AsyncSession):
+    from app.models.writing import WritingSubmission, WritingEvaluation, WritingTask
+    from app.models.enums import WritingSubmissionStatus
+    from app.core.enums import AttemptStatus
+    from app.services.runtime_store import AttemptRuntime
+
+    rows = (await session.execute(
+        select(WritingSubmission, WritingEvaluation, WritingTask)
+        .outerjoin(WritingEvaluation, WritingEvaluation.submission_id == WritingSubmission.id)
+        .join(WritingTask, WritingTask.id == WritingSubmission.task_id)
+        .where(WritingSubmission.user_id == current_user.id)
+    )).all()
+
+    adapters = []
+    for sub, ev, task in rows:
+        status = AttemptStatus.completed if sub.status == WritingSubmissionStatus.COMPLETED else AttemptStatus.in_progress
+        section_number = 1 if sub.task_type.value == "task_1" else 2
+
+        snapshot = {
+            "test_type": "writing",
+            "scope": "section",
+            "format": f"section_{section_number}",
+            "sections": [{"section_number": section_number}],
+            "title": task.title,
+        }
+
+        band_score = ev.overall_band if ev else None
+
+        metadata = {
+            "writing_criteria": {
+                "task_achievement": ev.task_achievement_band if ev else None,
+                "coherence_cohesion": ev.coherence_band if ev else None,
+                "lexical_resource": ev.lexical_band if ev else None,
+                "grammatical_range_accuracy": ev.grammar_band if ev else None,
+            }
+        }
+
+        adapters.append(AttemptRuntime(
+            attempt_id=sub.id,
+            user_id=sub.user_id,
+            test_id=task.id,
+            test_version=1,
+            scope=TestScope.section,
+            section_id=None,
+            mode=TestMode.practice, # Writing is generally practice for now
+            status=status,
+            started_at=sub.submitted_at,
+            completed_at=sub.submitted_at,
+            time_spent_sec=sub.time_spent_seconds,
+            raw_score=None,
+            total_questions=0,
+            band_score=Decimal(str(band_score)) if band_score is not None else None,
+            test_snapshot=snapshot,
+            metadata=metadata,
+            scoring_items=[]
+        ))
+
+    return adapters
+
+
 @router.get("/stats", response_model=MeStatsRead)
 async def get_stats(
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -806,6 +884,11 @@ async def get_stats(
         attempt.band_score
         for attempt in completed
         if attempt.band_score is not None and attempt.test_snapshot.get("test_type") == TestType.listening
+    ]
+    writing_bands = [
+        attempt.band_score
+        for attempt in completed
+        if attempt.band_score is not None and attempt.test_snapshot.get("test_type") == "writing"
     ]
     average_band = (
         sum(banded, start=banded[0].__class__("0")) / len(banded)
@@ -1060,6 +1143,8 @@ async def get_dashboard_analytics(
     test_type: TestType | None = Query(default=None),
 ) -> MeDashboardAnalyticsRead:
     all_attempts = await _load_attempts(current_user, session)
+    writing_attempts = await _load_writing_attempts(current_user, session)
+    all_attempts.extend(writing_attempts)
     completed = [
         attempt
         for attempt in all_attempts
@@ -1069,6 +1154,7 @@ async def get_dashboard_analytics(
     analysis = _build_question_type_analysis(filtered_completed, test_type)
     return MeDashboardAnalyticsRead(
         performance_summary=_build_performance_summary(filtered_completed),
+        writing_criteria=_build_writing_criteria(filtered_completed),
         question_type_analysis=analysis,
         comparison=_build_comparison(filtered_completed, test_type),
         error_distribution=_build_error_distribution(analysis),
@@ -1079,6 +1165,44 @@ async def get_dashboard_analytics(
         personal_bests=_build_personal_bests(all_attempts, filtered_completed),
         speed_metrics=_build_speed_metrics(filtered_completed),
         improvement_rate=_build_improvement_rate(filtered_completed),
+    )
+
+
+def _build_writing_criteria(attempts) -> MeWritingCriteriaRead | None:
+    writing_attempts = [
+        a for a in attempts
+        if a.test_snapshot.get("test_type") == "writing"
+        and a.metadata.get("writing_criteria")
+    ]
+    if not writing_attempts:
+        return None
+
+    ta, cc, lr, gra = 0.0, 0.0, 0.0, 0.0
+    count_ta, count_cc, count_lr, count_gra = 0, 0, 0, 0
+
+    for a in writing_attempts:
+        c = a.metadata["writing_criteria"]
+        if c.get("task_achievement") is not None:
+            ta += float(c["task_achievement"])
+            count_ta += 1
+        if c.get("coherence_cohesion") is not None:
+            cc += float(c["coherence_cohesion"])
+            count_cc += 1
+        if c.get("lexical_resource") is not None:
+            lr += float(c["lexical_resource"])
+            count_lr += 1
+        if c.get("grammatical_range_accuracy") is not None:
+            gra += float(c["grammatical_range_accuracy"])
+            count_gra += 1
+
+    if all(count == 0 for count in [count_ta, count_cc, count_lr, count_gra]):
+        return None
+
+    return MeWritingCriteriaRead(
+        task_achievement=round(ta / count_ta, 2) if count_ta > 0 else None,
+        coherence_cohesion=round(cc / count_cc, 2) if count_cc > 0 else None,
+        lexical_resource=round(lr / count_lr, 2) if count_lr > 0 else None,
+        grammatical_range_accuracy=round(gra / count_gra, 2) if count_gra > 0 else None,
     )
 
 
@@ -1155,10 +1279,10 @@ async def mark_all_read(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> MessageResponse:
-    result = await session.scalars(
-        select(Notification).where(Notification.user_id == current_user.id, Notification.is_read == False)
+    await session.execute(
+        update(Notification)
+        .where(Notification.user_id == current_user.id, Notification.is_read.is_(False))
+        .values(is_read=True)
     )
-    for n in result.all():
-        n.is_read = True
     await session.commit()
     return MessageResponse(message="All marked as read.")

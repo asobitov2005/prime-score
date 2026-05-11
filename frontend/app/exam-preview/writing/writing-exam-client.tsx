@@ -165,7 +165,6 @@ export function WritingExamClient({
     }
 
     pane.scrollTop += delta;
-    event.preventDefault();
     event.stopPropagation();
   }, []);
 
@@ -417,7 +416,7 @@ export function WritingExamClient({
   }
 
   return (
-    <div data-lenis-prevent className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
       <header className="sticky top-0 z-30 shrink-0 border-b border-border/80 bg-background/95 text-foreground shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
         <div className="mx-auto grid min-h-[68px] max-w-[1800px] grid-cols-1 gap-3 px-4 py-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -538,8 +537,6 @@ export function WritingExamClient({
       <main className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[minmax(320px,43%)_minmax(0,57%)]">
         <section className="min-h-0 overflow-hidden border-b border-border/80 bg-background lg:flex lg:border-b-0 lg:border-r">
           <div
-            data-lenis-prevent
-            data-lenis-prevent-wheel
             onWheelCapture={handlePaneWheel}
             className="h-full min-h-0 overflow-y-auto py-5 pl-4 pr-5 overscroll-contain sm:pl-6 sm:pr-5"
           >
@@ -578,8 +575,6 @@ export function WritingExamClient({
           ) : null}
 
           <div
-            data-lenis-prevent
-            data-lenis-prevent-wheel
             onWheelCapture={handlePaneWheel}
             className="flex flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-2 overscroll-contain sm:px-6 sm:pb-6 sm:pt-2"
             style={{ scrollbarGutter: "stable" }}

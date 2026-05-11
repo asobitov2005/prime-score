@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, get_async_session
+from app.core.deps import get_current_user
+from app.db.session import get_db_session
 from app.models.attempt import Attempt
 from app.models.user import User
 from app.schemas.common import DebugPrincipal
@@ -129,7 +130,7 @@ async def get_leaderboard(
     test_type: str = Query(default="combined", alias="type"),
     period: str = Query(default="all_time"),
     current_user: DebugPrincipal = Depends(get_current_user),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> LeaderboardResponse:
     if test_type not in LEADERBOARD_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported leaderboard type.")

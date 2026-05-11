@@ -67,7 +67,7 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
                 className="w-full h-auto p-4 flex items-center gap-4 text-left bg-card hover:bg-muted/50 border border-border/60 hover:border-primary/40 rounded-xl transition-all shadow-none group"
                 label={
                   <div className="flex items-center gap-4 w-full">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 group-hover:bg-blue-600 group-hover:text-white dark:group-hover:text-slate-950 transition-colors">
                       <Zap className="h-5 w-5" />
                     </div>
                     <div>
@@ -91,13 +91,13 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
                   className="w-full h-auto p-4 flex items-center gap-4 text-left bg-card hover:bg-red-50/50 dark:hover:bg-red-950/10 border border-border/60 hover:border-red-500/40 rounded-xl transition-all shadow-none group"
                   label={
                     <div className="flex items-center gap-4 w-full">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 group-hover:bg-red-600 group-hover:text-white dark:group-hover:text-slate-950 transition-colors">
                         <ClipboardCheck className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <p className="font-bold text-sm text-foreground">Exam Mode</p>
-                          <span className="text-[8px] font-black uppercase bg-red-500 text-white px-1.5 py-0.5 rounded">Strict</span>
+                          <span className="text-[8px] font-black uppercase bg-red-500 text-white dark:text-slate-950 px-1.5 py-0.5 rounded">Strict</span>
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">60 min, no pause, full screen.</p>
                       </div>

@@ -562,6 +562,11 @@ async def ensure_admin_example_tests_seeded(session: AsyncSession) -> None:
 
 
 async def ensure_test_admins_seeded(session: AsyncSession) -> None:
+    seeded_contact = {
+        "admin": ("+998900000001", 900000001),
+        "test_admin": ("+998900000002", 900000002),
+        "test_super_admin": ("+998900000003", 900000003),
+    }
     admins = (
         await session.scalars(select(Admin).where(Admin.username.in_(["test_admin", "test_super_admin", "admin"])))
     ).all()
@@ -576,6 +581,8 @@ async def ensure_test_admins_seeded(session: AsyncSession) -> None:
             Admin(
                 username="admin",
                 email="admin@primescore.local",
+                phone_number=seeded_contact["admin"][0],
+                telegram_id=seeded_contact["admin"][1],
                 password_hash=simple_admin_password_hash,
                 role=AdminRole.SUPER_ADMIN,
                 is_active=True,
@@ -591,6 +598,8 @@ async def ensure_test_admins_seeded(session: AsyncSession) -> None:
             Admin(
                 username="test_admin",
                 email="test-admin@primescore.local",
+                phone_number=seeded_contact["test_admin"][0],
+                telegram_id=seeded_contact["test_admin"][1],
                 password_hash=admin_password_hash,
                 role=AdminRole.ADMIN,
                 is_active=True,
@@ -605,6 +614,8 @@ async def ensure_test_admins_seeded(session: AsyncSession) -> None:
             Admin(
                 username="test_super_admin",
                 email="test-superadmin@primescore.local",
+                phone_number=seeded_contact["test_super_admin"][0],
+                telegram_id=seeded_contact["test_super_admin"][1],
                 password_hash=super_admin_password_hash,
                 role=AdminRole.SUPER_ADMIN,
                 is_active=True,
@@ -614,6 +625,18 @@ async def ensure_test_admins_seeded(session: AsyncSession) -> None:
     elif not existing["test_super_admin"].password_hash.startswith("$2"):
         existing["test_super_admin"].password_hash = super_admin_password_hash
         changed = True
+
+    for username, (phone_number, telegram_id) in seeded_contact.items():
+        admin = existing.get(username)
+        if admin is None:
+            continue
+        if admin.phone_number != phone_number:
+            admin.phone_number = phone_number
+            changed = True
+        if admin.telegram_id != telegram_id:
+            admin.telegram_id = telegram_id
+            changed = True
+
     if changed:
         await session.commit()
 
@@ -863,6 +886,7 @@ async def save_test_draft_to_db(
     *,
     draft: dict[str, object],
     test_id: UUID | None = None,
+    allow_new_version: bool = False,
 ) -> dict[str, object]:
     await ensure_test_admins_seeded(session)
     
@@ -900,6 +924,8 @@ async def save_test_draft_to_db(
             or await _test_has_answer_history(session, test)
         )
         if preserve_existing_version:
+            if not allow_new_version:
+                raise ValueError("new_version_required")
             next_version = int(test.version) + 1
             test = None
 

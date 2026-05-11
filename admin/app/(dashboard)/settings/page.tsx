@@ -13,12 +13,23 @@ type Settings = {
   environment: string;
   timezone: string;
   payment_paused: boolean;
+  admin_username: string;
+  admin_email: string;
+  admin_phone_number: string | null;
   max_sessions: number;
   telegram_bot_connected: boolean;
   total_users: number;
   total_tests: number;
   total_attempts: number;
 };
+
+function toLocalPhone(value: string | null | undefined): string {
+  const digits = (value ?? "").replace(/\D/g, "");
+  if (digits.startsWith("998") && digits.length >= 12) {
+    return digits.slice(3, 12);
+  }
+  return digits.slice(0, 9);
+}
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -31,15 +42,23 @@ export default function SettingsPage() {
   const [bcTitle, setBcTitle] = useState("");
   const [bcBody, setBcBody] = useState("");
   const [bcTgText, setBcTgText] = useState("");
+  const [adminPhone, setAdminPhone] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const token = () => getClientAdminAccessToken();
+  const updateAdminPhone = (value: string) => setAdminPhone(value.replace(/\D/g, "").slice(0, 9));
 
   const fetchSettings = () => {
     const t = token();
     if (!t) { setLoading(false); return; }
     fetch(`${API_BASE}/settings`, { headers: { Authorization: `Bearer ${t}` } })
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(setSettings)
+      .then((nextSettings: Settings) => {
+        setSettings(nextSettings);
+        setAdminPhone(toLocalPhone(nextSettings.admin_phone_number));
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   };
@@ -103,6 +122,67 @@ export default function SettingsPage() {
     });
   };
 
+  const handleSecuritySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!settings) return;
+
+    const currentPhone = toLocalPhone(settings.admin_phone_number);
+    const phoneChanged = adminPhone !== currentPhone;
+    const passwordChanged = newPassword.length > 0;
+
+    if (!phoneChanged && !passwordChanged) {
+      setActionMsg("Nothing to update.");
+      return;
+    }
+    if (adminPhone.length !== 9) {
+      setActionMsg("Phone number must be 9 digits.");
+      return;
+    }
+    if (!currentPassword) {
+      setActionMsg("Current password is required.");
+      return;
+    }
+    if (passwordChanged && newPassword.length < 8) {
+      setActionMsg("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setActionMsg("New password confirmation does not match.");
+      return;
+    }
+
+    setActionLoading("security");
+    setActionMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/auth/security`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          phone_number: phoneChanged ? adminPhone : null,
+          new_password: passwordChanged ? newPassword : null,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail ?? "Admin account update failed.");
+      }
+      const payload = await res.json();
+      setActionMsg(payload.message ?? "Admin account updated successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      fetchSettings();
+    } catch (error) {
+      setActionMsg(error instanceof Error ? error.message : "Admin account update failed.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (loading) return (
     <div className="space-y-4 animate-pulse max-w-4xl">
       <div className="h-8 w-48 bg-muted rounded-lg" />
@@ -126,6 +206,79 @@ export default function SettingsPage() {
         <Stat label="Tests" value={settings.total_tests} />
         <Stat label="Attempts" value={settings.total_attempts} />
       </div>
+
+      {/* Admin Account */}
+      <Card>
+        <CardHeader><CardTitle className="text-sm font-bold">Admin Account</CardTitle></CardHeader>
+        <CardContent>
+          <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSecuritySubmit}>
+            <div className="space-y-2">
+              <label htmlFor="admin-phone" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Phone number</label>
+              <input
+                id="admin-phone"
+                value={adminPhone}
+                onChange={(event) => updateAdminPhone(event.target.value)}
+                inputMode="numeric"
+                maxLength={9}
+                placeholder="940034424"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <p className="text-[10px] text-muted-foreground">Telegram bot orqali ro&apos;yxatdan o&apos;tgan raqam.</p>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="admin-current-password" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Current password</label>
+              <input
+                id="admin-current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                autoComplete="current-password"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="admin-new-password" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">New password</label>
+              <input
+                id="admin-new-password"
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="Leave empty to keep current"
+                autoComplete="new-password"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="admin-confirm-password" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Confirm password</label>
+              <input
+                id="admin-confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Repeat new password"
+                autoComplete="new-password"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="sm:col-span-2 flex items-center justify-between gap-4 border-t border-border/30 pt-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">{settings.admin_username}</p>
+                <p className="text-[10px] text-muted-foreground">{settings.admin_email}</p>
+              </div>
+              <button
+                type="submit"
+                disabled={actionLoading !== null}
+                className={cn(
+                  "shrink-0 h-9 px-4 rounded-lg text-xs font-semibold transition-all border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
+                  actionLoading !== null && "opacity-40 cursor-not-allowed"
+                )}
+              >
+                {actionLoading === "security" ? "Saving..." : "Save Account"}
+              </button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Integrations */}
       <Card>

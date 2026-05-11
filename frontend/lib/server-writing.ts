@@ -7,7 +7,7 @@ export type WritingQuestionSubtype =
   | "bar_chart" | "line_graph" | "pie_chart" | "table"
   | "process" | "map" | "two_charts"
   | "opinion" | "advantages_disadvantages" | "discussion"
-  | "problem_solution" | "two_part" | "causes_effects";
+  | "problem_solution" | "two_part" | "causes_effects" | "direct_question";
 export type WritingSubmissionStatus =
   | "queued"
   | "QUEUED"
@@ -72,6 +72,9 @@ export interface WritingInlineAnnotation {
   severity?: string | null;
   short_message?: string | null;
   explanation?: string | null;
+  band_impact?: string | null;
+  examiner_tip?: string | null;
+  improved_sentence?: string | null;
 }
 
 export interface WritingRoastFeedback {
@@ -258,4 +261,5 @@ export const QUESTION_SUBTYPES_TASK2: { value: WritingQuestionSubtype; label: st
   { value: "problem_solution", label: "Problem & Solution" },
   { value: "two_part", label: "Two-Part Question" },
   { value: "causes_effects", label: "Causes & Effects" },
+  { value: "direct_question", label: "Direct Question" },
 ];

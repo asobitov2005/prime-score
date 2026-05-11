@@ -28,13 +28,25 @@ async def send_telegram_message(
     text: str,
     reply_markup: dict | None = None,
 ) -> bool:
+    return await send_telegram_message_with_id(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+    ) is not None
+
+
+async def send_telegram_message_with_id(
+    chat_id: int,
+    text: str,
+    reply_markup: dict | None = None,
+) -> int | None:
     settings = get_settings()
     token = settings.telegram_bot_token
     if not token or token == "change-me":
-        return False
+        return None
     httpx = _get_httpx()
     if httpx is None:
-        return False
+        return None
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload: dict = {
         "chat_id": chat_id,
@@ -48,10 +60,51 @@ async def send_telegram_message(
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(url, json=payload)
             if resp.status_code == 200:
-                return True
+                payload = resp.json()
+                message_id = payload.get("result", {}).get("message_id")
+                if isinstance(message_id, int):
+                    return message_id
+                logger.warning("Telegram send response has no message_id: %s", resp.text[:200])
+                return None
             logger.warning("Telegram send failed: %s %s", resp.status_code, resp.text[:200])
     except Exception as exc:
         logger.warning("Telegram send error: %s", exc)
+    return None
+
+
+async def edit_telegram_message(
+    chat_id: int,
+    message_id: int,
+    text: str,
+    reply_markup: dict | None = None,
+) -> bool:
+    settings = get_settings()
+    token = settings.telegram_bot_token
+    if not token or token == "change-me":
+        return False
+    httpx = _get_httpx()
+    if httpx is None:
+        return False
+    url = f"https://api.telegram.org/bot{token}/editMessageText"
+    payload: dict = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML",
+    }
+    if reply_markup:
+        import json
+        payload["reply_markup"] = json.dumps(reply_markup)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code == 200:
+                return True
+            if resp.status_code == 400 and "message is not modified" in resp.text.lower():
+                return True
+            logger.warning("Telegram edit failed: %s %s", resp.status_code, resp.text[:200])
+    except Exception as exc:
+        logger.warning("Telegram edit error: %s", exc)
     return False
 
 

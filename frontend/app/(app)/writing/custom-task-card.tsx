@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { ArrowRight, ClipboardPaste, ImageIcon, Loader2, Plus, UploadCloud, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { emitNavigationStart } from "@/lib/navigation-transition";
 import { cn } from "@/lib/utils";
 import type { WritingTaskType } from "@/lib/server-writing";
+import { getCustomTaskConfig, getCustomTaskDraftKey, getCustomTaskWorkspaceHref } from "./custom-task-config";
 
-const CUSTOM_TASK_1_DRAFT_KEY = "writing-exam-draft:custom:task_1";
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -61,28 +60,29 @@ export function CustomTaskCard({ activeTaskType }: { activeTaskType: WritingTask
     </Card>
   );
 
-  if (activeTaskType !== "task_1") {
-    return (
-      <Link href={`/writing/tasks?task_type=${activeTaskType}`} className="group block">
-        {card}
-      </Link>
-    );
-  }
-
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="group block w-full text-left">
         {card}
       </button>
-      <CustomTask1Dialog open={open} onOpenChange={setOpen} />
+      <CustomTaskDialog taskType={activeTaskType} open={open} onOpenChange={setOpen} />
     </>
   );
 }
 
-function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function CustomTaskDialog({
+  taskType,
+  open,
+  onOpenChange,
+}: {
+  taskType: WritingTaskType;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const config = getCustomTaskConfig(taskType);
   const [prompt, setPrompt] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
@@ -91,7 +91,20 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canContinue = useMemo(() => prompt.trim().length > 0 && Boolean(imageDataUrl), [imageDataUrl, prompt]);
+  useEffect(() => {
+    setPrompt("");
+    setImageDataUrl(null);
+    setImageName(null);
+    setIsDragging(false);
+    setIsReadingClipboard(false);
+    setIsStarting(false);
+    setError(null);
+  }, [taskType, open]);
+
+  const canContinue = useMemo(
+    () => prompt.trim().length > 0 && (!config.requiresImage || Boolean(imageDataUrl)),
+    [config.requiresImage, imageDataUrl, prompt],
+  );
 
   const setImageFile = useCallback(async (file: File | null) => {
     setError(null);
@@ -101,7 +114,7 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
       return;
     }
     if (!file.type.startsWith("image/")) {
-      setError("Please add an image file for Task 1.");
+      setError("Please add an image file.");
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
@@ -153,157 +166,161 @@ function CustomTask1Dialog({ open, onOpenChange }: { open: boolean; onOpenChange
   }, [setImageFile]);
 
   const startWorkspace = useCallback(async () => {
-    if (!canContinue || !imageDataUrl || isStarting) return;
+    if (!canContinue || isStarting) return;
     setIsStarting(true);
 
     const payload = {
       topic: prompt.trim(),
       essay: "",
-      imageDataUrl,
+      imageDataUrl: config.requiresImage ? imageDataUrl : null,
       started: true,
       timeSpentSeconds: 0,
     };
 
     try {
-      window.localStorage.setItem(CUSTOM_TASK_1_DRAFT_KEY, JSON.stringify(payload));
+      window.localStorage.setItem(getCustomTaskDraftKey(taskType), JSON.stringify(payload));
     } catch {}
 
-    const href = "/exam-preview/writing?task_type=task_1";
+    const href = getCustomTaskWorkspaceHref(taskType);
     emitNavigationStart(href);
     router.push(href);
-  }, [canContinue, imageDataUrl, isStarting, prompt, router]);
+  }, [canContinue, config.requiresImage, imageDataUrl, isStarting, prompt, router, taskType]);
 
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Add custom Task 1"
-      description="Upload or paste the chart image, then enter the exact essay prompt before opening the workspace."
+      title={config.title}
+      description={config.description}
       className="max-w-4xl rounded-3xl"
     >
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className={cn("grid gap-5", config.requiresImage && "lg:grid-cols-[minmax(0,1fr)_340px]")}>
         <div className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="custom-task-1-prompt" className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-              Essay prompt
+            <label htmlFor={`custom-${taskType}-prompt`} className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              {config.promptLabel}
             </label>
             <Textarea
-              id="custom-task-1-prompt"
+              id={`custom-${taskType}-prompt`}
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Paste the exact Task 1 question here, for example: The chart below shows..."
+              placeholder={config.promptPlaceholder}
               className="min-h-[170px] rounded-2xl border-border/70 bg-background/70 px-4 py-4 text-sm leading-7"
             />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/20 bg-violet-500/[0.04] px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Ready for Task 1 workspace</p>
-              <p className="text-xs leading-5 text-muted-foreground">The prompt and visual will be saved, then the timer starts in the workspace.</p>
+              <p className="text-sm font-semibold text-foreground">{config.readyTitle}</p>
+              <p className="text-xs leading-5 text-muted-foreground">{config.readyDescription}</p>
             </div>
             <Button type="button" onClick={() => void startWorkspace()} disabled={!canContinue || isStarting} className="h-10 rounded-xl px-4">
               {isStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-              Open workspace
+              {config.ctaLabel}
             </Button>
           </div>
         </div>
 
-        <div className="space-y-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Chart image</p>
+        {config.requiresImage ? (
           <div
-            ref={dropZoneRef}
-            role="button"
-            tabIndex={0}
-            onClick={() => dropZoneRef.current?.focus()}
-            onPaste={handlePaste}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragOver={(event) => event.preventDefault()}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                dropZoneRef.current?.focus();
-              }
-            }}
-            className={cn(
-              "min-h-[300px] rounded-3xl border border-dashed border-border/70 bg-background/60 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              isDragging && "border-violet-500/60 bg-violet-500/10",
-              imageDataUrl && "border-solid bg-background",
-            )}
+            className="space-y-3"
           >
-            {imageDataUrl ? (
-              <div className="flex h-full flex-col gap-3">
-                <div className="overflow-hidden rounded-2xl border border-border/60 bg-muted/20 p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imageDataUrl} alt={imageName ?? "Task 1 visual"} className="max-h-[240px] w-full rounded-xl object-contain" />
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{imageName ?? "Task 1 visual"}</p>
-                    <p className="text-xs text-muted-foreground">Image attached</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{config.imageLabel}</p>
+            <div
+              ref={dropZoneRef}
+              role="button"
+              tabIndex={0}
+              onClick={() => dropZoneRef.current?.focus()}
+              onPaste={handlePaste}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  dropZoneRef.current?.focus();
+                }
+              }}
+              className={cn(
+                "min-h-[300px] rounded-3xl border border-dashed border-border/70 bg-background/60 p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isDragging && "border-violet-500/60 bg-violet-500/10",
+                imageDataUrl && "border-solid bg-background",
+              )}
+            >
+              {imageDataUrl ? (
+                <div className="flex h-full flex-col gap-3">
+                  <div className="overflow-hidden rounded-2xl border border-border/60 bg-muted/20 p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageDataUrl} alt={imageName ?? "Task 1 visual"} className="max-h-[240px] w-full rounded-xl object-contain" />
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-lg"
-                    onClick={(event) => {
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">{imageName ?? "Task 1 visual"}</p>
+                      <p className="text-xs text-muted-foreground">Image attached</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-lg"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void setImageFile(null);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex min-h-[260px] flex-col items-center justify-center gap-3 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
+                    <ImageIcon className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold text-foreground">{config.imageTitle}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{config.imageHint}</p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button type="button" variant="outline" className="h-10 rounded-xl" onClick={(event) => {
                       event.stopPropagation();
-                      void setImageFile(null);
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                    Remove
-                  </Button>
+                      inputRef.current?.click();
+                    }}>
+                      <UploadCloud className="h-4 w-4" />
+                      Upload
+                    </Button>
+                    <Button type="button" variant="outline" className="h-10 rounded-xl" onClick={(event) => {
+                      event.stopPropagation();
+                      void pasteFromClipboard();
+                    }}>
+                      {isReadingClipboard ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardPaste className="h-4 w-4" />}
+                      Paste
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">PNG, JPG, or WebP under 10 MB</p>
                 </div>
-              </div>
-            ) : (
-              <div className="flex min-h-[260px] flex-col items-center justify-center gap-3 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
-                  <ImageIcon className="h-7 w-7" />
-                </div>
-                <div>
-                  <p className="text-base font-semibold text-foreground">Drop or paste chart image here</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">Click this area to focus, then press Ctrl+V. Use Upload to choose a file.</p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button type="button" variant="outline" className="h-10 rounded-xl" onClick={(event) => {
-                    event.stopPropagation();
-                    inputRef.current?.click();
-                  }}>
-                    <UploadCloud className="h-4 w-4" />
-                    Upload
-                  </Button>
-                  <Button type="button" variant="outline" className="h-10 rounded-xl" onClick={(event) => {
-                    event.stopPropagation();
-                    void pasteFromClipboard();
-                  }}>
-                    {isReadingClipboard ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardPaste className="h-4 w-4" />}
-                    Paste
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">PNG, JPG, or WebP under 10 MB</p>
-              </div>
-            )}
-            <Input
-              ref={inputRef}
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(event) => void setImageFile(event.target.files?.[0] ?? null)}
-            />
-          </div>
-
-          {error ? (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
-              {error}
+              )}
+              <Input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(event) => void setImageFile(event.target.files?.[0] ?? null)}
+              />
             </div>
-          ) : null}
-        </div>
+
+            {error ? (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+                {error}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </Dialog>
   );

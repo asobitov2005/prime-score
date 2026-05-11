@@ -12,6 +12,7 @@ class UserRole(StrEnum):
 class TestType(StrEnum):
     reading = "reading"
     listening = "listening"
+    writing = "writing"
 
 class TestFormat(StrEnum):
     full = "full"

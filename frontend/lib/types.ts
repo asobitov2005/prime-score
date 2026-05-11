@@ -1,4 +1,4 @@
-export type TestType = "reading" | "listening";
+export type TestType = "reading" | "listening" | "writing";
 export type TestScope = "full" | "section";
 export type AttemptMode = "practice" | "exam";
 export type AccessType = "public" | "premium";
@@ -138,6 +138,13 @@ export interface DashboardStat {
   detail: string;
 }
 
+export interface DashboardWritingCriteria {
+  taskAchievement: number | null;
+  coherenceCohesion: number | null;
+  lexicalResource: number | null;
+  grammaticalRangeAccuracy: number | null;
+}
+
 export interface DashboardQuestionTypeAnalysisItem {
   label: string;
   workedCount: number;
@@ -179,12 +186,16 @@ export interface DashboardBandProgressPoint {
   occurredAt: string;
   reading: number | null;
   listening: number | null;
+  writing?: number | null;
 }
 
 export interface DashboardPerformanceStudyTime {
   totalTimeSec: number;
   readingTimeSec: number;
   listeningTimeSec: number;
+  writingTimeSec?: number;
+  thisWeekMinutes?: number;
+  dailyGoalMinutes?: number;
 }
 
 export interface DashboardPerformanceTestCountBucket {
@@ -199,10 +210,12 @@ export interface DashboardPerformanceSummary {
   studyTime: DashboardPerformanceStudyTime;
   reading: DashboardPerformanceTestCountBucket;
   listening: DashboardPerformanceTestCountBucket;
+  writing?: DashboardPerformanceTestCountBucket;
 }
 
 export interface DashboardAnalytics {
   performanceSummary: DashboardPerformanceSummary;
+  writingCriteria?: DashboardWritingCriteria | null;
   questionTypeAnalysis: DashboardQuestionTypeAnalysisItem[];
   comparison: DashboardQuestionTypeComparison;
   errorDistribution: DashboardErrorDistributionItem[];

@@ -1,12 +1,12 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
+import { Gem } from "lucide-react";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Badge, Card, CardContent, CardHeader, CardTitle, SectionHeader, buttonClassName, formatDate } from "@/components/ui";
 import { adminApi } from "@/lib/api";
-import { getClientAdminAccessToken } from "@/lib/auth";
-import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
 
 type AdminTestRow = {
@@ -35,8 +35,6 @@ function badgeToneForReviewStatus(status: string): "neutral" | "success" | "warn
   if (status === "needs_review") return "warning";
   return "paused";
 }
-
-const API_BASE = ADMIN_PUBLIC_API_BASE_URL;
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -159,16 +157,12 @@ export default function TestsPage() {
   const fetchTests = async () => {
     setLoading(true);
     try {
-      const token = getClientAdminAccessToken();
-      if (!token) { setLoading(false); return; }
-      const res = await fetch(`${API_BASE}/tests`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error("Failed");
-      const data = await res.json();
+      const data = await adminApi.listTests();
       setTests(data.map((t: any) => ({
-        id: t.id, title: t.title, type: t.test_type, format: t.format ?? "full",
-        source: t.source, sourceDetail: t.source_detail ?? "", accessType: t.access_type,
-        status: t.status, reviewStatus: t.review_status ?? "needs_review", updatedAt: t.updated_at ?? new Date().toISOString(),
-        questions: t.total_questions, version: t.version,
+        id: t.id, title: t.title, type: t.type, format: t.format ?? "full",
+        source: t.source, sourceDetail: t.sourceDetail ?? "", accessType: t.accessType,
+        status: t.status, reviewStatus: t.reviewStatus ?? "needs_review", updatedAt: t.updatedAt ?? new Date().toISOString(),
+        questions: t.questions, version: t.version,
       })));
     } catch { setTests([]); }
     finally { setLoading(false); }
@@ -310,7 +304,7 @@ export default function TestsPage() {
                   <IconGlobe /> Public qilish
                 </button>
                 <button onClick={() => doBulk(() => adminApi.bulkAccess(ids, "premium"))} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30">
-                  <IconCrown /> Premium qilish
+                  <PrimePremiumIcon className="h-4 w-4" /> Premium qilish
                 </button>
                 <button onClick={() => doBulk(() => adminApi.bulkPublish(ids, "archived"))} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30 text-red-500">
                   <IconArchive /> Archive

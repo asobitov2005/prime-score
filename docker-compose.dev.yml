@@ -76,6 +76,19 @@ services:
     volumes:
       - ./backend:/app
 
+  payment-detector:
+    entrypoint: ["sh", "/app/docker-entrypoint.sh"]
+    command:
+      ["python", "/app/dev_autoreload.py", "--", "python", "-m", "app.scripts.payment_detector"]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      RUN_APP_BOOTSTRAP: "0"
+      TELEGRAM_SESSION_PATH: /var/lib/primescore/telegram/payment_detector
+    volumes:
+      - ./backend:/app
+      - telegram_session_data:/var/lib/primescore/telegram
+
   frontend:
     build:
       context: ./frontend
@@ -121,6 +134,8 @@ services:
       - admin_next_cache:/app/.next
 
 volumes:
+  redis_data:
+  telegram_session_data:
   frontend_node_modules:
   frontend_next_cache:
   admin_node_modules:

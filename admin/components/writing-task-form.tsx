@@ -86,6 +86,7 @@ const subtypeIcons: Record<WritingQuestionSubtype, typeof BarChart3> = {
   problem_solution: FileQuestion,
   two_part: LayoutPanelTop,
   causes_effects: Route,
+  direct_question: Sparkles,
 };
 
 function defaultsForType(t: WritingTaskType): { word_minimum: number; time_limit_minutes: number } {

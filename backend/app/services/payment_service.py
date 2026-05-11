@@ -207,7 +207,7 @@ async def create_plan_payment(
         currency="UZS",
         status="pending",
         card_label=active_card.label,
-        card_number=mask_card_number(active_card.card_number),
+        card_number=normalize_card_number(active_card.card_number),
         wheel_options=[int(item) for item in wheel_options],
         expires_at=_now() + timedelta(minutes=INVOICE_TTL_MINUTES),
         status_reason="Pay the exact shown amount to enable auto-detection.",

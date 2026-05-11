@@ -1,4 +1,4 @@
-import { getClientAdminAccessToken } from "@/lib/auth";
+import { fetchAdminApi } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 
 const baseUrl = ADMIN_PUBLIC_API_BASE_URL;
@@ -10,7 +10,7 @@ export type WritingQuestionSubtype =
   | "bar_chart" | "line_graph" | "pie_chart" | "table"
   | "process" | "map" | "two_charts"
   | "opinion" | "advantages_disadvantages" | "discussion"
-  | "problem_solution" | "two_part" | "causes_effects";
+  | "problem_solution" | "two_part" | "causes_effects" | "direct_question";
 export type WritingImageSummaryStatus =
   | "not_required"
   | "pending"
@@ -105,18 +105,9 @@ export interface WritingSubmissionListResponse {
   total: number;
 }
 
-function authHeaders(): Record<string, string> {
-  const token = getClientAdminAccessToken();
-  if (!token) {
-    throw new Error("Admin session is missing.");
-  }
-  return { Authorization: `Bearer ${token}` };
-}
-
 function jsonHeaders(): Record<string, string> {
   return {
     "Content-Type": "application/json",
-    ...authHeaders()
   };
 }
 
@@ -164,23 +155,21 @@ export const writingApi = {
     if (params.page_size) query.set("page_size", String(params.page_size));
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
-    const response = await fetch(`${baseUrl}/writing/tasks${qs ? `?${qs}` : ""}`, {
-      headers: authHeaders(),
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks${qs ? `?${qs}` : ""}`, {
       cache: "no-store"
     });
     return handleJson<WritingTaskListResponse>(response);
   },
 
   async getTask(id: string): Promise<WritingTask> {
-    const response = await fetch(`${baseUrl}/writing/tasks/${id}`, {
-      headers: authHeaders(),
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks/${id}`, {
       cache: "no-store"
     });
     return handleJson<WritingTask>(response);
   },
 
   async createTask(input: WritingTaskCreateInput): Promise<WritingTask> {
-    const response = await fetch(`${baseUrl}/writing/tasks`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify(input)
@@ -189,7 +178,7 @@ export const writingApi = {
   },
 
   async updateTask(id: string, input: WritingTaskUpdateInput): Promise<WritingTask> {
-    const response = await fetch(`${baseUrl}/writing/tasks/${id}`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
       body: JSON.stringify(input)
@@ -198,33 +187,29 @@ export const writingApi = {
   },
 
   async deleteTask(id: string): Promise<void> {
-    const response = await fetch(`${baseUrl}/writing/tasks/${id}`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks/${id}`, {
       method: "DELETE",
-      headers: authHeaders()
     });
     await handleEmpty(response);
   },
 
   async publishTask(id: string): Promise<WritingTask> {
-    const response = await fetch(`${baseUrl}/writing/tasks/${id}/publish`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks/${id}/publish`, {
       method: "POST",
-      headers: authHeaders()
     });
     return handleJson<WritingTask>(response);
   },
 
   async archiveTask(id: string): Promise<WritingTask> {
-    const response = await fetch(`${baseUrl}/writing/tasks/${id}/archive`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks/${id}/archive`, {
       method: "POST",
-      headers: authHeaders()
     });
     return handleJson<WritingTask>(response);
   },
 
   async regenerateImageSummary(id: string): Promise<void> {
-    const response = await fetch(`${baseUrl}/writing/tasks/${id}/regenerate-image-summary`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks/${id}/regenerate-image-summary`, {
       method: "POST",
-      headers: authHeaders()
     });
     await handleEmpty(response);
   },
@@ -232,9 +217,8 @@ export const writingApi = {
   async uploadImage(file: File): Promise<{ url: string }> {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch(`${baseUrl}/writing/tasks/upload-image`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/tasks/upload-image`, {
       method: "POST",
-      headers: authHeaders(),
       body: formData
     });
     return handleJson<{ url: string }>(response);
@@ -254,25 +238,22 @@ export const writingApi = {
     if (params.page) query.set("page", String(params.page));
     if (params.page_size) query.set("page_size", String(params.page_size));
     const qs = query.toString();
-    const response = await fetch(`${baseUrl}/writing/submissions${qs ? `?${qs}` : ""}`, {
-      headers: authHeaders(),
+    const response = await fetchAdminApi(`${baseUrl}/writing/submissions${qs ? `?${qs}` : ""}`, {
       cache: "no-store"
     });
     return handleJson<WritingSubmissionListResponse>(response);
   },
 
   async getSubmission(id: string): Promise<WritingSubmission> {
-    const response = await fetch(`${baseUrl}/writing/submissions/${id}`, {
-      headers: authHeaders(),
+    const response = await fetchAdminApi(`${baseUrl}/writing/submissions/${id}`, {
       cache: "no-store"
     });
     return handleJson<WritingSubmission>(response);
   },
 
   async regradeSubmission(id: string): Promise<void> {
-    const response = await fetch(`${baseUrl}/writing/submissions/${id}/regrade`, {
+    const response = await fetchAdminApi(`${baseUrl}/writing/submissions/${id}/regrade`, {
       method: "POST",
-      headers: authHeaders()
     });
     await handleEmpty(response);
   }
@@ -321,4 +302,5 @@ export const QUESTION_SUBTYPES_TASK2: { value: WritingQuestionSubtype; label: st
   { value: "problem_solution", label: "Problem & Solution" },
   { value: "two_part", label: "Two-Part Question" },
   { value: "causes_effects", label: "Causes & Effects" },
+  { value: "direct_question", label: "Direct Question" },
 ];

@@ -151,6 +151,7 @@ class WritingQuestionSubtype(StrEnum):
     PROBLEM_SOLUTION = "problem_solution"
     TWO_PART = "two_part"
     CAUSES_EFFECTS = "causes_effects"
+    DIRECT_QUESTION = "direct_question"
 
 
 class WritingErrorCategory(StrEnum):

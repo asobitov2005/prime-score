@@ -184,6 +184,9 @@ class WritingInlineAnnotation(BaseModel):
     severity: str = "warning"
     short_message: str = ""
     explanation: str = ""
+    band_impact: str = ""
+    examiner_tip: str = ""
+    improved_sentence: str = ""
 
 
 class WritingRoastFeedback(BaseModel):

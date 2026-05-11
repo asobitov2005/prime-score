@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from app.services.payment_service import (
 
 logger = logging.getLogger(__name__)
 
-SESSION_PATH = Path(__file__).resolve().parents[2] / "data" / "payment_detector"
+SESSION_PATH = Path(os.getenv("TELEGRAM_SESSION_PATH", "/var/lib/primescore/telegram/payment_detector"))
 
 
 async def _load_settings():
@@ -67,7 +68,7 @@ async def _main() -> None:
         raise RuntimeError("Telegram API credentials are missing in payment settings.")
 
     try:
-        from telethon import TelegramClient, events  # type: ignore
+        from telethon import TelegramClient, events, functions  # type: ignore
     except ModuleNotFoundError as exc:
         raise RuntimeError("Telethon is not installed. Install backend dependencies again.") from exc
 
@@ -85,9 +86,19 @@ async def _main() -> None:
         text = event.raw_text or ""
         await _handle_detected_text(event.id, text)
 
+    async def _stay_offline() -> None:
+        while True:
+            try:
+                await client(functions.account.UpdateStatusRequest(offline=True))
+            except Exception:
+                logger.debug("Could not refresh Telegram offline status.", exc_info=True)
+            await asyncio.sleep(45)
+
     logger.info("Starting payment detector for @%s", active_bot)
     asyncio.create_task(_expire_loop())
     await client.start(phone=setting.phone_number or None)
+    await client(functions.account.UpdateStatusRequest(offline=True))
+    asyncio.create_task(_stay_offline())
     await client.run_until_disconnected()
 
 

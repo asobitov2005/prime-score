@@ -1,7 +1,11 @@
 "use client";
 
 import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
-import { useAuthStore } from "@/store/auth-store";
+import {
+  isUserAuthFailureStatus,
+  performClientUserAuthedFetch,
+  USER_SESSION_EXPIRED_MESSAGE,
+} from "@/lib/user-auth-client";
 import type {
   WritingTaskType,
   WritingSubmissionRecord,
@@ -33,14 +37,9 @@ export interface WritingDraftUpsertRequest {
 
 async function clientFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = getFrontendClientApiBaseUrl();
-  const accessToken = useAuthStore.getState().accessToken;
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(init?.headers ?? {}),
-    },
+  const response = await performClientUserAuthedFetch(path, init, {
+    baseUrl,
+    includeJsonContentType: true,
   });
   if (!response.ok) {
     let message = `Request failed for ${path}`;
@@ -52,6 +51,9 @@ async function clientFetch<T>(path: string, init?: RequestInit): Promise<T> {
         const text = await response.text();
         if (text.trim()) message = text.trim();
       } catch {}
+    }
+    if (isUserAuthFailureStatus(response.status) && message.startsWith("Request failed")) {
+      message = USER_SESSION_EXPIRED_MESSAGE;
     }
     const err = new Error(message) as Error & { status?: number };
     err.status = response.status;
@@ -92,6 +94,12 @@ export function fetchWritingSubmissionResult(submissionId: string): Promise<Writ
   return clientFetch<WritingSubmissionResult>(`/writing/submissions/${submissionId}/result`);
 }
 
+export function retryWritingSubmission(submissionId: string): Promise<WritingSubmissionRecord> {
+  return clientFetch<WritingSubmissionRecord>(`/writing/submissions/${submissionId}/retry`, {
+    method: "POST",
+  });
+}
+
 export function submitWritingSubmission(payload: {
   task_id?: string;
   task_type?: "task_1" | "task_2";
@@ -108,16 +116,15 @@ export function submitWritingSubmission(payload: {
 
 export async function uploadWritingImage(file: File): Promise<{ url: string }> {
   const baseUrl = getFrontendClientApiBaseUrl();
-  const accessToken = useAuthStore.getState().accessToken;
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${baseUrl}/writing/upload-image`, {
+  const response = await performClientUserAuthedFetch("/writing/upload-image", {
     method: "POST",
-    headers: {
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
     body: formData,
+  }, {
+    baseUrl,
+    includeJsonContentType: false,
   });
 
   if (!response.ok) {
@@ -130,6 +137,9 @@ export async function uploadWritingImage(file: File): Promise<{ url: string }> {
         const text = await response.text();
         if (text.trim()) message = text.trim();
       } catch {}
+    }
+    if (isUserAuthFailureStatus(response.status) && message === "Image upload failed.") {
+      message = USER_SESSION_EXPIRED_MESSAGE;
     }
     throw new Error(message);
   }

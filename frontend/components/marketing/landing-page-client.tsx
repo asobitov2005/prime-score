@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { motion, type Variants } from "framer-motion";
+import React, { useEffect, useRef, useState, type ReactNode } from "react";
+import { useInView } from "@/hooks/use-in-view";
 import { ArrowRight, BookOpenText, CheckCircle2, Headphones, Mic2, PenSquare, ShieldCheck, Zap } from "lucide-react";
 import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
@@ -13,21 +13,7 @@ import { cn } from "@/lib/utils";
 
 import { FloatingElements } from "@/components/marketing/floating-elements";
 
-const containerVariants: Variants = {
-  hidden: {},
-  show: {
-    transition: {
-      staggerChildren: 0.15,
-      delayChildren: 0.3,
-    }
-  }
-};
 
-const fromTop: Variants = { hidden: { opacity: 0, y: -50 }, show: { opacity: 1, y: 0, transition: { type: 'spring', damping: 15 } } };
-const fromBottom: Variants = { hidden: { opacity: 0, y: 50 }, show: { opacity: 1, y: 0, transition: { type: 'spring', damping: 15 } } };
-const fromLeft: Variants = { hidden: { opacity: 0, x: -50 }, show: { opacity: 1, x: 0, transition: { type: 'spring', damping: 15 } } };
-const fromRight: Variants = { hidden: { opacity: 0, x: 50 }, show: { opacity: 1, x: 0, transition: { type: 'spring', damping: 15 } } };
-const popIn: Variants = { hidden: { opacity: 0, scale: 0.8 }, show: { opacity: 1, scale: 1, transition: { type: 'spring', damping: 12 } } };
 
 const sectionPages = [
   {
@@ -40,23 +26,23 @@ const sectionPages = [
     className: "bg-gradient-to-br from-card/80 to-card/40 border-orange-500/20",
     content: (
       <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 flex gap-4 overflow-hidden shadow-inner">
-        <motion.div variants={fromLeft} className="w-1/2 border-r border-border/50 pr-4 space-y-2 relative pt-2">
+        <div className="w-1/2 border-r border-border/50 pr-4 space-y-2 relative pt-2">
           <div className="h-2 w-3/4 bg-foreground/20 rounded"></div>
           <div className="h-2 w-full bg-foreground/10 rounded"></div>
           <div className="h-2 w-full bg-orange-500/30 rounded border-b border-orange-500/50 mt-4 mb-4"></div>
           <div className="h-2 w-5/6 bg-foreground/10 rounded"></div>
           <div className="h-2 w-4/6 bg-foreground/10 rounded"></div>
-        </motion.div>
-        <motion.div variants={fromRight} className="w-1/2 space-y-5 pt-2">
+        </div>
+        <div className="w-1/2 space-y-5 pt-2">
           <div className="h-8 w-full rounded bg-orange-500/10 border border-orange-500/20 flex items-center px-2">
-             <div className="w-3 h-3 rounded-full border border-orange-500/50 mr-2 shrink-0"></div>
-             <div className="h-1.5 w-1/2 bg-orange-500/40 rounded"></div>
+            <div className="w-3 h-3 rounded-full border border-orange-500/50 mr-2 shrink-0"></div>
+            <div className="h-1.5 w-1/2 bg-orange-500/40 rounded"></div>
           </div>
           <div className="h-8 w-full rounded bg-foreground/5 border border-border/50 flex items-center px-2">
-             <div className="w-3 h-3 rounded-full border border-border/50 mr-2 shrink-0"></div>
-             <div className="h-1.5 w-2/3 bg-foreground/20 rounded"></div>
+            <div className="w-3 h-3 rounded-full border border-border/50 mr-2 shrink-0"></div>
+            <div className="h-1.5 w-2/3 bg-foreground/20 rounded"></div>
           </div>
-        </motion.div>
+        </div>
       </div>
     )
   },
@@ -70,23 +56,22 @@ const sectionPages = [
     className: "bg-gradient-to-br from-card/80 to-card/40 border-blue-500/20",
     content: (
       <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 overflow-hidden shadow-inner flex flex-col justify-between">
-        <motion.div variants={fromTop} className="flex justify-between items-center border-b border-border/50 pb-3 pt-1">
-           <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
-              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/50 shrink-0">
-                 <div className="w-2 h-2 bg-blue-400 rounded-sm"></div>
-              </div>
-              <div className="text-[10px] sm:text-xs font-mono text-muted-foreground truncate">Part 1. Section A</div>
-           </div>
-           <div className="text-[10px] sm:text-xs font-mono text-blue-500 shrink-0">02:14 / 05:30</div>
-        </motion.div>
+        <div className="flex justify-between items-center border-b border-border/50 pb-3 pt-1">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/50 shrink-0">
+              <div className="w-2 h-2 bg-blue-400 rounded-sm"></div>
+            </div>
+            <div className="text-[10px] sm:text-xs font-mono text-muted-foreground truncate">Part 1. Section A</div>
+          </div>
+          <div className="text-[10px] sm:text-xs font-mono text-blue-500 shrink-0">02:14 / 05:30</div>
+        </div>
         <div className="flex items-end gap-1 h-16 w-full mt-auto">
           {[...Array(24)].map((_, i) => (
-            <motion.div 
+            <div
               key={i}
-              variants={i % 2 === 0 ? fromBottom : fromTop}
               className="flex-1 bg-blue-500/40 rounded-t-sm"
               style={{ height: `${Math.max(20, Math.random() * 100)}%` }}
-            ></motion.div>
+            ></div>
           ))}
         </div>
       </div>
@@ -102,19 +87,19 @@ const sectionPages = [
     className: "bg-gradient-to-br from-card/80 to-card/40 border-violet-500/20",
     content: (
       <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 shadow-inner flex flex-col gap-4">
-        <motion.div variants={fromTop} className="font-mono text-xs sm:text-sm text-muted-foreground leading-relaxed mt-2">
-          The graph illustrates the <motion.span variants={popIn} className="text-red-400 line-through bg-red-500/10 px-1 rounded mx-1">ammount</motion.span> of energy...
-        </motion.div>
-        <motion.div variants={popIn} className="absolute top-16 left-6 bg-card border border-violet-500/30 p-2.5 rounded-lg shadow-xl flex items-center gap-2 z-10 w-fit">
+        <div className="font-mono text-xs sm:text-sm text-muted-foreground leading-relaxed mt-2">
+          The graph illustrates the <span className="text-red-400 line-through bg-red-500/10 px-1 rounded mx-1">ammount</span> of energy...
+        </div>
+        <div className="absolute top-16 left-6 bg-card border border-violet-500/30 p-2.5 rounded-lg shadow-xl flex items-center gap-2 z-10 w-fit">
           <div className="w-5 h-5 bg-violet-500/20 rounded-full flex items-center justify-center shrink-0">
             <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
           </div>
           <span className="text-violet-500 font-mono text-[11px] sm:text-xs tracking-tight whitespace-nowrap">amount (spelling)</span>
-        </motion.div>
-        <motion.div variants={fromBottom} className="mt-auto border-t border-border/50 pt-3 flex justify-between items-center">
-           <div className="text-[11px] sm:text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estimated Band</div>
-           <div className="text-base sm:text-lg font-bold text-violet-500">7.0</div>
-        </motion.div>
+        </div>
+        <div className="mt-auto border-t border-border/50 pt-3 flex justify-between items-center">
+          <div className="text-[11px] sm:text-xs text-muted-foreground uppercase tracking-wider font-semibold">Estimated Band</div>
+          <div className="text-base sm:text-lg font-bold text-violet-500">7.0</div>
+        </div>
       </div>
     )
   },
@@ -128,23 +113,22 @@ const sectionPages = [
     className: "bg-gradient-to-br from-card/80 to-card/40 border-emerald-500/20",
     content: (
       <div className="mt-8 relative h-[180px] bg-background/50 rounded-xl border border-border/50 p-4 shadow-inner flex flex-col items-center justify-between">
-        <motion.div variants={fromTop} className="flex flex-col items-center gap-2 mt-4 z-10">
-           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 p-[2px] shadow-lg shadow-emerald-500/20">
-              <div className="w-full h-full bg-card rounded-full flex items-center justify-center">
-                 <div className="w-4 h-4 bg-emerald-500 rounded-full animate-pulse"></div>
-              </div>
-           </div>
-           <div className="text-[10px] sm:text-xs font-mono text-foreground/80 mt-1 font-medium bg-background/80 px-2 py-0.5 rounded-full border border-border/50 backdrop-blur-sm">AI Examiner</div>
-        </motion.div>
+        <div className="flex flex-col items-center gap-2 mt-4 z-10">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 p-[2px] shadow-lg shadow-emerald-500/20">
+            <div className="w-full h-full bg-card rounded-full flex items-center justify-center">
+              <div className="w-4 h-4 bg-emerald-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+          <div className="text-[10px] sm:text-xs font-mono text-foreground/80 mt-1 font-medium bg-background/80 px-2 py-0.5 rounded-full border border-border/50 backdrop-blur-sm">AI Examiner</div>
+        </div>
         <div className="flex gap-1.5 items-end h-16 mt-auto mb-2 opacity-80">
-           {[...Array(9)].map((_, i) => (
-             <motion.div 
-               key={i}
-               variants={i % 2 === 0 ? fromLeft : fromRight}
-               className="w-2 sm:w-2.5 rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400"
-               style={{ height: `${30 + Math.random() * 60}%` }}
-             ></motion.div>
-           ))}
+          {[...Array(9)].map((_, i) => (
+            <div
+              key={i}
+              className="w-2 sm:w-2.5 rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400"
+              style={{ height: `${30 + Math.random() * 60}%` }}
+            ></div>
+          ))}
         </div>
       </div>
     )
@@ -152,6 +136,23 @@ const sectionPages = [
 ];
 
 const skills = ["Reading.", "Listening.", "Writing.", "Speaking."];
+
+function ScrollReveal({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
+  const [ref, inView] = useInView({ threshold: 0.1 });
+  return (
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      id={id}
+      className={cn(
+        className,
+        "transition-all duration-1000 ease-out",
+        inView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 
 interface LandingPageClientProps {
   plans: MarketingPlan[];
@@ -213,7 +214,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
   return (
     <div className="relative mx-auto max-w-[1600px] overflow-hidden">
       <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 sm:pb-0 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto md:-mb-[12%] xl:-mb-[8%]">
-        <section className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
+        <ScrollReveal className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
           <div className="space-y-8 md:space-y-10 min-w-0">
             <div className="space-y-4">
               <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
@@ -411,7 +412,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
               </div>
             </div>
           </div>
-        </section>
+        </ScrollReveal>
 
         <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
           <div className="max-w-6xl mx-auto space-y-6 mb-12 text-center">
@@ -423,27 +424,11 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-[1600px]">
+          <ScrollReveal className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-[1600px]">
             {sectionPages.map((mod, i) => (
-              <motion.div
+              <div
                 key={mod.id}
-                initial={{ 
-                  opacity: 0, 
-                  y: 50,
-                  scale: 0.95
-                }}
-                whileInView={{ 
-                  opacity: 1, 
-                  y: 0, 
-                  scale: 1
-                }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ 
-                  type: "spring", 
-                  damping: 20, 
-                  stiffness: 70, 
-                  delay: i * 0.1
-                }}
+                style={{ transitionDelay: `${i * 100}ms` }}
                 className={cn(
                   "group relative rounded-[2rem] border p-6 flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(var(--primary),0.15)] hover:border-primary/40 overflow-hidden cursor-pointer",
                   mod.className
@@ -452,35 +437,31 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
               >
                 {/* Hover Glow Effect */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                
-                <motion.div 
-                  variants={containerVariants}
-                  initial="hidden"
-                  whileInView="show"
-                  viewport={{ once: true }}
+
+                <div
                   className="relative z-10 h-full flex flex-col"
                 >
-                  <motion.div variants={popIn} className="w-12 h-12 rounded-xl bg-background/80 backdrop-blur-md flex items-center justify-center border border-border/50 mb-5 shadow-sm group-hover:scale-110 group-hover:bg-card transition-all duration-300">
+                  <div className="w-12 h-12 rounded-xl bg-background/80 backdrop-blur-md flex items-center justify-center border border-border/50 mb-5 shadow-sm group-hover:scale-110 group-hover:bg-card transition-all duration-300">
                     {mod.icon}
-                  </motion.div>
-                  
-                  <motion.h3 variants={fromLeft} className="text-xl font-bold mb-3 text-foreground tracking-tight group-hover:text-primary transition-colors duration-300">
-                    {mod.title}
-                  </motion.h3>
-                  <motion.p variants={fromRight} className="text-muted-foreground text-sm leading-relaxed mb-6 group-hover:text-foreground/80 transition-colors duration-300">
-                    {mod.desc}
-                  </motion.p>
+                  </div>
 
-                  <motion.div variants={fromBottom} className="mt-auto pt-4 scale-[0.85] origin-bottom sm:scale-100 xl:scale-[0.8] 2xl:scale-90 group-hover:scale-[0.88] sm:group-hover:scale-105 xl:group-hover:scale-[0.85] 2xl:group-hover:scale-95 transition-transform duration-500">
+                  <h3 className="text-xl font-bold mb-3 text-foreground tracking-tight group-hover:text-primary transition-colors duration-300">
+                    {mod.title}
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed mb-6 group-hover:text-foreground/80 transition-colors duration-300">
+                    {mod.desc}
+                  </p>
+
+                  <div className="mt-auto pt-4 scale-[0.85] origin-bottom sm:scale-100 xl:scale-[0.8] 2xl:scale-90 group-hover:scale-[0.88] sm:group-hover:scale-105 xl:group-hover:scale-[0.85] 2xl:group-hover:scale-95 transition-transform duration-500">
                     {mod.content}
-                  </motion.div>
-                </motion.div>
-              </motion.div>
+                  </div>
+                </div>
+              </div>
             ))}
-          </div>
+          </ScrollReveal>
         </section>
 
-        <section id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+        <ScrollReveal id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
           <div className="text-center space-y-4 mb-12">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Pricing that matches your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">exam timeline.</span>
@@ -499,11 +480,10 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
               </Link>
             </Button>
           </div>
-        </section>
+        </ScrollReveal>
 
-        <section
+        <ScrollReveal
           id="reviews"
-          ref={reviewsRef}
           className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 pb-20"
         >
           <div className="text-center space-y-4 mb-16">
@@ -516,6 +496,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
           </div>
 
           <div
+            ref={reviewsRef}
             className={cn("relative h-[600px] overflow-hidden", isReviewsVisible ? "opacity-100" : "opacity-0 transition-opacity duration-1000")}
             style={{
               maskImage: "linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)",
@@ -550,9 +531,9 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
               </Link>
             </Button>
           </div>
-        </section>
+        </ScrollReveal>
 
-        <section className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-3 text-center flex flex-col items-center overflow-hidden">
+        <ScrollReveal className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-3 text-center flex flex-col items-center overflow-hidden">
           <div className="max-w-3xl mx-auto space-y-6 relative z-10">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
@@ -572,7 +553,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
               </div>
             </div>
           </div>
-        </section>
+        </ScrollReveal>
       </div>
     </div>
   );

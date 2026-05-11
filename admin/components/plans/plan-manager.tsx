@@ -1,8 +1,9 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Crown, Eye, EyeOff, Pencil, Plus, Sparkles, X } from "lucide-react";
+import { Gem, Eye, EyeOff, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Notice, SectionHeader, Select, Textarea, cn } from "@/components/ui";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
@@ -370,7 +371,7 @@ export function PlanManager({ initialPlans }: PlanManagerProps) {
                         ? "border-primary/20 bg-primary/10 text-primary"
                         : "border-border bg-background text-muted-foreground",
                     )}>
-                      {plan.isFeatured ? <Crown className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+                      {plan.isFeatured ? <PrimePremiumIcon className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
                     </div>
                   </div>
 
@@ -552,7 +553,7 @@ export function PlanManager({ initialPlans }: PlanManagerProps) {
                         ? "border-primary/20 bg-primary/10 text-primary"
                         : "border-border bg-background text-muted-foreground",
                     )}>
-                      {draft.isFeatured ? <Crown className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                      {draft.isFeatured ? <PrimePremiumIcon className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                     </div>
                   </div>
                   <div className="space-y-1">

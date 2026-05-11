@@ -1,10 +1,11 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAdminStore } from "@/store/admin-store";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Crown, ChevronRight, User } from "lucide-react";
+import { Gem, ChevronRight, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
@@ -104,7 +105,7 @@ export default function AdminUsersPage() {
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-sm text-foreground truncate">{fullName}</p>
                       {user.is_premium && (
-                        <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        <PrimePremiumIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                       )}
                     </div>
                     {user.username && (

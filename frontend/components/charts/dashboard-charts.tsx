@@ -1,8 +1,9 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronDown, Lock, TrendingUp } from "lucide-react";
+import { ChevronDown, Gem, TrendingUp } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -26,6 +27,8 @@ import type { DashboardAnalytics, TestType } from "@/lib/types";
 import { roundToIeltsBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
+import { WritingCriteriaRadar } from "@/components/charts/writing-criteria-radar";
+import { Lock } from "lucide-react";
 
 interface DashboardChartsProps {
   analytics: DashboardAnalytics;
@@ -33,9 +36,10 @@ interface DashboardChartsProps {
 
 const EMPTY_ANALYTICS: DashboardAnalytics = {
   performanceSummary: {
-    studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0 },
+    studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0, writingTimeSec: 0 },
     reading: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
-    listening: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 }
+    listening: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
+    writing: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 }
   },
   questionTypeAnalysis: [],
   comparison: {
@@ -79,18 +83,20 @@ function buildDailyProgressSeries(progressSeries: DashboardAnalytics["progressSe
   const end = new Date(today);
   end.setHours(0, 0, 0, 0);
 
-  const byDate = new Map<string, { reading: number | null; listening: number | null }>();
+  const byDate = new Map<string, { reading: number | null; listening: number | null; writing: number | null }>();
   for (const point of sorted) {
     const key = toLocalDateKey(new Date(point.occurredAt));
     byDate.set(key, {
       reading: point.reading,
-      listening: point.listening
+      listening: point.listening,
+      writing: point.writing ?? null
     });
   }
 
   const items: DashboardAnalytics["progressSeries"] = [];
   let lastReading: number | null = null;
   let lastListening: number | null = null;
+  let lastWriting: number | null = null;
 
   for (const point of sorted) {
     const pointDate = new Date(point.occurredAt);
@@ -101,6 +107,9 @@ function buildDailyProgressSeries(progressSeries: DashboardAnalytics["progressSe
       }
       if (point.listening !== null && point.listening !== undefined) {
         lastListening = point.listening;
+      }
+      if (point.writing !== null && point.writing !== undefined) {
+        lastWriting = point.writing;
       }
     }
   }
@@ -114,11 +123,15 @@ function buildDailyProgressSeries(progressSeries: DashboardAnalytics["progressSe
     if (entry?.listening !== null && entry?.listening !== undefined) {
       lastListening = entry.listening;
     }
+    if (entry?.writing !== null && entry?.writing !== undefined) {
+      lastWriting = entry.writing;
+    }
     items.push({
       label: new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(current)),
       occurredAt: `${key}T00:00:00`,
       reading: lastReading,
-      listening: lastListening
+      listening: lastListening,
+      writing: lastWriting
     });
   }
 
@@ -153,17 +166,6 @@ function getHeatmapCellClass(value: number | null | undefined): string {
     return "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-400";
   }
   return "border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-400";
-}
-
-function formatStudyTime(totalSeconds: number): string {
-  const normalizedSeconds = Math.max(0, totalSeconds);
-  const totalMinutes = Math.floor(normalizedSeconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours <= 0) {
-    return `${minutes}m`;
-  }
-  return `${hours}h ${minutes}m`;
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -210,7 +212,7 @@ function SectionFilter({
 }) {
   return (
     <div className="inline-flex flex-wrap items-center gap-2">
-      {(["reading", "listening"] as TestType[]).map((option) => (
+      {(["reading", "listening", "writing"] as TestType[]).map((option) => (
         <button
           key={option}
           type="button"
@@ -240,6 +242,7 @@ function buildLastTenDayAverage(analytics: DashboardAnalytics) {
   const recent = analytics.progressSeries.filter((item) => new Date(item.occurredAt).getTime() >= cutoff);
   const readingValues = recent.map((item) => item.reading).filter((value): value is number => value !== null);
   const listeningValues = recent.map((item) => item.listening).filter((value): value is number => value !== null);
+  const writingValues = recent.map((item) => item.writing).filter((value): value is number => value !== null);
 
   return {
     reading: readingValues.length > 0
@@ -247,6 +250,9 @@ function buildLastTenDayAverage(analytics: DashboardAnalytics) {
       : null,
     listening: listeningValues.length > 0
       ? roundToIeltsBand(listeningValues.reduce((sum, value) => sum + value, 0) / listeningValues.length)
+      : null,
+    writing: writingValues.length > 0
+      ? roundToIeltsBand(writingValues.reduce((sum, value) => sum + value, 0) / writingValues.length)
       : null
   };
 }
@@ -283,138 +289,6 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[0.78fr_1.42fr]">
-        <Card className="relative overflow-hidden rounded-3xl border-border/40 bg-card/70 shadow-sm">
-          <CardHeader className="border-b border-border/30 px-4 py-3 md:px-5">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">Total study time</p>
-            </div>
-          </CardHeader>
-          <CardContent
-            className={cn(
-              "space-y-2 p-3 md:p-3.5",
-              !isPremium && "select-none blur-[3px] opacity-75"
-            )}
-          >
-            <div className="rounded-2xl border border-primary/20 bg-primary/[0.07] px-3 py-3 dark:border-border/40 dark:bg-background/70">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-primary">Total</p>
-                <p className="text-xl font-semibold tracking-tight text-foreground md:text-[22px]">
-                  {formatStudyTime(overallAnalytics.performanceSummary.studyTime.totalTimeSec)}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              {([
-                {
-                  label: "Reading",
-                  value: formatStudyTime(overallAnalytics.performanceSummary.studyTime.readingTimeSec),
-                  accent: "text-blue-600 dark:text-blue-400"
-                },
-                {
-                  label: "Listening",
-                  value: formatStudyTime(overallAnalytics.performanceSummary.studyTime.listeningTimeSec),
-                  accent: "text-emerald-600 dark:text-emerald-400"
-                }
-              ]).map((item) => (
-                <div
-                  key={item.label}
-                  className={cn(
-                    "rounded-2xl px-3 py-2.5 dark:border-border/40 dark:bg-background/70",
-                    item.label === "Reading"
-                      ? "border border-blue-200/80 bg-blue-50/85"
-                      : "border border-emerald-200/80 bg-emerald-50/85"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className={cn("text-[10px] font-black uppercase tracking-[0.16em]", item.accent)}>{item.label}</p>
-                    <p className="text-lg font-semibold tracking-tight text-foreground">{item.value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-          {!isPremium ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center px-5">
-              <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg backdrop-blur-sm">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">Premium Feature</p>
-                <p className="mt-1 text-sm font-bold text-foreground">Unlock full study-time analytics</p>
-                <Button asChild className="mt-4 h-9 rounded-xl px-4 text-xs font-black uppercase tracking-[0.18em]">
-                  <Link href="/subscription">Upgrade Now</Link>
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </Card>
-
-        <Card className="relative overflow-hidden rounded-3xl border-border/40 bg-card/70 shadow-sm">
-          <CardHeader className="border-b border-border/30 px-4 py-3 md:px-5">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">Total tests</p>
-            </div>
-          </CardHeader>
-          <CardContent
-            className={cn(
-              "space-y-2 p-3 md:p-3.5",
-              !isPremium && "select-none blur-[3px] opacity-75"
-            )}
-          >
-            <div className="rounded-2xl border border-blue-200/80 bg-blue-50/85 p-3 dark:border-border/40 dark:bg-background/70">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Reading</p>
-              <div className="mt-2 grid grid-cols-4 gap-2">
-                {([
-                  { label: "Full", value: overallAnalytics.performanceSummary.reading.fullCount },
-                  { label: "Passage 1", value: overallAnalytics.performanceSummary.reading.section1Count },
-                  { label: "Passage 2", value: overallAnalytics.performanceSummary.reading.section2Count },
-                  { label: "Passage 3", value: overallAnalytics.performanceSummary.reading.section3Count }
-                ]).map((item) => (
-                  <div key={item.label} className="rounded-xl border border-blue-100/90 bg-white/75 px-2.5 py-1.5 text-center shadow-sm dark:border-white/5 dark:bg-muted/40 dark:shadow-none">
-                    <p className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
-                    <p className="mt-1 text-lg font-black tracking-tight text-foreground">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/85 p-3 dark:border-border/40 dark:bg-background/70">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">Listening</p>
-              <div className="mt-2 grid grid-cols-5 gap-2">
-                {([
-                  { label: "Full", value: overallAnalytics.performanceSummary.listening.fullCount },
-                  { label: "Part 1", value: overallAnalytics.performanceSummary.listening.section1Count },
-                  { label: "Part 2", value: overallAnalytics.performanceSummary.listening.section2Count },
-                  { label: "Part 3", value: overallAnalytics.performanceSummary.listening.section3Count },
-                  { label: "Part 4", value: overallAnalytics.performanceSummary.listening.section4Count }
-                ]).map((item) => (
-                  <div key={item.label} className="rounded-xl border border-emerald-100/90 bg-white/75 px-2 py-1.5 text-center shadow-sm dark:border-white/5 dark:bg-muted/40 dark:shadow-none">
-                    <p className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
-                    <p className="mt-1 text-lg font-black tracking-tight text-foreground">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-          {!isPremium ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center px-5">
-              <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg backdrop-blur-sm">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">Premium Feature</p>
-                <p className="mt-1 text-sm font-bold text-foreground">Unlock full test-volume analytics</p>
-                <Button asChild className="mt-4 h-9 rounded-xl px-4 text-xs font-black uppercase tracking-[0.18em]">
-                  <Link href="/subscription">Upgrade Now</Link>
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </Card>
-      </div>
-
       <Card className="overflow-hidden rounded-3xl border-border/40 shadow-sm">
         <CardHeader className="border-b border-border/40 bg-card/60 px-4 py-4 md:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -422,9 +296,9 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               <p className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Progress Graph</p>
               <CardTitle className="mt-1 text-lg md:text-xl font-semibold tracking-tight">Band score over time</CardTitle>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[480px]">
               <div className="rounded-2xl border border-border/50 bg-background/60 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day average</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day avg</p>
               <div className="mt-2 flex items-end gap-2">
                 <TrendingUp className="h-5 w-5 text-primary" />
                 <p className={cn(
@@ -437,7 +311,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               <p className="mt-1 text-xs font-medium text-muted-foreground">Reading</p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/60 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day average</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day avg</p>
               <div className="mt-2 flex items-end gap-2">
                 <TrendingUp className="h-5 w-5 text-emerald-600" />
                 <p className={cn(
@@ -448,6 +322,19 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                 </p>
               </div>
               <p className="mt-1 text-xs font-medium text-muted-foreground">Listening</p>
+              </div>
+              <div className="rounded-2xl border border-border/50 bg-background/60 p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day avg</p>
+              <div className="mt-2 flex items-end gap-2">
+                <TrendingUp className="h-5 w-5 text-violet-600" />
+                <p className={cn(
+                  "text-2xl tracking-tight text-foreground",
+                  lastTenDayAverage.writing === null ? "font-semibold" : "font-black"
+                )}>
+                  {lastTenDayAverage.writing?.toFixed(1) ?? "0"}
+                </p>
+              </div>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">Writing</p>
               </div>
             </div>
           </div>
@@ -521,6 +408,16 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                       dot={{ r: 4.5, fill: "#059669", strokeWidth: 0 }}
                       activeDot={{ r: 5, fill: "#059669", strokeWidth: 0 }}
                     />
+                    <Line
+                      type="linear"
+                      dataKey="writing"
+                      name="Writing"
+                      connectNulls
+                      stroke="#7c3aed"
+                      strokeWidth={3}
+                      dot={{ r: 4.5, fill: "#7c3aed", strokeWidth: 0 }}
+                      activeDot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
             </div>
@@ -555,7 +452,11 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
         </CardHeader>
         {isAnalysisOpen ? (
         <CardContent className={cn("p-0", !isPremium && "select-none blur-[3px] opacity-75")}>
-          {analysisAnalytics.questionTypeAnalysis.length === 0 ? (
+          {analysisFilter === "writing" && analysisAnalytics.writingCriteria ? (
+            <div className="p-4 md:p-6">
+              <WritingCriteriaRadar criteria={analysisAnalytics.writingCriteria} />
+            </div>
+          ) : analysisAnalytics.questionTypeAnalysis.length === 0 ? (
             <div className="p-4 md:p-6">
               <EmptyState message="Answer a few scored questions to unlock question-type analysis." />
             </div>
@@ -839,7 +740,23 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                           ))}
                         </Pie>
                         <Tooltip
-                          contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--background))", color: "hsl(var(--foreground))" }}
+                          contentStyle={{
+                            borderRadius: 12,
+                            border: "1px solid hsl(var(--border))",
+                            background: "hsl(var(--background))",
+                            color: "hsl(var(--foreground))",
+                            boxShadow: "0 20px 48px -24px rgba(15, 23, 42, 0.45)"
+                          }}
+                          labelStyle={{
+                            color: "hsl(var(--foreground))",
+                            fontSize: 12,
+                            fontWeight: 800,
+                            letterSpacing: "0.04em"
+                          }}
+                          itemStyle={{
+                            color: "hsl(var(--foreground))",
+                            fontWeight: 700
+                          }}
                           formatter={(value: number, name: string) => [`${value} tests`, name]}
                         />
                       </PieChart>

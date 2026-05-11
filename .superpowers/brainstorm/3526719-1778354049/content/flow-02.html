@@ -1,0 +1,117 @@
+<h2>Exam Flow and Scoring</h2>
+<p class="subtitle">Dedicated speaking runtime with strict IELTS behavior, hidden telemetry, and post-session grading</p>
+
+<div class="section">
+  <div class="label">Session Flow</div>
+  <div class="cards">
+    <div class="card">
+      <div class="card-body">
+        <h3>1. Setup</h3>
+        <p>User chooses full test or a single part, checks mic, and starts an authenticated session.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>2. Live Examiner</h3>
+        <p>Gemini Live acts only as the examiner. English only. No score, no hints, no praise during the exam.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>3. Candidate Turn</h3>
+        <p>When examiner audio ends, VAD opens the candidate turn and records raw speech + timestamps.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>4. Final Grading</h3>
+        <p>After session close, backend runs a separate evaluator over transcript, turn metadata, and stored audio.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Strict but Smart Behavior</div>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Default Exam Rules</div>
+      <div class="mockup-body">
+        <div class="mock-content">
+          <p>Examiner controls order and pacing.</p>
+          <p>User cannot steer the conversation away.</p>
+          <p>Examiner asks follow-ups only inside IELTS logic.</p>
+          <p>Part 2 includes one-minute prep and timed long turn.</p>
+          <p>Part 3 stays linked to the Part 2 theme.</p>
+        </div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Allowed Smart Repairs</div>
+      <div class="mockup-body">
+        <div class="mock-content">
+          <p>Repeat the question once.</p>
+          <p>Mic or audio clarification.</p>
+          <p>Very short off-topic drift warning.</p>
+          <p>Non-English reminder to answer in English.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Integrity Policy</div>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Minor Violation</h4>
+      <ul>
+        <li>Single off-topic answer</li>
+        <li>Short non-English reply</li>
+        <li>Candidate asks examiner to help</li>
+        <li>One warning, then continue if corrected</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Major Violation</h4>
+      <ul>
+        <li>Abuse, hate, sexual content, threats</li>
+        <li>Prompt-injection or role-break attempts</li>
+        <li>Repeated refusal to answer in English</li>
+        <li>Automatic stop and penalized band</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Scoring Output</div>
+  <div class="mockup">
+    <div class="mockup-header">Final evaluation stored in backend</div>
+    <div class="mockup-body">
+      <div class="mock-content">
+        <p>Band scores for Fluency and Coherence, Lexical Resource, Grammatical Range and Accuracy, and Pronunciation.</p>
+        <p>Exact raw phrases stay unfixed in evidence snippets when candidate says words incorrectly.</p>
+        <p>Feedback includes strengths, critical weaknesses, pronunciation issues, useful corrections, and deep advice.</p>
+        <p>Live telemetry can inform fluency and pronunciation, but user sees feedback only after grading finishes.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="flow_approved" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Flow Fits</h3>
+      <p>Session behavior, integrity rules, and scoring direction look right.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="flow_changes" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Change This</h3>
+      <p>Some part of the runtime or scoring needs to change before planning.</p>
+    </div>
+  </div>
+</div>

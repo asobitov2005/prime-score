@@ -1,6 +1,7 @@
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Activity, BarChart3, CreditCard, FileText, ShieldCheck, TrendingUp, Users } from "lucide-react";
+import { Activity, BarChart3, CreditCard, Gem, FileText, TrendingUp, Users } from "lucide-react";
 import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, ProgressBar, SectionHeader, buttonClassName, cn } from "@/components/ui";
 import { getAdminDashboardOverview } from "@/lib/server-data";
 import { RevenueTrendChart, RegistrationTrendChart, AttemptsByDayChart, TypeSplitChart, BandDistributionChart, PaymentSplitChart, StatusSplitChart } from "@/components/dashboard-charts";
@@ -103,7 +104,7 @@ export default async function DashboardPage({
           label="Premium"
           value={formatNumber(metrics.premiumUsers)}
           detail={`${metrics.premiumRate}% of registered users`}
-          icon={<ShieldCheck className="h-5 w-5" />}
+          icon={<PrimePremiumIcon className="h-5 w-5" />}
           tone="success"
         />
       </div>

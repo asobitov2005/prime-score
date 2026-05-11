@@ -45,6 +45,7 @@ const TASK_2_FILTERS: FilterItem[] = [
   { value: "problem_solution", label: "Problem & Solution", icon: HelpCircle, gradient: "from-amber-500 to-amber-600", border: "border-amber-500/40" },
   { value: "two_part", label: "Two-Part Question", icon: Sparkles, gradient: "from-rose-500 to-rose-600", border: "border-rose-500/40" },
   { value: "causes_effects", label: "Causes & Effects", icon: TrendingUp, gradient: "from-pink-500 to-pink-600", border: "border-pink-500/40" },
+  { value: "direct_question", label: "Direct Question", icon: FileText, gradient: "from-indigo-500 to-indigo-600", border: "border-indigo-500/40" },
 ];
 
 export function WritingQuestionFilters({
@@ -79,7 +80,7 @@ export function WritingQuestionFilters({
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-200",
             !activeSubtype
-              ? "border-primary/50 bg-gradient-to-r from-primary to-primary/80 text-white shadow-sm shadow-primary/20"
+              ? "border-primary/50 bg-gradient-to-r from-primary to-primary/80 text-white dark:text-slate-950 shadow-sm shadow-primary/20"
               : "border-border/60 bg-background/70 text-muted-foreground hover:border-border hover:text-foreground dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
           )}
         >
@@ -97,7 +98,7 @@ export function WritingQuestionFilters({
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-200",
                 isActive
-                  ? `${filter.border} bg-gradient-to-r ${filter.gradient} text-white shadow-sm`
+                  ? `${filter.border} bg-gradient-to-r ${filter.gradient} text-white dark:text-slate-950 shadow-sm`
                   : "border-border/60 bg-background/70 text-muted-foreground hover:border-border hover:text-foreground dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
               )}
             >

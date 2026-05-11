@@ -126,6 +126,7 @@ export interface MeProfileRead {
   show_on_leaderboard: boolean;
   telegram_id?: number | null;
   last_active_at?: string | null;
+  created_at?: string | null;
 }
 
 export interface AuthSessionRead {
@@ -154,7 +155,15 @@ export interface AuthSessionStatusResponse {
     is_premium: boolean;
     premium_until?: string | null;
     telegram_id?: number | null;
+    created_at?: string | null;
   };
+}
+
+export interface DashboardAnalyticsWritingCriteriaRead {
+  task_achievement?: number | null;
+  coherence_cohesion?: number | null;
+  lexical_resource?: number | null;
+  grammatical_range_accuracy?: number | null;
 }
 
 export interface DashboardAnalyticsQuestionTypeAnalysisRead {
@@ -198,12 +207,14 @@ export interface DashboardAnalyticsBandProgressRead {
   occurred_at: string;
   reading?: number | null;
   listening?: number | null;
+  writing?: number | null;
 }
 
 export interface DashboardAnalyticsPerformanceStudyTimeRead {
   total_time_sec: number;
   reading_time_sec: number;
   listening_time_sec: number;
+  writing_time_sec?: number;
 }
 
 export interface DashboardAnalyticsPerformanceTestCountBucketRead {
@@ -218,10 +229,12 @@ export interface DashboardAnalyticsPerformanceSummaryRead {
   study_time: DashboardAnalyticsPerformanceStudyTimeRead;
   reading: DashboardAnalyticsPerformanceTestCountBucketRead;
   listening: DashboardAnalyticsPerformanceTestCountBucketRead;
+  writing?: DashboardAnalyticsPerformanceTestCountBucketRead;
 }
 
 export interface DashboardAnalyticsResponse {
   performance_summary: DashboardAnalyticsPerformanceSummaryRead;
+  writing_criteria?: DashboardAnalyticsWritingCriteriaRead | null;
   question_type_analysis: DashboardAnalyticsQuestionTypeAnalysisRead[];
   comparison: DashboardAnalyticsQuestionTypeComparisonRead;
   error_distribution: DashboardAnalyticsErrorDistributionRead[];

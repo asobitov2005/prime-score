@@ -1,22 +1,40 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { AdminAuthResponse, setAdminSessionCookies } from "@/lib/auth";
+import { AdminAuthChallengeResponse, AdminAuthResponse, setAdminSessionCookies } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@/components/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 
 export function LoginFlow() {
   const router = useRouter();
-  const [login, setLogin] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [challenge, setChallenge] = useState<AdminAuthChallengeResponse | null>(null);
+  const [expiresRemaining, setExpiresRemaining] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function updatePhoneNumber(value: string) {
+    setPhoneNumber(value.replace(/\D/g, "").slice(0, 9));
+  }
+
+  useEffect(() => {
+    if (!challenge || expiresRemaining <= 0) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setExpiresRemaining((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [challenge, expiresRemaining]);
+
+  async function requestOtp() {
     setIsSubmitting(true);
     setMessage("");
 
@@ -29,13 +47,58 @@ export function LoginFlow() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ login, password }),
+        body: JSON.stringify({ phone_number: phoneNumber, password }),
         signal: controller.signal,
       });
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        setMessage(payload?.detail ?? "Invalid login or password.");
+        setMessage(payload?.detail ?? "Invalid phone number or password.");
+        return;
+      }
+
+      const payload = (await response.json()) as AdminAuthChallengeResponse;
+      setChallenge(payload);
+      setExpiresRemaining(payload.expires_in_seconds);
+      setPassword("");
+      setOtpCode("");
+      setMessage("");
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        setMessage("Admin server is not responding.");
+        return;
+      }
+      setMessage("Unable to connect to the admin server.");
+    } finally {
+      window.clearTimeout(timeoutId);
+      setIsSubmitting(false);
+    }
+  }
+
+  async function verifyOtp() {
+    if (!challenge) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setMessage("");
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const response = await fetch(`${ADMIN_PUBLIC_API_BASE_URL}/auth/verify-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ challenge_id: challenge.challenge_id, otp_code: otpCode }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        setMessage(payload?.detail ?? "Invalid or expired OTP.");
         return;
       }
 
@@ -54,6 +117,25 @@ export function LoginFlow() {
       setIsSubmitting(false);
     }
   }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (challenge) {
+      await verifyOtp();
+      return;
+    }
+    await requestOtp();
+  }
+
+  function resetChallenge() {
+    setChallenge(null);
+    setOtpCode("");
+    setExpiresRemaining(0);
+    setMessage("");
+  }
+
+  const canSubmitCredentials = phoneNumber.trim().length > 0 && password.trim().length > 0;
+  const canSubmitOtp = Boolean(challenge) && otpCode.trim().length === 5 && expiresRemaining > 0;
 
   return (
     <div className="mx-auto w-full max-w-[460px]">
@@ -76,42 +158,75 @@ export function LoginFlow() {
         <div className="h-px w-full bg-[linear-gradient(90deg,transparent,rgba(255,140,46,0.6),transparent)]" />
         <CardHeader className="space-y-2 pb-6 pt-7">
           <CardTitle className="text-[2rem] tracking-tight">Control panel access</CardTitle>
-          <CardDescription className="text-sm leading-7">
-            Enter your admin login details to continue.
-          </CardDescription>
         </CardHeader>
 
         <CardContent>
           <form className="space-y-5" onSubmit={handleSubmit}>
-            <div className="space-y-2.5">
-              <Label htmlFor="login" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Login or email
-              </Label>
-              <Input
-                id="login"
-                value={login}
-                onChange={(event) => setLogin(event.target.value)}
-                placeholder="admin"
-                autoComplete="username"
-                autoFocus
-                className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
-              />
-            </div>
+            {!challenge ? (
+              <>
+                <div className="space-y-2.5">
+                  <Label htmlFor="phone-number" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Phone number
+                  </Label>
+                  <Input
+                    id="phone-number"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(event) => updatePhoneNumber(event.target.value)}
+                    placeholder="940034424"
+                    inputMode="numeric"
+                    maxLength={9}
+                    autoComplete="username"
+                    autoFocus
+                    className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
+                  />
+                </div>
 
-            <div className="space-y-2.5">
-              <Label htmlFor="password" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
-              />
-            </div>
+                <div className="space-y-2.5">
+                  <Label htmlFor="password" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border/70 bg-secondary/70 px-4 py-3 text-sm text-muted-foreground">
+                  OTP sent to Telegram for <span className="font-semibold text-foreground">{phoneNumber}</span>.
+                  {expiresRemaining > 0 ? ` Expires in ${expiresRemaining}s.` : " Code expired."}
+                </div>
+                <div className="space-y-2.5">
+                  <Label htmlFor="otp-code" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Telegram OTP
+                  </Label>
+                  <Input
+                    id="otp-code"
+                    value={otpCode}
+                    onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 5))}
+                    placeholder="12345"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm tracking-[0.22em] shadow-inner placeholder:tracking-normal placeholder:text-muted-foreground focus-visible:!bg-secondary"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={resetChallenge}
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Use a different phone number
+                </button>
+              </div>
+            )}
 
             {message ? (
               <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-medium text-danger">
@@ -121,10 +236,10 @@ export function LoginFlow() {
 
             <Button
               type="submit"
-              disabled={isSubmitting || !login.trim() || !password.trim()}
+              disabled={isSubmitting || (challenge ? !canSubmitOtp : !canSubmitCredentials)}
               className="group h-12 w-full rounded-xl text-sm font-semibold tracking-[0.02em]"
             >
-              {isSubmitting ? "Signing in..." : "Enter admin panel"}
+              {isSubmitting ? "Checking..." : challenge ? "Verify OTP" : "Send Telegram OTP"}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Button>
           </form>

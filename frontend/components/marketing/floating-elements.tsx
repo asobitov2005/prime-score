@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 export function FloatingElements() {
@@ -22,7 +21,7 @@ export function FloatingElements() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
       {elements.map((el) => (
-        <motion.div
+        <div
           key={el.id}
           className="absolute rounded-full"
           style={{
@@ -32,16 +31,8 @@ export function FloatingElements() {
             top: `${el.y}%`,
             background: "radial-gradient(circle at center, hsl(var(--primary) / 0.15) 0%, transparent 70%)",
             willChange: "transform", // GPU optimization
-          }}
-          animate={{
-            y: [0, -100, 0],
-            x: [0, 50, 0],
-          }}
-          transition={{
-            duration: el.duration,
-            repeat: Infinity,
-            delay: el.delay,
-            ease: "linear", // linear is smoother for infinite loops
+            animation: `float-element ${el.duration}s linear infinite`,
+            animationDelay: `${el.delay}s`,
           }}
         />
       ))}

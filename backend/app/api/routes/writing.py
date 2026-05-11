@@ -46,6 +46,12 @@ from app.services.object_storage import upload_test_diagram_image
 router = APIRouter()
 
 
+async def _dispatch_writing_retry(submission_id: UUID) -> str | None:
+    from app.services.writing_dispatch import dispatch_writing_grading
+
+    return await dispatch_writing_grading(submission_id)
+
+
 def _serialize_task_read(task: WritingTask) -> WritingTaskRead:
     return WritingTaskRead(
         id=task.id,
@@ -273,7 +279,33 @@ async def get_writing_draft(
         )
     )
     if draft is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found.")
+        task_id: UUID | None = None
+        task_type = WritingTaskType.TASK_1
+        if draft_key.startswith("writing-exam-draft:custom:"):
+            suffix = draft_key.removeprefix("writing-exam-draft:custom:")
+            if suffix == WritingTaskType.TASK_2.value:
+                task_type = WritingTaskType.TASK_2
+        elif draft_key.startswith("writing-exam-draft:"):
+            raw_task_id = draft_key.removeprefix("writing-exam-draft:")
+            try:
+                task_id = UUID(raw_task_id)
+            except ValueError:
+                task_id = None
+            if task_id is not None:
+                task = await session.get(WritingTask, task_id)
+                if task is not None:
+                    task_type = task.task_type
+        return WritingDraftRead(
+            draft_key=draft_key,
+            task_id=task_id,
+            task_type=task_type,
+            topic="",
+            essay_text="",
+            image_data_url=None,
+            started=False,
+            time_spent_seconds=0,
+            updated_at=datetime.now(UTC),
+        )
     return _serialize_draft(draft)
 
 
@@ -414,10 +446,9 @@ async def submit_writing(
     await session.commit()
     await session.refresh(submission)
 
-    from app.tasks.tasks import evaluate_writing_submission_task
+    from app.services.writing_dispatch import dispatch_writing_grading
 
-    result = evaluate_writing_submission_task.delay(str(submission.id))
-    submission.celery_task_id = result.id
+    submission.celery_task_id = await dispatch_writing_grading(submission.id)
     await session.commit()
     await session.refresh(submission)
 
@@ -433,6 +464,35 @@ async def get_submission(
     submission = await session.get(WritingSubmission, submission_id)
     if submission is None or submission.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+    return WritingSubmissionRead.model_validate(submission)
+
+
+@router.post(
+    "/submissions/{submission_id}/retry",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_submission(
+    submission_id: UUID,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+):
+    submission = await session.get(WritingSubmission, submission_id)
+    if submission is None or submission.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+
+    if submission.status != WritingSubmissionStatus.FAILED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed submissions can be retried.",
+        )
+
+    submission.status = WritingSubmissionStatus.QUEUED
+    submission.error_message = None
+    await session.commit()
+
+    submission.celery_task_id = await _dispatch_writing_retry(submission.id)
+    await session.commit()
+
     return WritingSubmissionRead.model_validate(submission)
 
 

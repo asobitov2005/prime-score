@@ -7,6 +7,7 @@ import { ResultViewTracker } from "./result-view-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCompletedAtLabel } from "@/lib/date-time";
 import { getLeaderboardRank } from "@/lib/server-me";
 import { getBackendAttemptResult, getBackendAttemptReview } from "@/lib/server-attempts";
 import { getTestSourceDetail } from "@/lib/test-source";
@@ -28,7 +29,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
 
   const formatLabel = formatTestFormat(result.test_format);
   const sourceLabel = getTestSourceDetail(result.source, result.source_detail);
-  const completedLabel = formatCompletedAt(result.completed_at);
+  const completedLabel = formatCompletedAtLabel(result.completed_at);
   const correctCount = Math.max(0, result.raw_score ?? 0);
   const answeredCount = Math.max(0, result.answered_slots_count ?? result.answers_count ?? 0);
   const totalQuestions = Math.max(0, result.total_questions ?? 0);
@@ -257,43 +258,6 @@ function formatPercentile(
   );
 
   return `${closest.percentile}th`;
-}
-
-function parseCompletedAt(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  const parts = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-
-  const lookup = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
-  const month = lookup("month");
-  const day = lookup("day");
-  const year = lookup("year");
-  const hour = lookup("hour");
-  const minute = lookup("minute");
-
-  return { month, day, year, hour, minute };
-}
-
-function formatCompletedAt(value: string | null | undefined): string | null {
-  const parsed = parseCompletedAt(value);
-  if (!parsed) {
-    return null;
-  }
-  return `Completed on ${parsed.month} ${parsed.day}, ${parsed.year} at ${parsed.hour}:${parsed.minute}`;
 }
 
 function ScoreCard({

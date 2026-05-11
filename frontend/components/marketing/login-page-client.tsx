@@ -81,6 +81,7 @@ export function LoginPageClient() {
         avatarUrl: userData.avatar_url ?? null,
         isPremium: Boolean(userData.is_premium),
         premiumUntil: userData.premium_until ?? null,
+        createdAt: userData.created_at ?? null,
       });
       trackLogin({
         method: "telegram_code",

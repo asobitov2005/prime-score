@@ -1,0 +1,127 @@
+<h2>IELTS Speaking v1</h2>
+<p class="subtitle">Dedicated speaking domain on top of the current PrimeScore platform</p>
+
+<div class="section">
+  <div class="label">Architecture</div>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">User App</div>
+      <div class="mockup-body">
+        <div class="mock-nav">Catalog -> Session Setup -> Live Exam -> Result</div>
+        <div class="mock-content">
+          <p><strong>Entry modes</strong></p>
+          <p>1. Full speaking test</p>
+          <p>2. Part 1 only</p>
+          <p>3. Part 2 only</p>
+          <p>4. Part 3 only</p>
+          <p>5. Resume combined score after all parts</p>
+        </div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Backend</div>
+      <div class="mockup-body">
+        <div class="mock-content">
+          <p><strong>Speaking API</strong></p>
+          <p>Session create</p>
+          <p>Ephemeral token mint</p>
+          <p>Turn + transcript persistence</p>
+          <p>Integrity policy</p>
+          <p>Final evaluation queue</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Live Runtime</div>
+  <div class="mockup">
+    <div class="mockup-header">Strict examiner flow with smart interruptions</div>
+    <div class="mockup-body">
+      <div class="mock-content">
+        <p>Examiner prompt -> Gemini Live speaks in English only</p>
+        <p>User mic stays ignored during examiner turn</p>
+        <p>After examiner ends -> VAD listens to candidate</p>
+        <p>Allowed repair intents: repeat / audio problem / clarification</p>
+        <p>Hidden telemetry: hesitation, cutoff, pronunciation suspicion, fluency markers</p>
+        <p>Integrity killswitch: abuse, role-break, repeated off-topic, manipulation</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Data Model</div>
+  <div class="cards">
+    <div class="card">
+      <div class="card-body">
+        <h3>speaking_tests</h3>
+        <p>Published mock sets, format full/part, estimated minutes, source window, status.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>speaking_topics</h3>
+        <p>Part 1 topics, Part 2 cue cards, Part 3 follow-up clusters, seed bank 20+ each.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>speaking_sessions</h3>
+        <p>User run, live provider ids, state machine, warning count, termination reason, timing.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>speaking_turns</h3>
+        <p>Examiner/candidate turns, raw transcript, no cleanup of mispronounced words, timestamps.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>speaking_audio_assets</h3>
+        <p>Chunk manifests, final merged audio, diarization metadata, per-part recordings.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h3>speaking_evaluations</h3>
+        <p>Criterion scores, strengths, issues, exact problematic phrases, advice, deep feedback.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Admin Surface</div>
+  <div class="mockup">
+    <div class="mockup-header">Admin CRUD</div>
+    <div class="mockup-body">
+      <div class="mock-content">
+        <p>Topic bank CRUD</p>
+        <p>Part 2 cue card builder</p>
+        <p>Part 3 linked follow-up editor</p>
+        <p>Publish / archive / reorder</p>
+        <p>Seeded real-reported topic import as initial content</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Direction Fits</h3>
+      <p>Dedicated architecture and data model look right.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="needs_changes" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Needs Changes</h3>
+      <p>Architecture is close, but some part needs to change before moving on.</p>
+    </div>
+  </div>
+</div>

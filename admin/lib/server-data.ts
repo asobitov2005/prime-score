@@ -3,7 +3,8 @@ import http from "node:http";
 import https from "node:https";
 import { getAdminServerApiBaseUrl } from "@/lib/admin-api-base";
 import { createEmptyDraft } from "@/lib/draft-template";
-import { ADMIN_ACCESS_COOKIE } from "@/lib/auth";
+import { ADMIN_REFRESH_COOKIE, isAdminAuthFailureStatus } from "@/lib/auth";
+import { getServerAdminAccessToken, refreshServerAdminAccessToken } from "@/lib/server-auth";
 import { normalizeAdminTestSourceDetail } from "@/lib/test-source";
 import type {
   AdminAnalyticsPoint,
@@ -210,16 +211,27 @@ type BackendAdminDraft = {
 };
 
 async function requestAdmin<T>(path: string): Promise<T> {
-  const token = cookies().get(ADMIN_ACCESS_COOKIE)?.value;
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const url = `${baseUrl}${path}`;
+  const buildHeaders = (token: string | null): Record<string, string> => (
+    token
+      ? { Authorization: `Bearer ${token}` }
+      : {}
+  );
+  let accessToken = await getServerAdminAccessToken();
 
   for (let attempt = 1; attempt <= ADMIN_REQUEST_MAX_ATTEMPTS; attempt += 1) {
     try {
-      const response = await requestJsonFromAdminApi(url, headers);
+      let response = await requestJsonFromAdminApi(url, buildHeaders(accessToken));
+      if (isAdminAuthFailureStatus(response.status)) {
+        const refreshToken = cookies().get(ADMIN_REFRESH_COOKIE)?.value ?? null;
+        const refreshedAccessToken = refreshToken
+          ? await refreshServerAdminAccessToken(refreshToken)
+          : null;
+        if (refreshedAccessToken) {
+          accessToken = refreshedAccessToken;
+          response = await requestJsonFromAdminApi(url, buildHeaders(accessToken));
+        }
+      }
       const text = response.text;
 
       if (response.status < 200 || response.status >= 300) {

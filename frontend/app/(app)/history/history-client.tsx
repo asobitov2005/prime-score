@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Filter, Search } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, ChevronRight, Clock3, FileText, Filter, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatDateTime } from "@/lib/date-time";
+import type { WritingHistoryItem } from "@/lib/server-writing";
 import type { AttemptRow } from "@/lib/types";
 import { HistoryRetakeButton } from "./retake-button";
 import { cn } from "@/lib/utils";
@@ -18,10 +20,25 @@ type HistoryGroup = {
   attempts: AttemptRow[];
 };
 
+type HistoryEntry =
+  | {
+      kind: "attempt";
+      key: string;
+      sortAt: string;
+      group: HistoryGroup;
+    }
+  | {
+      kind: "writing";
+      key: string;
+      sortAt: string;
+      item: WritingHistoryItem;
+    };
+
 type FilterValue =
   | "all"
   | "reading"
   | "listening"
+  | "writing"
   | "practice"
   | "exam"
   | "cambridge"
@@ -29,9 +46,10 @@ type FilterValue =
   | "practice_tests";
 
 const filterOptions: Array<{ id: FilterValue; label: string }> = [
-  { id: "all", label: "All attempts" },
+  { id: "all", label: "All history" },
   { id: "reading", label: "Reading" },
   { id: "listening", label: "Listening" },
+  { id: "writing", label: "Writing" },
   { id: "practice", label: "Practice" },
   { id: "exam", label: "Exam" },
   { id: "cambridge", label: "Cambridge Official" },
@@ -78,25 +96,36 @@ function typeBadgeClass(type: AttemptRow["type"]): string {
   if (type === "reading") {
     return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
   }
-  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  if (type === "listening") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+  return "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300";
 }
 
 function historyTypeCardClass(type: AttemptRow["type"]): string {
   if (type === "reading") {
     return "border-sky-500/20 bg-[linear-gradient(135deg,rgba(14,165,233,0.08),rgba(14,165,233,0.02)_26%,rgba(255,255,255,0)_42%)]";
   }
-  return "border-amber-500/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.09),rgba(245,158,11,0.025)_26%,rgba(255,255,255,0)_42%)]";
+  if (type === "listening") {
+    return "border-amber-500/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.09),rgba(245,158,11,0.025)_26%,rgba(255,255,255,0)_42%)]";
+  }
+  return "border-violet-500/20 bg-[linear-gradient(135deg,rgba(139,92,246,0.09),rgba(139,92,246,0.025)_26%,rgba(255,255,255,0)_42%)]";
 }
 
 function historyTypeAccentClass(type: AttemptRow["type"]): string {
   if (type === "reading") {
     return "bg-sky-500";
   }
-  return "bg-amber-500";
+  if (type === "listening") {
+    return "bg-amber-500";
+  }
+  return "bg-violet-500";
 }
 
 function formatType(type: AttemptRow["type"]): string {
-  return type === "reading" ? "Reading" : "Listening";
+  if (type === "reading") return "Reading";
+  if (type === "listening") return "Listening";
+  return "Writing";
 }
 
 function formatScore(attempt: AttemptRow): string {
@@ -170,6 +199,7 @@ function matchesFilter(attempt: AttemptRow, filter: FilterValue) {
   switch (filter) {
     case "reading":
     case "listening":
+    case "writing":
       return attempt.type === filter;
     case "practice":
     case "exam":
@@ -185,7 +215,255 @@ function matchesFilter(attempt: AttemptRow, filter: FilterValue) {
   }
 }
 
-export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
+function matchesWritingFilter(filter: FilterValue) {
+  switch (filter) {
+    case "all":
+    case "writing":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function exactDateTime(value: string | null | undefined): string {
+  return formatDateTime(value);
+}
+
+function formatDurationLabel(seconds: number | null | undefined): string {
+  const safe = Math.max(0, Math.floor(Number(seconds ?? 0)));
+  const minutes = Math.floor(safe / 60);
+  const remainingSeconds = safe % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${remainingSeconds}s`;
+}
+
+function writingBandClass(band: number) {
+  if (band >= 8) return "border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300";
+  if (band >= 7) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (band >= 6) return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  if (band >= 5) return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+}
+
+function sortTimestamp(value: string | null | undefined): number {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function WritingHistoryRow({ item }: { item: WritingHistoryItem }) {
+  const status = String(item.status ?? "").toLowerCase();
+  const isCompleted = status === "completed";
+  const isFailed = status === "failed";
+  const band =
+    item.overall_band !== null && item.overall_band !== undefined
+      ? typeof item.overall_band === "string"
+        ? Number.parseFloat(item.overall_band)
+        : item.overall_band
+      : null;
+
+  return (
+    <Link
+      href={`/writing/submissions/${item.submission_id}/result`}
+      className="group relative block m-2 rounded-xl border border-violet-500/20 bg-[linear-gradient(135deg,rgba(139,92,246,0.09),rgba(139,92,246,0.025)_26%,rgba(255,255,255,0)_42%)] shadow-sm"
+    >
+      <span className="absolute bottom-4 left-0 top-4 w-1 rounded-full bg-violet-500" />
+      <div className="flex items-center gap-3 rounded-xl px-4 py-4 transition-colors hover:bg-muted/20">
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-foreground" />
+        <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[minmax(0,1.7fr)_auto_auto_auto] md:items-center">
+          <div className="min-w-0 space-y-2">
+            <div className="truncate text-sm font-bold text-foreground">{item.task_title}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-md border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-violet-700 shadow-sm dark:text-violet-300">
+                Writing
+              </Badge>
+              <Badge variant="outline" className="rounded-md border-border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm">
+                {item.task_type === "task_1" ? "Task 1" : "Task 2"}
+              </Badge>
+            </div>
+          </div>
+
+          <div className="space-y-1 text-xs">
+            <div className="font-bold uppercase tracking-widest text-muted-foreground">Submitted</div>
+            <div className="font-semibold text-foreground">{exactDateTime(item.submitted_at)}</div>
+          </div>
+
+          <div className="space-y-1 text-xs">
+            <div className="font-bold uppercase tracking-widest text-muted-foreground">Result</div>
+            {!isCompleted ? (
+              isFailed ? (
+                <Badge className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold" tone="danger">
+                  Failed
+                </Badge>
+              ) : (
+                <Badge className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold" tone="outline">
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  Grading
+                </Badge>
+              )
+            ) : band !== null && Number.isFinite(band) ? (
+              <span
+                className={cn(
+                  "inline-flex whitespace-nowrap items-center rounded-full border px-3 py-1 text-sm font-semibold tabular-nums",
+                  writingBandClass(band),
+                )}
+              >
+                Band {band.toFixed(1)}
+              </span>
+            ) : (
+              <Badge className="whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold" tone="outline">
+                No score
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 md:justify-end">
+            <div className="space-y-1 text-xs">
+              <div className="font-bold uppercase tracking-widest text-muted-foreground">Time</div>
+              <div className="font-semibold text-foreground">{formatDurationLabel(item.time_spent_seconds)}</div>
+              <div className="text-muted-foreground">{item.word_count} words</div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-foreground" />
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function AttemptHistoryGroup({ group }: { group: HistoryGroup }) {
+  const { latestAttempt, bestAttempt } = group;
+
+  return (
+    <details
+      className={cn(
+        "group relative m-2 rounded-xl border bg-background shadow-sm",
+        historyTypeCardClass(latestAttempt.type)
+      )}
+    >
+      <span
+        className={cn(
+          "absolute bottom-4 left-0 top-4 w-1 rounded-full",
+          historyTypeAccentClass(latestAttempt.type)
+        )}
+      />
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-4 transition-colors hover:bg-muted/20 [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[minmax(0,1.7fr)_auto_auto_auto_auto] md:items-center">
+          <div className="min-w-0 space-y-2">
+            <div className="truncate text-sm font-bold text-foreground">{latestAttempt.testTitle}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", typeBadgeClass(latestAttempt.type))}>
+                {formatType(latestAttempt.type)}
+              </Badge>
+              <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", sourceBadgeClass(latestAttempt.source))}>
+                {latestAttempt.source}
+              </Badge>
+              <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", formatBadgeClass(latestAttempt.testFormat))}>
+                {formatDisplay(latestAttempt.testFormat)}
+              </Badge>
+              <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", modeBadgeClass(latestAttempt.mode))}>
+                {formatMode(latestAttempt.mode)}
+              </Badge>
+            </div>
+          </div>
+
+          <div className="space-y-1 text-xs">
+            <div className="font-bold uppercase tracking-widest text-muted-foreground">Latest</div>
+            <div className="font-bold text-foreground">{formatScore(latestAttempt)}</div>
+            <div className="text-muted-foreground">{latestAttempt.lastSavedAt}</div>
+          </div>
+
+          <div className="space-y-1 text-xs">
+            <div className="font-bold uppercase tracking-widest text-muted-foreground">Best</div>
+            <div className="font-bold text-primary">{formatScore(bestAttempt)}</div>
+            <div className="text-muted-foreground">Band {formatBand(bestAttempt)}</div>
+          </div>
+
+          <div className="space-y-1 text-xs">
+            <div className="font-bold uppercase tracking-widest text-muted-foreground">Attempts</div>
+            <div className="font-bold text-foreground">{group.attempts.length}</div>
+            <div className="text-muted-foreground">{latestAttempt.timeSpent}</div>
+          </div>
+
+          <div className="flex items-center md:justify-end">
+            <HistoryRetakeButton testId={latestAttempt.testId} testType={latestAttempt.type} mode={latestAttempt.mode} />
+          </div>
+        </div>
+      </summary>
+
+      <div className="border-t border-border/60 bg-muted/10 px-4 py-4">
+        <div className="relative space-y-3 pl-5 before:absolute before:bottom-3 before:left-2 before:top-3 before:w-px before:bg-border">
+          {group.attempts.map((attempt, index) => (
+            <div
+              key={attempt.id}
+              className={cn(
+                "relative rounded-lg border bg-background px-4 py-3 shadow-sm",
+                attempt.type === "reading"
+                  ? "border-sky-500/20"
+                  : attempt.type === "listening"
+                  ? "border-amber-500/20"
+                  : "border-violet-500/20"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-background shadow-sm",
+                  historyTypeAccentClass(attempt.type)
+                )}
+              />
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_auto_auto_auto] md:items-center">
+                <div className="min-w-0 space-y-1">
+                  <div className="text-sm font-bold text-foreground">Attempt #{group.attempts.length - index}</div>
+                  <div className="text-xs text-muted-foreground">{attempt.lastSavedAt}</div>
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div className="font-bold uppercase tracking-widest text-muted-foreground">Mode</div>
+                  <div className="font-semibold text-foreground">{formatMode(attempt.mode)}</div>
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div className="font-bold uppercase tracking-widest text-muted-foreground">Score</div>
+                  <div className="font-bold text-foreground">{formatScore(attempt)}</div>
+                </div>
+                <div className="flex items-center justify-between gap-3 md:justify-end">
+                  <div className="space-y-1 text-xs">
+                    <div className="font-bold uppercase tracking-widest text-muted-foreground">Time</div>
+                    <div className="font-semibold text-foreground">{attempt.timeSpent}</div>
+                  </div>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-lg border-border/60 bg-background px-3 text-[11px] font-bold"
+                  >
+                    <Link href={`/attempts/${attempt.id}/result`}>Review</Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+export function HistoryClient({
+  attempts,
+  writingHistory,
+}: {
+  attempts: AttemptRow[];
+  writingHistory: WritingHistoryItem[];
+}) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterValue>("all");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -201,7 +479,7 @@ export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const historyGroups = useMemo(() => {
+  const historyEntries = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const filteredAttempts = attempts.filter((attempt) => {
       if (!matchesFilter(attempt, filter)) {
@@ -218,8 +496,38 @@ export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
         attempt.mode,
       ].some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-    return groupSubmittedAttempts(filteredAttempts);
-  }, [attempts, filter, query]);
+    const filteredWritingItems = writingHistory.filter((item) => {
+      if (!matchesWritingFilter(filter)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
+      return [
+        item.task_title,
+        item.task_type,
+        String(item.status ?? ""),
+        exactDateTime(item.submitted_at),
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+
+    const entries: HistoryEntry[] = [
+      ...groupSubmittedAttempts(filteredAttempts).map((group) => ({
+        kind: "attempt" as const,
+        key: group.key,
+        sortAt: group.latestAttempt.date || group.latestAttempt.lastSavedAt,
+        group,
+      })),
+      ...filteredWritingItems.map((item) => ({
+        kind: "writing" as const,
+        key: item.submission_id,
+        sortAt: item.submitted_at ?? item.graded_at ?? "",
+        item,
+      })),
+    ];
+
+    return entries.sort((left, right) => sortTimestamp(right.sortAt) - sortTimestamp(left.sortAt));
+  }, [attempts, filter, query, writingHistory]);
   const selectedFilter = filterOptions.find((option) => option.id === filter) ?? filterOptions[0];
 
   return (
@@ -230,9 +538,9 @@ export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
         <CardHeader className="space-y-1 relative z-10 p-5 lg:px-6 border-b border-border/40 bg-muted/5">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
-              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Test History</CardTitle>
+              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">History</CardTitle>
               <CardDescription className="text-muted-foreground text-sm font-medium">
-                Analyze your past performance, track progress, and revisit mistakes.
+                Reading, listening, and writing activity in one list.
               </CardDescription>
             </div>
             <div className="hidden md:flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
@@ -246,7 +554,7 @@ export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by test title or submitted time..."
+              placeholder="Search by title or submitted time..."
               className="pl-10 h-10 text-sm border-border/60 bg-muted/20 text-foreground rounded-lg transition-all focus:bg-background"
             />
           </div>
@@ -322,124 +630,17 @@ export function HistoryClient({ attempts }: { attempts: AttemptRow[] }) {
 
       <Card className="border-border/50 shadow-sm overflow-hidden">
         <div className="divide-y divide-border/60">
-          {historyGroups.map((group) => {
-            const { latestAttempt, bestAttempt } = group;
-            return (
-              <details
-                key={group.key}
-                className={cn(
-                  "group relative m-2 rounded-xl border bg-background shadow-sm",
-                  historyTypeCardClass(latestAttempt.type)
-                )}
-              >
-                <span
-                  className={cn(
-                    "absolute bottom-4 left-0 top-4 w-1 rounded-full",
-                    historyTypeAccentClass(latestAttempt.type)
-                  )}
-                />
-                <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-4 transition-colors hover:bg-muted/20 [&::-webkit-details-marker]:hidden">
-                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-                  <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[minmax(0,1.7fr)_auto_auto_auto_auto] md:items-center">
-                    <div className="min-w-0 space-y-2">
-                      <div className="truncate text-sm font-bold text-foreground">{latestAttempt.testTitle}</div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", typeBadgeClass(latestAttempt.type))}>
-                          {formatType(latestAttempt.type)}
-                        </Badge>
-                        <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", sourceBadgeClass(latestAttempt.source))}>
-                          {latestAttempt.source}
-                        </Badge>
-                        <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", formatBadgeClass(latestAttempt.testFormat))}>
-                          {formatDisplay(latestAttempt.testFormat)}
-                        </Badge>
-                        <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", modeBadgeClass(latestAttempt.mode))}>
-                          {formatMode(latestAttempt.mode)}
-                        </Badge>
-                      </div>
-                    </div>
+          {historyEntries.map((entry) =>
+            entry.kind === "attempt" ? (
+              <AttemptHistoryGroup key={entry.key} group={entry.group} />
+            ) : (
+              <WritingHistoryRow key={entry.key} item={entry.item} />
+            )
+          )}
 
-                    <div className="space-y-1 text-xs">
-                      <div className="font-bold uppercase tracking-widest text-muted-foreground">Latest</div>
-                      <div className="font-bold text-foreground">{formatScore(latestAttempt)}</div>
-                      <div className="text-muted-foreground">{latestAttempt.lastSavedAt}</div>
-                    </div>
-
-                    <div className="space-y-1 text-xs">
-                      <div className="font-bold uppercase tracking-widest text-muted-foreground">Best</div>
-                      <div className="font-bold text-primary">{formatScore(bestAttempt)}</div>
-                      <div className="text-muted-foreground">Band {formatBand(bestAttempt)}</div>
-                    </div>
-
-                    <div className="space-y-1 text-xs">
-                      <div className="font-bold uppercase tracking-widest text-muted-foreground">Attempts</div>
-                      <div className="font-bold text-foreground">{group.attempts.length}</div>
-                      <div className="text-muted-foreground">{latestAttempt.timeSpent}</div>
-                    </div>
-
-                    <div className="flex items-center md:justify-end">
-                      <HistoryRetakeButton testId={latestAttempt.testId} testType={latestAttempt.type} mode={latestAttempt.mode} />
-                    </div>
-                  </div>
-                </summary>
-
-                <div className="border-t border-border/60 bg-muted/10 px-4 py-4">
-                  <div className="relative space-y-3 pl-5 before:absolute before:bottom-3 before:left-2 before:top-3 before:w-px before:bg-border">
-                    {group.attempts.map((attempt, index) => (
-                      <div
-                        key={attempt.id}
-                        className={cn(
-                          "relative rounded-lg border bg-background px-4 py-3 shadow-sm",
-                          attempt.type === "reading"
-                            ? "border-sky-500/20"
-                            : "border-amber-500/20"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-background shadow-sm",
-                            historyTypeAccentClass(attempt.type)
-                          )}
-                        />
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_auto_auto_auto] md:items-center">
-                          <div className="min-w-0 space-y-1">
-                            <div className="text-sm font-bold text-foreground">Attempt #{group.attempts.length - index}</div>
-                            <div className="text-xs text-muted-foreground">{attempt.lastSavedAt}</div>
-                          </div>
-                          <div className="space-y-1 text-xs">
-                            <div className="font-bold uppercase tracking-widest text-muted-foreground">Mode</div>
-                            <div className="font-semibold text-foreground">{formatMode(attempt.mode)}</div>
-                          </div>
-                          <div className="space-y-1 text-xs">
-                            <div className="font-bold uppercase tracking-widest text-muted-foreground">Score</div>
-                            <div className="font-bold text-foreground">{formatScore(attempt)}</div>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 md:justify-end">
-                            <div className="space-y-1 text-xs">
-                              <div className="font-bold uppercase tracking-widest text-muted-foreground">Time</div>
-                              <div className="font-semibold text-foreground">{attempt.timeSpent}</div>
-                            </div>
-                            <Button
-                              asChild
-                              size="sm"
-                              variant="outline"
-                              className="h-8 rounded-lg border-border/60 bg-background px-3 text-[11px] font-bold"
-                            >
-                              <Link href={`/attempts/${attempt.id}/result`}>Review</Link>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </details>
-            );
-          })}
-
-          {historyGroups.length === 0 && (
+          {historyEntries.length === 0 && (
             <div className="px-4 py-10 text-center">
-              <div className="text-sm font-bold text-foreground">No matching attempts found.</div>
+              <div className="text-sm font-bold text-foreground">No matching history found.</div>
               <div className="mt-1 text-xs text-muted-foreground">Try another keyword or change the filter.</div>
             </div>
           )}

@@ -17,7 +17,7 @@ import type {
   AdminTestSummary,
   TestFormat
 } from "@/lib/types";
-import { getClientAdminAccessToken } from "@/lib/auth";
+import { fetchAdminApi } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { normalizeAdminTestSourceDetail } from "@/lib/test-source";
 
@@ -64,28 +64,6 @@ function sanitizeQuestionGroupTitle(title: string) {
     return "";
   }
   return trimmedTitle;
-}
-
-function buildRequestHeaders(): Record<string, string> {
-  const token = getClientAdminAccessToken();
-  if (!token) {
-    throw new Error("Admin session is missing.");
-  }
-
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`
-  };
-}
-
-function buildAuthHeaders(): Record<string, string> {
-  const token = getClientAdminAccessToken();
-  if (!token) {
-    throw new Error("Admin session is missing.");
-  }
-  return {
-    Authorization: `Bearer ${token}`
-  };
 }
 
 type BackendAdminTest = {
@@ -513,11 +491,11 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   console.log(`[Admin API] Requesting: ${url}`, init?.method || "GET");
   
   try {
-    const response = await fetch(url, {
+    const response = await fetchAdminApi(url, {
       cache: "no-store",
       ...init,
       headers: {
-        ...buildRequestHeaders(),
+        "Content-Type": "application/json",
         ...(init?.headers ?? {})
       }
     });
@@ -974,9 +952,8 @@ export const adminApi = {
   async uploadImage(file: File): Promise<{ publicUrl: string; filename: string; contentType: string }> {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch(`${baseUrl}/images/upload`, {
+    const response = await fetchAdminApi(`${baseUrl}/images/upload`, {
       method: "POST",
-      headers: buildAuthHeaders(),
       body: formData,
     });
     if (!response.ok) {
@@ -996,9 +973,8 @@ export const adminApi = {
   async uploadAudio(file: File): Promise<{ publicUrl: string; filename: string; contentType: string }> {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch(`${baseUrl}/audio/upload`, {
+    const response = await fetchAdminApi(`${baseUrl}/audio/upload`, {
       method: "POST",
-      headers: buildAuthHeaders(),
       body: formData,
     });
     if (!response.ok) {
@@ -1149,9 +1125,11 @@ export const adminApi = {
     return mapAdminAiThreadDetail(response);
   },
   async archiveAiThread(threadId: string): Promise<void> {
-    const response = await fetch(`${baseUrl}/ai/threads/${threadId}`, {
+    const response = await fetchAdminApi(`${baseUrl}/ai/threads/${threadId}`, {
       method: "DELETE",
-      headers: buildRequestHeaders()
+      headers: {
+        "Content-Type": "application/json",
+      },
     });
     if (!response.ok) {
       throw new Error(`Admin API request failed: ${response.status} ${response.statusText}`);
@@ -1186,8 +1164,16 @@ export const adminApi = {
     });
     return mapAdminTest(response);
   },
-  async updateDraft(testId: string, draft: AdminTestDraftState): Promise<AdminTestSummary> {
-    const response = await requestJson<BackendAdminTest>(`/tests/${testId}/draft`, {
+  async updateDraft(
+    testId: string,
+    draft: AdminTestDraftState,
+    options: { allowNewVersion?: boolean } = {}
+  ): Promise<AdminTestSummary> {
+    const search = new URLSearchParams();
+    if (options.allowNewVersion) {
+      search.set("allow_new_version", "true");
+    }
+    const response = await requestJson<BackendAdminTest>(`/tests/${testId}/draft${search.size ? `?${search.toString()}` : ""}`, {
       method: "PUT",
       body: JSON.stringify(toBackendDraftPayload(draft))
     });

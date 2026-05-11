@@ -121,12 +121,14 @@ class MeBandProgressPointRead(BaseModel):
     occurred_at: datetime
     reading: float | None = None
     listening: float | None = None
+    writing: float | None = None
 
 
 class MePerformanceStudyTimeRead(BaseModel):
     total_time_sec: int = 0
     reading_time_sec: int = 0
     listening_time_sec: int = 0
+    writing_time_sec: int = 0
 
 
 class MePerformanceTestCountBucketRead(BaseModel):
@@ -141,6 +143,7 @@ class MePerformanceSummaryRead(BaseModel):
     study_time: MePerformanceStudyTimeRead = Field(default_factory=MePerformanceStudyTimeRead)
     reading: MePerformanceTestCountBucketRead = Field(default_factory=MePerformanceTestCountBucketRead)
     listening: MePerformanceTestCountBucketRead = Field(default_factory=MePerformanceTestCountBucketRead)
+    writing: MePerformanceTestCountBucketRead | None = Field(default=None)
 
 
 class MeAccuracyTrendPointRead(BaseModel):
@@ -185,8 +188,16 @@ class MeImprovementRateRead(BaseModel):
     percent_change: float | None = None
 
 
+class MeWritingCriteriaRead(BaseModel):
+    task_achievement: float | None = None
+    coherence_cohesion: float | None = None
+    lexical_resource: float | None = None
+    grammatical_range_accuracy: float | None = None
+
+
 class MeDashboardAnalyticsRead(BaseModel):
     performance_summary: MePerformanceSummaryRead = Field(default_factory=MePerformanceSummaryRead)
+    writing_criteria: MeWritingCriteriaRead | None = Field(default=None)
     question_type_analysis: list[MeQuestionTypeAnalysisItemRead] = Field(default_factory=list)
     comparison: MeQuestionTypeComparisonRead = Field(default_factory=MeQuestionTypeComparisonRead)
     error_distribution: list[MeErrorDistributionItemRead] = Field(default_factory=list)

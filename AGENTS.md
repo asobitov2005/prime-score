@@ -30,7 +30,7 @@ Quyidagilarni keraksiz context sifatida ochmang:
   - code store: `backend/app/services/code_store.py`
   - verify endpoint: `POST /api/auth/verify-code`
 - Shunga qaramay user frontend hali to'liq bearer-token auth bilan ulanmagan. Session asosan `frontend/store/auth-store.ts` ichida client-side saqlanadi.
-- Admin auth boshqa holatda: `admin/` app JWT bearer cookie flow ishlatadi va `/api/admin/auth/*` bilan gaplashadi.
+- Admin auth boshqa holatda: `admin/` app phone/password + Telegram OTP flowdan keyin JWT bearer cookie ishlatadi va `/api/admin/auth/*` bilan gaplashadi.
 - User frontend hybrid: backend muvaffaqiyatsiz bo'lsa ko'p joy fallback/mock ma'lumotga qaytadi.
   - `frontend/lib/server-data.ts`
   - `frontend/lib/server-me.ts`
@@ -72,6 +72,10 @@ Task turiga qarab birinchi shu joylarni tekshiring:
 - Telegram auth bot:
   - `backend/app/bot/main.py`
   - `backend/app/services/code_store.py`
+- Admin auth OTP:
+  - `backend/app/services/admin_auth.py`
+  - `backend/app/api/routes/admin.py`
+  - `admin/components/login-flow.tsx`
 
 ## Ishlash qoidalari
 

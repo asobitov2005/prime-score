@@ -22,6 +22,11 @@ import { FRONTEND_API_TIMEOUT_MS, getFrontendClientApiBaseUrl, getFrontendServer
 import { getAttemptsByType, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
 import { useAuthStore } from "@/store/auth-store";
 import type { AccessType, AttemptRow, LeaderboardEntry, LeaderboardResponseData, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
+import {
+  isUserAuthFailureStatus,
+  performClientUserAuthedFetch,
+  refreshClientUserAccessToken,
+} from "@/lib/user-auth-client";
 
 export class ApiError extends Error {
   status: number;
@@ -104,47 +109,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
   }
   const fetchImpl = config.fetchImpl ?? fetch;
 
-  async function tryRefreshAccessToken(): Promise<string | null> {
-    const { refreshToken, setTokens, clearSession } = useAuthStore.getState();
-    if (!refreshToken) {
-      return null;
-    }
-
-    const response = await fetchImpl(`${baseUrl}/auth/refresh`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ refresh_token: refreshToken })
-    });
-
-    if (!response.ok) {
-      clearSession();
-      return null;
-    }
-
-    const payload = await response.json() as { access_token: string; refresh_token?: string | null };
-    setTokens({
-      accessToken: payload.access_token,
-      refreshToken: payload.refresh_token ?? refreshToken,
-    });
-    return payload.access_token;
-  }
-
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const performRequest = async (accessTokenOverride?: string | null) => {
-      const authToken = accessTokenOverride ?? useAuthStore.getState().accessToken;
-      return fetchImpl(`${baseUrl}${path}`, {
-        ...init,
-        signal: init?.signal ?? controller?.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-          ...(init?.headers ?? {})
-        }
-      });
-    };
-
     const controller = init?.signal ? null : new AbortController();
     const timeoutId = controller
       ? setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS)
@@ -152,7 +117,14 @@ export function createApiClient(config: ApiClientConfig = {}) {
 
     let response: Response;
     try {
-      response = await performRequest();
+      response = await performClientUserAuthedFetch(path, {
+        ...init,
+        signal: init?.signal ?? controller?.signal,
+      }, {
+        baseUrl,
+        fetchImpl,
+        includeJsonContentType: true,
+      });
     } catch (error) {
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -163,34 +135,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
       throw error;
     }
 
-    if (
-      response.status === 401 &&
-      !path.startsWith("/auth/refresh") &&
-      !path.startsWith("/auth/request-code") &&
-      !path.startsWith("/auth/verify-code")
-    ) {
-      try {
-        const nextAccessToken = await tryRefreshAccessToken();
-        if (nextAccessToken) {
-          response = await performRequest(nextAccessToken);
-        }
-      } catch {}
-    }
-
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
 
     if (!response.ok) {
-      if (
-        response.status === 401 &&
-        !path.startsWith("/auth/refresh") &&
-        !path.startsWith("/auth/request-code") &&
-        !path.startsWith("/auth/verify-code")
-      ) {
-        useAuthStore.getState().clearSession();
-      }
-
       let message = `Request failed for ${path}`;
 
       try {
@@ -212,18 +161,6 @@ export function createApiClient(config: ApiClientConfig = {}) {
   }
 
   async function requestForm<T>(path: string, init?: RequestInit): Promise<T> {
-    const performRequest = async (accessTokenOverride?: string | null) => {
-      const authToken = accessTokenOverride ?? useAuthStore.getState().accessToken;
-      return fetchImpl(`${baseUrl}${path}`, {
-        ...init,
-        signal: init?.signal ?? controller?.signal,
-        headers: {
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-          ...(init?.headers ?? {})
-        }
-      });
-    };
-
     const controller = init?.signal ? null : new AbortController();
     const timeoutId = controller
       ? setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS)
@@ -231,7 +168,14 @@ export function createApiClient(config: ApiClientConfig = {}) {
 
     let response: Response;
     try {
-      response = await performRequest();
+      response = await performClientUserAuthedFetch(path, {
+        ...init,
+        signal: init?.signal ?? controller?.signal,
+      }, {
+        baseUrl,
+        fetchImpl,
+        includeJsonContentType: false,
+      });
     } catch (error) {
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -242,24 +186,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
       throw error;
     }
 
-    if (response.status === 401) {
-      try {
-        const nextAccessToken = await tryRefreshAccessToken();
-        if (nextAccessToken) {
-          response = await performRequest(nextAccessToken);
-        }
-      } catch {}
-    }
-
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
 
     if (!response.ok) {
-      if (response.status === 401) {
-        useAuthStore.getState().clearSession();
-      }
-
       let message = `Request failed for ${path}`;
       try {
         const payload = (await response.json()) as { detail?: string; message?: string };
@@ -300,6 +231,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
         is_premium: boolean;
         premium_until?: string | null;
         telegram_id?: number | null;
+        created_at?: string | null;
       };
     }>("/auth/verify-code", {
       method: "POST",
@@ -308,7 +240,16 @@ export function createApiClient(config: ApiClientConfig = {}) {
         code: body.code,
       })
     }),
-    refresh: (refreshToken: string) => request<{ access_token: string; refresh_token: string }>("/auth/refresh", { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) }),
+    refresh: async (refreshToken: string) => {
+      const accessToken = await refreshClientUserAccessToken(baseUrl, fetchImpl, { clearOnFailure: true });
+      if (!accessToken) {
+        throw new ApiError("Authentication is required.", 401);
+      }
+      return {
+        access_token: accessToken,
+        refresh_token: useAuthStore.getState().refreshToken ?? refreshToken,
+      };
+    },
     logout: (payload?: { sessionId?: string | null; refreshToken?: string | null }) =>
       request<{ message: string }>("/auth/logout", {
         method: "POST",

@@ -236,7 +236,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       </SmartFilterShell>
 
       {/* Test Grid area */}
-      <div className="pb-8">
+      <div className="pt-4 pb-8 sm:pt-5">
         {tests.length === 0 ? (
         <div className="text-center py-20 bg-card/20 rounded-[3rem] border border-dashed border-border/60">
           <div className="mx-auto w-20 h-20 rounded-[2rem] bg-muted/30 flex items-center justify-center mb-6">
@@ -248,7 +248,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {tests.map((test) => {
             const isFull = !test.format || test.format === "full";
             const latestAttempt = latestAttemptByTestId.get(test.id);

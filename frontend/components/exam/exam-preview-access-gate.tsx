@@ -1,7 +1,8 @@
 "use client";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 
 import Link from "next/link";
-import { LockKeyhole, LogIn } from "lucide-react";
+import { Gem, LogIn } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/auth-store";
@@ -26,8 +27,8 @@ export function ExamPreviewAccessGate({ kind, backHref }: ExamPreviewAccessGateP
         <section className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 shadow-2xl">
           <div className="h-1 bg-primary" />
           <div className="space-y-5 p-6 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-              <LockKeyhole className="h-7 w-7" />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 text-amber-500 mb-6">
+              <PrimePremiumIcon className="h-7 w-7" />
             </div>
 
             <div className="space-y-2">
