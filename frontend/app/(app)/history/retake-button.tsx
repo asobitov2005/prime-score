@@ -10,9 +10,17 @@ interface HistoryRetakeButtonProps {
   testId: string;
   testType: TestType;
   mode: AttemptMode;
+  idleLabel?: string;
+  loadingLabel?: string;
 }
 
-export function HistoryRetakeButton({ testId, testType, mode }: HistoryRetakeButtonProps) {
+export function HistoryRetakeButton({
+  testId,
+  testType,
+  mode,
+  idleLabel = "Retake",
+  loadingLabel = "Starting...",
+}: HistoryRetakeButtonProps) {
   const router = useRouter();
   const [isStarting, setIsStarting] = useState(false);
 
@@ -62,7 +70,7 @@ export function HistoryRetakeButton({ testId, testType, mode }: HistoryRetakeBut
       }}
       className="h-9 rounded-lg border-border/70 bg-background px-3.5 text-[11px] font-bold text-foreground shadow-sm hover:bg-muted/40"
     >
-      {isStarting ? "Starting..." : "Retake"}
+      {isStarting ? loadingLabel : idleLabel}
     </Button>
   );
 }

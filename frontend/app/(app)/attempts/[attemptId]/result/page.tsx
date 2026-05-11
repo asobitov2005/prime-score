@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Minus, XCircle } from "lucide-react";
+import { HistoryRetakeButton } from "@/app/(app)/history/retake-button";
 import { AnswersOverviewCard } from "./answers-overview-card";
 import { ResultBackGuard } from "./result-back-guard";
 import { ResultViewTracker } from "./result-view-tracker";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCompletedAtLabel } from "@/lib/date-time";
 import { getLeaderboardRank } from "@/lib/server-me";
-import { getBackendAttemptResult, getBackendAttemptReview } from "@/lib/server-attempts";
+import { getBackendAttempt, getBackendAttemptResult, getBackendAttemptReview } from "@/lib/server-attempts";
 import { getTestSourceDetail } from "@/lib/test-source";
 import type { TestType } from "@/lib/types";
 
@@ -24,6 +25,7 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
   if (!result) {
     notFound();
   }
+  const attempt = await getBackendAttempt(params.attemptId).catch(() => null);
   const review = await getBackendAttemptReview(params.attemptId).catch(() => null);
   const leaderboardRank = await getLeaderboardRank(result.test_type).catch(() => null);
 
@@ -69,11 +71,12 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/tests/${result.test_id}`}>
-                  Try Again
-                </Link>
-              </Button>
+              <HistoryRetakeButton
+                testId={result.test_id}
+                testType={result.test_type}
+                mode={attempt?.mode ?? "exam"}
+                idleLabel="Try Again"
+              />
             </div>
           </div>
           <CardDescription className="-mt-2 flex flex-wrap items-center justify-between gap-2 text-muted-foreground">

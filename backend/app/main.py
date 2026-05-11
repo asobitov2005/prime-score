@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     # Keep app assembly centralized so the API boot path stays predictable.
+    # Test comment: backend app factory entrypoint.
     settings = get_settings()
 
     app = FastAPI(
