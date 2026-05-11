@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMatchingAnswerForReview, shouldAutoLetterMatchingOptions } from "@/lib/matching-option-format";
+import {
+  formatMatchingAnswerForReview,
+  shouldAutoLetterMatchingOptions,
+  shouldAutoRomanMatchingOptions,
+} from "@/lib/matching-option-format";
 import { getBackendAttemptReview } from "@/lib/server-attempts";
 
 interface AttemptReviewPageProps {
@@ -96,19 +100,23 @@ export default async function AttemptReviewPage({ params }: AttemptReviewPagePro
 }
 
 function formatReviewValue(questionType: string, answerValue: string | null | undefined, options: string[]) {
-  if (!shouldAutoLetterMatchingOptions(questionType)) {
+  if (!shouldFormatMatchingReviewValue(questionType)) {
     return answerValue ?? "No answer";
   }
   return formatMatchingAnswerForReview(answerValue, options, questionType);
 }
 
 function formatReviewAnswers(questionType: string, correctAnswers: string[], options: string[]) {
-  if (!shouldAutoLetterMatchingOptions(questionType)) {
+  if (!shouldFormatMatchingReviewValue(questionType)) {
     return correctAnswers.join(", ");
   }
   return correctAnswers
     .map((answer) => formatMatchingAnswerForReview(answer, options, questionType))
     .join(", ");
+}
+
+function shouldFormatMatchingReviewValue(questionType: string) {
+  return shouldAutoLetterMatchingOptions(questionType) || shouldAutoRomanMatchingOptions(questionType);
 }
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
