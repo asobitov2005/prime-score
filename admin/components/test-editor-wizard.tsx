@@ -1825,9 +1825,17 @@ function parseCompletionTableLayout(text: string) {
       const continuationTargetIndex = /^\(.*\)$/.test(line)
         ? 0
         : Math.max(0, previousRow.cells.length - 1);
-      previousRow.cells[continuationTargetIndex] = previousRow.cells[continuationTargetIndex]
-        ? `${previousRow.cells[continuationTargetIndex]}\n${line}`
-        : line;
+      const currentCell = previousRow.cells[continuationTargetIndex];
+      previousRow.cells[continuationTargetIndex] = currentCell
+        ? {
+            ...currentCell,
+            text: currentCell.text ? `${currentCell.text}\n${line}` : line,
+          }
+        : {
+            text: line,
+            rowSpan: 1,
+            colSpan: 1,
+          };
       continue;
     }
 
