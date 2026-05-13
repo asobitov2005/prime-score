@@ -189,6 +189,14 @@ class WritingInlineAnnotation(BaseModel):
     improved_sentence: str = ""
 
 
+class WritingVocabularySuggestion(BaseModel):
+    current_phrase: str = ""
+    improved_phrase: str = ""
+    level: str = ""
+    why_it_works: str = ""
+    example_sentence: str = ""
+
+
 class WritingRoastFeedback(BaseModel):
     overall_roast: str = ""
     one_liner: str = ""
@@ -219,6 +227,7 @@ class WritingEvaluationRead(BaseModel):
     lexical: WritingCriterionFeedback
     grammar: WritingCriterionFeedback
     inline_annotations: list[WritingInlineAnnotation] = Field(default_factory=list)
+    vocabulary_suggestions: list[WritingVocabularySuggestion] = Field(default_factory=list)
     improved_version: str | None = None
     overall_summary: str = ""
     next_steps: list[str] = Field(default_factory=list)

@@ -42,7 +42,7 @@ const defaultInstructions: Record<string, string> = {
   "reading_true_false_not_given": "Do the following statements agree with the information given in the Reading Passage?\n\nIn boxes on your answer sheet, write:\n\n{TRUE}\t\t\tif the statement agrees with the information\n{FALSE}\t\t\tif the statement contradicts the information\n{NOT GIVEN}\tif there is no information on this",
   "reading_yes_no_not_given": "Do the following statements agree with the claims of the writer in the Reading Passage?\n\nIn boxes on your answer sheet, write:\n\n{YES}\t\t\tif the statement agrees with the claims of the writer\n{NO}\t\t\tif the statement contradicts the claims of the writer\n{NOT GIVEN}\tif it is impossible to say what the writer thinks about this",
   "reading_mc_single": "Choose the correct letter, A, B, C or D.\n\nWrite the correct letter in boxes on your answer sheet.",
-  "reading_mc_multiple": "Choose TWO letters, A-E.\n\nWrite the correct letters in boxes on your answer sheet.",
+  "reading_mc_multiple": "Choose TWO letters, A-H.\n\nWrite the correct letters in boxes on your answer sheet.",
   "reading_matching_headings": "Choose the correct heading for each paragraph from the list of headings below.\n\nWrite the correct number, i-ix, in boxes on your answer sheet.",
   "reading_matching_information": "Which paragraph contains the following information?\n\nWrite the correct letter, A-F, in boxes on your answer sheet.\n\nNB You may use any letter more than once.",
   "reading_matching_features": "Look at the following statements and the list of people below.\n\nMatch each statement with the correct person.\n\nWrite the correct letter, A-E, in boxes on your answer sheet.",
@@ -51,6 +51,7 @@ const defaultInstructions: Record<string, string> = {
   "reading_summary_completion_wordbank": "Complete the summary using the list of words, A-G, below.\n\nWrite the correct letter, A-G, in boxes on your answer sheet.",
   "reading_summary_completion_freetext": "Complete the summary below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_note_completion": "Complete the notes below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
+  "reading_table_completion": "Complete the table below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_flowchart_completion": "Complete the flow-chart below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_diagram_labeling": "Label the diagram below.\n\nChoose {ONE WORD ONLY} from the passage for each answer.",
   "reading_short_answer": "Answer the questions below.\n\nChoose {NO MORE THAN TWO WORDS AND/OR A NUMBER} from the passage for each answer.",
@@ -59,9 +60,10 @@ const defaultInstructions: Record<string, string> = {
   "listening_form_completion": "Complete the form below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
   "listening_sentence_completion": "Complete the sentences below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
   "listening_mc_single": "Choose the correct letter, A, B or C.",
-  "listening_mc_multiple": "Choose TWO letters, A-E.",
+  "listening_mc_multiple": "Choose TWO letters, A-H.",
   "listening_matching": "What does the speaker say about each of the following items?\n\nChoose the correct letter, A, B or C, and write them next to Questions.",
   "listening_plan_map_labeling": "Label the map below.\n\nWrite the correct letter, A-H, next to Questions.",
+  "listening_table_completion": "Complete the table below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
   "listening_plan_map_labeling_free_text": "Label the map below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
   "listening_flowchart_completion": "Complete the flow-chart below.\n\nWrite {NO MORE THAN TWO WORDS AND/OR A NUMBER} for each answer.",
   "listening_short_answer": "Answer the questions below.\n\nWrite {NO MORE THAN THREE WORDS AND/OR A NUMBER} for each answer."
@@ -209,6 +211,56 @@ function getAudioFileDurationSeconds(file: File) {
   });
 }
 
+const FULL_TEST_AUDIO_UPLOAD_ID = "__full_test_audio__";
+
+type SharedListeningAudioMeta = {
+  audioUrl: string;
+  audioDurationSeconds: number | null;
+};
+
+function detectSharedListeningAudioSections(sections: AdminTestDraftContentSection[]): SharedListeningAudioMeta | null {
+  if (sections.length === 0) {
+    return null;
+  }
+
+  const firstUrl = String(sections[0]?.audioUrl ?? "").trim();
+  if (!firstUrl) {
+    return null;
+  }
+
+  if (!sections.every((section) => String(section.audioUrl ?? "").trim() === firstUrl)) {
+    return null;
+  }
+
+  const audioDurationSeconds = sections.find((section) => (section.audioDurationSeconds ?? 0) > 0)?.audioDurationSeconds ?? null;
+  return { audioUrl: firstUrl, audioDurationSeconds };
+}
+
+function createDraftContentSection(
+  type: AdminTestDraftState["metadata"]["type"],
+  index: number,
+  sharedListeningAudio?: SharedListeningAudioMeta | null
+): AdminTestDraftContentSection {
+  return {
+    id: createDraftId("draft-section"),
+    label: type === "listening" ? "Part " + (index + 1) : "Passage " + (index + 1),
+    title: type === "listening" ? "" : "Reading Passage " + (index + 1),
+    subtitle: "",
+    content: "",
+    paragraphs: [],
+    showLabels: false,
+    mediaKind: type === "listening" ? "audio" : "text",
+    audioUrl: type === "listening" ? (sharedListeningAudio?.audioUrl ?? "") : "",
+    audioDurationSeconds: type === "listening"
+      ? (sharedListeningAudio ? (index === 0 ? sharedListeningAudio.audioDurationSeconds : null) : 0)
+      : null,
+    transcript: "",
+    transcriptSegments: [],
+    transcriptQuestionLocations: [],
+    markerCount: 0,
+  };
+}
+
 function clipboardImageFileName(mimeType: string) {
   const normalizedType = mimeType.toLowerCase();
   if (normalizedType === "image/png") return "clipboard-image.png";
@@ -252,6 +304,20 @@ function alphabetLabelFromIndex(index: number) {
   return label;
 }
 
+function alphabetLabelToIndex(label: string) {
+  let value = 0;
+
+  for (const char of label.toUpperCase()) {
+    const code = char.charCodeAt(0);
+    if (code < 65 || code > 90) {
+      return -1;
+    }
+    value = value * 26 + (code - 64);
+  }
+
+  return value - 1;
+}
+
 function romanNumeralFromIndex(index: number) {
   const numerals: Array<[number, string]> = [
     [1000, "m"],
@@ -281,7 +347,7 @@ function romanNumeralFromIndex(index: number) {
 }
 
 function shouldAutoLetterMatchingOptions(typeId: string) {
-  return typeId.includes("matching_features");
+  return typeId.includes("matching_features") || typeId.includes("listening_matching");
 }
 
 function getMatchingOptionPreview(option: string, index: number, typeId: string) {
@@ -579,10 +645,31 @@ function isBracketCompletionType(typeId: string) {
     typeId.includes("sentence_completion")
     || typeId.includes("summary_completion")
     || typeId.includes("note_completion")
+    || typeId.includes("table_completion")
     || typeId.includes("flowchart_completion")
     || typeId.includes("form_completion")
     || typeId.includes("short_answer")
   );
+}
+
+function getCompletionQuestionBlockPlaceholder(typeId: string) {
+  if (typeId.includes("table_completion")) {
+    return "<table>\n  <tr><th>Region</th><th>Style</th><th>Additional Information</th></tr>\n  <tr><td>Eastern Africa</td><td>Subjects similar to the 18 area of the country.</td><td>Less sought-after than other styles of African art.</td></tr>\n  <tr><td>Southern Africa</td><td>...</td><td>...</td></tr>\n</table>\n\nor:\n\n|| Region | Style | Additional Information ||\n| Eastern Africa | Subjects similar to the 18 area of the country. | Less sought-after than other styles of African art. |\n| Southern Africa | ... | ... |";
+  }
+
+  if (typeId.includes("wordbank")) {
+    return "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days.";
+  }
+
+  if (typeId.includes("note_completion") || typeId.includes("summary_completion") || typeId.includes("flowchart_completion") || typeId.includes("form_completion")) {
+    return "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days.";
+  }
+
+  if (typeId.includes("sentence_completion") || typeId.includes("short_answer")) {
+    return "Statement or sentence here...";
+  }
+
+  return "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days.";
 }
 
 function hasFlowChartSeparators(text: string) {
@@ -640,7 +727,7 @@ function parseMultipleChoiceQuestionBlock(text: string) {
   const promptIndex = normalizedLines.indexOf(promptLine);
 
   for (const rawLine of normalizedLines.slice(promptIndex + 1)) {
-    const optionMatch = rawLine.match(/^\s*([A-E])[.)]\s*(.+)$/i);
+    const optionMatch = rawLine.match(/^\s*([A-Z]+)[.)]\s*(.+)$/i);
     const optionText = optionMatch ? optionMatch[2].trim() : rawLine.trim();
     if (optionText) {
       variants.push(optionText);
@@ -683,7 +770,7 @@ function parseMultipleChoiceQuestionBlocks(text: string) {
       continue;
     }
 
-    const optionMatch = trimmedLine.match(/^\s*([A-E])[.)]\s*(.+)$/i);
+    const optionMatch = trimmedLine.match(/^\s*([A-Z]+)[.)]\s*(.+)$/i);
     const optionText = optionMatch ? optionMatch[2].trim() : trimmedLine;
     currentVariants.push(optionText);
   }
@@ -716,13 +803,17 @@ function resolveMcOptionLetter(token: string, variants: string[]) {
     return null;
   }
 
-  if (/^[A-E]$/i.test(trimmed)) {
-    return trimmed.toUpperCase();
+  if (/^[A-Z]+$/i.test(trimmed)) {
+    const optionIndex = alphabetLabelToIndex(trimmed);
+    if (optionIndex >= 0 && optionIndex < variants.length) {
+      return trimmed.toUpperCase();
+    }
+    return null;
   }
 
   const normalized = normalizeLookupToken(trimmed);
   for (let index = 0; index < variants.length; index += 1) {
-    const letter = String.fromCharCode(65 + index);
+    const letter = alphabetLabelFromIndex(index);
     const optionText = variants[index] ?? "";
     const candidates = [`${letter}. ${optionText}`, `${letter}) ${optionText}`, optionText];
     if (candidates.some((candidate) => normalizeLookupToken(candidate) === normalized)) {
@@ -762,7 +853,7 @@ function matchWordBankOptionVariants(token: string, options: string[]) {
     const fullOption = option.trim();
     const optionValue = extractMatchingOptionValue(fullOption);
     const optionText = stripMatchingOptionPrefix(fullOption);
-    const orderLetter = String.fromCharCode(65 + index);
+    const orderLetter = alphabetLabelFromIndex(index);
     const candidates = [fullOption, optionValue, optionText, orderLetter];
 
     if (candidates.some((candidate) => normalizeLookupToken(candidate) === normalized)) {
@@ -1442,6 +1533,7 @@ function normalizeMetadataQuickFixes(draft: AdminTestDraftState): AdminTestDraft
       ...group,
       title: normalizeInlineBlankPlaceholders(group.title.trim()),
       instructions: normalizeInlineBlankPlaceholders(group.instructions.trim()),
+      optionsTitle: normalizeInlineBlankPlaceholders(group.optionsTitle?.trim() ?? ""),
       questionBlock: group.questionBlock !== undefined ? normalizeInlineBlankPlaceholders(group.questionBlock) : group.questionBlock,
       answerBlock: group.answerBlock !== undefined ? normalizeInlineBlankPlaceholders(group.answerBlock) : group.answerBlock,
       secondaryBlock: group.secondaryBlock !== undefined ? normalizeInlineBlankPlaceholders(group.secondaryBlock) : group.secondaryBlock,
@@ -1615,7 +1707,102 @@ function parseBinaryInstructionLayout(text: string) {
   };
 }
 
+type CompletionTableRow = {
+  isHeader: boolean;
+  cells: Array<{
+    text: string;
+    rowSpan: number;
+    colSpan: number;
+  }>;
+};
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'");
+}
+
+function stripHtmlToText(value: string) {
+  return decodeHtmlEntities(
+    value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|tr|th|td|h[1-6])>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+  )
+    .replace(/\u00a0/g, " ")
+    .trim();
+}
+
+function parseTableSpanAttr(value: string, attrName: "rowspan" | "colspan") {
+  const match = value.match(new RegExp(`${attrName}\\s*=\\s*["']?(\\d+)["']?`, "i"));
+  const parsed = match ? Number.parseInt(match[1] ?? "", 10) : 1;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function normalizePipeCompletionTableRows(rows: CompletionTableRow[]) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.cells.length), 0);
+  if (maxColumns < 2) {
+    return null;
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    cells: row.cells.length < maxColumns
+      ? [...row.cells, ...Array.from({ length: maxColumns - row.cells.length }, () => ({
+        text: "",
+        rowSpan: 1,
+        colSpan: 1,
+      }))]
+      : row.cells,
+  }));
+}
+
+function parseCompletionTableHtmlLayout(text: string) {
+  const tableMatch = text.match(/<table\b[\s\S]*?<\/table>/i);
+  if (!tableMatch) {
+    return null;
+  }
+
+  const rowMatches = [...tableMatch[0].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
+  if (rowMatches.length === 0) {
+    return null;
+  }
+
+  const rows = rowMatches
+    .map((rowMatch, rowIndex) => {
+      const cellMatches = [...rowMatch[1].matchAll(/<(t[hd])\b([^>]*)>([\s\S]*?)<\/t[hd]>/gi)];
+      if (cellMatches.length === 0) {
+        return null;
+      }
+
+      return {
+        isHeader: cellMatches.some((cellMatch) => cellMatch[1].toLowerCase() === "th") || rowIndex === 0,
+        cells: cellMatches.map((cellMatch) => ({
+          text: stripHtmlToText(cellMatch[3]),
+          rowSpan: parseTableSpanAttr(cellMatch[2] ?? "", "rowspan"),
+          colSpan: parseTableSpanAttr(cellMatch[2] ?? "", "colspan"),
+        })),
+      } satisfies CompletionTableRow;
+    })
+    .filter((row): row is CompletionTableRow => Boolean(row));
+
+  return rows.length > 0 ? rows : null;
+}
+
 function parseCompletionTableLayout(text: string) {
+  const htmlLayout = parseCompletionTableHtmlLayout(text);
+  if (htmlLayout) {
+    return htmlLayout;
+  }
+
   const rows = text
     .split("\n")
     .map((line) => line.trim())
@@ -1625,13 +1812,14 @@ function parseCompletionTableLayout(text: string) {
     return null;
   }
 
-  const parsedRows: Array<{ isHeader: boolean; cells: string[] }> = [];
+  const parsedRows: CompletionTableRow[] = [];
+  let maxColumns = 0;
 
   for (const line of rows) {
     if (!line.includes("|")) {
       const previousRow = parsedRows[parsedRows.length - 1];
       if (!previousRow) {
-        return null;
+        continue;
       }
 
       const continuationTargetIndex = /^\(.*\)$/.test(line)
@@ -1644,15 +1832,30 @@ function parseCompletionTableLayout(text: string) {
     }
 
     const isHeader = line.startsWith("||") && line.endsWith("||");
-    const body = isHeader ? line.slice(2, -2).trim() : line;
-    const cells = body.split("|").map((cell) => cell.trim());
-    if (cells.length < 2) {
-      return null;
+    const body = isHeader
+      ? line.slice(2, -2).trim()
+      : line.replace(/^\|/, "").replace(/\|$/, "").trim();
+    const cells = body.split("|").map((cell) => ({
+      text: cell.trim(),
+      rowSpan: 1,
+      colSpan: 1,
+    }));
+    if (cells.length === 0) {
+      continue;
     }
     parsedRows.push({ isHeader, cells });
+    maxColumns = Math.max(maxColumns, cells.length);
   }
 
-  return parsedRows;
+  if (parsedRows.length === 0) {
+    return null;
+  }
+
+  if (maxColumns < 2) {
+    return null;
+  }
+
+  return normalizePipeCompletionTableRows(parsedRows);
 }
 
 function renderInstructionPreviewText(text: string, keyPrefix: string) {
@@ -2170,8 +2373,16 @@ function ContentPanel({
   const [uploadingSectionId, setUploadingSectionId] = useState<string | null>(null);
   const [transcribingSectionId, setTranscribingSectionId] = useState<string | null>(null);
   const [transcriptProgressBySection, setTranscriptProgressBySection] = useState<Record<string, TranscriptProgressState>>({});
+  const [contentErrorMessage, setContentErrorMessage] = useState<string | null>(null);
   const [collapseStateReady, setCollapseStateReady] = useState(false);
   const collapseStorageKey = useMemo(() => "admin-content-sections:" + pathname, [pathname]);
+  const sharedListeningAudio = useMemo(
+    () => draft.metadata.type === "listening" && draft.metadata.format === "full"
+      ? detectSharedListeningAudioSections(draft.content.sections)
+      : null,
+    [draft.content.sections, draft.metadata.format, draft.metadata.type]
+  );
+  const isUsingFullTestAudio = Boolean(sharedListeningAudio);
 
   const addSection = () => {
     setDraft((current) => ({
@@ -2179,33 +2390,38 @@ function ContentPanel({
       content: {
         sections: [
           ...current.content.sections,
-          {
-            id: createDraftId("draft-section"),
-            label: current.metadata.type === "listening" ? "Part " + (current.content.sections.length + 1) : "Passage " + (current.content.sections.length + 1),
-            title: current.metadata.type === "listening" ? "" : "Reading Passage " + (current.content.sections.length + 1),
-            subtitle: "",
-            content: "",
-            paragraphs: [],
-            showLabels: false,
-            mediaKind: current.metadata.type === "listening" ? "audio" : "text",
-            audioUrl: "",
-            audioDurationSeconds: current.metadata.type === "listening" ? 0 : null,
-            transcript: "",
-            transcriptSegments: [],
-            transcriptQuestionLocations: [],
-            markerCount: 0
-          }
+          createDraftContentSection(
+            current.metadata.type,
+            current.content.sections.length,
+            current.metadata.type === "listening" && current.metadata.format === "full"
+              ? detectSharedListeningAudioSections(current.content.sections)
+              : null
+          )
         ]
       }
     }));
   };
 
   const removeSection = (sectionId: string) => {
-    setDraft((current) => ({
-      ...current,
-      content: { sections: current.content.sections.filter((s) => s.id !== sectionId) },
-      questionGroups: (current.questionGroups ?? []).filter((g) => g.sectionId !== sectionId)
-    }));
+    setDraft((current) => {
+      const sharedAudioBeforeRemoval = current.metadata.type === "listening" && current.metadata.format === "full"
+        ? detectSharedListeningAudioSections(current.content.sections)
+        : null;
+      const nextSections = current.content.sections.filter((section) => section.id !== sectionId);
+
+      if (sharedAudioBeforeRemoval && nextSections.length > 0 && !nextSections.some((section) => (section.audioDurationSeconds ?? 0) > 0)) {
+        nextSections[0] = {
+          ...nextSections[0],
+          audioDurationSeconds: sharedAudioBeforeRemoval.audioDurationSeconds,
+        };
+      }
+
+      return {
+        ...current,
+        content: { sections: nextSections },
+        questionGroups: (current.questionGroups ?? []).filter((g) => g.sectionId !== sectionId)
+      };
+    });
     setDeleteConfirmSectionId(null);
     setCollapsedSections((current) => {
       const next = { ...current };
@@ -2340,7 +2556,7 @@ function ContentPanel({
         adminApi.uploadAudio(file),
         getAudioFileDurationSeconds(file),
       ]);
-      const updatedSection = draft.content.sections.find((item) => item.id === sectionId);
+      setContentErrorMessage(null);
       updateSection(sectionId, {
         audioUrl: asset.publicUrl,
         audioDurationSeconds: duration,
@@ -2349,10 +2565,64 @@ function ContentPanel({
         transcriptSegments: [],
         transcriptQuestionLocations: [],
       });
+    } catch (error) {
+      setContentErrorMessage(error instanceof Error ? error.message : "Audio upload failed.");
     } finally {
       setUploadingSectionId((current) => (current === sectionId ? null : current));
       setDraggingSectionId((current) => (current === sectionId ? null : current));
     }
+  };
+
+  const handleFullTestAudioUpload = async (file?: File | null) => {
+    if (!file || draft.metadata.type !== "listening") return;
+    setUploadingSectionId(FULL_TEST_AUDIO_UPLOAD_ID);
+    try {
+      const [asset, duration] = await Promise.all([
+        adminApi.uploadAudio(file),
+        getAudioFileDurationSeconds(file),
+      ]);
+      setContentErrorMessage(null);
+      setDraft((current) => {
+        const baseSections = current.content.sections.length > 0
+          ? current.content.sections
+          : [createDraftContentSection(current.metadata.type, 0)];
+
+        return {
+          ...current,
+          content: {
+            sections: baseSections.map((section, index) => ({
+              ...section,
+              mediaKind: "audio",
+              audioUrl: asset.publicUrl,
+              audioDurationSeconds: index === 0 ? duration : null,
+              transcript: "",
+              transcriptSegments: [],
+              transcriptQuestionLocations: [],
+            })),
+          },
+        };
+      });
+    } catch (error) {
+      setContentErrorMessage(error instanceof Error ? error.message : "Audio upload failed.");
+    } finally {
+      setUploadingSectionId((current) => (current === FULL_TEST_AUDIO_UPLOAD_ID ? null : current));
+    }
+  };
+
+  const clearFullTestAudio = () => {
+    setDraft((current) => ({
+      ...current,
+      content: {
+        sections: current.content.sections.map((section) => ({
+          ...section,
+          audioUrl: "",
+          audioDurationSeconds: 0,
+          transcript: "",
+          transcriptSegments: [],
+          transcriptQuestionLocations: [],
+        })),
+      },
+    }));
   };
 
   useEffect(() => {
@@ -2427,12 +2697,73 @@ function ContentPanel({
             <h3 className="text-xl font-bold">Test Content</h3>
             <p className="text-sm text-muted-foreground">Compose your reading passages or listening parts.</p>
           </div>
-          {draft.metadata.format === "full" || draft.content.sections.length === 0 ? (
-            <Button type="button" variant="solid" onClick={addSection}>
-              + Add Section
-            </Button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {draft.metadata.type === "listening" && draft.metadata.format === "full" ? (
+              <>
+                <label
+                  className={cn(
+                    "inline-flex items-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground",
+                    uploadingSectionId === FULL_TEST_AUDIO_UPLOAD_ID
+                      ? "cursor-not-allowed opacity-50"
+                      : "cursor-pointer hover:bg-muted/40"
+                  )}
+                >
+                  {uploadingSectionId === FULL_TEST_AUDIO_UPLOAD_ID
+                    ? "Uploading..."
+                    : isUsingFullTestAudio
+                      ? "Replace Full Audio"
+                      : "Upload Full Audio"}
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    className="hidden"
+                    disabled={uploadingSectionId === FULL_TEST_AUDIO_UPLOAD_ID}
+                    onChange={(event) => void handleFullTestAudioUpload(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {isUsingFullTestAudio ? (
+                  <Button type="button" variant="outline" onClick={clearFullTestAudio}>
+                    Clear Full Audio
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            {draft.metadata.format === "full" || draft.content.sections.length === 0 ? (
+              <Button type="button" variant="solid" onClick={addSection}>
+                + Add Section
+              </Button>
+            ) : null}
+          </div>
         </div>
+
+        {draft.metadata.type === "listening" && draft.metadata.format === "full" ? (
+          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Full Test Audio</p>
+                <p className="text-xs text-muted-foreground">
+                  Upload one shared file for the whole listening test. When enabled, section-level audio upload is hidden.
+                </p>
+              </div>
+              {sharedListeningAudio?.audioDurationSeconds ? (
+                <Badge tone="neutral">Duration: {sharedListeningAudio.audioDurationSeconds}s</Badge>
+              ) : null}
+            </div>
+            {sharedListeningAudio?.audioUrl ? (
+              <audio className="mt-4 w-full" controls src={sharedListeningAudio.audioUrl} />
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">
+                No shared audio uploaded yet.
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {contentErrorMessage ? (
+          <div className="rounded-xl border border-danger/25 bg-danger/5 px-4 py-3 text-sm text-danger">
+            {contentErrorMessage}
+          </div>
+        ) : null}
 
         {draft.content.sections.map((section, idx) => {
           const sectionLabel = draft.metadata.type === "reading" ? "Passage " + (resolveLogicalIndex(idx) + 1) : "Part " + (resolveLogicalIndex(idx) + 1);
@@ -2531,104 +2862,146 @@ function ContentPanel({
                   <div className="space-y-3">
                     {draft.metadata.type === "listening" ? (
                       <>
-                        <EditableField label="Audio URL">
-                          <Input
-                            className="h-11 bg-background font-medium"
-                            placeholder="Uploaded audio URL appears here"
-                            value={section.audioUrl || ""}
-                            onChange={(e) => updateSection(section.id, {
-                              audioUrl: e.target.value,
-                              mediaKind: "audio",
-                              transcript: "",
-                              transcriptSegments: [],
-                              transcriptQuestionLocations: [],
-                            })}
-                          />
-                        </EditableField>
-
-                        <div
-                          className={cn(
-                            "rounded-xl border border-dashed p-4 transition-colors",
-                            draggingSectionId === section.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border/70 bg-muted/20",
-                          )}
-                          onDragOver={(event: ReactDragEvent<HTMLDivElement>) => {
-                            event.preventDefault();
-                            if (event.dataTransfer.types.includes("Files")) {
-                              event.dataTransfer.dropEffect = "copy";
-                              setDraggingSectionId(section.id);
-                            }
-                          }}
-                          onDragLeave={(event: ReactDragEvent<HTMLDivElement>) => {
-                            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                              setDraggingSectionId((current) => (current === section.id ? null : current));
-                            }
-                          }}
-                          onDrop={(event: ReactDragEvent<HTMLDivElement>) => {
-                            event.preventDefault();
-                            const file = event.dataTransfer.files?.[0] ?? null;
-                            void handleAudioUpload(section.id, file);
-                          }}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">Audio Asset</p>
-                              <p className="text-xs text-muted-foreground">
-                                Drag and drop audio here. Transcript generation is paused for now.
-                              </p>
+                        {isUsingFullTestAudio ? (
+                          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">Shared Full-Test Audio</p>
+                                <p className="text-xs text-muted-foreground">
+                                  This section inherits the audio uploaded at the top of the content page.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {section.audioUrl ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={transcribingSectionId === section.id}
+                                    onClick={() => void regenerateTranscript(section)}
+                                  >
+                                    {transcribingSectionId === section.id ? "Generating..." : "Regenerate Transcript"}
+                                  </Button>
+                                ) : null}
+                                {transcribingSectionId === section.id ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:bg-destructive/10"
+                                    onClick={() => void cancelTranscriptGeneration(section.id)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                ) : null}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {section.audioUrl ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={transcribingSectionId === section.id}
-                                  onClick={() => void regenerateTranscript(section)}
-                                >
-                                  {transcribingSectionId === section.id ? "Generating..." : "Regenerate Transcript"}
-                                </Button>
-                              ) : null}
-                              {transcribingSectionId === section.id ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:bg-destructive/10"
-                                  onClick={() => void cancelTranscriptGeneration(section.id)}
-                                >
-                                  Cancel
-                                </Button>
-                              ) : null}
-                              <label
-                                className={cn(
-                                  "inline-flex items-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground",
-                                  transcribingSectionId === section.id
-                                    ? "cursor-not-allowed opacity-50"
-                                    : "cursor-pointer hover:bg-muted/40"
-                                )}
-                              >
-                                {uploadingSectionId === section.id ? "Uploading..." : "Upload Audio"}
-                                <input
-                                  type="file"
-                                  accept="audio/*"
-                                  className="hidden"
-                                  disabled={transcribingSectionId === section.id}
-                                  onChange={(event) => void handleAudioUpload(section.id, event.target.files?.[0] ?? null)}
-                                />
-                              </label>
-                            </div>
+                            {section.audioUrl ? (
+                              <audio className="mt-4 w-full" controls src={section.audioUrl} />
+                            ) : null}
                           </div>
-                          {section.audioDurationSeconds ? (
-                            <p className="mt-3 text-xs font-medium text-muted-foreground">
-                              Detected duration: {section.audioDurationSeconds}s
-                            </p>
-                          ) : null}
-                          {section.audioUrl ? (
-                            <audio className="mt-4 w-full" controls src={section.audioUrl} />
-                          ) : null}
-                        </div>
+                        ) : (
+                          <>
+                            <EditableField label="Audio URL">
+                              <Input
+                                className="h-11 bg-background font-medium"
+                                placeholder="Uploaded audio URL appears here"
+                                value={section.audioUrl || ""}
+                                onChange={(e) => updateSection(section.id, {
+                                  audioUrl: e.target.value,
+                                  mediaKind: "audio",
+                                  transcript: "",
+                                  transcriptSegments: [],
+                                  transcriptQuestionLocations: [],
+                                })}
+                              />
+                            </EditableField>
+
+                            <div
+                              className={cn(
+                                "rounded-xl border border-dashed p-4 transition-colors",
+                                draggingSectionId === section.id
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border/70 bg-muted/20",
+                              )}
+                              onDragOver={(event: ReactDragEvent<HTMLDivElement>) => {
+                                event.preventDefault();
+                                if (event.dataTransfer.types.includes("Files")) {
+                                  event.dataTransfer.dropEffect = "copy";
+                                  setDraggingSectionId(section.id);
+                                }
+                              }}
+                              onDragLeave={(event: ReactDragEvent<HTMLDivElement>) => {
+                                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                                  setDraggingSectionId((current) => (current === section.id ? null : current));
+                                }
+                              }}
+                              onDrop={(event: ReactDragEvent<HTMLDivElement>) => {
+                                event.preventDefault();
+                                const file = event.dataTransfer.files?.[0] ?? null;
+                                void handleAudioUpload(section.id, file);
+                              }}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">Audio Asset</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Drag and drop audio here. Transcript generation is paused for now.
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {section.audioUrl ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={transcribingSectionId === section.id}
+                                      onClick={() => void regenerateTranscript(section)}
+                                    >
+                                      {transcribingSectionId === section.id ? "Generating..." : "Regenerate Transcript"}
+                                    </Button>
+                                  ) : null}
+                                  {transcribingSectionId === section.id ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:bg-destructive/10"
+                                      onClick={() => void cancelTranscriptGeneration(section.id)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  ) : null}
+                                  <label
+                                    className={cn(
+                                      "inline-flex items-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground",
+                                      transcribingSectionId === section.id
+                                        ? "cursor-not-allowed opacity-50"
+                                        : "cursor-pointer hover:bg-muted/40"
+                                    )}
+                                  >
+                                    {uploadingSectionId === section.id ? "Uploading..." : "Upload Audio"}
+                                    <input
+                                      type="file"
+                                      accept="audio/*"
+                                      className="hidden"
+                                      disabled={transcribingSectionId === section.id}
+                                      onChange={(event) => void handleAudioUpload(section.id, event.target.files?.[0] ?? null)}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                              {section.audioDurationSeconds ? (
+                                <p className="mt-3 text-xs font-medium text-muted-foreground">
+                                  Detected duration: {section.audioDurationSeconds}s
+                                </p>
+                              ) : null}
+                              {section.audioUrl ? (
+                                <audio className="mt-4 w-full" controls src={section.audioUrl} />
+                              ) : null}
+                            </div>
+                          </>
+                        )}
 
                         <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
                           <div className="flex items-center justify-between gap-3">
@@ -2930,6 +3303,7 @@ function QuestionsPanel({
       sectionId: targetSectionId,
       title: "",
       instructions: defaultInstructions[typeId] || "Enter instructions for this group of questions.",
+      optionsTitle: "",
       typeId,
       questionStart: 1,
       questionEnd: 1,
@@ -3090,6 +3464,7 @@ function QuestionsPanel({
               newGroup.typeId.includes("matching_headings")
               || newGroup.typeId.includes("matching_features")
               || newGroup.typeId.includes("matching_sentence_endings")
+              || newGroup.typeId.includes("listening_matching")
               || newGroup.typeId.includes("wordbank")
             ) {
               newGroup.sharedOptions = sBlock.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -3783,40 +4158,56 @@ function QuestionsPanel({
                   ) : null}
 
                   {(group.typeId.includes("matching_headings") || group.typeId.includes("matching_features") || group.typeId.includes("matching_sentence_endings") || group.typeId.includes("wordbank") || group.typeId.includes("listening_matching") || isListeningMapOptionType(group.typeId)) && (
-                    <EditableField
-                      label={
-                        group.typeId.includes("matching_headings")
-                          ? "Headings"
-                          : group.typeId.includes("matching_sentence_endings")
-                            ? "Sentence Endings"
-                          : isListeningMapOptionType(group.typeId)
-                            ? "Map Options / Range"
-                          : group.typeId.includes("listening_matching")
-                            ? "Options"
-                          : group.typeId.includes("wordbank")
-                            ? "Word Bank"
-                            : "Options"
-                      }
-                    >
-                      <Textarea
-                        className="bg-muted/30 font-mono text-sm min-h-[100px]"
-                        value={group.secondaryBlock || ""}
-                        onChange={(e) => updateGroup(group.id, { secondaryBlock: e.target.value })}
-                        placeholder={
+                    <div className="grid gap-4">
+                      {(group.typeId.includes("matching_features") || group.typeId.includes("matching_sentence_endings") || group.typeId.includes("wordbank") || group.typeId.includes("listening_matching")) ? (
+                        <EditableField label="Options Title">
+                          <Input
+                            className="bg-background font-medium"
+                            value={group.optionsTitle || ""}
+                            onChange={(e) => updateGroup(group.id, { optionsTitle: e.target.value })}
+                            placeholder={
+                              group.typeId.includes("listening_matching")
+                                ? "Who will do the following tasks?"
+                                : "Enter a heading shown above the options list"
+                            }
+                          />
+                        </EditableField>
+                      ) : null}
+                      <EditableField
+                        label={
                           group.typeId.includes("matching_headings")
-                            ? "i. Planning a bigger idea\nii. Looking back at early mistakes\n..."
+                            ? "Headings"
                             : group.typeId.includes("matching_sentence_endings")
-                              ? "A. was first proposed in 1920.\nB. reduced travel costs for workers.\nC. remained popular in rural areas."
+                              ? "Sentence Endings"
                             : isListeningMapOptionType(group.typeId)
-                              ? "A-H\nor\nA\nB\nC\nD"
+                              ? "Map Options / Range"
                             : group.typeId.includes("listening_matching")
-                              ? "A. Option One\nB. Option Two\nC. Option Three\nD. Option Four"
+                              ? "Options"
                             : group.typeId.includes("wordbank")
-                              ? "A. Option One\nB. Option Two\nC. Option Three"
-                              : "A. Option One\nB. Option Two\n..."
+                              ? "Word Bank"
+                              : "Options"
                         }
-                      />
-                    </EditableField>
+                      >
+                        <Textarea
+                          className="bg-muted/30 font-mono text-sm min-h-[100px]"
+                          value={group.secondaryBlock || ""}
+                          onChange={(e) => updateGroup(group.id, { secondaryBlock: e.target.value })}
+                          placeholder={
+                            group.typeId.includes("matching_headings")
+                              ? "i. Planning a bigger idea\nii. Looking back at early mistakes\n..."
+                              : group.typeId.includes("matching_sentence_endings")
+                                ? "A. was first proposed in 1920.\nB. reduced travel costs for workers.\nC. remained popular in rural areas."
+                              : isListeningMapOptionType(group.typeId)
+                                ? "A-H\nor\nA\nB\nC\nD"
+                              : group.typeId.includes("listening_matching")
+                                ? "A. Option One\nB. Option Two\nC. Option Three\nD. Option Four"
+                              : group.typeId.includes("wordbank")
+                                ? "A. Option One\nB. Option Two\nC. Option Three"
+                                : "A. Option One\nB. Option Two\n..."
+                          }
+                        />
+                      </EditableField>
+                    </div>
                   )}
                   
                   <div
@@ -3848,9 +4239,7 @@ function QuestionsPanel({
                           value={group.questionBlock || ""}
                           onChange={(e) => updateGroup(group.id, { questionBlock: e.target.value })}
                           placeholder={isBracketCompletionType(group.typeId)
-                            ? group.typeId.includes("wordbank")
-                              ? "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days."
-                              : "* Complete the summary below using [] markers.\nThe first visitors arrived in [] and stayed for [] days."
+                            ? getCompletionQuestionBlockPlaceholder(group.typeId)
                             : isBinaryStatementType(group.typeId)
                               ? "Other countries had built underground railways before the Metropolitan line opened.\nThe first trains were designed for passengers in warmer climates.\nSteam engines were initially used on the route."
                                 : isMatchingInformationType(group.typeId)
@@ -3979,6 +4368,11 @@ function QuestionsPanel({
                         {group.typeId.includes("wordbank") ? (
                           <p className="text-xs leading-5 text-muted-foreground">
                             Use one answer line per blank. You can enter either the word-bank letter or the exact option text.
+                          </p>
+                        ) : null}
+                        {group.typeId.includes("table_completion") ? (
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Use either a real HTML table or the pipe format with <code>&lt;table&gt;</code>, <code>||</code>, and <code>|</code>.
                           </p>
                         ) : null}
                         {isBinaryStatementType(group.typeId) ? (
@@ -4264,6 +4658,20 @@ function EditorPreviewSection({
       return "Multiple-answer questions";
     }
     return `Questions ${group.questionStart}-${group.questionEnd}`;
+  };
+
+  const optionPanelTitle = (group: AdminTestDraftState["questionGroups"][number]) => {
+    const customTitle = group.optionsTitle?.trim();
+    if (customTitle) {
+      return customTitle;
+    }
+    if (group.typeId.includes("matching_headings")) {
+      return "List of Headings";
+    }
+    if (group.typeId.includes("matching_sentence_endings")) {
+      return "Sentence Endings";
+    }
+    return "Options";
   };
 
   const formatPreviewQuestionHeading = (
@@ -4571,10 +4979,12 @@ function EditorPreviewSection({
                   >
                     {row.cells.map((cell, cellIndex) => {
                       const CellTag = row.isHeader ? "th" : "td";
-                      const cellSegments = cell.split("[]");
+                      const cellSegments = cell.text.split("[]");
                       return (
                         <CellTag
                           key={`${group.id}-table-cell-${rowIndex}-${cellIndex}`}
+                          rowSpan={cell.rowSpan > 1 ? cell.rowSpan : undefined}
+                          colSpan={cell.colSpan > 1 ? cell.colSpan : undefined}
                           className={cn(
                             "align-middle border-l border-border px-3 py-2 text-left font-sans text-foreground first:border-l-0",
                             row.isHeader ? "text-sm font-bold" : compact ? "text-[14px] leading-[1.55]" : "text-[15px] leading-[1.7]"
@@ -4734,15 +5144,9 @@ function EditorPreviewSection({
                 {renderDiagramPreview(group)}
                 {((group.typeId.includes("matching") && !group.typeId.includes("matching_information")) || group.typeId.includes("wordbank")) && group.sharedOptions.length > 0 ? (
                   <div className={cn("border border-border/70 bg-muted/20", compact ? "rounded-[1rem] px-3 py-2.5" : "rounded-2xl px-4 py-3")}>
-                    {group.typeId.includes("matching_headings") ? (
-                      <p className={cn("mb-3 font-bold tracking-tight text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
-                        List of Headings
-                      </p>
-                    ) : group.typeId.includes("matching_sentence_endings") ? (
-                      <p className={cn("mb-3 font-bold tracking-tight text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
-                        Sentence Endings
-                      </p>
-                    ) : null}
+                    <p className={cn("mb-3 font-bold tracking-tight text-foreground", compact ? "text-[15px]" : "text-[17px]")}>
+                      {renderBraceBoldText(optionPanelTitle(group), `${group.id}-option-panel-title`)}
+                    </p>
                     <div className="flex flex-wrap gap-2">
                     {group.sharedOptions
                       .filter((option) => !(group.typeId.includes("matching_headings") && isFixedMatchingHeadingExample(option)))
@@ -4856,7 +5260,7 @@ function previewTypeLabel(typeId: string) {
   if (typeId.includes("yes_no")) return "Yes / No / Not Given";
   if (typeId.includes("mc_")) return "Multiple Choice";
   if (typeId.includes("matching")) return "Matching";
-  if (typeId.includes("summary") || typeId.includes("sentence_completion") || typeId.includes("note_completion") || typeId.includes("flowchart_completion") || typeId.includes("form_completion")) return "Completion";
+  if (typeId.includes("summary") || typeId.includes("sentence_completion") || typeId.includes("note_completion") || typeId.includes("table_completion") || typeId.includes("flowchart_completion") || typeId.includes("form_completion")) return "Completion";
   if (isListeningMapOptionType(typeId)) return "Map Labeling";
   if (isListeningMapFreeTextType(typeId)) return "Map Labeling (free text)";
   if (typeId.includes("diagram")) return "Diagram Labeling";
@@ -4902,7 +5306,7 @@ function renderAdminPreviewAnswer(
     return (
       <div className="space-y-2">
         {(question.variants ?? []).map((option, index) => {
-          const optionLetter = String.fromCharCode(65 + index);
+          const optionLetter = alphabetLabelFromIndex(index);
           return (
             <div key={`${question.id}-${optionLetter}`} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3">
               <span className="mt-0.5 flex h-5 w-5 shrink-0 rounded border-2 border-border bg-background" />
@@ -4921,7 +5325,7 @@ function renderAdminPreviewAnswer(
     return (
       <div className="space-y-2">
         {(question.variants ?? []).map((option, index) => {
-          const optionLetter = String.fromCharCode(65 + index);
+          const optionLetter = alphabetLabelFromIndex(index);
           return (
             <div key={`${question.id}-${optionLetter}`} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3">
               <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-black text-foreground">
@@ -4957,7 +5361,11 @@ function renderAdminPreviewAnswer(
     );
   }
 
-  if (group.typeId.includes("matching_features") || group.typeId.includes("matching_sentence_endings")) {
+  if (
+    group.typeId.includes("matching_features")
+    || group.typeId.includes("matching_sentence_endings")
+    || group.typeId.includes("listening_matching")
+  ) {
     return (
       <div className="max-w-[260px]">
         <select

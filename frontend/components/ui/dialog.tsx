@@ -14,9 +14,10 @@ interface DialogProps {
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
   className?: string;
+  dismissible?: boolean;
 }
 
-export function Dialog({ open, title, description, onOpenChange, children, className }: DialogProps) {
+export function Dialog({ open, title, description, onOpenChange, children, className, dismissible = true }: DialogProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export function Dialog({ open, title, description, onOpenChange, children, class
     document.body.style.overflow = "hidden";
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (dismissible && event.key === "Escape") {
         onOpenChange(false);
       }
     }
@@ -42,7 +43,7 @@ export function Dialog({ open, title, description, onOpenChange, children, class
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onOpenChange, open]);
+  }, [dismissible, onOpenChange, open]);
 
   if (!open || !mounted) {
     return null;
@@ -50,7 +51,7 @@ export function Dialog({ open, title, description, onOpenChange, children, class
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-card/55 p-3 backdrop-blur-sm sm:p-4">
-      <button aria-label="Close dialog" className="absolute inset-0" onClick={() => onOpenChange(false)} type="button" />
+      {dismissible ? <button aria-label="Close dialog" className="absolute inset-0" onClick={() => onOpenChange(false)} type="button" /> : null}
       <Card className={cn("relative z-10 w-full max-h-[90vh] overflow-hidden", className)}>
         <div className="flex items-start justify-between gap-4 border-b border-border/70 px-4 py-4 sm:px-6 sm:py-5">
           <div className="space-y-1">

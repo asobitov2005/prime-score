@@ -277,6 +277,7 @@ def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: s
             "question_block": str(group.shared_content.get("question_block") or ""),
             "answer_block": str(group.shared_content.get("answer_block") or ""),
             "secondary_block": str(group.shared_content.get("secondary_block") or ""),
+            "options_title": str(group.shared_content.get("options_title") or ""),
             "diagram_title": str(group.shared_content.get("diagram_title") or ""),
             "diagram_image_url": normalize_storage_asset_path(group.shared_content.get("diagram_image_url")),
         },
@@ -1042,6 +1043,7 @@ async def save_test_draft_to_db(
                 "question_block": str(group.get("question_block") or ""),
                 "answer_block": str(group.get("answer_block") or ""),
                 "secondary_block": str(group.get("secondary_block") or ""),
+                "options_title": str(group.get("options_title") or ""),
                 "diagram_title": str(group.get("diagram_title") or ""),
                 "diagram_image_url": normalize_storage_asset_path(group.get("diagram_image_url")),
             },
@@ -1243,6 +1245,7 @@ async def quick_fix_published_test_in_db(
             "question_block": str(group_payload.get("question_block") or ""),
             "answer_block": str(group_payload.get("answer_block") or ""),
             "secondary_block": str(group_payload.get("secondary_block") or ""),
+            "options_title": str(group_payload.get("options_title") or ""),
             "diagram_title": str(group_payload.get("diagram_title") or ""),
             "diagram_image_url": normalize_storage_asset_path(group_payload.get("diagram_image_url")),
         }
@@ -1402,6 +1405,7 @@ async def build_admin_draft_state_from_db(
                 "section_id": section.id,
                 "title": group.title,
                 "instructions": group.instructions or "",
+                "options_title": str(group.shared_content.get("options_title") or ""),
                 "type_id": str(group.question_type.value),
                 "question_start": group.question_start,
                 "question_end": group.question_end,
@@ -1419,6 +1423,7 @@ async def build_admin_draft_state_from_db(
                     group.shared_content.get("secondary_block")
                     or "\n".join(str(option) for option in group.shared_options)
                 ),
+                "options_title": str(group.shared_content.get("options_title") or ""),
                 "diagram_title": str(group.shared_content.get("diagram_title") or ""),
                 "diagram_image_url": normalize_storage_asset_path(group.shared_content.get("diagram_image_url")),
                 "questions": group_questions

@@ -292,6 +292,7 @@ export interface AdminTestDraftQuestionGroup {
   sectionId: string;
   title: string;
   instructions: string;
+  optionsTitle?: string;
   typeId: string;
   questionStart: number;
   questionEnd: number;

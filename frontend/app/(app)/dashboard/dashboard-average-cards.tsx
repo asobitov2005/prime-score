@@ -77,28 +77,28 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className="flex flex-col sm:flex-row gap-5 lg:gap-6 h-full items-center justify-center">
+    <div className="flex flex-col sm:flex-row gap-5 lg:gap-6 h-full items-stretch justify-center">
       {/* Left: Overall Band */}
       <div className={cn(
-        "flex flex-col items-center justify-center rounded-3xl border p-5 min-w-[170px] shadow-sm relative overflow-hidden group transition-all duration-500",
+        "flex flex-col items-center justify-center self-stretch h-full min-h-[202px] rounded-3xl border border-border/70 p-3.5 min-w-[170px] shadow-sm relative overflow-hidden group transition-all duration-500 backdrop-blur-sm",
         currentStatusColors.bg,
-        currentStatusColors.border
+        "ring-1 ring-inset ring-border/20"
       )}>
         <div className={cn("absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br to-transparent blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-700", currentStatusColors.glow)} />
         
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-3 relative z-10">Overall Band</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-2 relative z-10">Overall Band</p>
         
-        <p className="text-5xl font-semibold tracking-tight leading-none mb-4 relative z-10 text-foreground">
+        <p className="text-5xl font-semibold tracking-tight leading-none mb-3 relative z-10 text-foreground">
           {overallBand > 0 ? overallBand.toFixed(1) : "—"}
         </p>
 
-        <div className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-background/80 backdrop-blur-md shadow-sm border border-border/10 relative z-10 mb-4", overallLabel.color)}>
+        <div className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-background/80 backdrop-blur-md shadow-sm border border-border/10 relative z-10 mb-3", overallLabel.color)}>
           {overallLabel.text}
         </div>
 
         {/* Improvement (Delta) */}
         {delta !== null && (
-          <div className="flex flex-col items-center gap-1 w-full relative z-10 border-t border-border/10 pt-3">
+          <div className="flex flex-col items-center gap-1 w-full relative z-10 border-t border-border/10 pt-2">
             <div className="flex items-center gap-1.5">
               <TrendingUp className={cn("h-3.5 w-3.5", delta >= 0 ? "text-emerald-500" : "text-rose-500")} />
               <span className={cn("text-sm font-bold", delta >= 0 ? "text-emerald-500" : "text-rose-500")}>

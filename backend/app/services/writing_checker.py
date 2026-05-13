@@ -61,6 +61,14 @@ class _AnnotationPayload(BaseModel):
     improved_sentence: str = ""
 
 
+class _VocabularySuggestionPayload(BaseModel):
+    current_phrase: str = ""
+    improved_phrase: str = ""
+    level: str = ""
+    why_it_works: str = ""
+    example_sentence: str = ""
+
+
 class _GraderPayload(BaseModel):
     task_achievement: _CriterionPayload
     coherence: _CriterionPayload
@@ -69,9 +77,211 @@ class _GraderPayload(BaseModel):
     overall_summary: str = ""
     next_steps: list[str] = Field(default_factory=list)
     inline_annotations: list[_AnnotationPayload] = Field(default_factory=list)
+    vocabulary_suggestions: list[_VocabularySuggestionPayload] = Field(default_factory=list)
 
 
 _ANNOTATION_LIST_ADAPTER = TypeAdapter(list[_AnnotationPayload])
+_VOCAB_TARGET_COUNT = 10
+_VOCAB_MAX_COUNT = 12
+_GENERIC_PATTERNS = (
+    "improve grammar",
+    "improve your grammar",
+    "use better vocabulary",
+    "improve vocabulary",
+    "develop your ideas",
+    "be more specific",
+    "give more details",
+    "add more examples",
+    "work on coherence",
+    "more practice",
+    "practice more",
+    "clear response with room for improvement",
+)
+
+_TASK_2_VOCAB_RULES: list[dict[str, Any]] = [
+    {
+        "patterns": [r"\blearn many useful things\b", r"\buseful things\b"],
+        "current_phrase": "learn many useful things",
+        "improved_phrase": "acquire essential life skills",
+        "level": "C1",
+        "why": "It replaces vague wording with a more academic collocation for personal development.",
+        "example": "By working, children can acquire essential life skills.",
+    },
+    {
+        "patterns": [r"\bfuture life\b"],
+        "current_phrase": "future life",
+        "improved_phrase": "their future careers",
+        "level": "C1",
+        "why": "It is more precise when discussing work and long-term development.",
+        "example": "These habits can help them in their future careers.",
+    },
+    {
+        "patterns": [r"\bhow hard money is earned\b", r"\bearning money is not easy\b"],
+        "current_phrase": "how hard money is earned",
+        "improved_phrase": "develop financial literacy",
+        "level": "C1",
+        "why": "It turns a general idea into a stronger academic phrase about money awareness.",
+        "example": "Part-time work can help teenagers develop financial literacy.",
+    },
+    {
+        "patterns": [r"\bhow real job works\b", r"\breal job\b"],
+        "current_phrase": "how real job works",
+        "improved_phrase": "how the workplace functions",
+        "level": "C1",
+        "why": "It sounds more natural and formal in academic writing.",
+        "example": "Early exposure helps students understand how the workplace functions.",
+    },
+    {
+        "patterns": [r"\blittle money\b"],
+        "current_phrase": "little money",
+        "improved_phrase": "a small income",
+        "level": "C1",
+        "why": "It sounds more natural and accurate in this context.",
+        "example": "They may earn a small income while studying.",
+    },
+    {
+        "patterns": [r"\bgood experience\b"],
+        "current_phrase": "good experience",
+        "improved_phrase": "a valuable formative experience",
+        "level": "C2",
+        "why": "It sounds more mature and specific than a basic adjective.",
+        "example": "Part-time work can be a valuable formative experience.",
+    },
+    {
+        "patterns": [r"\bcontrol the time\b", r"\bcontrol their working hours\b"],
+        "current_phrase": "control the time",
+        "improved_phrase": "regulate their working hours",
+        "level": "C1",
+        "why": "It gives the idea a more precise and academic tone.",
+        "example": "Parents should regulate their working hours carefully.",
+    },
+    {
+        "patterns": [r"\bschool results can go down\b", r"\bresults can go down\b"],
+        "current_phrase": "school results can go down",
+        "improved_phrase": "academic performance may suffer",
+        "level": "C1",
+        "why": "It is a more natural academic collocation than a literal phrase.",
+        "example": "If work hours are excessive, academic performance may suffer.",
+    },
+    {
+        "patterns": [r"\bmore mature\b"],
+        "current_phrase": "more mature",
+        "improved_phrase": "more self-disciplined",
+        "level": "C1",
+        "why": "It is more specific and sounds less repetitive.",
+        "example": "These responsibilities can make teenagers more self-disciplined.",
+    },
+    {
+        "patterns": [r"\bthink only about money\b"],
+        "current_phrase": "think only about money",
+        "improved_phrase": "become overly money-focused",
+        "level": "C1",
+        "why": "It sounds more natural and less conversational.",
+        "example": "Some teenagers may become overly money-focused.",
+    },
+    {
+        "patterns": [r"\bbad for their study and health\b", r"\bbad for their studies and health\b"],
+        "current_phrase": "bad for their study and health",
+        "improved_phrase": "adversely affect their studies and well-being",
+        "level": "C2",
+        "why": "It gives a stronger academic tone and covers the health idea more precisely.",
+        "example": "Excessive work can adversely affect their studies and well-being.",
+    },
+    {
+        "patterns": [r"\bpart time job\b", r"\bpart-time job\b"],
+        "current_phrase": "part time job",
+        "improved_phrase": "part-time employment",
+        "level": "C1",
+        "why": "It sounds more formal and natural in IELTS essays.",
+        "example": "Part-time employment can build responsibility and independence.",
+    },
+]
+
+_TASK_1_VOCAB_RULES: list[dict[str, Any]] = [
+    {
+        "patterns": [r"\bwent up\b", r"\brose\b", r"\bincrease\b"],
+        "current_phrase": "went up",
+        "improved_phrase": "rose steadily",
+        "level": "C1",
+        "why": "It is more precise than a basic verb phrase.",
+        "example": "The figure rose steadily over the period.",
+    },
+    {
+        "patterns": [r"\bwent down\b", r"\bfall\b", r"\bdecrease\b"],
+        "current_phrase": "went down",
+        "improved_phrase": "declined gradually",
+        "level": "C1",
+        "why": "It sounds more academic and specific.",
+        "example": "After 2010, the number declined gradually.",
+    },
+    {
+        "patterns": [r"\bbecome highest\b", r"\bhighest\b"],
+        "current_phrase": "become highest",
+        "improved_phrase": "reach the highest level",
+        "level": "C1",
+        "why": "It is a natural report-writing phrase.",
+        "example": "By 2020, country A reached the highest level.",
+    },
+    {
+        "patterns": [r"\balways have more\b", r"\bmore than\b"],
+        "current_phrase": "always have more",
+        "improved_phrase": "maintained a clear lead",
+        "level": "C2",
+        "why": "It is a stronger overview phrase for Task 1.",
+        "example": "Country A maintained a clear lead throughout the period.",
+    },
+    {
+        "patterns": [r"\blower\b", r"\blowest\b"],
+        "current_phrase": "always lowest",
+        "improved_phrase": "remained the smallest market",
+        "level": "C1",
+        "why": "It sounds more academic and less repetitive.",
+        "example": "Country D remained the smallest market until the end.",
+    },
+    {
+        "patterns": [r"\ball of them grow up\b", r"\bgrow up\b"],
+        "current_phrase": "grow up",
+        "improved_phrase": "grow significantly",
+        "level": "C1",
+        "why": "It is the correct academic collocation for trend descriptions.",
+        "example": "All four figures grew significantly over the decade.",
+    },
+]
+
+_GENERAL_VOCAB_RULES: list[dict[str, Any]] = [
+    {
+        "patterns": [r"\bgood\b"],
+        "current_phrase": "good",
+        "improved_phrase": "beneficial",
+        "level": "C1",
+        "why": "It is more formal and flexible for IELTS writing.",
+        "example": "Part-time work can be beneficial for teenagers.",
+    },
+    {
+        "patterns": [r"\bbad\b"],
+        "current_phrase": "bad",
+        "improved_phrase": "detrimental",
+        "level": "C1",
+        "why": "It is a stronger academic adjective.",
+        "example": "Excessive work can be detrimental to health.",
+    },
+    {
+        "patterns": [r"\bthings\b"],
+        "current_phrase": "things",
+        "improved_phrase": "skills",
+        "level": "C1",
+        "why": "It replaces vague wording with a clearer noun.",
+        "example": "Students can acquire useful skills through work.",
+    },
+    {
+        "patterns": [r"\bmore mature\b"],
+        "current_phrase": "more mature",
+        "improved_phrase": "more responsible",
+        "level": "C1",
+        "why": "It is a more natural evaluation of personal growth.",
+        "example": "The experience can make teenagers more responsible.",
+    },
+]
 
 
 def _strip_html(text: str) -> str:
@@ -96,6 +306,11 @@ def _build_gemini_client() -> genai.Client:
     if not (settings.gemini_api_key or "").strip():
         raise RuntimeError("GEMINI_API_KEY is not configured.")
     return genai.Client(api_key=settings.gemini_api_key)
+
+
+def _writing_model_name() -> str:
+    settings = get_settings()
+    return (settings.gemini_writing_model or settings.gemini_model).strip()
 
 
 def _criterion_schema() -> genai_types.Schema:
@@ -160,6 +375,29 @@ def _annotation_schema() -> genai_types.Schema:
     )
 
 
+def _vocabulary_suggestion_schema() -> genai_types.Schema:
+    return genai_types.Schema(
+        type=genai_types.Type.OBJECT,
+        required=[
+            "current_phrase",
+            "improved_phrase",
+            "level",
+            "why_it_works",
+            "example_sentence",
+        ],
+        properties={
+            "current_phrase": genai_types.Schema(type=genai_types.Type.STRING),
+            "improved_phrase": genai_types.Schema(type=genai_types.Type.STRING),
+            "level": genai_types.Schema(
+                type=genai_types.Type.STRING,
+                enum=["C1", "C2"],
+            ),
+            "why_it_works": genai_types.Schema(type=genai_types.Type.STRING),
+            "example_sentence": genai_types.Schema(type=genai_types.Type.STRING),
+        },
+    )
+
+
 def _response_schema() -> genai_types.Schema:
     criterion = _criterion_schema()
     return genai_types.Schema(
@@ -172,6 +410,7 @@ def _response_schema() -> genai_types.Schema:
             "overall_summary",
             "next_steps",
             "inline_annotations",
+            "vocabulary_suggestions",
         ],
         properties={
             "task_achievement": criterion,
@@ -186,6 +425,10 @@ def _response_schema() -> genai_types.Schema:
             "inline_annotations": genai_types.Schema(
                 type=genai_types.Type.ARRAY,
                 items=_annotation_schema(),
+            ),
+            "vocabulary_suggestions": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=_vocabulary_suggestion_schema(),
             ),
         },
     )
@@ -210,6 +453,10 @@ def _grader_thinking_level() -> genai_types.ThinkingLevel:
 
 def _seed_from_hash(essay_hash: str) -> int:
     return int(essay_hash[:8], 16) % (2**31)
+
+
+def _essay_word_count(text: str) -> int:
+    return len(re.findall(r"\b\w+\b", text or ""))
 
 
 def _format_anchors_block(task_type: str) -> str:
@@ -250,7 +497,18 @@ def _build_system_instruction() -> str:
         "avoid vague comments such as 'use better vocabulary' or 'improve "
         "grammar'. Name the exact weakness, quote or paraphrase the weak "
         "phrase, and, when possible, suggest the stronger grammar pattern, "
-        "collocation, or academic wording that would raise the band.\n\n"
+        "collocation, or academic wording that would raise the band. Every "
+        "summary, strength, improvement, and next step must be tied to a real "
+        "feature of THIS essay. Do not write generic praise or generic study "
+        "advice. The `overall_summary` must identify the strongest criterion, "
+        "the weakest criterion, and the clearest score-limiting issue. Each "
+        "`next_steps` item must be an action the student can apply on the next "
+        "draft. The `vocabulary_suggestions` field must contain 10-12 genuinely "
+        "useful C1/C2 lexical upgrades based on weak, repetitive, or too-basic "
+        "phrases from the essay. Prefer natural, slightly less common IELTS-appropriate "
+        "collocations or phrasing that an examiner would notice positively, but "
+        "avoid forced, old-fashioned, or unnatural wording. Each suggestion must "
+        "include a natural example sentence and stay compact.\n\n"
         + IELTS_WRITING_RUBRIC_TEXT
     )
 
@@ -268,6 +526,19 @@ def _build_grading_prompt(
     if task_type == WritingTaskType.TASK_1.value and image_summary:
         parts.append("VISUAL DESCRIPTION (ground truth, do not re-interpret):\n" + image_summary.strip())
     parts.append("CALIBRATION ANCHORS:\n" + _format_anchors_block(task_type))
+    parts.append(
+        "COACHING OUTPUT RULES:\n"
+        "1. `overall_summary` must be 2-3 sentences only.\n"
+        "2. Sentence 1: state the current overall level and the strongest criterion.\n"
+        "3. Sentence 2: state the weakest criterion and quote or paraphrase one exact score-limiting feature from the essay.\n"
+        "4. Sentence 3: state the single fastest revision move that would raise the score.\n"
+        "5. `next_steps` must contain exactly 3 concise actions. Each action must mention a concrete pattern, phrase, or paragraph move from the essay. Do not write generic advice.\n"
+        "6. `strengths` and `improvements` inside each criterion must be essay-specific, not template language.\n"
+        "7. `vocabulary_suggestions` must contain 10-12 items. Each item must upgrade a phrase that appears in the essay or clearly reflects the essay's repeated wording.\n"
+        "8. The vocabulary level must be either C1 or C2. Prefer C1 unless a C2 phrase sounds natural and useful in IELTS Writing.\n"
+        "9. Prefer lexical upgrades that feel natural, precise, and slightly uncommon rather than flashy or memorised.\n"
+        "10. Keep each suggestion compact: phrase, upgrade, and one example sentence only."
+    )
     parts.append(
         "INLINE ANNOTATIONS:\n"
         "Identify concrete, fixable language errors in the candidate's essay. "
@@ -300,6 +571,328 @@ def _build_grading_prompt(
     )
     parts.append("===== CANDIDATE ESSAY START =====\n" + essay_text + "\n===== CANDIDATE ESSAY END =====")
     return "\n\n".join(parts)
+
+
+def _clean_text(value: str | None) -> str:
+    return _WHITESPACE_RE.sub(" ", (value or "").strip())
+
+
+def _trim_sentence(value: str, *, limit: int = 220) -> str:
+    cleaned = _clean_text(value)
+    if len(cleaned) <= limit:
+        return cleaned
+    shortened = cleaned[:limit].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return f"{shortened}..."
+
+
+def _is_generic_text(value: str | None) -> bool:
+    cleaned = _normalize_essay(value or "")
+    if not cleaned:
+        return True
+    return any(pattern in cleaned for pattern in _GENERIC_PATTERNS)
+
+
+def _criterion_records(
+    grader: _GraderPayload,
+    *,
+    ta: float,
+    cc: float,
+    lr: float,
+    gra: float,
+) -> list[tuple[str, float, _CriterionPayload]]:
+    return [
+        ("Task Achievement", ta, grader.task_achievement),
+        ("Coherence & Cohesion", cc, grader.coherence),
+        ("Lexical Resource", lr, grader.lexical),
+        ("Grammatical Range & Accuracy", gra, grader.grammar),
+    ]
+
+
+def _criterion_anchor_text(criterion: _CriterionPayload) -> str:
+    for bucket in (criterion.evidence_quotes, criterion.improvements, criterion.strengths):
+        for item in bucket:
+            cleaned = _clean_text(item)
+            if cleaned:
+                return cleaned
+    return ""
+
+
+def _build_precise_summary(
+    *,
+    grader: _GraderPayload,
+    overall_band: float,
+    penalty: float,
+    word_minimum: int,
+    ta: float,
+    cc: float,
+    lr: float,
+    gra: float,
+) -> str:
+    criteria = _criterion_records(grader, ta=ta, cc=cc, lr=lr, gra=gra)
+    strongest_name, strongest_band, strongest_payload = max(criteria, key=lambda item: item[1])
+    weakest_name, weakest_band, weakest_payload = min(criteria, key=lambda item: item[1])
+    strongest_anchor = _criterion_anchor_text(strongest_payload)
+    weakest_anchor = _criterion_anchor_text(weakest_payload)
+    priority = _clean_text(
+        weakest_payload.improvements[0] if weakest_payload.improvements else weakest_payload.summary
+    )
+
+    parts = [
+        f"Band {overall_band:.1f} overall. Your strongest area is {strongest_name} at Band {strongest_band:.1f}"
+        + (f", especially in {strongest_anchor!r}." if strongest_anchor else "."),
+        f"The main score limit is {weakest_name} at Band {weakest_band:.1f}"
+        + (f", where {weakest_anchor!r} still sounds underdeveloped or imprecise." if weakest_anchor else "."),
+    ]
+    if priority:
+        parts.append(f"The fastest improvement now is to {priority.rstrip('.')}.")
+    if penalty > 0:
+        parts.append(
+            f"Length also cost you {penalty:.1f} band because the response stayed below the {word_minimum}-word minimum."
+        )
+    return " ".join(parts)
+
+
+def _annotation_action(annotation: dict[str, Any]) -> str | None:
+    original = _clean_text(str(annotation.get("original", "")))
+    replacement = _clean_text(
+        str(((annotation.get("replacements") or [""])[0]))
+    )
+    short_message = _clean_text(str(annotation.get("short_message", "")))
+    if not original:
+        return None
+    if replacement:
+        action = f"Replace {original!r} with {replacement!r}"
+    else:
+        action = f"Fix {original!r}"
+    if short_message:
+        action += f" to solve the {short_message.lower()} issue"
+    band_impact = _clean_text(str(annotation.get("band_impact", "")))
+    if band_impact:
+        action += f"; {band_impact.rstrip('.')}"
+    return f"{action}."
+
+
+def _criterion_action(name: str, criterion: _CriterionPayload) -> str | None:
+    improvement = _clean_text(criterion.improvements[0] if criterion.improvements else criterion.summary)
+    if not improvement:
+        return None
+    return f"In {name}, {improvement.rstrip('.')}."
+
+
+def _build_precise_next_steps(
+    *,
+    grader: _GraderPayload,
+    annotations: list[dict[str, Any]],
+    ta: float,
+    cc: float,
+    lr: float,
+    gra: float,
+) -> list[str]:
+    criteria = _criterion_records(grader, ta=ta, cc=cc, lr=lr, gra=gra)
+    ordered_criteria = sorted(criteria, key=lambda item: item[1])
+    steps: list[str] = []
+    seen: set[str] = set()
+
+    for annotation in annotations:
+        action = _annotation_action(annotation)
+        if action and action not in seen:
+            seen.add(action)
+            steps.append(action)
+        if len(steps) >= 2:
+            break
+
+    for name, _, criterion in ordered_criteria:
+        action = _criterion_action(name, criterion)
+        if action and action not in seen:
+            seen.add(action)
+            steps.append(action)
+        if len(steps) >= 3:
+            break
+
+    fallback = [
+        "Write one more revision draft and fix every highlighted sentence before changing ideas.",
+        "Underline repeated nouns and verbs, then upgrade at least three of them with stronger academic collocations.",
+        "Check each paragraph for one clear main idea, one supporting explanation, and one precise example or comparison.",
+    ]
+    for item in fallback:
+        if item not in seen:
+            steps.append(item)
+        if len(steps) >= 3:
+            break
+    return steps[:3]
+
+
+def _normalize_vocabulary_suggestions(
+    suggestions: list[_VocabularySuggestionPayload],
+) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for suggestion in suggestions:
+        current_phrase = _clean_text(suggestion.current_phrase)
+        improved_phrase = _clean_text(suggestion.improved_phrase)
+        if not current_phrase or not improved_phrase:
+            continue
+        key = (current_phrase.lower(), improved_phrase.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        level = suggestion.level.strip().upper()
+        if level not in {"C1", "C2"}:
+            level = "C1"
+        normalized.append(
+            {
+                "current_phrase": current_phrase,
+                "improved_phrase": improved_phrase,
+                "level": level,
+                "why_it_works": _trim_sentence(suggestion.why_it_works, limit=180),
+                "example_sentence": _trim_sentence(suggestion.example_sentence, limit=220),
+            }
+        )
+        if len(normalized) >= _VOCAB_MAX_COUNT:
+            break
+    return normalized
+
+
+def _append_vocab_rule_suggestions(
+    *,
+    rules: list[dict[str, Any]],
+    essay_text: str,
+    items: list[dict[str, str]],
+    seen: set[tuple[str, str]],
+) -> None:
+    for rule in rules:
+        if len(items) >= _VOCAB_MAX_COUNT:
+            return
+        patterns = rule.get("patterns", [])
+        if not patterns:
+            continue
+        matched = any(re.search(pattern, essay_text, flags=re.IGNORECASE) for pattern in patterns)
+        if not matched:
+            continue
+        current_phrase = _clean_text(str(rule.get("current_phrase", "")))
+        improved_phrase = _clean_text(str(rule.get("improved_phrase", "")))
+        if not current_phrase or not improved_phrase:
+            continue
+        key = (current_phrase.lower(), improved_phrase.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(
+            {
+                "current_phrase": current_phrase,
+                "improved_phrase": improved_phrase,
+                "level": str(rule.get("level", "C1")).upper(),
+                "why_it_works": _trim_sentence(str(rule.get("why", "")), limit=180),
+                "example_sentence": _trim_sentence(str(rule.get("example", "")), limit=220),
+            }
+        )
+
+
+def _augment_vocabulary_suggestions(
+    *,
+    task_type: str,
+    essay_text: str,
+    annotations: list[dict[str, Any]],
+    items: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    seen: set[tuple[str, str]] = {
+        (item["current_phrase"].lower(), item["improved_phrase"].lower()) for item in items
+    }
+
+    _append_vocab_rule_suggestions(
+        rules=_TASK_2_VOCAB_RULES if task_type == WritingTaskType.TASK_2.value else _TASK_1_VOCAB_RULES,
+        essay_text=essay_text,
+        items=items,
+        seen=seen,
+    )
+    _append_vocab_rule_suggestions(
+        rules=_GENERAL_VOCAB_RULES,
+        essay_text=essay_text,
+        items=items,
+        seen=seen,
+    )
+
+    if len(items) < _VOCAB_TARGET_COUNT:
+        fallback_rules = _TASK_2_VOCAB_RULES + _TASK_1_VOCAB_RULES + _GENERAL_VOCAB_RULES
+        for rule in fallback_rules:
+            if len(items) >= _VOCAB_TARGET_COUNT:
+                break
+            current_phrase = _clean_text(str(rule.get("current_phrase", "")))
+            improved_phrase = _clean_text(str(rule.get("improved_phrase", "")))
+            if not current_phrase or not improved_phrase:
+                continue
+            key = (current_phrase.lower(), improved_phrase.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(
+                {
+                    "current_phrase": current_phrase,
+                    "improved_phrase": improved_phrase,
+                    "level": str(rule.get("level", "C1")).upper(),
+                    "why_it_works": _trim_sentence(str(rule.get("why", "")), limit=180),
+                    "example_sentence": _trim_sentence(str(rule.get("example", "")), limit=220),
+                }
+            )
+
+    if len(items) < _VOCAB_TARGET_COUNT:
+        for annotation in annotations:
+            if len(items) >= _VOCAB_TARGET_COUNT:
+                break
+            category = str(annotation.get("category", "")).lower()
+            if category not in {"lexical", "style", "cohesion"}:
+                continue
+            current_phrase = _clean_text(str(annotation.get("original", "")))
+            replacements = annotation.get("replacements") or []
+            improved_phrase = _clean_text(str(replacements[0] if replacements else ""))
+            if not current_phrase or not improved_phrase:
+                continue
+            key = (current_phrase.lower(), improved_phrase.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(
+                {
+                    "current_phrase": current_phrase,
+                    "improved_phrase": improved_phrase,
+                    "level": "C1",
+                    "why_it_works": _trim_sentence(
+                        _clean_text(str(annotation.get("explanation", "")))
+                        or _clean_text(str(annotation.get("examiner_tip", "")))
+                        or "This version sounds more precise and natural in academic writing.",
+                        limit=180,
+                    ),
+                    "example_sentence": _trim_sentence(
+                        _clean_text(str(annotation.get("improved_sentence", "")))
+                        or f"Writers can use {improved_phrase!r} when they need a more natural academic phrase.",
+                        limit=220,
+                    ),
+                }
+            )
+
+    return items[:_VOCAB_MAX_COUNT]
+
+
+def _assert_grader_payload_integrity(
+    grader: _GraderPayload,
+    *,
+    essay_text: str,
+) -> None:
+    if _essay_word_count(essay_text) < 20:
+        return
+
+    criteria = [
+        ("task_achievement", grader.task_achievement),
+        ("coherence", grader.coherence),
+        ("lexical", grader.lexical),
+        ("grammar", grader.grammar),
+    ]
+    zero_bands = [name for name, criterion in criteria if criterion.band <= 0]
+    if zero_bands:
+        raise ValueError(
+            "Grader returned zero-band criteria for a non-empty essay: "
+            + ", ".join(zero_bands)
+        )
 
 
 def _validate_annotations(
@@ -426,6 +1019,7 @@ def _call_grader(
     client: genai.Client,
     system_instruction: str,
     prompt: str,
+    essay_text: str,
     seed: int,
 ) -> _GraderPayload:
     settings = get_settings()
@@ -444,7 +1038,7 @@ def _call_grader(
     last_error: Exception | None = None
     for _ in range(2):
         response = client.models.generate_content(
-            model=settings.gemini_model,
+            model=_writing_model_name(),
             contents=prompt,
             config=config,
         )
@@ -454,7 +1048,9 @@ def _call_grader(
             continue
         try:
             data = json.loads(_extract_json_payload(raw_text))
-            return _GraderPayload.model_validate(data)
+            payload = _GraderPayload.model_validate(data)
+            _assert_grader_payload_integrity(payload, essay_text=essay_text)
+            return payload
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = exc
             repaired_text = _repair_grader_json(
@@ -465,11 +1061,16 @@ def _call_grader(
             if repaired_text:
                 try:
                     data = json.loads(_extract_json_payload(repaired_text))
-                    return _GraderPayload.model_validate(data)
-                except (json.JSONDecodeError, ValidationError) as repair_exc:
+                    payload = _GraderPayload.model_validate(data)
+                    _assert_grader_payload_integrity(payload, essay_text=essay_text)
+                    return payload
+                except (json.JSONDecodeError, ValidationError, ValueError) as repair_exc:
                     last_error = repair_exc
             continue
-    raise RuntimeError(f"Grader returned invalid JSON: {last_error}")
+        except ValueError as exc:
+            last_error = exc
+            continue
+    raise RuntimeError(f"Grader returned invalid or incomplete payload: {last_error}")
 
 
 def _extract_json_payload(raw_text: str) -> str:
@@ -528,7 +1129,7 @@ def _call_annotation_recovery(
 ) -> list[_AnnotationPayload]:
     settings = get_settings()
     response = client.models.generate_content(
-        model=settings.gemini_model,
+        model=_writing_model_name(),
         contents=_build_annotation_recovery_prompt(
             essay_text=essay_text,
             hints=hints,
@@ -560,7 +1161,7 @@ def _repair_grader_json(
 ) -> str | None:
     settings = get_settings()
     response = client.models.generate_content(
-        model=settings.gemini_model,
+        model=_writing_model_name(),
         contents=(
             "Repair the broken IELTS grader JSON below so it becomes valid JSON "
             "that matches the response schema exactly. Preserve meaning when possible, "
@@ -621,7 +1222,7 @@ def _generate_improved_version(
         ),
     )
     response = client.models.generate_content(
-        model=settings.gemini_model,
+        model=_writing_model_name(),
         contents=prompt,
         config=config,
     )
@@ -634,6 +1235,7 @@ def _build_payload(
     grader: _GraderPayload,
     annotations: list[dict[str, Any]],
     essay_text: str,
+    task_type: str,
     word_count: int,
     word_minimum: int,
     model_version: str,
@@ -654,6 +1256,36 @@ def _build_payload(
 
     overall_after_penalty = max(0.0, min(9.0, overall_pre_penalty - penalty))
     overall_after_penalty = round_to_ielts_band(overall_after_penalty)
+    precise_summary = _build_precise_summary(
+        grader=grader,
+        overall_band=overall_after_penalty,
+        penalty=penalty,
+        word_minimum=word_minimum,
+        ta=ta,
+        cc=cc,
+        lr=lr,
+        gra=gra,
+    )
+    precise_next_steps = _build_precise_next_steps(
+        grader=grader,
+        annotations=annotations,
+        ta=ta,
+        cc=cc,
+        lr=lr,
+        gra=gra,
+    )
+    generated_next_steps = [
+        _trim_sentence(step, limit=180)
+        for step in grader.next_steps
+        if _clean_text(step)
+    ]
+    normalized_vocabulary = _normalize_vocabulary_suggestions(grader.vocabulary_suggestions)
+    normalized_vocabulary = _augment_vocabulary_suggestions(
+        task_type=task_type,
+        essay_text=essay_text,
+        annotations=annotations,
+        items=normalized_vocabulary,
+    )
 
     feedback = {
         "task_achievement": {
@@ -688,8 +1320,13 @@ def _build_payload(
             "evidence_quotes": grader.grammar.evidence_quotes,
             "reasoning": grader.grammar.reasoning,
         },
-        "overall_summary": grader.overall_summary,
-        "next_steps": grader.next_steps,
+        "overall_summary": precise_summary if _is_generic_text(grader.overall_summary) else _trim_sentence(grader.overall_summary, limit=340),
+        "next_steps": (
+            precise_next_steps
+            if len(generated_next_steps) != 3 or any(_is_generic_text(step) for step in generated_next_steps)
+            else [step if step.endswith(".") else f"{step}." for step in generated_next_steps[:3]]
+        ),
+        "vocabulary_suggestions": normalized_vocabulary[:_VOCAB_MAX_COUNT],
     }
 
     rubric_reasoning = {
@@ -747,6 +1384,7 @@ def grade_essay_sync(
         client=client,
         system_instruction=system_instruction,
         prompt=prompt,
+        essay_text=essay_text,
         seed=seed,
     )
     grader_annotations = _validate_annotations(grader.inline_annotations, essay_text)
@@ -784,9 +1422,10 @@ def grade_essay_sync(
         grader=grader,
         annotations=annotations,
         essay_text=essay_text,
+        task_type=task_type_value,
         word_count=word_count,
         word_minimum=word_minimum,
-        model_version=settings.gemini_model,
+        model_version=_writing_model_name(),
         latency_ms=elapsed_ms,
     )
 
@@ -812,6 +1451,7 @@ def grade_essay_sync(
                 client=client,
                 system_instruction=system_instruction,
                 prompt=regrade_prompt,
+                essay_text=improved_text,
                 seed=improved_seed,
             )
             potential_band = calculate_overall_band(

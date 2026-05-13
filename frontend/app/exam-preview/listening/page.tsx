@@ -237,6 +237,7 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
         sectionTranscriptQuestionLocations: groupIndex === 0 ? transcriptQuestionLocations : undefined,
         questionBlock: group.shared_content?.question_block ?? "",
         secondaryBlock: group.shared_content?.secondary_block ?? "",
+        optionsTitle: group.shared_content?.options_title ?? "",
         diagramTitle: group.shared_content?.diagram_title ?? "",
         diagramImageUrl: group.shared_content?.diagram_image_url ?? "",
         sharedOptions: group.shared_options ?? [],

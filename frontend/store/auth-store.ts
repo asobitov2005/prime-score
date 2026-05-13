@@ -18,11 +18,14 @@ export interface AuthSessionState {
   isPremium: boolean;
   premiumUntil: string | null;
   createdAt: string | null;
+  welcomeBonusDays: number;
   isAuthenticated: boolean;
   hasHydrated: boolean;
   setHasHydrated: (hasHydrated: boolean) => void;
   setSession: (session: { userId: string; sessionId: string; accessToken?: string | null; refreshToken?: string | null; name: string; phoneNumber: string | null; avatarUrl?: string | null; isPremium: boolean; premiumUntil?: string | null; createdAt?: string | null }) => void;
   syncSession: (session: Partial<{ userId: string | null; sessionId: string | null; accessToken: string | null; refreshToken: string | null; name: string; phoneNumber: string | null; avatarUrl: string | null; isPremium: boolean; premiumUntil: string | null; createdAt: string | null }>) => void;
+  setWelcomeBonus: (days: number) => void;
+  dismissWelcomeBonus: () => void;
   setTokens: (tokens: { accessToken?: string | null; refreshToken?: string | null }) => void;
   updateName: (newName: string) => void;
   updateAvatar: (avatarUrl: string | null) => void;
@@ -42,6 +45,7 @@ export const useAuthStore = create<AuthSessionState>()(
       isPremium: false,
       premiumUntil: null,
       createdAt: null,
+      welcomeBonusDays: 0,
       isAuthenticated: false,
       hasHydrated: false,
       setHasHydrated: (hasHydrated) =>
@@ -65,6 +69,14 @@ export const useAuthStore = create<AuthSessionState>()(
             isAuthenticated: true
           };
         }),
+      setWelcomeBonus: (days) =>
+        set(() => ({
+          welcomeBonusDays: Math.max(0, days),
+        })),
+      dismissWelcomeBonus: () =>
+        set(() => ({
+          welcomeBonusDays: 0,
+        })),
       syncSession: (session) =>
         set((state) => ({
           userId: session.userId ?? state.userId,
@@ -119,6 +131,7 @@ export const useAuthStore = create<AuthSessionState>()(
             isPremium: false,
             premiumUntil: null,
             createdAt: null,
+            welcomeBonusDays: 0,
             isAuthenticated: false
           };
         })
@@ -136,6 +149,7 @@ export const useAuthStore = create<AuthSessionState>()(
         isPremium: state.isPremium,
         premiumUntil: state.premiumUntil,
         createdAt: state.createdAt,
+        welcomeBonusDays: state.welcomeBonusDays,
         isAuthenticated: state.isAuthenticated
       }),
       onRehydrateStorage: () => (state) => {

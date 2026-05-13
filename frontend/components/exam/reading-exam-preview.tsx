@@ -28,6 +28,7 @@ import {
   normalizeMatchingAnswerValue,
   shouldAutoLetterMatchingOptions,
 } from "@/lib/matching-option-format";
+import { emitNotificationRefresh } from "@/lib/notification-events";
 import { readBrowserSessionCookies } from "@/lib/user-session-cookies";
 import { cn } from "@/lib/utils";
 import type { QuestionType } from "@/lib/types";
@@ -82,6 +83,7 @@ interface PreviewGroup {
   id: string;
   title: string;
   instruction: string;
+  optionsTitle?: string;
   type: QuestionType | "tfng" | "mcq" | "gap";
   sectionId?: string;
   sectionTitle?: string;
@@ -1566,6 +1568,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       if (!response.ok) {
         throw new Error("Submit failed");
       }
+      emitNotificationRefresh();
       clearAttemptBackup();
       allowLeaveRef.current = true;
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
@@ -2318,6 +2321,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }, []);
 
   function optionBankWidthForGroup(group: PreviewGroup) {
+    if (group.type.includes("listening_matching")) {
+      return "18rem";
+    }
+
     const longestChars = typedOptionLines(group).reduce((maxLength, option, index) => {
       const optionView = typedOptionView(option, index, group.type);
       const text = optionView.text || optionView.label || optionView.value;
@@ -2331,11 +2338,27 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     return `${Math.max(18, longestChars + 6)}ch`;
   }
 
+  function optionPanelTitleForGroup(group: PreviewGroup) {
+    const customTitle = group.optionsTitle?.trim();
+    if (customTitle) {
+      return customTitle;
+    }
+    if (group.type.includes("matching_headings")) {
+      return "List of Headings";
+    }
+    if (group.type.includes("matching_sentence_endings")) {
+      return "Sentence Endings";
+    }
+    return "Options";
+  }
+
   function renderOptionBank(group: PreviewGroup) {
     if (group.type.includes("matching_information") || group.type.includes("plan_map_labeling")) {
       return null;
     }
 
+    const isListeningMatchingGroup = group.type.includes("listening_matching");
+    const isWordBankGroup = group.type.includes("wordbank");
     const baseOptions = typedOptionLines(group);
     const baseOptionEntries = baseOptions.map((option, index) => ({
       option,
@@ -2353,7 +2376,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             .filter((entry): entry is { groupId: string; value: string; prefix: string; text: string; label: string } => Boolean(entry && entry.groupId === group.id))
             .map((entry) => normalizeHeadingComparableValue(entry.value)),
         ])
-      : group.type.includes("wordbank") || group.type.includes("listening_matching")
+      : isWordBankGroup
         ? new Set<string>(
           group.questions
               .map((question) => {
@@ -2365,52 +2388,47 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           )
         : new Set<string>();
 
-    const isWordBankLikeGroup = group.type.includes("wordbank") || group.type.includes("listening_matching");
-    const bankOptions = group.type.includes("matching_headings") || isWordBankLikeGroup
+    const bankOptions = group.type.includes("matching_headings") || isWordBankGroup
       ? baseOptionEntries.filter((entry) => {
-          const value = normalizeHeadingComparableValue(
-            isWordBankLikeGroup
-              ? entry.optionView.value
-              : entry.optionView.value
-          );
+          const value = normalizeHeadingComparableValue(entry.optionView.value);
           return !selectedValues.has(value);
         })
       : baseOptionEntries;
 
-    if (bankOptions.length === 0 && !isWordBankLikeGroup) {
+    if (bankOptions.length === 0 && !isWordBankGroup && !isListeningMatchingGroup) {
       return null;
     }
 
-    const isBankDropReady = draggingHeading?.groupId === group.id || draggingWordBank?.groupId === group.id;
     const optionBankWidth = optionBankWidthForGroup(group);
+    const isBankDropReady = !isListeningMatchingGroup && (draggingHeading?.groupId === group.id || draggingWordBank?.groupId === group.id);
 
     return (
       <div
         data-heading-bank-group-id={group.type.includes("matching_headings") ? group.id : undefined}
-        data-wordbank-bank-group-id={isWordBankLikeGroup ? group.id : undefined}
+        data-wordbank-bank-group-id={isWordBankGroup ? group.id : undefined}
         className={cn(
           "w-full p-1 transition",
-          (dragOverHeadingBankGroupId === group.id || dragOverWordBankGroupId === group.id) && isBankDropReady && "rounded-xl bg-primary/5"
+          !isListeningMatchingGroup && (dragOverHeadingBankGroupId === group.id || dragOverWordBankGroupId === group.id) && isBankDropReady && "rounded-xl bg-primary/5"
         )}
-        style={group.type.includes("listening_matching") ? { width: optionBankWidth } : undefined}
+        style={isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
       >
-        {!group.type.includes("listening_matching") ? (
-          <p
-            className={cn(
-              "mb-3 font-black uppercase tracking-[0.18em]",
-              group.type.includes("matching_headings")
-                ? "text-[13px] text-foreground"
-                : "text-[10px] text-foreground/80"
-            )}
-          >
-            {group.type.includes("matching_headings") ? "List of Headings" : "Options"}
-          </p>
-        ) : null}
+        <p
+          className={cn(
+            "mb-3",
+            group.optionsTitle?.trim()
+              ? "text-[15px] font-bold tracking-tight text-foreground"
+              : group.type.includes("matching_headings")
+                ? "font-black uppercase tracking-[0.18em] text-[13px] text-foreground"
+                : "font-black uppercase tracking-[0.18em] text-[10px] text-foreground/80"
+          )}
+        >
+          {renderFormattedText(optionPanelTitleForGroup(group), `${group.id}-option-bank-title`)}
+        </p>
         <div className={cn(
-          group.type.includes("wordbank")
+          isListeningMatchingGroup
+            ? "flex flex-col gap-2"
+            : group.type.includes("wordbank")
             ? "flex flex-wrap gap-2"
-            : group.type.includes("listening_matching")
-              ? "flex flex-col gap-2"
             : "space-y-2"
         )}>
           {bankOptions.map((entry) => {
@@ -2428,7 +2446,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   !draggingHeading?.sourceQuestionId
                 )
               : (
-                  isWordBankLikeGroup
+                  isWordBankGroup
                   && draggingWordBank?.groupId === group.id
                   && normalizeHeadingComparableValue(draggingWordBank?.value) === normalizeHeadingComparableValue(value)
                   && !draggingWordBank?.sourceQuestionId
@@ -2442,7 +2460,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               <div
                 key={`${group.id}-${value}-${text}-${index}`}
                 onPointerDown={(event) => {
-                  if (isWordBankLikeGroup) {
+                  if (isWordBankGroup) {
                     beginWordBankPointerDrag(event, {
                       groupId: group.id,
                       value: entry.optionView.value,
@@ -2456,12 +2474,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     ? "w-full min-w-0 border border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
                     : group.type.includes("wordbank")
                       ? "inline-flex min-w-[16rem] max-w-full cursor-grab items-center border border-border/55 bg-card active:cursor-grabbing hover:bg-muted/20"
-                      : group.type.includes("listening_matching")
-                        ? "w-full min-w-0 cursor-grab rounded-lg border border-border/90 bg-card px-3 py-1.5 shadow-sm active:cursor-grabbing dark:border-slate-500/80"
-                        : "border border-border/55 bg-card",
+                      : isListeningMatchingGroup
+                        ? "w-full min-w-0 px-0 py-1"
+                      : "border border-border/55 bg-card",
                   hasPrefix ? "flex items-start gap-0.5" : "block"
                 )}
-                style={group.type.includes("matching_headings") || isWordBankLikeGroup ? { width: optionBankWidth } : undefined}
+                style={group.type.includes("matching_headings") || isWordBankGroup || isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
               >
               {hasPrefix ? (
                   <>
@@ -2482,13 +2500,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
                       className={cn(
                         "select-text flex-1 whitespace-nowrap text-[16px] leading-6 text-foreground",
-                        group.type.includes("listening_matching") && "min-w-0 leading-5",
+                        isListeningMatchingGroup && "min-w-0 whitespace-normal break-words leading-5",
                         group.type.includes("matching_headings") && "whitespace-normal"
                       )}
                     >
                       {group.type.includes("matching_headings") ? (
                         renderHighlightedText(optionBlockKey, `${headingPrefix}. ${text}`)
-                      ) : group.type.includes("listening_matching") ? (
+                      ) : isListeningMatchingGroup ? (
                         <>
                           <span className="font-black">{value}.</span>{" "}
                           <span className="font-normal">{renderHighlightedText(optionBlockKey, text)}</span>
@@ -2532,7 +2550,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               </div>
             );
           })}
-          {bankOptions.length === 0 && isWordBankLikeGroup ? (
+          {bankOptions.length === 0 && isWordBankGroup ? (
             <div className="rounded-xl border border-dashed border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground">
               All options are in use
             </div>
@@ -3225,7 +3243,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         matchingOptions,
         question.type
       );
-      const activeMatchingOption = matchingOptionViews.find((option) => option.value === normalizedMatchingValue) ?? null;
 
       if (matchingOptions.length === 0) {
         return (
@@ -3247,37 +3264,31 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
       if (isListeningMatching) {
         return (
-          <div className="min-w-[132px] max-w-[168px] flex-none space-y-1">
-            <button
-              type="button"
-              data-question-anchor={question.id}
-              data-wordbank-drop-question-id={question.id}
-              data-wordbank-drop-group-id={group.id}
-              onClick={() => setActiveQuestionId(question.id)}
-              onPointerDown={(event) => {
-                if (!activeMatchingOption) {
-                  return;
-                }
-                beginWordBankPointerDrag(event, {
-                  groupId: group.id,
-                  value: activeMatchingOption.value,
-                  sourceQuestionId: question.id,
-                  previewLabel: activeMatchingOption.label,
-                });
-              }}
-              className={cn(
-                "flex h-8 w-full items-center rounded-xl border-2 border-dashed border-slate-400/90 bg-card px-3 text-left text-sm font-semibold text-foreground shadow-none transition dark:border-slate-400/85",
-                dragOverWordBankQuestionId === question.id && "border-primary/80 bg-primary/10",
-                isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500/90 bg-emerald-500/10 dark:border-emerald-400/85",
-                isReviewMode && reviewItem?.isCorrect === false && "border-red-500/90 bg-red-500/10 dark:border-red-400/85",
-                activeMatchingOption ? "cursor-grab active:cursor-grabbing" : "cursor-default",
-                activeQuestionId === question.id && activeInputClass
-              )}
-            >
-              <span className={cn("truncate", !activeMatchingOption && "opacity-0")}>
-                {activeMatchingOption ? activeMatchingOption.label : "\u00A0"}
-              </span>
-            </button>
+          <div className="min-w-[176px] max-w-[240px] flex-none space-y-2">
+            <div className="relative">
+              <select
+                value={normalizedMatchingValue}
+                onFocus={() => setActiveQuestionId(question.id)}
+                onChange={(event) => persistAnswer(question.id, event.target.value)}
+                className={cn(
+                  "flex h-9 w-full appearance-none items-center rounded-xl border border-border bg-card px-3 pr-9 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                  theme === "light"
+                    ? "focus:border-[#2f436f]"
+                    : "focus:border-primary/45",
+                  isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500/90 bg-emerald-500/10 dark:border-emerald-400/85",
+                  isReviewMode && reviewItem?.isCorrect === false && "border-red-500/90 bg-red-500/10 dark:border-red-400/85",
+                  activeQuestionId === question.id && activeInputClass
+                )}
+              >
+                <option value="">Select answer</option>
+                {matchingOptionViews.map((optionView, index) => (
+                  <option key={`${question.id}-listening-matching-${index}`} value={optionView.value}>
+                    {optionView.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
             {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
               <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                 {formattedReviewCorrectAnswer}
@@ -4067,11 +4078,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
                   <div className={cn(
                     "mt-5 px-0 py-2",
-                    isListeningMatchingGroup ? "flex items-start gap-2" : "space-y-4"
+                    isListeningMatchingGroup ? "inline-flex max-w-full items-start gap-3" : "space-y-4"
                   )}>
                     <div className={cn(
                       "min-w-0",
-                      isListeningMatchingGroup ? "w-[28rem] shrink-0 space-y-4" : "space-y-4"
+                      isListeningMatchingGroup ? "w-[32rem] max-w-full flex-none space-y-4" : "space-y-4"
                     )}>
                     {shouldRenderCustomGroupTitle(group) ? (
                       <div className="px-2">
@@ -4099,7 +4110,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     </div>
                     {isListeningMatchingGroup ? (
                       <div
-                        className="shrink-0"
+                        className="shrink-0 rounded-2xl border border-border/70 bg-muted/20 p-3"
                         style={{ width: optionBankWidthForGroup(group) }}
                       >
                         {renderOptionBank(group)}

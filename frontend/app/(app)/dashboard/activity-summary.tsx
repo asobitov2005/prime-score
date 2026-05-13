@@ -31,10 +31,19 @@ function formatJoinedDate(value: string | null): string | null {
   }).format(date);
 }
 
+function formatHours(value: number | null | undefined): string {
+  const safeHours = Math.max(0, Number(value ?? 0));
+  return `${safeHours === 0 ? 0 : safeHours.toFixed(1)}h`;
+}
+
 export function ActivitySummary({ analytics }: ActivitySummaryProps) {
   const summary = analytics.performanceSummary;
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const router = useRouter();
+  const readingTimeHours = formatHours(summary.studyTime.readingTimeSec / 3600);
+  const listeningTimeHours = formatHours(summary.studyTime.listeningTimeSec / 3600);
+  const writingTimeHours = formatHours((summary.studyTime.writingTimeSec ?? 0) / 3600);
+  const speakingTimeHours = formatHours(0);
   
   const activities = [
     {
@@ -47,12 +56,12 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
       color: "text-blue-600",
       bg: "bg-blue-500/10",
       details: {
-        time: "12.5h",
+        time: readingTimeHours,
         breakdown: [
           { name: "Full Tests", value: summary.reading.fullCount },
-          { name: "Passage 1", value: 42 },
-          { name: "Passage 2", value: 38 },
-          { name: "Passage 3", value: 31 },
+          { name: "Passage 1", value: summary.reading.section1Count },
+          { name: "Passage 2", value: summary.reading.section2Count },
+          { name: "Passage 3", value: summary.reading.section3Count },
         ]
       }
     },
@@ -66,13 +75,13 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
       color: "text-emerald-600",
       bg: "bg-emerald-500/10",
       details: {
-        time: "8.2h",
+        time: listeningTimeHours,
         breakdown: [
           { name: "Full Tests", value: summary.listening.fullCount },
-          { name: "Part 1", value: 28 },
-          { name: "Part 2", value: 24 },
-          { name: "Part 3", value: 18 },
-          { name: "Part 4", value: 15 },
+          { name: "Part 1", value: summary.listening.section1Count },
+          { name: "Part 2", value: summary.listening.section2Count },
+          { name: "Part 3", value: summary.listening.section3Count },
+          { name: "Part 4", value: summary.listening.section4Count },
         ]
       }
     },
@@ -86,10 +95,10 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
       color: "text-violet-600",
       bg: "bg-violet-500/10",
       details: {
-        time: "15.7h",
+        time: writingTimeHours,
         breakdown: [
-          { name: "Task 1 (Report)", value: 12 },
-          { name: "Task 2 (Essay)", value: 8 },
+          { name: "Task 1", value: summary.writing?.section1Count ?? 0 },
+          { name: "Task 2", value: summary.writing?.section2Count ?? 0 },
         ]
       }
     },
@@ -103,7 +112,7 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
       color: "text-orange-600",
       bg: "bg-orange-500/10",
       details: {
-        time: "0h",
+        time: speakingTimeHours,
         breakdown: [
           { name: "Part 1", value: 0 },
           { name: "Part 2 & 3", value: 0 },

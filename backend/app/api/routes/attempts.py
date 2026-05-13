@@ -223,6 +223,32 @@ def _hydrate_snapshot_media_from_live(
                 or live_location_quality > merged_location_quality + 1
             ):
                 merged_section["transcript_question_locations"] = live_section.get("transcript_question_locations", [])
+
+        live_groups_by_id = {
+            str(group.get("group_id")): group
+            for group in live_section.get("question_groups", [])
+            if isinstance(group, dict) and group.get("group_id")
+        }
+        merged_groups: list[dict[str, object]] = []
+        for raw_group in merged_section.get("question_groups", []):
+            if not isinstance(raw_group, dict):
+                continue
+            merged_group = dict(raw_group)
+            live_group = live_groups_by_id.get(str(raw_group.get("group_id")))
+            if live_group is not None:
+                if not merged_group.get("shared_options") and live_group.get("shared_options"):
+                    merged_group["shared_options"] = live_group.get("shared_options")
+
+                merged_shared_content = dict(raw_group.get("shared_content") or {})
+                live_shared_content = live_group.get("shared_content")
+                if isinstance(live_shared_content, dict):
+                    for key in ("question_block", "answer_block", "secondary_block", "options_title", "diagram_title", "diagram_image_url"):
+                        if not str(merged_shared_content.get(key) or "").strip() and str(live_shared_content.get(key) or "").strip():
+                            merged_shared_content[key] = live_shared_content.get(key)
+                if merged_shared_content:
+                    merged_group["shared_content"] = merged_shared_content
+            merged_groups.append(merged_group)
+        merged_section["question_groups"] = merged_groups
         merged_sections.append(merged_section)
 
     merged_snapshot["sections"] = merged_sections

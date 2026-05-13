@@ -20,7 +20,7 @@ export const readingQuestionTypes: QuestionTypeOption[] = [
 export const listeningQuestionTypes: QuestionTypeOption[] = [
   { id: "listening_mc_single", label: "MC Single", family: "selection", description: "One correct option." },
   { id: "listening_mc_multiple", label: "MC Multiple", family: "selection", description: "Multiple correct options." },
-  { id: "listening_matching", label: "Matching", family: "matching", description: "Pair items with answers." },
+  { id: "listening_matching", label: "Matching Features", family: "matching", description: "Match prompts to reusable lettered options." },
   { id: "listening_plan_map_labeling", label: "Map Labeling (dropdown options)", family: "labeling", description: "Choose map labels from configured options." },
   { id: "listening_form_completion", label: "Form / Note / Table / Flow-chart / Summary Completion", family: "completion", description: "Structured blank filling." },
   { id: "listening_sentence_completion", label: "Sentence Completion", family: "completion", description: "Complete the sentence." },

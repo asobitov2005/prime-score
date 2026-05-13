@@ -125,6 +125,7 @@ type BackendAdminDraftPayload = {
     section_id: string;
     title: string;
     instructions: string;
+    options_title?: string;
     type_id: string;
     question_start: number;
     question_end: number;
@@ -193,6 +194,7 @@ type BackendAdminDraft = {
     section_id: string;
     title: string;
     instructions: string;
+    options_title?: string;
     type_id: string;
     question_start: number;
     question_end: number;
@@ -610,6 +612,26 @@ function buildParagraphPayloads(content: string, showLabels: boolean): BackendAd
     });
 }
 
+function detectSharedListeningAudio(
+  sections: Array<{ audioUrl?: string; audioDurationSeconds?: number | null }>
+) {
+  if (sections.length === 0) {
+    return null;
+  }
+
+  const firstUrl = String(sections[0]?.audioUrl ?? "").trim();
+  if (!firstUrl) {
+    return null;
+  }
+
+  if (!sections.every((section) => String(section.audioUrl ?? "").trim() === firstUrl)) {
+    return null;
+  }
+
+  const durationSeconds = sections.find((section) => (section.audioDurationSeconds ?? 0) > 0)?.audioDurationSeconds ?? null;
+  return { audioUrl: firstUrl, audioDurationSeconds: durationSeconds };
+}
+
 function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPayload {
   const resolvedQuestionType = (typeId: string): string => {
     if (typeId === "listening_plan_map_labeling_free_text") {
@@ -644,6 +666,9 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
   const questionGroups = draft.questionGroups && draft.questionGroups.length > 0 
     ? draft.questionGroups 
     : [];
+  const sharedListeningAudio = draft.metadata.type === "listening" && draft.metadata.format === "full"
+    ? detectSharedListeningAudio(draft.content.sections)
+    : null;
 
   return {
     metadata: {
@@ -676,7 +701,9 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
         showLabels: Boolean(section.showLabels),
         media_kind: section.mediaKind,
         audio_url: section.audioUrl || "",
-        audio_duration_seconds: section.audioDurationSeconds ?? null,
+        audio_duration_seconds: sharedListeningAudio
+          ? (idx === 0 ? (section.audioDurationSeconds ?? sharedListeningAudio.audioDurationSeconds ?? null) : null)
+          : (section.audioDurationSeconds ?? null),
         transcript: section.transcript || "",
         transcript_segments: (section.transcriptSegments ?? []).map((segment) => ({
           id: segment.id,
@@ -701,6 +728,7 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
       section_id: sectionIdMap.get(group.sectionId) ?? generateUuid(),
       title: sanitizeQuestionGroupTitle(group.title),
       instructions: group.instructions,
+      options_title: group.optionsTitle,
       type_id: resolvedQuestionType(group.typeId),
       question_start: group.questionStart,
       question_end: group.questionEnd,
@@ -775,6 +803,7 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
       sectionId: group.section_id,
       title: sanitizeQuestionGroupTitle(String(group.title ?? "")),
       instructions: group.instructions,
+      optionsTitle: group.options_title ?? "",
       typeId: resolveAdminQuestionType(group.type_id, group.shared_options),
       questionStart: group.question_start,
       questionEnd: group.question_end,
@@ -978,7 +1007,14 @@ export const adminApi = {
       body: formData,
     });
     if (!response.ok) {
-      throw new Error(`Audio upload failed: ${response.status} ${response.statusText}`);
+      let detail = "";
+      try {
+        const payload = await response.json() as { detail?: string };
+        detail = payload.detail ? ` - ${payload.detail}` : "";
+      } catch {
+        detail = "";
+      }
+      throw new Error(`Audio upload failed: ${response.status} ${response.statusText}${detail}`);
     }
     const payload = await response.json() as {
       public_url: string;

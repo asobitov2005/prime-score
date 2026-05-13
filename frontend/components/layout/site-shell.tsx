@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { Suspense, useState, useEffect, type CSSProperties, type ReactNode } from "react";
-import { Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell, PenSquare, Mic2 } from "lucide-react";
+import { BookOpen, CalendarDays, Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell, PenSquare, Mic2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
+import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 import { createApiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/client";
 import { buildUserDisplayName } from "@/lib/user-name";
@@ -14,6 +16,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { NavigationTransitionOverlay } from "@/components/layout/navigation-transition-overlay";
 import { emitNavigationStart, setPendingPublicRedirect } from "@/lib/navigation-transition";
 import { refreshClientUserAccessToken } from "@/lib/user-auth-client";
+import { listenNotificationRefresh } from "@/lib/notification-events";
 
 interface SiteShellProps {
   children: ReactNode;
@@ -45,7 +48,8 @@ const highlights = [
 export function SiteShell({ children }: SiteShellProps) {
   // This shell owns the authenticated navigation frame for the user-facing app.
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const { isAuthenticated, name, phoneNumber, avatarUrl, sessionId, refreshToken, clearSession, syncSession, hasHydrated } = useAuthStore();
+  const { isAuthenticated, name, phoneNumber, avatarUrl, sessionId, refreshToken, clearSession, syncSession, hasHydrated, welcomeBonusDays, dismissWelcomeBonus } = useAuthStore();
+  const [showWelcomeBonusModal, setShowWelcomeBonusModal] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -66,6 +70,7 @@ export function SiteShell({ children }: SiteShellProps) {
     || currentPath.startsWith("/speaking")
     || currentPath.startsWith("/articles");
   const hideSiteChrome = currentPath.startsWith("/admin") || currentPath.startsWith("/exam-preview/");
+  const welcomeBonusVisible = hasHydrated && isAuthenticated && isAppRoute && welcomeBonusDays > 0;
 
   const fetchNotifications = async () => {
     const api = createApiClient();
@@ -119,12 +124,32 @@ export function SiteShell({ children }: SiteShellProps) {
   };
 
   useEffect(() => {
-    if (isAuthenticated && hasHydrated) {
+    if (!hasHydrated || !isAuthenticated) {
       setNotifications([]);
-      fetchNotifications();
-    } else {
-      setNotifications([]);
+      return;
     }
+
+    let cancelled = false;
+    const api = createApiClient();
+
+    const refreshNotifications = async () => {
+      try {
+        const items = await api.listNotifications();
+        if (!cancelled) {
+          setNotifications(items);
+        }
+      } catch {}
+    };
+
+    void refreshNotifications();
+    const stopListening = listenNotificationRefresh(() => {
+      void refreshNotifications();
+    });
+
+    return () => {
+      cancelled = true;
+      stopListening();
+    };
   }, [hasHydrated, isAuthenticated]);
 
   useEffect(() => {
@@ -206,6 +231,24 @@ export function SiteShell({ children }: SiteShellProps) {
     setIsMobileNavOpen(false);
   }, [currentPath]);
 
+  useEffect(() => {
+    if (!welcomeBonusVisible) {
+      setShowWelcomeBonusModal(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowWelcomeBonusModal(true);
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [welcomeBonusVisible]);
+
+  const closeWelcomeBonusModal = () => {
+    setShowWelcomeBonusModal(false);
+    dismissWelcomeBonus();
+  };
+
   if (hideSiteChrome) {
     return (
       <>
@@ -230,6 +273,77 @@ export function SiteShell({ children }: SiteShellProps) {
       <Suspense fallback={null}>
         <NavigationTransitionOverlay />
       </Suspense>
+
+      {welcomeBonusVisible && showWelcomeBonusModal ? (
+        <Dialog
+          open={showWelcomeBonusModal}
+          onOpenChange={() => undefined}
+          title="Welcome bonus activated"
+          description="Your 1-day premium is active, and a 2-day bonus is waiting for you."
+          className="max-w-2xl border-amber-500/20 bg-background/95 shadow-[0_30px_90px_-20px_rgba(245,158,11,0.35)]"
+          dismissible={false}
+        >
+          <div className="space-y-5">
+            <div className="rounded-lg border border-amber-500/20 bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-transparent p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-background text-amber-600">
+                  <PrimePremiumIcon className="h-12 w-12" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-amber-500">Premium unlocked</p>
+                  <h3 className="text-2xl font-semibold tracking-tight text-foreground">
+                    +{welcomeBonusDays} day{welcomeBonusDays === 1 ? "" : "s"} of premium
+                  </h3>
+                  <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+                    Complete a full Reading or Listening test to earn 2 more premium days.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-border/70 bg-muted/30 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                    <CalendarDays className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Premium today</p>
+                    <p className="text-xs text-muted-foreground">Your access is active now.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-muted/30 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+                    <BookOpen className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Next bonus</p>
+                    <p className="text-xs text-muted-foreground">Finish a full Reading or Listening test and get +2 days.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild className="h-11 flex-1 rounded-lg bg-amber-500 font-semibold text-black hover:bg-amber-400">
+                <Link href="/tests?type=reading" onClick={closeWelcomeBonusModal}>
+                  Start Reading
+                </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 flex-1 rounded-lg"
+                onClick={closeWelcomeBonusModal}
+              >
+                Continue
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      ) : null}
 
       <header 
         className="sticky top-0 z-50 border-b border-primary/10 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] flex items-center shrink-0 h-14 md:h-16"
@@ -405,7 +519,10 @@ export function SiteShell({ children }: SiteShellProps) {
                         </button>
                       )}
                     </div>
-                    <div className="overflow-y-auto max-h-72">
+                    <div
+                      className="max-h-72 overflow-y-auto overscroll-contain"
+                      data-lenis-prevent
+                    >
                       {notifications.length === 0 ? (
                         <div className="px-4 py-8 text-center text-sm text-muted-foreground">No notifications yet</div>
                       ) : (
@@ -459,6 +576,14 @@ export function SiteShell({ children }: SiteShellProps) {
                         <p className="text-sm font-bold text-foreground tracking-tight">{phoneNumber || "No number"}</p>
                       </div>
                     </div>
+
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                    >
+                       <LayoutDashboard className="h-4 w-4" /> Dashboard
+                    </Link>
 
                     <Link
                       href="/settings"
@@ -575,6 +700,13 @@ export function SiteShell({ children }: SiteShellProps) {
 
               {mounted && hasHydrated && isAuthenticated ? (
                 <>
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setIsMobileNavOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <LayoutDashboard className="h-4 w-4" /> Dashboard
+                  </Link>
                   <Link
                     href="/settings"
                     onClick={() => setIsMobileNavOpen(false)}

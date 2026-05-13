@@ -9,7 +9,6 @@ import {
   Smartphone,
   KeyRound,
   Fingerprint,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,9 +24,10 @@ import { cn } from "@/lib/utils";
 export function LoginPageClient() {
   const router = useRouter();
   const setSession = useAuthStore((state) => state.setSession);
+  const setWelcomeBonus = useAuthStore((state) => state.setWelcomeBonus);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
-  const [step, setStep] = useState<"guide" | "verify" | "done">("guide");
+  const [step, setStep] = useState<"guide" | "verify">("guide");
 
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) {
@@ -70,6 +70,7 @@ export function LoginPageClient() {
 
       const data = await response.json();
       const userData = data.user || { id: "user", first_name: "Candidate", phone: "Phone" };
+      const isNewUser = Boolean(data.is_new_user);
 
       setSession({
         userId: userData.id,
@@ -83,13 +84,18 @@ export function LoginPageClient() {
         premiumUntil: userData.premium_until ?? null,
         createdAt: userData.created_at ?? null,
       });
+      const welcomeBonusDays = Number(data.welcome_bonus_days ?? (isNewUser ? 1 : 0));
+      if (welcomeBonusDays > 0) {
+        setWelcomeBonus(welcomeBonusDays);
+      }
       trackLogin({
         method: "telegram_code",
         isPremium: Boolean(userData.is_premium),
       });
 
-      setStep("done");
-      setTimeout(() => router.replace("/dashboard"), 1500);
+      window.setTimeout(() => {
+        window.location.assign("/dashboard");
+      }, 0);
     } catch (error: unknown) {
       console.error("Login verification error:", error);
       if (error instanceof Error && error.name === "AbortError") {
@@ -103,7 +109,7 @@ export function LoginPageClient() {
     }
   };
 
-  if (!hasHydrated || isAuthenticated) {
+  if (!hasHydrated || (isAuthenticated && step === "guide")) {
     return (
       <AppLoadingPlaceholder
         mode="overlay"
@@ -232,11 +238,11 @@ export function LoginPageClient() {
                     authState: "guest",
                   });
                 }}
-                className="flex items-center justify-center gap-2.5 w-full h-11 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-black text-sm font-semibold shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 hover:from-orange-500 hover:to-orange-500 transition-all active:scale-[0.98]"
+                className="flex items-center justify-center gap-2.5 w-full h-11 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-semibold shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 hover:from-orange-500 hover:to-orange-500 transition-all active:scale-[0.98]"
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4 text-white" />
                 Open Telegram Bot
-                <ArrowRight className="h-4 w-4 opacity-60" />
+                <ArrowRight className="h-4 w-4 text-white/80 opacity-80" />
               </a>
 
               <button
@@ -361,37 +367,6 @@ export function LoginPageClient() {
               </button>
             </div>
           </form>
-        )}
-
-        {/* ── STEP: DONE ── */}
-        {step === "done" && (
-          <div className="text-center space-y-6 animate-in fade-in zoom-in-95 duration-600 py-8">
-            <div className="relative inline-flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl scale-150" />
-              <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/30 flex items-center justify-center">
-                <Sparkles className="h-8 w-8 text-emerald-500" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-foreground tracking-tight">
-                You&apos;re in!
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Preparing your dashboard…
-              </p>
-            </div>
-            <div className="flex justify-center">
-              <div className="flex gap-1.5">
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="h-1.5 w-1.5 rounded-full bg-emerald-500/60 animate-pulse"
-                    style={{ animationDelay: `${i * 200}ms` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </div>

@@ -35,16 +35,16 @@ export function WelcomeHeader() {
       <CardHeader className="space-y-1 relative z-10 p-6 lg:p-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
-                Welcome, <span className="text-primary">{displayName}</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+                Welcome, <span className="font-medium text-primary">{displayName}</span>
+                {isPremium && (
+                  <span className="ml-2 inline-flex align-middle items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-[0.35rem] text-[10px] font-black uppercase tracking-[0.2em] leading-none text-primary shadow-sm">
+                    <Sparkles className="h-3 w-3 fill-current" />
+                    Premium Member
+                  </span>
+                )}
               </h1>
-              {isPremium && (
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-primary shadow-sm">
-                  <Sparkles className="h-3 w-3 fill-current" />
-                  Premium Member
-                </div>
-              )}
             </div>
 
             {/* Desired Score Section */}

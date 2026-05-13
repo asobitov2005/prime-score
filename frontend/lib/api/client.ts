@@ -233,6 +233,8 @@ export function createApiClient(config: ApiClientConfig = {}) {
         telegram_id?: number | null;
         created_at?: string | null;
       };
+      is_new_user?: boolean;
+      welcome_bonus_days?: number;
     }>("/auth/verify-code", {
       method: "POST",
       body: JSON.stringify({

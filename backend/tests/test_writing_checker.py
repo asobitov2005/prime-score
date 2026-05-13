@@ -4,6 +4,9 @@ from types import SimpleNamespace
 
 from app.services.writing_checker import (
     _AnnotationPayload,
+    _CriterionPayload,
+    _GraderPayload,
+    _build_payload,
     _call_annotation_recovery,
     _call_grader,
     _dedupe_annotations,
@@ -48,7 +51,16 @@ def _valid_grader_json() -> str:
       },
       "overall_summary": "A competent response with room for sharper detail.",
       "next_steps": ["Add one precise data comparison", "Vary linkers"],
-      "inline_annotations": []
+      "inline_annotations": [],
+      "vocabulary_suggestions": [
+        {
+          "current_phrase": "go up",
+          "improved_phrase": "rise markedly",
+          "level": "C1",
+          "why_it_works": "It sounds more precise and academic than a basic phrasal verb.",
+          "example_sentence": "Overall, the proportion of online sales rose markedly over the period."
+        }
+      ]
     }
     """.strip()
 
@@ -79,6 +91,7 @@ def test_call_grader_repairs_invalid_json() -> None:
         client=client,
         system_instruction="system",
         prompt="prompt",
+        essay_text="This is a complete essay with enough words to count as a real attempt in the checker.",
         seed=123,
     )
 
@@ -196,3 +209,140 @@ def test_dedupe_annotations_prefers_richer_detail() -> None:
 
     assert len(deduped) == 1
     assert deduped[0]["short_message"] == "Subject-verb agreement"
+
+
+def test_call_grader_rejects_partial_zero_band_payload_for_real_essay() -> None:
+    broken_but_valid = """
+    {
+      "task_achievement": {
+        "band": 7.0,
+        "reasoning": "Addresses the question.",
+        "summary": "Clear position.",
+        "strengths": ["Clear opinion"],
+        "improvements": ["Develop one point more fully"],
+        "evidence_quotes": ["In my opinion"]
+      },
+      "coherence": {
+        "band": 0.0,
+        "reasoning": "",
+        "summary": "",
+        "strengths": [],
+        "improvements": [],
+        "evidence_quotes": []
+      },
+      "lexical": {
+        "band": 0.0,
+        "reasoning": "",
+        "summary": "",
+        "strengths": [],
+        "improvements": [],
+        "evidence_quotes": []
+      },
+      "grammar": {
+        "band": 0.0,
+        "reasoning": "",
+        "summary": "",
+        "strengths": [],
+        "improvements": [],
+        "evidence_quotes": []
+      },
+      "overall_summary": "Clear response with room for improvement.",
+      "next_steps": ["Improve grammar.", "Use better vocabulary.", "Be more specific."],
+      "inline_annotations": [],
+      "vocabulary_suggestions": []
+    }
+    """.strip()
+
+    class _Models:
+        def generate_content(self, **_: object) -> SimpleNamespace:
+            return SimpleNamespace(text=broken_but_valid)
+
+    client = SimpleNamespace(models=_Models())
+
+    try:
+        _call_grader(
+            client=client,
+            system_instruction="system",
+            prompt="prompt",
+            essay_text=(
+                "This essay contains enough content to count as a real IELTS attempt and should "
+                "not receive zero bands in three criteria."
+            ),
+            seed=123,
+        )
+    except RuntimeError as exc:
+        assert "invalid or incomplete payload" in str(exc)
+    else:
+        raise AssertionError("Expected partial zero-band payload to be rejected")
+
+
+def test_build_payload_rewrites_generic_summary_and_backfills_vocab() -> None:
+    grader = _GraderPayload(
+        task_achievement=_CriterionPayload(
+            band=6.5,
+            summary="The response addresses both parts of the question but develops one idea more fully than the other.",
+            strengths=["Clear position throughout the essay."],
+            improvements=["extend the second body paragraph with one more specific consequence"],
+            evidence_quotes=["I believe government should invest more in public transport"],
+            reasoning="The response stays on task but one supporting point is thinner than the others.",
+        ),
+        coherence=_CriterionPayload(
+            band=6.0,
+            summary="The essay is easy to follow overall, but some paragraph links feel mechanical.",
+            strengths=["Body paragraphs follow a logical order."],
+            improvements=["replace repetitive linkers such as 'Firstly' and 'Secondly' with more natural transitions"],
+            evidence_quotes=["Firstly", "Secondly"],
+            reasoning="Organisation is clear, but cohesive devices are somewhat repetitive.",
+        ),
+        lexical=_CriterionPayload(
+            band=6.0,
+            summary="Vocabulary is adequate, but several phrases sound too basic for a higher band.",
+            strengths=["Some accurate topic vocabulary about transport and pollution."],
+            improvements=["upgrade repetitive wording like 'very big problem' to more precise academic phrasing"],
+            evidence_quotes=["very big problem"],
+            reasoning="Word choice is understandable but occasionally basic and repetitive.",
+        ),
+        grammar=_CriterionPayload(
+            band=5.5,
+            summary="Grammar errors are noticeable in complex sentences.",
+            strengths=["Simple sentences are mostly accurate."],
+            improvements=["fix article and subject-verb agreement errors in the second paragraph"],
+            evidence_quotes=["the traffic are increasing"],
+            reasoning="Error frequency increases when the writer attempts more complex clauses.",
+        ),
+        overall_summary="A clear response with room for improvement.",
+        next_steps=["Improve grammar.", "Use better vocabulary.", "Be more specific."],
+        inline_annotations=[],
+        vocabulary_suggestions=[],
+    )
+
+    payload = _build_payload(
+        grader=grader,
+        annotations=[
+            {
+                "offset": 48,
+                "length": 16,
+                "original": "very big problem",
+                "replacements": ["pressing concern"],
+                "category": "lexical",
+                "severity": "suggestion",
+                "short_message": "Basic wording",
+                "explanation": "The phrase is understandable but too plain for a stronger IELTS lexical profile.",
+                "band_impact": "This holds Lexical Resource at a mid-band level.",
+                "examiner_tip": "Use a more precise noun phrase when describing social issues.",
+                "improved_sentence": "Traffic congestion has become a pressing concern in many large cities.",
+            },
+        ],
+        essay_text="Traffic congestion is a very big problem in many cities.",
+        task_type="task_2",
+        word_count=210,
+        word_minimum=250,
+        model_version="test-model",
+        latency_ms=12,
+    )
+
+    assert "strongest area" in payload["feedback"]["overall_summary"].lower()
+    assert "weakest" in payload["feedback"]["overall_summary"].lower() or "score limit" in payload["feedback"]["overall_summary"].lower()
+    assert len(payload["feedback"]["next_steps"]) == 3
+    assert payload["feedback"]["next_steps"][0].startswith("Replace 'very big problem'")
+    assert len(payload["feedback"]["vocabulary_suggestions"]) >= 10

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from celery import Celery
 from celery.signals import worker_process_init
 
@@ -20,6 +22,12 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # Keep beat state out of the bind-mounted repo tree so the appuser inside
+    # the container can always read/write it.
+    beat_schedule_filename=os.getenv(
+        "CELERY_BEAT_SCHEDULE_FILENAME",
+        "/tmp/primescore-celerybeat-schedule",
+    ),
     task_routes={
         "primescore.run_admin_ai_job": {"queue": "admin_ai"},
         "primescore.score_attempt": {"queue": "default"},

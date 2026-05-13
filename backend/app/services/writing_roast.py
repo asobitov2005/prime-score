@@ -158,8 +158,9 @@ def generate_roast(
         overall_summary=overall_summary,
     )
     try:
+        writing_model = (settings.gemini_writing_model or settings.gemini_model).strip()
         response = client.models.generate_content(
-            model=settings.gemini_model,
+            model=writing_model,
             contents=prompt,
             config=config,
         )

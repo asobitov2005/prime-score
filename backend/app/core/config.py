@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     payment_paused: bool = True
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
+    gemini_writing_model: str | None = None
     gemini_thinking_level: str = "HIGH"
     gemini_max_tool_loops: int = 80
     minio_endpoint: str = "127.0.0.1:9200"

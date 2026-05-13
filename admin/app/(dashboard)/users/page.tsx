@@ -78,6 +78,21 @@ export default function UsersPage() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [bulkMsg, setBulkMsg] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createMsg, setCreateMsg] = useState("");
+  const [createError, setCreateError] = useState("");
+  const [createForm, setCreateForm] = useState({
+    telegram_id: "",
+    phone: "",
+    first_name: "",
+    last_name: "",
+    username: "",
+    avatar_url: "",
+    show_on_leaderboard: true,
+    is_premium: false,
+    premium_days: "0",
+  });
   const actionsRef = useRef<HTMLDivElement>(null);
 
   const [premiumFilter, setPremiumFilter] = useState("all");
@@ -86,6 +101,17 @@ export default function UsersPage() {
 
   const hasFilters = premiumFilter !== "all" || leaderboardFilter !== "all" || search !== "";
   const clearFilters = () => { setPremiumFilter("all"); setLeaderboardFilter("all"); setSearch(""); };
+
+  useEffect(() => {
+    if (!createOpen) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [createOpen]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) { if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setActionsOpen(false); }
@@ -176,6 +202,55 @@ export default function UsersPage() {
     finally { setBulkLoading(false); }
   };
 
+  const createUser = async () => {
+    setCreateLoading(true);
+    setCreateError("");
+    setCreateMsg("");
+    try {
+      const token = getClientAdminAccessToken();
+      if (!token) throw new Error("No token");
+      const res = await fetch(`${API_BASE}/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          telegram_id: Number(createForm.telegram_id),
+          phone: createForm.phone,
+          first_name: createForm.first_name,
+          last_name: createForm.last_name || null,
+          username: createForm.username || null,
+          avatar_url: createForm.avatar_url || null,
+          show_on_leaderboard: createForm.show_on_leaderboard,
+          is_premium: createForm.is_premium,
+          premium_days: Number(createForm.premium_days || 0),
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail ?? "Failed to create user.");
+      }
+      const data = await res.json();
+      setCreateMsg("User created successfully.");
+      setCreateOpen(false);
+      setCreateForm({
+        telegram_id: "",
+        phone: "",
+        first_name: "",
+        last_name: "",
+        username: "",
+        avatar_url: "",
+        show_on_leaderboard: true,
+        is_premium: false,
+        premium_days: "0",
+      });
+      setSelectedIds(new Set());
+      await fetchUsers();
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Failed to create user.");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   const noneSelected = selectedIds.size === 0;
 
   return (
@@ -208,6 +283,12 @@ export default function UsersPage() {
                 <button onClick={() => grantPremium(30)} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3">
                   <PrimePremiumIcon className="h-4 w-4" /> Premium 30 kun
                 </button>
+                <button onClick={() => grantPremium(7)} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30">
+                  <PrimePremiumIcon className="h-4 w-4" /> Premium 7 kun
+                </button>
+                <button onClick={() => grantPremium(10)} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30">
+                  <PrimePremiumIcon className="h-4 w-4" /> Premium 10 kun
+                </button>
                 <button onClick={() => grantPremium(90)} disabled={bulkLoading} className="w-full px-3 py-2.5 text-sm font-medium text-left hover:bg-muted transition-colors flex items-center gap-3 border-t border-border/30">
                   <PrimePremiumIcon className="h-4 w-4" /> Premium 90 kun
                 </button>
@@ -238,6 +319,13 @@ export default function UsersPage() {
               className="h-9 w-40 pl-8 pr-3 rounded-lg border border-border bg-card text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/40 transition-all" />
           </div>
 
+          <button
+            onClick={() => setCreateOpen(true)}
+            className={buttonClassName({ variant: "solid", size: "sm" })}
+          >
+            Add user
+          </button>
+
           {hasFilters && (
             <button onClick={clearFilters} className="h-9 px-2.5 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
               <IconX /> Clear
@@ -256,6 +344,13 @@ export default function UsersPage() {
 
       {loadError && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-600">{loadError}</div>
+      )}
+
+      {createMsg && (
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-600">{createMsg}</div>
+      )}
+      {createError && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-600">{createError}</div>
       )}
 
       {/* Table */}
@@ -334,6 +429,66 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-muted-foreground">Users</p>
+                <h2 className="text-lg font-bold text-foreground">Add new user</h2>
+              </div>
+              <button className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setCreateOpen(false)} type="button">
+                Close
+              </button>
+            </div>
+            <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Telegram ID</label>
+                <input value={createForm.telegram_id} onChange={(e) => setCreateForm((prev) => ({ ...prev, telegram_id: e.target.value }))} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Phone</label>
+                <input value={createForm.phone} onChange={(e) => setCreateForm((prev) => ({ ...prev, phone: e.target.value }))} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">First name</label>
+                <input value={createForm.first_name} onChange={(e) => setCreateForm((prev) => ({ ...prev, first_name: e.target.value }))} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Last name</label>
+                <input value={createForm.last_name} onChange={(e) => setCreateForm((prev) => ({ ...prev, last_name: e.target.value }))} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Username</label>
+                <input value={createForm.username} onChange={(e) => setCreateForm((prev) => ({ ...prev, username: e.target.value }))} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Avatar URL</label>
+                <input value={createForm.avatar_url} onChange={(e) => setCreateForm((prev) => ({ ...prev, avatar_url: e.target.value }))} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              </div>
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <input type="checkbox" checked={createForm.show_on_leaderboard} onChange={(e) => setCreateForm((prev) => ({ ...prev, show_on_leaderboard: e.target.checked }))} className="h-4 w-4 accent-primary" />
+                Show on leaderboard
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <input type="checkbox" checked={createForm.is_premium} onChange={(e) => setCreateForm((prev) => ({ ...prev, is_premium: e.target.checked }))} className="h-4 w-4 accent-primary" />
+                Start as premium
+              </label>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Premium days</label>
+                <input type="number" min="0" value={createForm.premium_days} onChange={(e) => setCreateForm((prev) => ({ ...prev, premium_days: e.target.value }))} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border px-5 py-4">
+              <button type="button" onClick={() => setCreateOpen(false)} className={buttonClassName({ variant: "outline", size: "sm" })}>Cancel</button>
+              <button type="button" onClick={() => void createUser()} disabled={createLoading} className={buttonClassName({ variant: "solid", size: "sm" })}>
+                {createLoading ? "Creating..." : "Create user"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

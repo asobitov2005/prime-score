@@ -29,6 +29,7 @@ from app.models.enums import AdminRole as ModelAdminRole
 from app.models.enums import PaymentStatus as ModelPaymentStatus
 from app.models.enums import TestStatus as ModelTestStatus
 from app.models.test import Question, QuestionGroup, Test
+from app.models.user import Session as UserSession
 from app.models.user import User
 from app.models.ops import AuditLog, Notification
 from app.models.review import Review
@@ -110,9 +111,11 @@ from app.services.admin_auth import (
     generate_admin_otp_code,
     get_admin_auth_throttle,
     get_admin_by_id,
+    normalize_phone_number,
     update_admin_security_settings,
 )
 from app.services.notification_sender import edit_telegram_message, send_telegram_message_with_id
+from app.services.code_store import get_code_store
 from app.services.plan_catalog import (
     list_plans as list_catalog_plans,
 )
@@ -145,6 +148,7 @@ from app.services.test_content_repo import (
     quick_fix_published_test_in_db,
     save_test_draft_to_db,
 )
+from app.services.user_cleanup import purge_user_data
 
 
 class BulkStatusRequest(BaseModel):
@@ -173,6 +177,18 @@ class AdminUserDetailRead(BaseModel):
     attempts_total: int = 0
     attempts_completed: int = 0
     average_band: float | None = None
+
+
+class AdminUserCreateRequest(BaseModel):
+    telegram_id: int
+    phone: str
+    first_name: str
+    last_name: str | None = None
+    username: str | None = None
+    avatar_url: str | None = None
+    show_on_leaderboard: bool = True
+    is_premium: bool = False
+    premium_days: int = 0
 
 
 class AdminFilterParams:
@@ -1797,6 +1813,8 @@ async def _build_admin_user_detail(
     user: User,
     params: AdminFilterParams,
 ) -> AdminUserDetailRead:
+    if user.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     attempts_total = await session.scalar(
         apply_admin_filters(select(func.count()).select_from(Attempt), Attempt, params).where(Attempt.user_id == user.id)
     ) or 0
@@ -1832,6 +1850,13 @@ async def _build_admin_user_detail(
     )
 
 
+async def _get_active_user_or_404(session: AsyncSession, user_id: UUID) -> User:
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return user
+
+
 @router.get("/users", response_model=list[AdminUserDetailRead])
 async def list_users(
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -1840,7 +1865,7 @@ async def list_users(
 ) -> list[AdminUserDetailRead]:
     _ = current_admin
     try:
-        users = list((await session.scalars(select(User).order_by(User.created_at.desc()))).all())
+        users = list((await session.scalars(select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc()))).all())
         result = []
         for user in users:
             result.append(await _build_admin_user_detail(session, user, params))
@@ -1991,9 +2016,7 @@ async def get_user(
 ) -> AdminUserDetailRead:
     _ = current_admin
     try:
-        user = await session.get(User, user_id)
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        user = await _get_active_user_or_404(session, user_id)
         return await _build_admin_user_detail(session, user, params)
     except HTTPException:
         raise
@@ -2086,20 +2109,85 @@ async def toggle_leaderboard(
     return MessageResponse(message=f"Leaderboard: {'visible' if user.show_on_leaderboard else 'hidden'}.")
 
 
-@router.patch("/users/{user_id}", response_model=AdminUserRead)
-async def update_user(
-    user_id: UUID,
-    payload: AdminContentCreateRequest,
+@router.post("/users", response_model=AdminUserDetailRead, status_code=201)
+async def create_user(
+    payload: AdminUserCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
-) -> AdminUserRead:
-    _ = (payload, current_admin)
-    return AdminUserRead(
-        id=user_id,
-        telegram_id=0,
-        first_name="Unknown",
-        last_name=None,
-        username=None,
+    session: AsyncSession = Depends(get_db_session),
+    params: AdminFilterParams = Depends(),
+) -> AdminUserDetailRead:
+    _ = current_admin
+    phone = normalize_phone_number(payload.phone)
+    if not phone:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phone number is required.")
+    existing = await session.scalar(
+        select(User).where(
+            (User.telegram_id == payload.telegram_id) | (User.phone == phone),
+        )
     )
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User with the same Telegram ID or phone already exists.")
+
+    now = datetime.now(UTC)
+    premium_until = None
+    if payload.is_premium or payload.premium_days > 0:
+        premium_until = now + timedelta(days=max(1, payload.premium_days or 1))
+
+    first_name = " ".join(payload.first_name.split()).strip() or "User"
+    last_name = " ".join(payload.last_name.split()).strip() if payload.last_name else None
+    username = " ".join(payload.username.split()).strip() if payload.username else None
+
+    user = User(
+        telegram_id=payload.telegram_id,
+        phone=phone,
+        first_name=first_name,
+        last_name=last_name or None,
+        username=username or None,
+        avatar_url=payload.avatar_url,
+        telegram_contact_updated_at=now,
+        is_premium=bool(premium_until),
+        premium_until=premium_until,
+        show_on_leaderboard=payload.show_on_leaderboard,
+        last_active_at=now,
+    )
+    session.add(user)
+
+    try:
+        await session.commit()
+        await session.refresh(user)
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create user.") from exc
+
+    return await _build_admin_user_detail(session, user, params)
+
+
+@router.delete("/users/{user_id}", response_model=MessageResponse)
+async def delete_user(
+    user_id: UUID,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    user = await _get_active_user_or_404(session, user_id)
+    telegram_id = user.telegram_id
+    phone = user.phone
+    await purge_user_data(session, user=user)
+    await _write_audit_log(
+        session,
+        admin_id=current_admin.id,
+        action="user.delete",
+        target_type="user",
+        target_id=user.id,
+        changes={
+            "telegram_id": telegram_id,
+            "phone": phone,
+        },
+    )
+    await session.commit()
+    return MessageResponse(message="User deleted.")
 
 
 @router.post("/check-premiums", response_model=MessageResponse)

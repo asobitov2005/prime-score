@@ -148,6 +148,8 @@ class RuntimeStoreBackend(Protocol):
 
     def iter_user_attempts(self, user_id: UUID) -> list[AttemptRuntime]: ...
 
+    def delete_user_attempts(self, user_id: UUID) -> None: ...
+
 
 def _band_for_raw_score(test_type: TestType, raw_score: int) -> Decimal | None:
     table = READING_BAND_TABLE if test_type == TestType.reading else LISTENING_BAND_TABLE
@@ -282,6 +284,15 @@ class RedisRuntimeStore:
             if payload is not None
         ]
 
+    def delete_user_attempts(self, user_id: UUID) -> None:
+        attempt_ids = self.client.zrevrange(self._user_key(user_id), 0, -1)
+        pipe = self.client.pipeline()
+        if attempt_ids:
+            for attempt_id in attempt_ids:
+                pipe.delete(self._attempt_key(attempt_id))
+        pipe.delete(self._user_key(user_id))
+        pipe.execute()
+
 
 class FileRuntimeStore:
     def __init__(self, path: Path):
@@ -334,6 +345,21 @@ class FileRuntimeStore:
             return attempts, False
 
         return self._with_document(mutator)
+
+    def delete_user_attempts(self, user_id: UUID) -> None:
+        def mutator(document: dict[str, object]):
+            attempts = dict(document.get("attempts", {}))
+            filtered_attempts = {
+                attempt_id: payload
+                for attempt_id, payload in attempts.items()
+                if str(payload.get("user_id")) != str(user_id)
+            }
+            if len(filtered_attempts) == len(attempts):
+                return None, False
+            document["attempts"] = filtered_attempts
+            return None, True
+
+        self._with_document(mutator)
 
 
 @lru_cache
@@ -415,6 +441,10 @@ def get_attempt(attempt_id: UUID) -> AttemptRuntime | None:
 
 def iter_user_attempts(user_id: UUID) -> list[AttemptRuntime]:
     return _backend().iter_user_attempts(user_id)
+
+
+def delete_user_attempts(user_id: UUID) -> None:
+    _backend().delete_user_attempts(user_id)
 
 
 def save_answer(attempt_id: UUID, question_id: UUID, value: str | None) -> tuple[AttemptRuntime, int]:

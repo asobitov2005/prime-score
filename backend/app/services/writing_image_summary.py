@@ -64,8 +64,9 @@ def generate_image_summary(image_storage_path: str) -> str:
                 thinkingLevel=genai_types.ThinkingLevel.MINIMAL,
             ),
         )
+        writing_model = (get_settings().gemini_writing_model or get_settings().gemini_model).strip()
         response = client.models.generate_content(
-            model=get_settings().gemini_model,
+            model=writing_model,
             contents=[
                 genai_types.Content(
                     role="user",

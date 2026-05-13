@@ -77,6 +77,14 @@ export interface WritingInlineAnnotation {
   improved_sentence?: string | null;
 }
 
+export interface WritingVocabularySuggestion {
+  current_phrase: string;
+  improved_phrase: string;
+  level: string;
+  why_it_works: string;
+  example_sentence: string;
+}
+
 export interface WritingRoastFeedback {
   overall_roast: string;
   one_liner: string;
@@ -107,6 +115,7 @@ export interface WritingSubmissionResult {
   lexical: WritingCriterionEvaluation;
   grammar: WritingCriterionEvaluation;
   inline_annotations: WritingInlineAnnotation[];
+  vocabulary_suggestions: WritingVocabularySuggestion[];
   improved_version: string;
   overall_summary: string;
   next_steps: string[];

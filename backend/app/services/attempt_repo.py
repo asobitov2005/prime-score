@@ -17,6 +17,7 @@ from app.models.enums import AttemptScope as ModelAttemptScope
 from app.models.enums import AttemptStatus as ModelAttemptStatus
 from app.models.enums import TestType as ModelTestType
 from app.models.user import User
+from app.services.premium_bonus import grant_premium_bonus
 from app.services.fixtures import build_test_snapshot, get_question_fixture
 from app.services.runtime_store import AttemptRuntime, _band_for_raw_score
 from app.services.scoring import score_answer
@@ -83,6 +84,20 @@ def _snapshot_group_shared_options(snapshot: dict[str, object]) -> dict[str, lis
 
 def _count_non_empty_answer_values(values: list[str] | tuple[str, ...]) -> int:
     return sum(1 for value in values if str(value or "").strip())
+
+
+def _should_grant_premium_bonus(
+    *,
+    attempt: Attempt,
+    metadata: dict[str, object],
+) -> bool:
+    if metadata.get("premium_bonus_granted"):
+        return False
+
+    return (
+        attempt.scope == ModelAttemptScope.FULL
+        and attempt.test_type in {ModelTestType.READING, ModelTestType.LISTENING}
+    )
 
 
 def _normalized_attempt_time_spent(
@@ -647,6 +662,35 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
     attempt.raw_score = raw_score
     attempt.max_score = int(snapshot.get("total_questions", 0))
     attempt.band_score = float(band_score) if band_score is not None else None
+
+    if _should_grant_premium_bonus(attempt=attempt, metadata=metadata):
+        user = await session.get(User, attempt.user_id)
+        if user is not None:
+            bonus_until = await grant_premium_bonus(
+                session,
+                user=user,
+                days=2,
+                title="Test bonus activated",
+                body="You completed a full Reading or Listening test. Your +2 premium days are active.",
+                telegram_text="🎉 <b>Test bonus activated</b>\n\nYou completed a full Reading or Listening test. Your +2 premium days are active.",
+            )
+            metadata["premium_bonus_granted"] = True
+            metadata["premium_bonus_days"] = 2
+            metadata["premium_bonus_granted_at"] = now.isoformat()
+            attempt.attempt_metadata = metadata
+            session.add(
+                AttemptEvent(
+                    attempt_id=attempt_id,
+                    event_type="premium_bonus_granted",
+                    payload={
+                        "days": 2,
+                        "premium_until": bonus_until.isoformat(),
+                        "test_type": str(attempt.test_type),
+                        "scope": str(attempt.scope),
+                    },
+                    created_at=now,
+                )
+            )
     attempt.attempt_metadata = metadata
     session.add(
         AttemptEvent(

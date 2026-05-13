@@ -63,6 +63,8 @@ class TokenPairResponse(BaseModel):
 class AuthLoginResponse(TokenPairResponse):
     session_id: UUID
     user: DebugPrincipal
+    is_new_user: bool = False
+    welcome_bonus_days: int = 0
 
 
 class AuthSessionStatusResponse(BaseModel):

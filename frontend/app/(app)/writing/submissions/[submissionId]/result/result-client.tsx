@@ -36,6 +36,7 @@ import type {
   WritingRoastFeedback,
   WritingSubmissionResult,
   WritingSubmissionStatus,
+  WritingVocabularySuggestion,
 } from "@/lib/server-writing";
 
 interface ResultClientProps {
@@ -55,6 +56,7 @@ const GRADING_STEPS = [
   { id: "grammar", label: "Grammatical range & accuracy", icon: ClipboardList },
   { id: "compile", label: "Compiling feedback", icon: FileText },
 ];
+const STEP_ADVANCE_MS = 5000;
 
 const CATEGORY_STYLE: Record<
   string,
@@ -278,6 +280,35 @@ function buildAnnotatedSegments(
     segments.push({ kind: "text", text: essay.slice(cursor) });
   }
   return segments;
+}
+
+function buildCriterionInsights(result: WritingSubmissionResult) {
+  return [
+    {
+      key: "task_achievement",
+      title: "Task Achievement",
+      band: toBandNumber(result.task_achievement.band),
+      data: result.task_achievement,
+    },
+    {
+      key: "coherence",
+      title: "Coherence & Cohesion",
+      band: toBandNumber(result.coherence.band),
+      data: result.coherence,
+    },
+    {
+      key: "lexical",
+      title: "Lexical Resource",
+      band: toBandNumber(result.lexical.band),
+      data: result.lexical,
+    },
+    {
+      key: "grammar",
+      title: "Grammatical Range & Accuracy",
+      band: toBandNumber(result.grammar.band),
+      data: result.grammar,
+    },
+  ];
 }
 
 function ScoreGauge({ band }: { band: number }) {
@@ -656,6 +687,48 @@ function FeedbackPanel({
   );
 }
 
+function VocabularySuggestionCard({
+  suggestion,
+}: {
+  suggestion: WritingVocabularySuggestion;
+}) {
+  const isC2 = suggestion.level.toUpperCase() === "C2";
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card/55 p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Natural upgrade
+          </div>
+          <div className="mt-1 text-sm font-semibold text-foreground line-clamp-1">
+            {suggestion.current_phrase}
+          </div>
+        </div>
+        <Badge
+          tone="outline"
+          className={cn(
+            "shrink-0 border-border/70 bg-muted/40 text-foreground",
+            isC2 && "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+          )}
+        >
+          {suggestion.level}
+        </Badge>
+      </div>
+      <div className="mt-2 flex items-center gap-2 rounded-xl border border-emerald-500/15 bg-emerald-500/5 px-3 py-2">
+        <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600" />
+        <span className="text-sm font-medium leading-snug text-emerald-700 dark:text-emerald-300 line-clamp-2">
+          {suggestion.improved_phrase}
+        </span>
+      </div>
+      {suggestion.example_sentence ? (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground line-clamp-2">
+          <span className="font-semibold text-foreground/80">Example:</span> {suggestion.example_sentence}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function WritingResultClient({
   submissionId,
   initialStatus,
@@ -673,12 +746,24 @@ export function WritingResultClient({
   const [result, setResult] = useState<WritingSubmissionResult | null>(initialResult);
   const [errorMessage, setErrorMessage] = useState<string | null>(initialErrorMessage);
   const [activeAnnotation, setActiveAnnotation] = useState<number | null>(null);
-  const [hoveredAnnotation, setHoveredAnnotation] = useState<number | null>(null);
   const [activeVersion, setActiveVersion] = useState<"original" | "improved">("improved");
   const [activeStep, setActiveStep] = useState(0);
   const [sseAvailable, setSseAvailable] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const annotatedRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (stage === "ready" || stage === "failed") return;
+    if (activeStep >= GRADING_STEPS.length - 1) return;
+
+    const timer = setTimeout(() => {
+      setActiveStep((prev) => Math.min(GRADING_STEPS.length - 1, prev + 1));
+    }, STEP_ADVANCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [activeStep, stage]);
 
   useEffect(() => {
     if (stage === "ready" || stage === "failed" || !sseAvailable) return;
@@ -697,11 +782,13 @@ export function WritingResultClient({
       };
       const status = String(payload.status ?? "").toLowerCase();
       if (typeof payload.stepIndex === "number") {
-        setActiveStep(Math.max(0, Math.min(payload.stepIndex, GRADING_STEPS.length - 1)));
+        const nextStep = Math.max(0, Math.min(payload.stepIndex, GRADING_STEPS.length - 1));
+        setActiveStep((prev) => Math.max(prev, nextStep));
       }
 
       if (status === "completed") {
         setStage("loading_result");
+        setActiveStep(GRADING_STEPS.length - 1);
         try {
           const resultPayload = await fetchWritingSubmissionResult(submissionId);
           setResult(resultPayload);
@@ -764,7 +851,6 @@ export function WritingResultClient({
           }
           return;
         }
-        setActiveStep((prev) => Math.min(GRADING_STEPS.length - 1, prev + 1));
         timer = setTimeout(poll, 3000);
       } catch (err) {
         if (cancelled) return;
@@ -840,7 +926,7 @@ export function WritingResultClient({
 
   const wordPenalty = toBandNumber(result.word_count_penalty);
   const errorCount = annotations.length;
-  const focusedAnnotationIndex = hoveredAnnotation ?? activeAnnotation ?? (annotations.length ? 0 : null);
+  const focusedAnnotationIndex = activeAnnotation;
   const activeAnno = focusedAnnotationIndex !== null ? annotations[focusedAnnotationIndex] ?? null : null;
   const activeAnnoSentencePreview = activeAnno
     ? buildAnnotationSentencePreview(result.essay_text, activeAnno)
@@ -851,6 +937,10 @@ export function WritingResultClient({
   );
   const taskBadgeLabel = result.task_type === "task_1" ? "Task 1" : "Task 2";
   const delta = potential !== null ? potential - overall : 0;
+  const criterionInsights = buildCriterionInsights(result);
+  const strongestCriterion = [...criterionInsights].sort((a, b) => b.band - a.band)[0] ?? null;
+  const weakestCriterion = [...criterionInsights].sort((a, b) => a.band - b.band)[0] ?? null;
+  const vocabularySuggestions = result.vocabulary_suggestions ?? [];
 
   return (
     <div className="space-y-3 animate-in fade-in duration-500">
@@ -951,7 +1041,7 @@ export function WritingResultClient({
             <div>
               <CardTitle className="text-lg">Your essay with annotations</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Click any highlighted span — or any item in the list — to jump to it and see the fix.
+                Click any highlighted span or issue row to lock the detail view. The issue table stays stable while you read.
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -980,7 +1070,7 @@ export function WritingResultClient({
             </div>
           ) : null}
 
-          <div className={cn("grid gap-4", errorCount > 0 && "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]")}>
+          <div className={cn("grid gap-4", errorCount > 0 && "xl:grid-cols-[minmax(0,1.05fr)_minmax(520px,0.95fr)]")}>
             <div
               ref={annotatedRef}
               className={cn(
@@ -1000,8 +1090,6 @@ export function WritingResultClient({
                     <mark
                       data-anno-idx={seg.index}
                       title={buildAnnotationTooltip(annotations[seg.index] ?? { offset: 0, length: 0, original: "", replacements: [], category: seg.category })}
-                      onMouseEnter={() => setHoveredAnnotation(seg.index)}
-                      onMouseLeave={() => setHoveredAnnotation(null)}
                       onClick={(e) => {
                         e.stopPropagation();
                         setActiveAnnotation((prev) => (prev === seg.index ? null : seg.index));
@@ -1026,9 +1114,9 @@ export function WritingResultClient({
             </div>
 
             {errorCount > 0 ? (
-              <div className="rounded-2xl border border-border/40 bg-card/60 max-h-[560px] overflow-y-auto">
+              <div className="rounded-2xl border border-border/40 bg-card/60 max-h-[560px] overflow-auto">
                 <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/40 bg-card/95 backdrop-blur px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <span>Issues ({errorCount})</span>
+                  <span>Issue table ({errorCount})</span>
                   {activeAnnotation !== null ? (
                     <button
                       type="button"
@@ -1039,26 +1127,43 @@ export function WritingResultClient({
                     </button>
                   ) : null}
                 </div>
-                <ul className="divide-y divide-border/30">
-                  {annotations.map((a, i) => {
-                    const s = categoryStyle(a.category);
-                    const isActive = focusedAnnotationIndex === i;
-                    return (
-                      <li key={i}>
-                        <button
-                          type="button"
+                <table className="min-w-[760px] w-full border-separate border-spacing-0 text-left text-sm">
+                  <thead className="sticky top-[33px] z-[9] bg-card/95 text-[10px] uppercase tracking-[0.16em] text-muted-foreground backdrop-blur">
+                    <tr>
+                      <th className="border-b border-border/40 px-3 py-2 font-semibold">#</th>
+                      <th className="border-b border-border/40 px-3 py-2 font-semibold">Type</th>
+                      <th className="border-b border-border/40 px-3 py-2 font-semibold">Problem</th>
+                      <th className="border-b border-border/40 px-3 py-2 font-semibold">Fix</th>
+                      <th className="border-b border-border/40 px-3 py-2 font-semibold">Impact</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {annotations.map((a, i) => {
+                      const s = categoryStyle(a.category);
+                      const isActive = focusedAnnotationIndex === i;
+                      const replacement = a.replacements?.[0] ?? "";
+                      return (
+                        <tr
+                          key={i}
+                          role="button"
+                          tabIndex={0}
                           title={buildAnnotationTooltip(a)}
-                          onMouseEnter={() => setHoveredAnnotation(i)}
-                          onMouseLeave={() => setHoveredAnnotation(null)}
-                          onClick={() =>
-                            setActiveAnnotation((prev) => (prev === i ? null : i))
-                          }
+                          onClick={() => setActiveAnnotation((prev) => (prev === i ? null : i))}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setActiveAnnotation((prev) => (prev === i ? null : i));
+                            }
+                          }}
                           className={cn(
-                            "w-full text-left px-4 py-3 flex flex-col gap-1.5 transition-colors",
-                            isActive ? "bg-muted/60" : "hover:bg-muted/30",
+                            "cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            isActive ? "bg-muted/70" : "hover:bg-muted/25",
                           )}
                         >
-                          <div className="flex items-center justify-between gap-2">
+                          <td className="border-b border-border/30 px-3 py-3 align-top text-xs font-semibold text-muted-foreground">
+                            {i + 1}
+                          </td>
+                          <td className="border-b border-border/30 px-3 py-3 align-top">
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
@@ -1068,38 +1173,36 @@ export function WritingResultClient({
                               <span className={cn("h-1.5 w-1.5 rounded-full", s.dot)} />
                               {s.label}
                             </span>
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                              #{i + 1}
-                            </span>
-                          </div>
-                          {a.short_message ? (
-                            <div className="text-sm font-medium text-foreground/90">
-                              {a.short_message}
+                          </td>
+                          <td className="border-b border-border/30 px-3 py-3 align-top">
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium text-foreground/90">
+                                {a.short_message || "Writing issue"}
+                              </div>
+                              <div className={cn("text-xs font-semibold line-through", s.text)}>
+                                {a.original}
+                              </div>
                             </div>
-                          ) : null}
-                          <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                            <span className={cn("font-medium line-through", s.text)}>
-                              {a.original}
+                          </td>
+                          <td className="border-b border-border/30 px-3 py-3 align-top">
+                            {replacement ? (
+                              <span className="inline-flex rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                                {replacement}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">No direct replacement</span>
+                            )}
+                          </td>
+                          <td className="border-b border-border/30 px-3 py-3 align-top text-xs leading-5 text-muted-foreground">
+                            <span className="line-clamp-3">
+                              {a.band_impact || a.explanation || "Open this row to view details."}
                             </span>
-                            {a.replacements?.[0] ? (
-                              <>
-                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                                <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300 font-medium">
-                                  {a.replacements[0]}
-                                </span>
-                              </>
-                            ) : null}
-                          </div>
-                          {a.band_impact ? (
-                            <div className="text-xs text-muted-foreground line-clamp-2">
-                              {a.band_impact}
-                            </div>
-                          ) : null}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : null}
           </div>
@@ -1280,6 +1383,46 @@ export function WritingResultClient({
             {result.overall_summary ? (
               <p className="text-sm text-foreground/90 leading-relaxed">{result.overall_summary}</p>
             ) : null}
+            {(strongestCriterion || weakestCriterion) ? (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {strongestCriterion ? (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        Strongest area
+                      </div>
+                      <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                        Band {strongestCriterion.band.toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm font-semibold text-foreground">
+                      {strongestCriterion.title}
+                    </div>
+                    <p className="mt-1.5 text-sm leading-relaxed text-foreground/85">
+                      {strongestCriterion.data.summary || strongestCriterion.data.strengths?.[0] || "This criterion is currently leading your score."}
+                    </p>
+                  </div>
+                ) : null}
+                {weakestCriterion ? (
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                        Main score limiter
+                      </div>
+                      <div className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                        Band {weakestCriterion.band.toFixed(1)}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm font-semibold text-foreground">
+                      {weakestCriterion.title}
+                    </div>
+                    <p className="mt-1.5 text-sm leading-relaxed text-foreground/85">
+                      {weakestCriterion.data.improvements?.[0] || weakestCriterion.data.summary || "This criterion is currently holding the overall band down."}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {result.next_steps?.length ? (
               <div className="space-y-2">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1295,6 +1438,30 @@ export function WritingResultClient({
                 </ul>
               </div>
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {vocabularySuggestions.length ? (
+        <Card className="rounded-3xl border-border/60 bg-card/40 mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-emerald-500" />
+              Natural C1/C2 upgrades ({vocabularySuggestions.length})
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Compact upgrades with one example sentence each.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {vocabularySuggestions.map((suggestion, index) => (
+                <VocabularySuggestionCard
+                  key={`${suggestion.current_phrase}-${suggestion.improved_phrase}-${index}`}
+                  suggestion={suggestion}
+                />
+              ))}
+            </div>
           </CardContent>
         </Card>
       ) : null}

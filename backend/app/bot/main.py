@@ -174,7 +174,7 @@ async def _get_saved_contact(telegram_id: int) -> dict | None:
         result = await session.execute(select(User).where(User.telegram_id == telegram_id))
         user = result.scalars().first()
 
-    if user is None or _is_contact_refresh_due(user.telegram_contact_updated_at):
+    if user is None or user.deleted_at is not None or _is_contact_refresh_due(user.telegram_contact_updated_at):
         return None
 
     first_name, last_name = normalize_user_name_parts(user.first_name, user.last_name)

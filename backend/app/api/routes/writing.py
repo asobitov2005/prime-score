@@ -33,6 +33,7 @@ from app.schemas.writing import (
     WritingHistoryResponse,
     WritingInlineAnnotation,
     WritingRoastFeedback,
+    WritingVocabularySuggestion,
     WritingSubmissionRead,
     WritingSubmitRequest,
     WritingTaskListItem,
@@ -534,6 +535,13 @@ async def get_submission_result(
             annotations.append(WritingInlineAnnotation.model_validate(item))
         except Exception:
             continue
+    vocabulary_raw = feedback.get("vocabulary_suggestions") or []
+    vocabulary_suggestions: list[WritingVocabularySuggestion] = []
+    for item in vocabulary_raw:
+        try:
+            vocabulary_suggestions.append(WritingVocabularySuggestion.model_validate(item))
+        except Exception:
+            continue
 
     return WritingEvaluationRead(
         submission_id=submission.id,
@@ -554,6 +562,7 @@ async def get_submission_result(
         lexical=_criterion_from_dict(feedback.get("lexical")),
         grammar=_criterion_from_dict(feedback.get("grammar")),
         inline_annotations=annotations,
+        vocabulary_suggestions=vocabulary_suggestions,
         improved_version=evaluation.improved_version,
         overall_summary=str(feedback.get("overall_summary", "") or ""),
         next_steps=list(feedback.get("next_steps", []) or []),

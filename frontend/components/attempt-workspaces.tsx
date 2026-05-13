@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { trackAttemptSubmit } from "@/lib/analytics";
 import { getMatchingOptionViewModel, shouldAutoLetterMatchingOptions } from "@/lib/matching-option-format";
 import { QuestionRenderer } from "@/components/question-renderer";
+import { emitNotificationRefresh } from "@/lib/notification-events";
 import { useUIStore } from "@/store/ui-store";
 import type { AttemptWorkspaceMeta, ListeningPart, ReadingPassage, TestSectionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -126,6 +127,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
             scope,
             submitReason: "time_up",
           });
+          emitNotificationRefresh();
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
         })
@@ -195,6 +197,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
                     scope,
                     submitReason: "user_confirmed",
                   });
+                  emitNotificationRefresh();
                   router.push(`/attempts/${attemptId}/result`);
                 } finally {
                   setIsSubmitting(false);
@@ -459,6 +462,7 @@ export function ListeningAttemptWorkspace({
             scope,
             submitReason: "time_up",
           });
+          emitNotificationRefresh();
           if (document.fullscreenElement) document.exitFullscreen();
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
         })
@@ -560,6 +564,7 @@ export function ListeningAttemptWorkspace({
                     scope,
                     submitReason: "user_confirmed",
                   });
+                  emitNotificationRefresh();
                   router.push(`/attempts/${attemptId}/result`);
                 } finally {
                   setIsSubmitting(false);

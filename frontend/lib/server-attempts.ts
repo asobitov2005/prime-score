@@ -80,6 +80,7 @@ export type BackendAttemptSnapshot = {
         question_block?: string;
         answer_block?: string;
         secondary_block?: string;
+        options_title?: string;
         diagram_title?: string;
         diagram_image_url?: string;
       };
