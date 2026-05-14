@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenText, ClipboardList, Headphones, Play, Target, Clock, PenSquare, Trophy, Zap, Flame } from "lucide-react";
+import { ArrowRight, BookOpenText, ClipboardList, Headphones, Play, Target, Clock, PenSquare, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,23 +9,73 @@ import { getDashboardAnalytics, getUserAttempts } from "@/lib/server-me";
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
 import { DashboardAverageCards } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
-import { ActivitySummary, StudyTimeCard } from "./activity-summary";
+import { ActivitySummary } from "./activity-summary";
 import { cn } from "@/lib/utils";
 import type { AttemptRow } from "@/lib/types";
 import { pickQuickTests } from "./quick-tests";
 
 interface InProgressTestCardState {
   title: string;
-  progress: number;
-  time: string;
+  progressPercent: number;
+  answeredLabel: string;
+  timingLabel: string;
+  detailLabel: string;
+  attemptId: string;
+  type: string;
+  mode: string;
 }
 
 type RecentActivityItem =
   | { kind: "attempt"; key: string; sortAt: string; attempt: AttemptRow }
   | { kind: "writing"; key: string; sortAt: string; submission: WritingHistoryItem };
 
-function getInProgressTest(): InProgressTestCardState | null {
-  return null;
+function formatSecondsAsClock(totalSeconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getInProgressTest(attempts: AttemptRow[]): InProgressTestCardState | null {
+  const inProgressAttempt = attempts.find(a => a.status === "in_progress");
+  if (!inProgressAttempt) return null;
+
+  const totalQuestions = Math.max(0, inProgressAttempt.totalQuestions ?? 0);
+  const answeredCount = Math.max(0, inProgressAttempt.answeredCount ?? 0);
+  const progressPercent = Math.max(
+    0,
+    Math.min(
+      inProgressAttempt.progressPercent ?? (totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0),
+      100,
+    ),
+  );
+  const timeSpentSec = Math.max(0, inProgressAttempt.timeSpentSec ?? 0);
+  const timeLimitSeconds = Math.max(0, inProgressAttempt.timeLimitSeconds ?? 0);
+  const remainingSeconds = timeLimitSeconds > 0 ? Math.max(0, timeLimitSeconds - timeSpentSec) : 0;
+  const timingLabel = inProgressAttempt.mode === "exam" && timeLimitSeconds > 0
+    ? formatSecondsAsClock(remainingSeconds)
+    : inProgressAttempt.timeSpent;
+  const answeredLabel = totalQuestions > 0
+    ? `${Math.min(answeredCount, totalQuestions)}/${totalQuestions}`
+    : String(answeredCount);
+  const detailLabel = inProgressAttempt.mode === "exam"
+    ? "Resume under exam conditions."
+    : "Pick up exactly where you paused.";
+
+  return {
+    attemptId: inProgressAttempt.id,
+    type: inProgressAttempt.type,
+    mode: inProgressAttempt.mode,
+    title: inProgressAttempt.testTitle,
+    progressPercent,
+    answeredLabel,
+    timingLabel,
+    detailLabel,
+  };
 }
 
 export default async function DashboardPage() {
@@ -60,20 +110,18 @@ export default async function DashboardPage() {
     3,
   );
 
-  // --- 1. CONTINUE TEST OR FALLBACK LOGIC ---
-  // In a real app, fetch an incomplete attempt from DB. Here we mock it as null to show the fallback.
-  const inProgressTest = getInProgressTest();
-  // const inProgressTest = { title: "Cambridge 18 Reading Test 1", progress: 35, time: "26 min" };
+  const inProgressTest = getInProgressTest(attempts);
 
-  // --- 2. DYNAMIC RECOMMENDED ACTION LOGIC ---
-  const now = new Date("2026-04-18"); // Mock current date
+  const now = new Date();
   const hasTests = attempts.length > 0;
   const lastAttempt = hasTests ? attempts[0] : null;
 
   let daysSinceLast = 0;
   if (lastAttempt) {
     const lastDate = new Date(lastAttempt.date);
-    daysSinceLast = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
+    if (!Number.isNaN(lastDate.getTime())) {
+      daysSinceLast = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
+    }
   }
 
   const lastBand = lastAttempt && lastAttempt.band ? parseFloat(lastAttempt.band) : 0;
@@ -123,83 +171,112 @@ export default async function DashboardPage() {
 
         {/* Top Row: Recommended and Scores aligned in height */}
         <div className="grid lg:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
-          <div className="h-full">
+          <div className="space-y-3">
             {inProgressTest ? (
-              <Card className="h-full relative overflow-hidden bg-primary text-primary-foreground border-none shadow-lg shadow-primary/20 hover:shadow-xl transition-all">
-                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                  <Clock className="w-32 h-32 -rotate-12" />
+              <Card className="relative min-h-[228px] overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-all group">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-80" />
+                <div className="absolute top-0 right-0 p-2 opacity-5 dark:opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
+                  <Clock className="w-20 h-20 -rotate-12 text-blue-900 dark:text-white" />
                 </div>
-                <CardContent className="p-4 md:p-5 flex flex-col justify-between h-full relative z-10">
-                  <div>
-                    <Badge variant="outline" className="bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 mb-2 font-bold tracking-wider uppercase text-[9px]">
-                      In Progress
-                    </Badge>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight mb-1.5">{inProgressTest.title}</h2>
-                    <p className="text-primary-foreground/80 font-medium mb-4 text-xs">
-                      Finish your paused test.
-                    </p>
-
-                    <div className="space-y-1.5 max-w-sm mb-4">
-                      <div className="flex justify-between text-[10px] font-bold text-primary-foreground/90">
-                        <span>{inProgressTest.progress}% Completed</span>
-                        <span>{inProgressTest.time} left</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-primary-foreground/20 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary-foreground rounded-full" style={{ width: `${inProgressTest.progress}%` }} />
+                <CardContent className="flex h-full p-3 relative z-10">
+                  <div className="flex w-full flex-col justify-between gap-2">
+                    <div className="flex flex-col gap-2.5 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-1.5 font-bold tracking-wider uppercase text-[9px] backdrop-blur-sm">
+                          In Progress
+                        </Badge>
+                        <h2 className="truncate text-base md:text-lg font-semibold tracking-tight text-blue-950 dark:text-white">
+                          {inProgressTest.title}
+                        </h2>
+                        <p className="mt-1 text-blue-800/80 dark:text-white/70 font-medium text-[11px]">
+                          {inProgressTest.detailLabel}
+                        </p>
                       </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <Button className="bg-background text-primary hover:bg-background/90 font-black px-6 h-9 rounded-lg text-xs shadow-sm transition-transform active:scale-95" asChild>
-                      <Link href="/tests">
-                        <Play className="mr-1.5 h-4 w-4 fill-current" /> Continue
-                      </Link>
-                    </Button>
+                    <div className="rounded-xl bg-white/50 dark:bg-white/[0.04] px-2.5 py-1.5">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="space-y-0.5">
+                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-blue-700/70 dark:text-white/50">
+                            Progress
+                          </p>
+                          <p className="text-sm font-semibold text-blue-950 dark:text-white">
+                            {inProgressTest.progressPercent}%
+                          </p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-blue-700/70 dark:text-white/50">
+                            Answers
+                          </p>
+                          <p className="text-sm font-semibold text-blue-950 dark:text-white">
+                            {inProgressTest.answeredLabel}
+                          </p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-blue-700/70 dark:text-white/50">
+                            Time
+                          </p>
+                          <p className="text-sm font-semibold text-blue-950 dark:text-white">
+                            {inProgressTest.timingLabel}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-1.5 space-y-1">
+                        <div className="h-1.5 w-full bg-blue-200/70 dark:bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-blue-600 dark:bg-blue-400 transition-[width]"
+                            style={{ width: `${inProgressTest.progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-1.5">
+                      <Button
+                        asChild
+                        className="w-fit bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white font-semibold shadow-md transition-all active:scale-95 text-[11px] h-7 rounded-lg px-3"
+                      >
+                        <Link href={`/exam-preview/${inProgressTest.type}?attemptId=${inProgressTest.attemptId}&mode=${inProgressTest.mode}&resume=${Date.now()}`}>
+                          Continue <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             ) : (
-              <Card className="h-full relative overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-all group">
+              <Card className="relative min-h-[228px] overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-all group">
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-80" />
                 <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
                   <Target className="w-32 h-32 -rotate-12 text-blue-900 dark:text-white" />
                 </div>
-                <CardContent className="p-4 md:p-5 flex flex-col justify-between h-full relative z-10">
+                <CardContent className="flex h-full flex-col justify-between p-4 md:p-5 relative z-10">
                   <div>
                     <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-2 font-bold tracking-wider uppercase text-[9px] backdrop-blur-sm">
                       Recommended For You
                     </Badge>
-                    <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-1.5 text-blue-950 dark:text-white">Next Challenge?</h2>
+                    <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-1.5 text-blue-950 dark:text-white">{recTitle}</h2>
                     <p className="text-blue-800/80 dark:text-white/70 font-medium mb-4 text-xs max-w-md">
-                      Take the latest Cambridge test to measure your true band score.
+                      {recDesc}
                     </p>
                   </div>
 
-                  <div>
+                  <div className="flex justify-start pt-2">
                     <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 h-9 rounded-lg text-xs shadow-lg shadow-primary/20 transition-transform active:scale-95" asChild>
-                      <Link href="/tests">
-                        <Play className="mr-1.5 h-4 w-4 fill-current" /> Start Test
+                      <Link href={recHref}>
+                        <Play className="mr-1.5 h-4 w-4 fill-current" /> {recBtnText}
                       </Link>
                     </Button>
                   </div>
                 </CardContent>
               </Card>
             )}
+
+            <ActivitySummary analytics={analytics} />
           </div>
 
           <div className="h-full">
             <DashboardAverageCards initialAnalytics={analytics} />
-          </div>
-        </div>
-
-        {/* Activity Row: Sections and Study Time matched to top row grid */}
-        <div className="grid lg:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
-          <div className="h-full">
-            <ActivitySummary analytics={analytics} />
-          </div>
-          <div className="h-full">
-            <StudyTimeCard analytics={analytics} />
           </div>
         </div>
 
@@ -342,7 +419,7 @@ export default async function DashboardPage() {
       <section className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
 
         {/* Left: Recent Activity */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
             <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
@@ -355,15 +432,15 @@ export default async function DashboardPage() {
               {recentActivity.map((entry) =>
                 entry.kind === "attempt" ? (
                   <div key={entry.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-4">
+                    <div className="flex min-w-0 items-center gap-4">
                       <div className={cn(
                         "h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner",
                         entry.attempt.type === "reading" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                       )}>
                         {entry.attempt.type === "reading" ? <BookOpenText className="h-6 w-6" /> : <Headphones className="h-6 w-6" />}
                       </div>
-                      <div className="space-y-1">
-                        <h4 className="truncate font-bold text-foreground text-[15px]">{entry.attempt.testTitle}</h4>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.attempt.testTitle}>{entry.attempt.testTitle}</h4>
                         <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                           <span>{entry.attempt.date}</span>
                           <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
@@ -391,12 +468,12 @@ export default async function DashboardPage() {
                   </div>
                 ) : (
                   <div key={entry.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-4">
+                    <div className="flex min-w-0 items-center gap-4">
                       <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner bg-violet-500/10 text-violet-600 dark:text-violet-400">
                         <PenSquare className="h-6 w-6" />
                       </div>
-                      <div className="space-y-1 min-w-0">
-                        <h4 className="max-w-full line-clamp-2 font-bold text-foreground text-[15px] sm:max-w-[170px] sm:line-clamp-1 lg:max-w-[210px]">{entry.submission.task_title}</h4>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.submission.task_title}>{entry.submission.task_title}</h4>
                         <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                           <span>{entry.submission.task_type === "task_1" ? "task 1" : "task 2"}</span>
                           <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />

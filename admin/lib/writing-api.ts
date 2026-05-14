@@ -64,40 +64,98 @@ export type WritingTaskUpdateInput = Partial<WritingTaskCreateInput>;
 export interface WritingSubmission {
   id: string;
   user_id: string;
+  user_display_name?: string | null;
   user_username?: string | null;
-  user_email?: string | null;
+  user_phone?: string | null;
   task_id: string;
   task_title?: string | null;
   task_type: WritingTaskType;
-  essay_text: string;
+  essay_text?: string;
   word_count: number;
   status: string;
   submitted_at: string;
-  time_spent_seconds: number;
+  time_spent_seconds?: number;
+  overall_band?: number | null;
+  graded_at?: string | null;
   error_message?: string | null;
   evaluation?: WritingEvaluation | null;
 }
 
+export interface WritingCriterionFeedback {
+  band: number;
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  evidence_quotes: string[];
+  reasoning: string;
+}
+
+export interface WritingInlineAnnotation {
+  offset: number;
+  length: number;
+  original: string;
+  replacements: string[];
+  category: string;
+  severity?: string | null;
+  short_message?: string | null;
+  explanation?: string | null;
+  band_impact?: string | null;
+  examiner_tip?: string | null;
+  improved_sentence?: string | null;
+}
+
+export interface WritingVocabularySuggestion {
+  current_phrase: string;
+  improved_phrase: string;
+  level: string;
+  why_it_works: string;
+  example_sentence: string;
+}
+
+export interface WritingRoastFeedback {
+  overall_roast: string;
+  one_liner: string;
+  task_achievement_zinger: string;
+  coherence_zinger: string;
+  lexical_zinger: string;
+  grammar_zinger: string;
+  savage_tips: string[];
+  pep_talk: string;
+}
+
 export interface WritingEvaluation {
-  id: string;
   submission_id: string;
-  task_achievement_band: number;
-  coherence_band: number;
-  lexical_band: number;
-  grammar_band: number;
+  task_id: string;
+  task_type: WritingTaskType;
+  task_title: string;
+  word_count: number;
+  word_minimum: number;
+  time_spent_seconds: number;
+  submitted_at: string;
+  graded_at: string;
+  essay_text: string;
   overall_band: number;
   potential_band?: number | null;
   word_count_penalty: number;
-  feedback?: Record<string, unknown> | null;
-  inline_annotations?: unknown[];
+  task_achievement: WritingCriterionFeedback;
+  coherence: WritingCriterionFeedback;
+  lexical: WritingCriterionFeedback;
+  grammar: WritingCriterionFeedback;
+  inline_annotations: WritingInlineAnnotation[];
+  vocabulary_suggestions: WritingVocabularySuggestion[];
   improved_version?: string | null;
-  rubric_reasoning?: Record<string, unknown> | null;
+  overall_summary: string;
+  next_steps: string[];
+  roast?: WritingRoastFeedback | null;
+  cache_hit?: boolean;
   model_version?: string;
   prompt_version?: string;
-  anchors_version?: string;
-  latency_ms?: number;
-  cache_hit?: boolean;
-  graded_at: string;
+  grader_profile_version?: number | null;
+  rubric_version?: number | null;
+  anchor_set_version?: number | null;
+  roast_profile_version?: number | null;
+  improved_profile_version?: number | null;
+  annotation_profile_version?: number | null;
 }
 
 export interface WritingSubmissionListResponse {
@@ -282,6 +340,26 @@ export function formatImageSummaryStatus(s: string | null | undefined): string {
   if (s === "pending") return "Pending";
   if (s === "ready") return "Ready";
   if (s === "failed") return "Failed";
+  return s;
+}
+
+export function formatSubmissionStatus(s: string | null | undefined): string {
+  if (!s) return "Unknown";
+  const normalized = s.toLowerCase();
+  if (normalized === "queued") return "Queued";
+  if (normalized === "running" || normalized === "processing") return "Running";
+  if (normalized === "completed") return "Completed";
+  if (normalized === "failed") return "Failed";
+  return s;
+}
+
+export function describeSubmissionStatus(s: string | null | undefined): string {
+  if (!s) return "Unknown grading state.";
+  const normalized = s.toLowerCase();
+  if (normalized === "queued") return "Waiting in the grading queue.";
+  if (normalized === "running" || normalized === "processing") return "Grading is in progress.";
+  if (normalized === "completed") return "Evaluation finished successfully.";
+  if (normalized === "failed") return "Grading stopped with an error.";
   return s;
 }
 

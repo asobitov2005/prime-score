@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getAverageBand, roundToIeltsBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
 import type { DashboardAnalytics } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { StudyTimeCard } from "./activity-summary";
 
 interface DashboardAverageCardsProps {
   initialAnalytics: DashboardAnalytics;
@@ -54,7 +55,7 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
     reading: averageReading,
     listening: averageListening,
     writing: averageWriting,
-    speaking: averageSpeaking,
+    speaking: null,
   };
 
   const statusColorMap: Record<string, { bg: string; border: string; glow: string; text: string }> = {
@@ -68,74 +69,75 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
 
   const currentStatusColors = statusColorMap[overallLabel.color] || statusColorMap["text-muted-foreground"];
 
-  // Gauge calculations
-  const gaugeSize = 90;
-  const strokeWidth = 9;
-  const radius = (gaugeSize - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const percentage = (overallBand / 9) * 100;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
   return (
-    <div className="flex flex-col sm:flex-row gap-5 lg:gap-6 h-full items-stretch justify-center">
-      {/* Left: Overall Band */}
-      <div className={cn(
-        "flex flex-col items-center justify-center self-stretch h-full min-h-[202px] rounded-3xl border border-border/70 p-3.5 min-w-[170px] shadow-sm relative overflow-hidden group transition-all duration-500 backdrop-blur-sm",
-        currentStatusColors.bg,
-        "ring-1 ring-inset ring-border/20"
-      )}>
-        <div className={cn("absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br to-transparent blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-700", currentStatusColors.glow)} />
-        
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-2 relative z-10">Overall Band</p>
-        
-        <p className="text-5xl font-semibold tracking-tight leading-none mb-3 relative z-10 text-foreground">
-          {overallBand > 0 ? overallBand.toFixed(1) : "—"}
-        </p>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col sm:flex-row gap-5 lg:gap-6 items-stretch justify-center">
+        {/* Left: Overall Band */}
+        <div className={cn(
+          "flex flex-col items-center justify-center self-stretch min-h-[202px] rounded-3xl border border-border/70 p-3.5 min-w-[170px] shadow-sm relative overflow-hidden group transition-all duration-500 backdrop-blur-sm",
+          currentStatusColors.bg,
+          "ring-1 ring-inset ring-border/20"
+        )}>
+          <div className={cn("absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br to-transparent blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-700", currentStatusColors.glow)} />
+          
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-2 relative z-10">Overall Band</p>
+          
+          <p className="text-5xl font-semibold tracking-tight leading-none mb-3 relative z-10 text-foreground">
+            {overallBand > 0 ? overallBand.toFixed(1) : "—"}
+          </p>
 
-        <div className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-background/80 backdrop-blur-md shadow-sm border border-border/10 relative z-10 mb-3", overallLabel.color)}>
-          {overallLabel.text}
+          <div className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-background/80 backdrop-blur-md shadow-sm border border-border/10 relative z-10 mb-3", overallLabel.color)}>
+            {overallLabel.text}
+          </div>
+
+          {delta !== null && (
+            <div className="flex flex-col items-center gap-1 w-full relative z-10 border-t border-border/10 pt-2">
+              <div className="flex items-center gap-1.5">
+                <TrendingUp className={cn("h-3.5 w-3.5", delta >= 0 ? "text-emerald-500" : "text-rose-500")} />
+                <span className={cn("text-sm font-bold", delta >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                  {delta > 0 ? "+" : ""}{delta.toFixed(1)} pts
+                </span>
+              </div>
+              <p className="text-[8px] text-muted-foreground font-black uppercase tracking-widest">Since last test</p>
+            </div>
+          )}
         </div>
 
-        {/* Improvement (Delta) */}
-        {delta !== null && (
-          <div className="flex flex-col items-center gap-1 w-full relative z-10 border-t border-border/10 pt-2">
-            <div className="flex items-center gap-1.5">
-              <TrendingUp className={cn("h-3.5 w-3.5", delta >= 0 ? "text-emerald-500" : "text-rose-500")} />
-              <span className={cn("text-sm font-bold", delta >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                {delta > 0 ? "+" : ""}{delta.toFixed(1)} pts
-              </span>
-            </div>
-            <p className="text-[8px] text-muted-foreground font-black uppercase tracking-widest">Since last test</p>
-          </div>
-        )}
+        <div className="grid flex-1 gap-2 auto-rows-fr h-full">
+          {sections.map((section) => {
+            const Icon = section.icon;
+            const band = bandValues[section.key];
+            const isSpeaking = section.key === "speaking";
+            
+            return (
+              <div
+                key={section.key}
+                className={cn(
+                  "flex h-full items-center gap-3 rounded-xl border p-2 transition-all duration-300 shadow-sm relative overflow-hidden min-h-[46px]",
+                  isSpeaking ? "bg-muted/30 border-muted/50 opacity-60 grayscale-[0.5]" : "bg-background/40 hover:bg-background/80 group",
+                  section.borderColor
+                )}
+              >
+                <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative z-10", isSpeaking ? "bg-slate-200 dark:bg-slate-800" : section.bg)}>
+                  <Icon className={cn("h-4 w-4", isSpeaking ? "text-slate-400 dark:text-slate-500" : section.iconColor)} />
+                </div>
+                <div className="flex-1 min-w-0 flex items-center justify-between px-1 relative z-10">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70 truncate">{section.label}</p>
+                  {isSpeaking ? (
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-2 py-0.5 rounded-full">Soon</span>
+                  ) : (
+                    <p className="text-lg font-semibold tracking-tight text-foreground leading-none tabular-nums">
+                      {formatBand(band)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Right: Section Scores - Vertical Stack */}
-      <div className="flex-1 flex flex-col gap-2 w-full">
-        {sections.map((section) => {
-          const Icon = section.icon;
-          const band = bandValues[section.key];
-          return (
-            <div
-              key={section.key}
-              className={cn(
-                "flex items-center gap-3 rounded-xl border p-2 bg-background/40 hover:bg-background/80 transition-all duration-300 group shadow-sm",
-                section.borderColor
-              )}
-            >
-              <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0 shadow-sm", section.bg)}>
-                <Icon className={cn("h-4 w-4", section.iconColor)} />
-              </div>
-              <div className="flex-1 min-w-0 flex items-center justify-between px-1">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70 truncate">{section.label}</p>
-                <p className="text-lg font-semibold tracking-tight text-foreground leading-none tabular-nums">
-                  {formatBand(band)}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <StudyTimeCard analytics={analytics} className="h-auto min-h-[104px]" />
     </div>
   );
 }

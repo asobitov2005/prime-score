@@ -10,10 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_admin
 from app.db.session import get_db_session
-from app.models.ai import AdminAiJob, AdminAiMessage, AdminAiThread
-from app.models.enums import AdminAiJobStatus, AdminAiThreadStatus
+from app.models.ai import AdminAiJob, AdminAiMessage, AdminAiThread, AiProviderConfig, AiProviderModel, AiUseCaseBinding
+from app.models.enums import AdminAiJobStatus, AdminAiThreadStatus, AiUseCase
 from app.schemas.admin_ai import (
     AdminAiConfigRead,
+    AdminAiProviderConfigRead,
+    AdminAiProviderConfigUpdateRequest,
+    AdminAiProviderModelRead,
+    AdminAiProviderValidationRead,
+    AdminAiProviderValidationRequest,
     AdminAiJobProgressRead,
     AdminAiJobRead,
     AdminAiMessageCreateRequest,
@@ -23,15 +28,24 @@ from app.schemas.admin_ai import (
     AdminAiThreadSummaryRead,
     AdminAiThreadUpdateRequest,
     AdminAiToolTraceRead,
+    AdminAiUseCaseBindingRead,
+    AdminAiUseCaseBindingUpdateRequest,
     AdminAiWorkspaceScopeRead,
 )
 from app.schemas.common import AdminPrincipal, MessageResponse
+from app.services.ai_config import (
+    invalidate_ai_config_cache,
+    mask_secret,
+    resolve_ai_use_case_config,
+    sync_provider_models,
+    supports_use_case_binding,
+    validate_provider_credentials,
+)
 from app.services.admin_ai_agent import (
     archive_admin_ai_thread,
     cancel_active_admin_ai_job,
     create_admin_ai_thread,
     enqueue_admin_ai_message,
-    get_admin_ai_config,
     resume_pending_admin_ai_jobs,
 )
 
@@ -268,10 +282,230 @@ async def _serialize_thread_summary(
     return AdminAiThreadSummaryRead.model_validate(detail.model_dump())
 
 
+def _serialize_provider_config(row: AiProviderConfig) -> AdminAiProviderConfigRead:
+    return AdminAiProviderConfigRead(
+        id=row.id,
+        provider=row.provider,
+        label=row.label,
+        api_key_masked=mask_secret(row.api_key),
+        has_api_key=bool((row.api_key or "").strip()),
+        base_url=(row.base_url or "").strip() or None,
+        is_enabled=bool(row.is_enabled),
+        last_sync_at=row.last_sync_at,
+        last_sync_status=row.last_sync_status,
+        last_sync_error=row.last_sync_error,
+    )
+
+
+def _serialize_provider_model(row: AiProviderModel) -> AdminAiProviderModelRead:
+    return AdminAiProviderModelRead(
+        id=row.id,
+        model_id=row.model_id,
+        display_name=row.display_name,
+        family=row.family,
+        capabilities=dict(row.capabilities or {}),
+        context_window=row.context_window,
+        is_accessible=bool(row.is_accessible),
+        is_selectable=bool(row.is_selectable),
+        sort_order=int(row.sort_order or 0),
+    )
+
+
+async def _serialize_use_case_binding(
+    session: AsyncSession,
+    use_case: AiUseCase,
+) -> AdminAiUseCaseBindingRead:
+    binding = await session.scalar(select(AiUseCaseBinding).where(AiUseCaseBinding.use_case == use_case))
+    if binding is None:
+        return AdminAiUseCaseBindingRead(use_case=use_case)
+    provider_config = await session.get(AiProviderConfig, binding.provider_config_id)
+    provider_model = await session.get(AiProviderModel, binding.provider_model_id)
+    resolved_source = "binding"
+    try:
+        resolved = await resolve_ai_use_case_config(session, use_case)
+        resolved_source = resolved.source
+    except Exception:
+        resolved_source = "missing"
+    return AdminAiUseCaseBindingRead(
+        id=binding.id,
+        use_case=use_case,
+        provider_config_id=binding.provider_config_id,
+        provider=provider_config.provider if provider_config is not None else None,
+        provider_label=provider_config.label if provider_config is not None else None,
+        provider_model_id=binding.provider_model_id,
+        model_id=provider_model.model_id if provider_model is not None else None,
+        model_display_name=provider_model.display_name if provider_model is not None else None,
+        settings_json=dict(binding.settings_json or {}),
+        resolved_source=resolved_source,
+    )
+
+
 @router.get("/ai/config", response_model=AdminAiConfigRead)
-async def read_admin_ai_config(current_admin: AdminPrincipal = Depends(get_current_admin)) -> AdminAiConfigRead:
+async def read_admin_ai_config(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminAiConfigRead:
     _ = current_admin
-    return AdminAiConfigRead.model_validate(get_admin_ai_config())
+    resolved = await resolve_ai_use_case_config(session, AiUseCase.ADMIN_CHAT)
+    return AdminAiConfigRead(
+        provider=resolved.provider.value,
+        model_name=resolved.model_id,
+        has_api_key=bool(resolved.api_key),
+        background_supported=True,
+        context_window_tokens=1_048_576,
+        notes=[
+            "Tasks are persisted in the database and run through Celery workers after the page closes.",
+            "Admin AI resolves provider, model, and API key from the published AI use-case binding at execution time.",
+            "Google is currently required for the admin workspace tool-calling runtime.",
+        ],
+    )
+
+
+@router.get("/ai/providers", response_model=list[AdminAiProviderConfigRead])
+async def list_ai_providers(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AdminAiProviderConfigRead]:
+    _ = current_admin
+    rows = (
+        await session.scalars(select(AiProviderConfig).order_by(AiProviderConfig.label.asc()))
+    ).all()
+    return [_serialize_provider_config(row) for row in rows]
+
+
+@router.patch("/ai/providers/{provider}", response_model=AdminAiProviderConfigRead)
+async def update_ai_provider(
+    provider: str,
+    payload: AdminAiProviderConfigUpdateRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminAiProviderConfigRead:
+    _ = current_admin
+    row = await session.scalar(select(AiProviderConfig).where(AiProviderConfig.provider == provider))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI provider not found.")
+    data = payload.model_dump(exclude_unset=True)
+    if "label" in data and payload.label is not None:
+        row.label = payload.label.strip() or row.label
+    if "api_key" in data and payload.api_key is not None:
+        row.api_key = payload.api_key.strip()
+    if "base_url" in data:
+        row.base_url = (payload.base_url or "").strip() or None
+    if "is_enabled" in data and payload.is_enabled is not None:
+        row.is_enabled = bool(payload.is_enabled)
+    await session.commit()
+    invalidate_ai_config_cache()
+    return _serialize_provider_config(row)
+
+
+@router.post("/ai/providers/{provider}/validate", response_model=AdminAiProviderValidationRead)
+async def validate_ai_provider(
+    provider: str,
+    payload: AdminAiProviderValidationRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminAiProviderValidationRead:
+    _ = current_admin
+    row = await session.scalar(select(AiProviderConfig).where(AiProviderConfig.provider == provider))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI provider not found.")
+    try:
+        result = await validate_provider_credentials(
+            provider=row.provider,
+            api_key=(payload.api_key or row.api_key or "").strip(),
+            base_url=(payload.base_url or row.base_url or "").strip() or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return AdminAiProviderValidationRead(
+        ok=True,
+        provider=row.provider,
+        message="Credentials look valid.",
+        models_seen=result.get("models_seen"),
+    )
+
+
+@router.post("/ai/providers/{provider}/sync-models", response_model=list[AdminAiProviderModelRead])
+async def sync_ai_provider_models(
+    provider: str,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AdminAiProviderModelRead]:
+    _ = current_admin
+    row = await session.scalar(select(AiProviderConfig).where(AiProviderConfig.provider == provider))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI provider not found.")
+    if not (row.api_key or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provider API key is missing.")
+    try:
+        models = await sync_provider_models(session, provider_config=row)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return [_serialize_provider_model(model) for model in models]
+
+
+@router.get("/ai/providers/{provider}/models", response_model=list[AdminAiProviderModelRead])
+async def list_ai_provider_models(
+    provider: str,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AdminAiProviderModelRead]:
+    _ = current_admin
+    row = await session.scalar(select(AiProviderConfig).where(AiProviderConfig.provider == provider))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI provider not found.")
+    models = (
+        await session.scalars(
+            select(AiProviderModel)
+            .where(AiProviderModel.provider_config_id == row.id)
+            .order_by(AiProviderModel.sort_order.asc(), AiProviderModel.display_name.asc())
+        )
+    ).all()
+    return [_serialize_provider_model(model) for model in models]
+
+
+@router.get("/ai/use-cases", response_model=list[AdminAiUseCaseBindingRead])
+async def list_ai_use_cases(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AdminAiUseCaseBindingRead]:
+    _ = current_admin
+    return [await _serialize_use_case_binding(session, use_case) for use_case in AiUseCase]
+
+
+@router.patch("/ai/use-cases/{use_case}", response_model=AdminAiUseCaseBindingRead)
+async def update_ai_use_case(
+    use_case: AiUseCase,
+    payload: AdminAiUseCaseBindingUpdateRequest,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminAiUseCaseBindingRead:
+    _ = current_admin
+    provider_config = await session.get(AiProviderConfig, payload.provider_config_id)
+    provider_model = await session.get(AiProviderModel, payload.provider_model_id)
+    if provider_config is None or provider_model is None or provider_model.provider_config_id != provider_config.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider or model not found.")
+    if not supports_use_case_binding(dict(provider_model.capabilities or {}), use_case, provider_config.provider):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{provider_config.label} model {provider_model.model_id} does not support {use_case.value}.",
+        )
+    binding = await session.scalar(select(AiUseCaseBinding).where(AiUseCaseBinding.use_case == use_case))
+    if binding is None:
+        binding = AiUseCaseBinding(
+            use_case=use_case,
+            provider_config_id=provider_config.id,
+            provider_model_id=provider_model.id,
+            settings_json=dict(payload.settings_json or {}),
+        )
+        session.add(binding)
+    else:
+        binding.provider_config_id = provider_config.id
+        binding.provider_model_id = provider_model.id
+        binding.settings_json = dict(payload.settings_json or {})
+    await session.commit()
+    invalidate_ai_config_cache()
+    return await _serialize_use_case_binding(session, use_case)
 
 
 @router.get("/ai/threads", response_model=list[AdminAiThreadSummaryRead])

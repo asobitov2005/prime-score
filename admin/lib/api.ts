@@ -1,11 +1,19 @@
 import type {
   AdminAiCreateThreadInput,
+  AdminAiProviderConfig,
+  AdminAiProviderModel,
+  AdminAiUseCaseBinding,
   AdminAiJob,
   AdminAiSendMessageInput,
   AdminAiThreadDetail,
   AdminAiThreadSummary,
   AdminAiToolTrace,
   AdminAiUpdateThreadInput,
+  AdminWritingAnchorSet,
+  AdminWritingConfigAuditEntry,
+  AdminWritingPromptPreview,
+  AdminWritingPromptProfile,
+  AdminWritingRubric,
   AdminPaymentCardSummary,
   AdminPaymentSettingsSummary,
   AdminPaymentSummary,
@@ -318,6 +326,119 @@ type BackendAdminAiJob = {
 type BackendAdminAiThreadDetail = BackendAdminAiThreadSummary & {
   messages?: BackendAdminAiMessage[] | null;
   jobs?: BackendAdminAiJob[] | null;
+};
+
+type BackendAdminAiProviderConfig = {
+  id: string;
+  provider: "google" | "cerebras" | "groq";
+  label: string;
+  api_key_masked?: string | null;
+  has_api_key: boolean;
+  base_url?: string | null;
+  is_enabled: boolean;
+  last_sync_at?: string | null;
+  last_sync_status?: string | null;
+  last_sync_error?: string | null;
+};
+
+type BackendAdminAiProviderModel = {
+  id: string;
+  model_id: string;
+  display_name: string;
+  family?: string | null;
+  capabilities?: Record<string, unknown> | null;
+  context_window?: number | null;
+  is_accessible: boolean;
+  is_selectable: boolean;
+  sort_order: number;
+};
+
+type BackendAdminAiUseCaseBinding = {
+  id?: string | null;
+  use_case: AdminAiUseCaseBinding["useCase"];
+  provider_config_id?: string | null;
+  provider?: AdminAiProviderConfig["provider"] | null;
+  provider_label?: string | null;
+  provider_model_id?: string | null;
+  model_id?: string | null;
+  model_display_name?: string | null;
+  settings_json?: Record<string, unknown> | null;
+  resolved_source?: string;
+};
+
+type BackendAdminWritingPromptEntry = {
+  id?: string;
+  key: AdminWritingPromptProfile["entries"][number]["key"];
+  body: string;
+  format: "text" | "json";
+};
+
+type BackendAdminWritingPromptProfile = {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string | null;
+  task_type_scope: AdminWritingPromptProfile["taskTypeScope"];
+  status: AdminWritingPromptProfile["status"];
+  version: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  entries?: BackendAdminWritingPromptEntry[] | null;
+};
+
+type BackendAdminWritingRubric = {
+  id: string;
+  task_type_scope: AdminWritingRubric["taskTypeScope"];
+  version: number;
+  body: string;
+  status: AdminWritingRubric["status"];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type BackendAdminWritingAnchorItem = {
+  id?: string;
+  band: number;
+  essay: string;
+  criteria?: Record<string, unknown> | null;
+  rationale?: string;
+  sort_order?: number;
+};
+
+type BackendAdminWritingAnchorSet = {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string | null;
+  task_type_scope: AdminWritingAnchorSet["taskTypeScope"];
+  version: number;
+  status: AdminWritingAnchorSet["status"];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  items?: BackendAdminWritingAnchorItem[] | null;
+};
+
+type BackendAdminWritingPromptPreview = {
+  grader_system: string;
+  grader_user: string;
+  improved_version: string;
+  roast_system: string;
+  roast_user: string;
+};
+
+type BackendAdminWritingConfigAuditEntry = {
+  id: string;
+  actor_admin_id?: string | null;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  previous_version?: number | null;
+  new_version?: number | null;
+  metadata_json?: Record<string, unknown> | null;
+  created_at: string;
 };
 
 type BackendPayment = {
@@ -927,6 +1048,131 @@ function mapAdminAiThreadDetail(thread: BackendAdminAiThreadDetail): AdminAiThre
   };
 }
 
+function mapAdminAiProviderConfig(config: BackendAdminAiProviderConfig): AdminAiProviderConfig {
+  return {
+    id: config.id,
+    provider: config.provider,
+    label: config.label,
+    apiKeyMasked: config.api_key_masked ?? null,
+    hasApiKey: config.has_api_key,
+    baseUrl: config.base_url ?? null,
+    isEnabled: config.is_enabled,
+    lastSyncAt: config.last_sync_at ?? null,
+    lastSyncStatus: config.last_sync_status ?? null,
+    lastSyncError: config.last_sync_error ?? null,
+  };
+}
+
+function mapAdminAiProviderModel(model: BackendAdminAiProviderModel): AdminAiProviderModel {
+  return {
+    id: model.id,
+    modelId: model.model_id,
+    displayName: model.display_name,
+    family: model.family ?? null,
+    capabilities: model.capabilities ?? {},
+    contextWindow: model.context_window ?? null,
+    isAccessible: model.is_accessible,
+    isSelectable: model.is_selectable,
+    sortOrder: model.sort_order,
+  };
+}
+
+function mapAdminAiUseCaseBinding(binding: BackendAdminAiUseCaseBinding): AdminAiUseCaseBinding {
+  return {
+    id: binding.id ?? null,
+    useCase: binding.use_case,
+    providerConfigId: binding.provider_config_id ?? null,
+    provider: binding.provider ?? null,
+    providerLabel: binding.provider_label ?? null,
+    providerModelId: binding.provider_model_id ?? null,
+    modelId: binding.model_id ?? null,
+    modelDisplayName: binding.model_display_name ?? null,
+    settingsJson: binding.settings_json ?? {},
+    resolvedSource: binding.resolved_source ?? "missing",
+  };
+}
+
+function mapAdminWritingPromptProfile(profile: BackendAdminWritingPromptProfile): AdminWritingPromptProfile {
+  return {
+    id: profile.id,
+    slug: profile.slug,
+    title: profile.title,
+    description: profile.description ?? null,
+    taskTypeScope: profile.task_type_scope,
+    status: profile.status,
+    version: profile.version,
+    isActive: profile.is_active,
+    createdAt: profile.created_at,
+    updatedAt: profile.updated_at,
+    entries: (profile.entries ?? []).map((entry) => ({
+      id: entry.id,
+      key: entry.key,
+      body: entry.body,
+      format: entry.format,
+    })),
+  };
+}
+
+function mapAdminWritingRubric(rubric: BackendAdminWritingRubric): AdminWritingRubric {
+  return {
+    id: rubric.id,
+    taskTypeScope: rubric.task_type_scope,
+    version: rubric.version,
+    body: rubric.body,
+    status: rubric.status,
+    isActive: rubric.is_active,
+    createdAt: rubric.created_at,
+    updatedAt: rubric.updated_at,
+  };
+}
+
+function mapAdminWritingAnchorSet(anchorSet: BackendAdminWritingAnchorSet): AdminWritingAnchorSet {
+  return {
+    id: anchorSet.id,
+    slug: anchorSet.slug,
+    title: anchorSet.title,
+    description: anchorSet.description ?? null,
+    taskTypeScope: anchorSet.task_type_scope,
+    version: anchorSet.version,
+    status: anchorSet.status,
+    isActive: anchorSet.is_active,
+    createdAt: anchorSet.created_at,
+    updatedAt: anchorSet.updated_at,
+    items: (anchorSet.items ?? []).map((item) => ({
+      id: item.id,
+      band: item.band,
+      essay: item.essay,
+      criteria: item.criteria ?? {},
+      rationale: item.rationale ?? "",
+      sortOrder: item.sort_order ?? 0,
+    })),
+  };
+}
+
+function mapAdminWritingPromptPreview(preview: BackendAdminWritingPromptPreview): AdminWritingPromptPreview {
+  return {
+    graderSystem: preview.grader_system,
+    graderUser: preview.grader_user,
+    improvedVersion: preview.improved_version,
+    roastSystem: preview.roast_system,
+    roastUser: preview.roast_user,
+  };
+}
+
+function mapAdminWritingConfigAuditEntry(entry: BackendAdminWritingConfigAuditEntry): AdminWritingConfigAuditEntry {
+  return {
+    id: entry.id,
+    actorAdminId: entry.actor_admin_id ?? null,
+    entityType: entry.entity_type,
+    entityId: entry.entity_id,
+    action: entry.action,
+    previousVersion: entry.previous_version ?? null,
+    newVersion: entry.new_version ?? null,
+    metadataJson: entry.metadata_json ?? {},
+    createdAt: entry.created_at,
+  };
+}
+
 function mapAdminPayment(payment: BackendPayment): AdminPaymentSummary {
   return {
     id: payment.id,
@@ -1192,6 +1438,192 @@ export const adminApi = {
       method: "POST"
     });
     return mapAdminAiThreadDetail(response);
+  },
+  async listAiProviders(): Promise<AdminAiProviderConfig[]> {
+    const response = await requestJson<BackendAdminAiProviderConfig[]>("/ai/providers");
+    return response.map(mapAdminAiProviderConfig);
+  },
+  async updateAiProvider(
+    provider: AdminAiProviderConfig["provider"],
+    input: { label?: string; apiKey?: string | null; baseUrl?: string | null; isEnabled?: boolean },
+  ): Promise<AdminAiProviderConfig> {
+    const response = await requestJson<BackendAdminAiProviderConfig>(`/ai/providers/${provider}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        label: input.label,
+        api_key: input.apiKey ?? undefined,
+        base_url: input.baseUrl ?? undefined,
+        is_enabled: input.isEnabled,
+      }),
+    });
+    return mapAdminAiProviderConfig(response);
+  },
+  async validateAiProvider(
+    provider: AdminAiProviderConfig["provider"],
+    input: { apiKey?: string | null; baseUrl?: string | null } = {},
+  ): Promise<{ ok: boolean; message: string; modelsSeen: number | null }> {
+    const response = await requestJson<{ ok: boolean; message: string; models_seen?: number | null }>(`/ai/providers/${provider}/validate`, {
+      method: "POST",
+      body: JSON.stringify({
+        api_key: input.apiKey ?? undefined,
+        base_url: input.baseUrl ?? undefined,
+      }),
+    });
+    return { ok: response.ok, message: response.message, modelsSeen: response.models_seen ?? null };
+  },
+  async syncAiProviderModels(provider: AdminAiProviderConfig["provider"]): Promise<AdminAiProviderModel[]> {
+    const response = await requestJson<BackendAdminAiProviderModel[]>(`/ai/providers/${provider}/sync-models`, {
+      method: "POST",
+    });
+    return response.map(mapAdminAiProviderModel);
+  },
+  async listAiProviderModels(provider: AdminAiProviderConfig["provider"]): Promise<AdminAiProviderModel[]> {
+    const response = await requestJson<BackendAdminAiProviderModel[]>(`/ai/providers/${provider}/models`);
+    return response.map(mapAdminAiProviderModel);
+  },
+  async listAiUseCases(): Promise<AdminAiUseCaseBinding[]> {
+    const response = await requestJson<BackendAdminAiUseCaseBinding[]>("/ai/use-cases");
+    return response.map(mapAdminAiUseCaseBinding);
+  },
+  async updateAiUseCase(
+    useCase: AdminAiUseCaseBinding["useCase"],
+    input: { providerConfigId: string; providerModelId: string; settingsJson?: Record<string, unknown> },
+  ): Promise<AdminAiUseCaseBinding> {
+    const response = await requestJson<BackendAdminAiUseCaseBinding>(`/ai/use-cases/${useCase}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        provider_config_id: input.providerConfigId,
+        provider_model_id: input.providerModelId,
+        settings_json: input.settingsJson ?? {},
+      }),
+    });
+    return mapAdminAiUseCaseBinding(response);
+  },
+  async listWritingPromptProfiles(): Promise<AdminWritingPromptProfile[]> {
+    const response = await requestJson<BackendAdminWritingPromptProfile[]>("/writing-config/profiles");
+    return response.map(mapAdminWritingPromptProfile);
+  },
+  async createWritingPromptProfile(input: {
+    slug: string;
+    title: string;
+    description?: string | null;
+    taskTypeScope: AdminWritingPromptProfile["taskTypeScope"];
+    entries: AdminWritingPromptProfile["entries"];
+  }): Promise<AdminWritingPromptProfile> {
+    const response = await requestJson<BackendAdminWritingPromptProfile>("/writing-config/profiles", {
+      method: "POST",
+      body: JSON.stringify({
+        slug: input.slug,
+        title: input.title,
+        description: input.description ?? null,
+        task_type_scope: input.taskTypeScope,
+        entries: input.entries.map((entry) => ({
+          key: entry.key,
+          body: entry.body,
+          format: entry.format,
+        })),
+      }),
+    });
+    return mapAdminWritingPromptProfile(response);
+  },
+  async updateWritingPromptProfile(
+    profileId: string,
+    input: { title?: string; description?: string | null; entries?: AdminWritingPromptProfile["entries"] },
+  ): Promise<AdminWritingPromptProfile> {
+    const response = await requestJson<BackendAdminWritingPromptProfile>(`/writing-config/profiles/${profileId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: input.title,
+        description: input.description ?? undefined,
+        entries: input.entries?.map((entry) => ({
+          key: entry.key,
+          body: entry.body,
+          format: entry.format,
+        })),
+      }),
+    });
+    return mapAdminWritingPromptProfile(response);
+  },
+  async publishWritingPromptProfile(profileId: string): Promise<AdminWritingPromptProfile> {
+    const response = await requestJson<BackendAdminWritingPromptProfile>(`/writing-config/profiles/${profileId}/publish`, {
+      method: "POST",
+    });
+    return mapAdminWritingPromptProfile(response);
+  },
+  async listWritingRubrics(): Promise<AdminWritingRubric[]> {
+    const response = await requestJson<BackendAdminWritingRubric[]>("/writing-config/rubrics");
+    return response.map(mapAdminWritingRubric);
+  },
+  async createWritingRubric(input: { taskTypeScope: AdminWritingRubric["taskTypeScope"]; body: string }): Promise<AdminWritingRubric> {
+    const response = await requestJson<BackendAdminWritingRubric>("/writing-config/rubrics", {
+      method: "POST",
+      body: JSON.stringify({
+        task_type_scope: input.taskTypeScope,
+        body: input.body,
+      }),
+    });
+    return mapAdminWritingRubric(response);
+  },
+  async publishWritingRubric(rubricId: string): Promise<AdminWritingRubric> {
+    const response = await requestJson<BackendAdminWritingRubric>(`/writing-config/rubrics/${rubricId}/publish`, {
+      method: "POST",
+    });
+    return mapAdminWritingRubric(response);
+  },
+  async listWritingAnchorSets(): Promise<AdminWritingAnchorSet[]> {
+    const response = await requestJson<BackendAdminWritingAnchorSet[]>("/writing-config/anchors");
+    return response.map(mapAdminWritingAnchorSet);
+  },
+  async createWritingAnchorSet(input: {
+    slug: string;
+    title: string;
+    description?: string | null;
+    taskTypeScope: AdminWritingAnchorSet["taskTypeScope"];
+    items: AdminWritingAnchorSet["items"];
+  }): Promise<AdminWritingAnchorSet> {
+    const response = await requestJson<BackendAdminWritingAnchorSet>("/writing-config/anchors", {
+      method: "POST",
+      body: JSON.stringify({
+        slug: input.slug,
+        title: input.title,
+        description: input.description ?? null,
+        task_type_scope: input.taskTypeScope,
+        items: input.items.map((item) => ({
+          band: item.band,
+          essay: item.essay,
+          criteria: item.criteria,
+          rationale: item.rationale,
+        })),
+      }),
+    });
+    return mapAdminWritingAnchorSet(response);
+  },
+  async publishWritingAnchorSet(anchorSetId: string): Promise<AdminWritingAnchorSet> {
+    const response = await requestJson<BackendAdminWritingAnchorSet>(`/writing-config/anchors/${anchorSetId}/publish`, {
+      method: "POST",
+    });
+    return mapAdminWritingAnchorSet(response);
+  },
+  async previewWritingPrompts(input: {
+    taskType: AdminWritingPromptProfile["taskTypeScope"];
+    taskPromptText: string;
+    imageSummary?: string;
+    essayText: string;
+  }): Promise<AdminWritingPromptPreview> {
+    const response = await requestJson<BackendAdminWritingPromptPreview>("/writing-config/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        task_type: input.taskType,
+        task_prompt_text: input.taskPromptText,
+        image_summary: input.imageSummary ?? "",
+        essay_text: input.essayText,
+      }),
+    });
+    return mapAdminWritingPromptPreview(response);
+  },
+  async listWritingConfigAuditLog(): Promise<AdminWritingConfigAuditEntry[]> {
+    const response = await requestJson<BackendAdminWritingConfigAuditEntry[]>("/writing-config/audit-log");
+    return response.map(mapAdminWritingConfigAuditEntry);
   },
   async createDraft(draft: AdminTestDraftState): Promise<AdminTestSummary> {
     const response = await requestJson<BackendAdminTest>("/tests/draft", {

@@ -6,6 +6,7 @@ from uuid import UUID
 from app.schemas.common import DebugPrincipal
 from app.db.session import get_session_maker
 from app.models import admin, attempt, commerce, notification, ops, review, test, user  # noqa: F401
+from app.services.ai_config import ensure_provider_configs_seeded
 from app.services.attempt_repo import ensure_debug_user
 from app.services.test_content_repo import (
     ensure_fixture_tests_seeded,
@@ -28,6 +29,12 @@ TEST_USER = DebugPrincipal(
 async def seed_debug_data() -> None:
     session_maker = get_session_maker()
     async with session_maker() as session:
+        await ensure_provider_configs_seeded(
+            session,
+            google_api_key=None,
+            cerebras_api_key=None,
+            groq_api_key=None,
+        )
         await ensure_test_admins_seeded(session)
         await ensure_fixture_tests_seeded(session)
         await ensure_debug_user(session, TEST_USER)

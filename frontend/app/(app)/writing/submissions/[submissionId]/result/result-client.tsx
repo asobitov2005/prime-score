@@ -1070,7 +1070,7 @@ export function WritingResultClient({
             </div>
           ) : null}
 
-          <div className={cn("grid gap-4", errorCount > 0 && "xl:grid-cols-[minmax(0,1.05fr)_minmax(520px,0.95fr)]")}>
+          <div className="space-y-4">
             <div
               ref={annotatedRef}
               className={cn(
@@ -1127,7 +1127,7 @@ export function WritingResultClient({
                     </button>
                   ) : null}
                 </div>
-                <table className="min-w-[760px] w-full border-separate border-spacing-0 text-left text-sm">
+                <table className="w-full min-w-[700px] border-separate border-spacing-0 text-left text-sm">
                   <thead className="sticky top-[33px] z-[9] bg-card/95 text-[10px] uppercase tracking-[0.16em] text-muted-foreground backdrop-blur">
                     <tr>
                       <th className="border-b border-border/40 px-3 py-2 font-semibold">#</th>
@@ -1230,7 +1230,7 @@ export function WritingResultClient({
                   </span>
                 ) : null}
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-3">
                 <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-3">
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
                     Original
@@ -1263,7 +1263,7 @@ export function WritingResultClient({
                 </div>
               ) : null}
               {activeAnnoSentencePreview?.originalSentence ? (
-                <div className="grid gap-3 lg:grid-cols-2">
+                <div className="space-y-3">
                   <div className="space-y-1">
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Your sentence
@@ -1283,7 +1283,7 @@ export function WritingResultClient({
                 </div>
               ) : null}
               {(activeAnno.band_impact || activeAnno.examiner_tip) ? (
-                <div className="grid gap-3 lg:grid-cols-2">
+                <div className="space-y-3">
                   {activeAnno.band_impact ? (
                     <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
                       <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
@@ -1318,9 +1318,9 @@ export function WritingResultClient({
               <div>
                 <CardTitle className="text-lg">Improved version</CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Your essay was not rewritten — only error spans were corrected.
+                  This is a stronger next draft built from your original ideas and structure, with a controlled improvement target.
                   {potential !== null
-                    ? ` With these fixes you'd score Band ${potential.toFixed(1)}${delta > 0 ? ` (↑${delta.toFixed(1)})` : ""}.`
+                    ? ` It is capped at Band ${potential.toFixed(1)}${delta > 0 ? ` (↑${delta.toFixed(1)})` : ""}.`
                     : ""}
                 </p>
               </div>

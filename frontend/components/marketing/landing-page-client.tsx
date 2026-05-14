@@ -158,6 +158,7 @@ interface LandingPageClientProps {
   plans: MarketingPlan[];
   reviews: ReviewItem[];
   onlineCount: number;
+  initialTests?: any;
 }
 
 function formatOnlineCount(value: number): string {

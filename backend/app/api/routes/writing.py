@@ -566,10 +566,16 @@ async def get_submission_result(
         improved_version=evaluation.improved_version,
         overall_summary=str(feedback.get("overall_summary", "") or ""),
         next_steps=list(feedback.get("next_steps", []) or []),
+        roast=roast,
         cache_hit=evaluation.cache_hit,
         model_version=evaluation.model_version,
         prompt_version=evaluation.prompt_version,
-        roast=roast,
+        grader_profile_version=evaluation.grader_profile_version,
+        rubric_version=evaluation.rubric_version,
+        anchor_set_version=evaluation.anchor_set_version,
+        roast_profile_version=evaluation.roast_profile_version,
+        improved_profile_version=evaluation.improved_profile_version,
+        annotation_profile_version=evaluation.annotation_profile_version,
     )
 
 

@@ -25,6 +25,8 @@ from app.models.enums import (
     AdminAiJobStatus,
     AdminAiMessageRole,
     AdminAiThreadStatus,
+    AiProvider,
+    AiUseCase,
     QuestionType as ModelQuestionType,
     TestStatus as ModelTestStatus,
     TestType as ModelTestType,
@@ -32,6 +34,7 @@ from app.models.enums import (
 from app.models.test import Question, QuestionGroup, Test, TestSection
 from app.schemas.admin import AdminTestDraftUpsertRequest
 from app.schemas.common import AdminPrincipal
+from app.services.ai_config import resolve_ai_use_case_config
 from app.services.test_content_repo import (
     build_admin_draft_state_from_db,
     build_test_snapshot_from_db,
@@ -885,12 +888,12 @@ async def create_admin_ai_thread(
     admin: AdminPrincipal,
     title: str | None = None,
 ) -> AdminAiThread:
-    settings = get_settings()
+    resolved = await resolve_ai_use_case_config(session, AiUseCase.ADMIN_CHAT)
     thread = AdminAiThread(
         admin_id=admin.id,
         title=(title or "New AI task").strip() or "New AI task",
-        provider="gemini",
-        model_name=settings.gemini_model,
+        provider=resolved.provider.value,
+        model_name=resolved.model_id,
         task_kind="test_builder",
         status=AdminAiThreadStatus.ACTIVE,
         last_job_status=None,
@@ -962,13 +965,13 @@ async def create_admin_ai_job(
     admin: AdminPrincipal,
     user_message: AdminAiMessage,
 ) -> AdminAiJob:
-    settings = get_settings()
+    resolved = await resolve_ai_use_case_config(session, AiUseCase.ADMIN_CHAT)
     job = AdminAiJob(
         thread_id=thread.id,
         admin_id=admin.id,
         user_message_id=user_message.id,
-        provider="gemini",
-        model_name=settings.gemini_model,
+        provider=resolved.provider.value,
+        model_name=resolved.model_id,
         broker_task_id=None,
         task_kind="test_builder",
         status=AdminAiJobStatus.QUEUED,
@@ -1115,11 +1118,10 @@ def _max_tool_loops() -> int:
     return max(10, int(get_settings().gemini_max_tool_loops or 80))
 
 
-def _build_gemini_client() -> genai.Client:
-    settings = get_settings()
-    if not (settings.gemini_api_key or "").strip():
-        raise RuntimeError("GEMINI_API_KEY is not configured.")
-    return genai.Client(api_key=settings.gemini_api_key)
+def _build_gemini_client(api_key: str) -> genai.Client:
+    if not (api_key or "").strip():
+        raise RuntimeError("Google provider API key is not configured.")
+    return genai.Client(api_key=api_key)
 
 
 def _build_generation_config(tool_declarations: list[genai_types.FunctionDeclaration]) -> genai_types.GenerateContentConfig:
@@ -1817,10 +1819,19 @@ async def _run_admin_ai_job_once(job_id: UUID) -> None:
         job.error_message = None
         thread.last_job_status = AdminAiJobStatus.RUNNING
         thread.updated_at = _now()
+        resolved_config = await resolve_ai_use_case_config(session, AiUseCase.ADMIN_CHAT)
+        job.provider = resolved_config.provider.value
+        job.model_name = resolved_config.model_id
+        thread.provider = resolved_config.provider.value
+        thread.model_name = resolved_config.model_id
         await session.commit()
 
     try:
-        client = _build_gemini_client()
+        if resolved_config.provider != AiProvider.GOOGLE:
+            raise RuntimeError(
+                "Admin AI workspace currently requires a Google binding because tool-calling and grounded search still use the Google runtime."
+            )
+        client = _build_gemini_client(resolved_config.api_key)
         tool_declarations = _tool_declarations()
         config = _build_generation_config(tool_declarations)
         contents: list[Any] = _message_history_to_contents(messages)
@@ -1832,7 +1843,7 @@ async def _run_admin_ai_job_once(job_id: UUID) -> None:
             response = await asyncio.wait_for(
                 asyncio.to_thread(
                     client.models.generate_content,
-                    model=get_settings().gemini_model,
+                    model=resolved_config.model_id,
                     contents=contents,
                     config=config,
                 ),

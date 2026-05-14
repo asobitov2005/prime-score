@@ -35,7 +35,9 @@ import type { QuestionType } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
 
 type PreviewMode = "practice" | "exam" | "review";
-type PreviewDialog = "submit" | "leave" | null;
+type PreviewDialog = "submit" | "leave" | "fullscreen" | null;
+type SubmitReason = "user_confirmed" | "time_up" | "exit_fullscreen";
+type FullscreenDialogStage = "confirm-exit" | "exited-warning" | null;
 type TextHighlight = { id: string; start: number; end: number };
 type PreviewUiState = {
   theme?: "light" | "dark";
@@ -279,7 +281,7 @@ function formatMinutesLeft(totalSeconds: number) {
 
 function getDocumentTheme(): "light" | "dark" {
   if (typeof window === "undefined") {
-    return "dark";
+    return "light";
   }
 
   const savedTheme = window.localStorage.getItem("prime-theme");
@@ -804,7 +806,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const initialQuestionId = examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "";
   const [answers, setAnswers] = useState<Record<string, string>>(examData.initialAnswers ?? {});
   const [hasMounted, setHasMounted] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [splitRatio, setSplitRatio] = useState(clampSplitRatio(examData.initialUiState?.splitRatio ?? 54));
   const [fontScale, setFontScale] = useState(clampFontScale(examData.initialUiState?.fontScale ?? 1));
   const [timeLeft, setTimeLeft] = useState(
@@ -817,6 +819,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [isCalculatingResults, setIsCalculatingResults] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeDialog, setActiveDialog] = useState<PreviewDialog>(null);
+  const [fullscreenDialogStage, setFullscreenDialogStage] = useState<FullscreenDialogStage>(null);
+  const [fullscreenExitCountdown, setFullscreenExitCountdown] = useState(0);
   const [activeQuestionId, setActiveQuestionId] = useState(initialQuestionId);
   const [activeSectionId, setActiveSectionId] = useState(
     findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs)
@@ -842,6 +846,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     examData.attemptId ? "saved" : "idle"
   );
   const allowLeaveRef = useRef(false);
+  const ignoreNextFullscreenExitRef = useRef(false);
+  const hasExamFullscreenSessionRef = useRef(false);
   const saveTimersRef = useRef<Record<string, number>>({});
   const pendingAnswerValuesRef = useRef<Record<string, string>>({});
   const latestAnswersRef = useRef<Record<string, string>>(examData.initialAnswers ?? {});
@@ -988,6 +994,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const currentQuestionGroups = currentSection?.questionGroups ?? examData.questionGroups;
   const currentQuestions = currentSection?.questions ?? allQuestions;
   const isListeningPreview = examData.testType === "listening";
+  const isExamMode = mode === "exam";
   const isReviewMode = mode === "review";
   const isSinglePaneListeningMode = isListeningPreview && !isReviewMode;
   const currentTranscriptSegments = currentSection?.transcriptSegments ?? [];
@@ -1000,6 +1007,25 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   useEffect(() => {
     setHasMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isExamMode || isReviewMode || isSubmitted) {
+      return;
+    }
+
+    const enterFullscreen = async () => {
+      if (document.fullscreenElement) {
+        hasExamFullscreenSessionRef.current = true;
+        return;
+      }
+
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch {}
+    };
+
+    void enterFullscreen();
+  }, [isExamMode, isReviewMode, isSubmitted]);
 
   useEffect(() => {
     const currentTheme = getDocumentTheme();
@@ -1054,19 +1080,80 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     setIsSubmitted(false);
     setIsSubmitting(false);
     setActiveDialog(null);
+    setFullscreenDialogStage(null);
+    setFullscreenExitCountdown(0);
     setSyncState(examData.attemptId ? "saved" : "idle");
     pendingAnswerValuesRef.current = {};
+    ignoreNextFullscreenExitRef.current = false;
+    hasExamFullscreenSessionRef.current = false;
   }, [examData, initialQuestionId, mode, previewSections.length]);
 
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+    const handleFocusOrFullscreenChange = () => {
+      const isCurrentlyFullscreen = Boolean(document.fullscreenElement);
+      setIsFullscreen(isCurrentlyFullscreen);
+
+      const isHidden = document.visibilityState === "hidden";
+      const isFocused = document.hasFocus ? document.hasFocus() : true;
+
+      const isCompliant = isCurrentlyFullscreen && !isHidden && isFocused;
+
+      if (isCompliant) {
+        hasExamFullscreenSessionRef.current = true;
+        return;
+      }
+
+      if (!isExamMode || isSubmitted || isSubmitting) {
+        return;
+      }
+      if (ignoreNextFullscreenExitRef.current) {
+        ignoreNextFullscreenExitRef.current = false;
+        return;
+      }
+      if (!hasExamFullscreenSessionRef.current) {
+        return;
+      }
+
+      if (fullscreenDialogStage === "exited-warning") {
+        return;
+      }
+
+      let eventType = "violation_exit_fullscreen";
+      if (isHidden) eventType = "violation_tab_switch";
+      else if (!isFocused) eventType = "violation_window_blur";
+
+      if (examData.attemptId) {
+        void fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/events`, {
+          method: "POST",
+          headers: buildAttemptRequestHeaders(accessToken),
+          credentials: "same-origin",
+          keepalive: true,
+          body: JSON.stringify({ event_type: eventType, payload: {} }),
+        }).catch(() => undefined);
+      }
+
+      setFullscreenDialogStage("exited-warning");
+      setFullscreenExitCountdown(10);
+      setActiveDialog("fullscreen");
     };
 
-    handleFullscreenChange();
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, []);
+    const onVisibilityChange = () => handleFocusOrFullscreenChange();
+    const onBlur = () => handleFocusOrFullscreenChange();
+    const onFocus = () => handleFocusOrFullscreenChange();
+
+    handleFocusOrFullscreenChange();
+    document.addEventListener("fullscreenchange", handleFocusOrFullscreenChange);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFocusOrFullscreenChange);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fullscreenDialogStage, isExamMode, isSubmitted, isSubmitting]);
 
   useEffect(() => {
     if (isSubmitted) return;
@@ -1089,9 +1176,25 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   useEffect(() => {
     if (timeLeft === 0 && mode === "exam" && !isSubmitted) {
-      void submitAttempt();
+      void submitAttempt("time_up");
     }
   }, [timeLeft, mode, isSubmitted]);
+
+  useEffect(() => {
+    if (activeDialog !== "fullscreen" || fullscreenDialogStage !== "exited-warning" || isSubmitting) {
+      return;
+    }
+    if (fullscreenExitCountdown <= 0) {
+      void submitAttempt("exit_fullscreen");
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setFullscreenExitCountdown((current) => current - 1);
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [activeDialog, fullscreenDialogStage, fullscreenExitCountdown, isSubmitting]);
 
   const answeredCount = useMemo(
     () => allQuestions.reduce((count, question) => count + answeredQuestionWeight(question, answers[question.id]), 0),
@@ -1197,7 +1300,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     return lookup;
   }, [examData.questionGroups]);
   const unansweredCount = totalQuestions - answeredCount;
-  const isExamMode = mode === "exam";
   const isLastFiveMinutes = isExamMode && timeLeft <= 5 * 60;
   const isLastMinute = isExamMode && timeLeft <= 60;
   const effectiveFontScale = fontScale * 0.93;
@@ -1492,7 +1594,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   function handleSubmit() {
     if (isSubmitted || isReviewMode) return;
     if (unansweredCount === 0) {
-      void submitAttempt();
+      void submitAttempt("user_confirmed");
       return;
     }
     setActiveDialog("submit");
@@ -1543,9 +1645,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     }, 220);
   }
 
-  async function submitAttempt() {
+  async function submitAttempt(reason: SubmitReason) {
     if (isSubmitting) return;
     setActiveDialog(null);
+    setFullscreenDialogStage(null);
+    setFullscreenExitCountdown(0);
     setIsSubmitting(true);
     setIsSubmitted(true);
 
@@ -1563,7 +1667,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         method: "POST",
         headers: buildAttemptRequestHeaders(accessToken),
         credentials: "same-origin",
-        body: JSON.stringify({ confirm: true, reason: mode === "exam" && timeLeft === 0 ? "time_up" : "user_confirmed" }),
+        body: JSON.stringify({ confirm: true, reason }),
       });
       if (!response.ok) {
         throw new Error("Submit failed");
@@ -1571,6 +1675,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       emitNotificationRefresh();
       clearAttemptBackup();
       allowLeaveRef.current = true;
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => undefined);
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
       router.replace(`/attempts/${examData.attemptId}/result`);
     } catch {
@@ -1586,7 +1693,26 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       setIsSubmitted(true);
       return;
     }
-    await submitAttempt();
+    await submitAttempt("user_confirmed");
+  }
+
+  async function recoverFullscreen() {
+    try {
+      await document.documentElement.requestFullscreen();
+      setActiveDialog(null);
+      setFullscreenDialogStage(null);
+      setFullscreenExitCountdown(0);
+    } catch {}
+  }
+
+  async function confirmFullscreenExit() {
+    ignoreNextFullscreenExitRef.current = true;
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {}
+    }
+    await submitAttempt("exit_fullscreen");
   }
 
   function selectSection(sectionId: string) {
@@ -1629,6 +1755,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   async function toggleFullscreen() {
+    if (isExamMode && isFullscreen && !isReviewMode && !isSubmitted) {
+      setFullscreenDialogStage("confirm-exit");
+      setActiveDialog("fullscreen");
+      return;
+    }
+
     try {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen();
@@ -1699,6 +1831,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     const handleKeyDown = (event: KeyboardEvent) => {
       const isRefreshShortcut =
         event.key === "F5" || ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r");
+      const isSearchShortcut =
+        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f";
+
+      if (isSearchShortcut) {
+        event.preventDefault();
+        return;
+      }
 
       if (!isRefreshShortcut) return;
       event.preventDefault();
@@ -1729,6 +1868,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       } catch {
         markSyncError();
       }
+    }
+
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => undefined);
     }
 
     const exitHref = examData.exitHref ?? "/tests?type=reading";
@@ -3608,82 +3751,141 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       ) : null}
 
       {activeDialog ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[1.75rem] border border-border/80 bg-card p-6 shadow-[0_40px_120px_-30px_rgba(15,23,42,0.55)]">
-            <div className="mb-5 space-y-2">
-              <Badge className={cn(
-                "rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-none",
-                activeDialog === "submit"
-                  ? unansweredCount > 0
-                    ? "bg-red-500/10 text-red-400"
-                    : "bg-slate-500/6 text-slate-500 dark:bg-slate-200/10 dark:text-slate-300"
-                  : "bg-slate-500/6 text-slate-500 dark:bg-slate-200/10 dark:text-slate-300"
-              )}>
-                {activeDialog === "submit" ? (unansweredCount > 0 ? "Submission Warning" : "Ready To Submit") : "Leave Protection"}
-              </Badge>
-              <h3 className="text-xl font-black tracking-tight text-foreground">
-                {activeDialog === "submit"
-                  ? unansweredCount > 0
-                    ? "You have unanswered questions"
-                    : "Submit this reading test?"
-                  : "Leave this reading test?"}
-              </h3>
-              <p className="text-sm leading-6 text-muted-foreground">
-                {activeDialog === "submit"
-                  ? unansweredCount > 0
-                    ? `You left ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} unanswered. Do you want to submit your test anyway?`
-                    : "All questions are answered. Submit now when you are ready to lock this mock attempt."
-                  : "You are about to leave the split-screen exam preview. If you continue, your current answers in this mock session will be lost."}
-              </p>
-            </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-[340px] overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 duration-300">
+            
+            <div className={cn(
+              "absolute top-0 left-0 right-0 h-1",
+              activeDialog === "submit" && unansweredCount > 0 ? "bg-red-500" :
+              activeDialog === "submit" ? "bg-emerald-500" :
+              activeDialog === "fullscreen" ? "bg-amber-500" : "bg-red-500"
+            )} />
 
-            {activeDialog === "submit" && unansweredCount > 0 ? (
-              <div className="mb-5 rounded-2xl border border-red-500/45 bg-red-500/8 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-red-400">Questions Left</p>
-                <p className="mt-1 text-lg font-black text-red-300">
-                  {unansweredCount} unanswered
+            <div className="p-5 space-y-5">
+              <div className="text-center space-y-2">
+                <Badge className={cn(
+                  "mx-auto rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-none border-0 mb-3",
+                  activeDialog === "submit" && unansweredCount > 0 ? "bg-red-500/10 text-red-600 dark:text-red-400" :
+                  activeDialog === "submit" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
+                  activeDialog === "fullscreen" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-red-500/10 text-red-600 dark:text-red-400"
+                )}>
+                  {activeDialog === "submit"
+                    ? (unansweredCount > 0 ? "Warning" : "Submit")
+                    : activeDialog === "fullscreen"
+                      ? "Focus Required"
+                      : "Leave"}
+                </Badge>
+                <h3 className="text-lg font-bold tracking-tight text-foreground">
+                  {activeDialog === "submit"
+                    ? unansweredCount > 0 ? "Unanswered Questions" : "Ready to Submit?"
+                    : activeDialog === "fullscreen"
+                      ? fullscreenDialogStage === "confirm-exit" ? "Exit & Submit?" : "Return to Full Screen"
+                      : "Leave Attempt?"}
+                </h3>
+                <p className="text-xs font-medium leading-relaxed text-muted-foreground">
+                  {activeDialog === "submit"
+                    ? unansweredCount > 0
+                      ? `You have ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} left. Are you sure?`
+                      : "Submit now to lock in your score."
+                    : activeDialog === "fullscreen"
+                      ? fullscreenDialogStage === "confirm-exit"
+                        ? "Leaving full screen will submit your attempt."
+                        : "Please return to full screen."
+                      : "Your progress will be lost if you leave."}
                 </p>
               </div>
-            ) : null}
 
-            <div className="flex items-center justify-end gap-3">
-              {activeDialog === "submit" ? (
-                <>
-                  <Button
-                    type="button"
-                    className="rounded-xl border border-border bg-muted/35 px-4 text-sm font-semibold text-foreground hover:bg-muted/55 dark:border-slate-700 dark:bg-slate-800/75 dark:text-slate-100 dark:hover:bg-slate-800"
-                    onClick={() => setActiveDialog(null)}
-                  >
-                    Go back & finish
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl border-border bg-background px-4 text-sm font-bold text-foreground hover:bg-muted"
-                    onClick={confirmSubmit}
-                  >
-                    Submit anyway
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-xl border-border bg-background px-4 text-sm font-bold text-foreground hover:bg-muted"
-                    onClick={() => setActiveDialog(null)}
-                  >
-                    Stay In Test
-                  </Button>
-                  <Button
-                    type="button"
-                    className="rounded-xl bg-red-500 px-4 text-sm font-black text-white dark:text-slate-950 hover:bg-red-400"
-                    onClick={confirmLeave}
-                  >
-                    Leave Test
-                  </Button>
-                </>
+              {activeDialog === "fullscreen" && fullscreenDialogStage !== "confirm-exit" && (
+                <div className="flex justify-center">
+                  <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono text-xl font-bold border border-amber-500/20">
+                    00:{fullscreenExitCountdown.toString().padStart(2, '0')}
+                  </div>
+                </div>
               )}
+
+              <div className="flex flex-col gap-2 pt-1">
+                {activeDialog === "submit" ? (
+                  <>
+                    <Button
+                      type="button"
+                      className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
+                      onClick={() => setActiveDialog(null)}
+                    >
+                      Go back to test
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className={cn(
+                        "h-10 w-full rounded-xl text-xs font-semibold transition-all hover:bg-muted/50",
+                        unansweredCount > 0 ? "text-red-500 hover:text-red-600" : "text-emerald-500 hover:text-emerald-600"
+                      )}
+                      onClick={confirmSubmit}
+                    >
+                      Yes, submit anyway
+                    </Button>
+                  </>
+                ) : activeDialog === "fullscreen" ? (
+                  fullscreenDialogStage === "confirm-exit" ? (
+                    <>
+                      <Button
+                        type="button"
+                        className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
+                        onClick={() => {
+                          setActiveDialog(null);
+                          setFullscreenDialogStage(null);
+                        }}
+                      >
+                        Stay in full screen
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-10 w-full rounded-xl text-xs font-semibold text-amber-600 hover:text-amber-700 hover:bg-muted/50 transition-all dark:text-amber-500"
+                        onClick={() => void confirmFullscreenExit()}
+                      >
+                        Exit & Submit
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
+                        onClick={() => void recoverFullscreen()}
+                      >
+                        Return to Full Screen
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-10 w-full rounded-xl text-xs font-semibold text-amber-600 hover:text-amber-700 hover:bg-muted/50 transition-all dark:text-amber-500"
+                        onClick={() => void submitAttempt("exit_fullscreen")}
+                      >
+                        Submit now
+                      </Button>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
+                      onClick={() => setActiveDialog(null)}
+                    >
+                      Stay in test
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-10 w-full rounded-xl text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-muted/50 transition-all"
+                      onClick={confirmLeave}
+                    >
+                      Leave test
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

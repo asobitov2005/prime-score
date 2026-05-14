@@ -14,6 +14,24 @@ interface ActivitySummaryProps {
   analytics: DashboardAnalytics;
 }
 
+interface StudyTimeCardProps extends ActivitySummaryProps {
+  className?: string;
+}
+
+function getBucketTotal(bucket?: DashboardAnalytics["performanceSummary"]["reading"]): number {
+  if (!bucket) {
+    return 0;
+  }
+
+  return (
+    bucket.fullCount
+    + bucket.section1Count
+    + bucket.section2Count
+    + bucket.section3Count
+    + bucket.section4Count
+  );
+}
+
 function formatJoinedDate(value: string | null): string | null {
   if (!value) {
     return null;
@@ -43,14 +61,16 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
   const readingTimeHours = formatHours(summary.studyTime.readingTimeSec / 3600);
   const listeningTimeHours = formatHours(summary.studyTime.listeningTimeSec / 3600);
   const writingTimeHours = formatHours((summary.studyTime.writingTimeSec ?? 0) / 3600);
-  const speakingTimeHours = formatHours(0);
+  const readingTotal = getBucketTotal(summary.reading);
+  const listeningTotal = getBucketTotal(summary.listening);
+  const writingTotal = getBucketTotal(summary.writing);
   
   const activities = [
     {
       id: "reading",
       label: "Reading",
       href: "/tests?type=reading",
-      count: summary.reading.fullCount,
+      count: readingTotal,
       unit: "Tests",
       icon: BookOpen,
       color: "text-blue-600",
@@ -69,7 +89,7 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
       id: "listening",
       label: "Listening",
       href: "/tests?type=listening",
-      count: summary.listening.fullCount,
+      count: listeningTotal,
       unit: "Tests",
       icon: Headphones,
       color: "text-emerald-600",
@@ -89,7 +109,7 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
       id: "writing",
       label: "Writing",
       href: "/writing",
-      count: summary.writing?.fullCount || 0,
+      count: writingTotal,
       unit: "Tasks",
       icon: PenSquare,
       color: "text-violet-600",
@@ -105,18 +125,16 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
     {
       id: "speaking",
       label: "Speaking",
-      href: "/speaking",
+      href: "#",
       count: 0,
       unit: "Sessions",
       icon: Mic,
-      color: "text-orange-600",
-      bg: "bg-orange-500/10",
+      color: "text-slate-400 dark:text-slate-500",
+      bg: "bg-slate-100 dark:bg-slate-800/50",
+      disabled: true,
       details: {
-        time: speakingTimeHours,
-        breakdown: [
-          { name: "Part 1", value: 0 },
-          { name: "Part 2 & 3", value: 0 },
-        ]
+        time: "0h",
+        breakdown: []
       }
     },
   ];
@@ -125,31 +143,36 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 h-full">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {activities.map((act) => (
           <Card 
             key={act.label} 
-            onClick={() => setSelectedSection(act.id)}
+            onClick={() => !act.disabled && setSelectedSection(act.id)}
             className={cn(
-              "border border-border/50 shadow-sm transition-all duration-300 rounded-[1.5rem] overflow-hidden group h-full relative cursor-pointer",
-              "bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-md",
-              "hover:shadow-md hover:shadow-primary/5 hover:border-primary/20 hover:-translate-y-1"
+              "border border-border/50 shadow-sm transition-all duration-300 rounded-[1.5rem] overflow-hidden group relative min-h-[104px]",
+              act.disabled ? "opacity-60 cursor-not-allowed grayscale-[0.5]" : "cursor-pointer bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-md hover:shadow-md hover:shadow-primary/5 hover:border-primary/20 hover:-translate-y-1"
             )}
           >
-            <div className={cn("absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br via-transparent to-transparent pointer-events-none", act.bg.replace('/10', '/5'))} />
+            {!act.disabled && <div className={cn("absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br via-transparent to-transparent pointer-events-none", act.bg.replace('/10', '/5'))} />}
             
-            <CardContent className="p-4 flex flex-col items-center text-center justify-center h-full relative z-10">
+            {act.disabled && (
+              <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[8px] font-black uppercase tracking-widest text-slate-500 shadow-sm z-20">
+                Soon
+              </div>
+            )}
+            
+            <CardContent className="p-3 flex flex-col items-center text-center justify-center h-full relative z-10">
               <div className={cn(
-                "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm mb-3 transition-all duration-500",
+                "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm mb-2.5 transition-all duration-500",
                 "group-hover:scale-110 group-hover:rotate-3",
                 act.bg
               )}>
-                <act.icon className={cn("h-5 w-5 transition-transform duration-500", act.color)} />
+                <act.icon className={cn("h-4.5 w-4.5 transition-transform duration-500", act.color)} />
               </div>
 
-              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-foreground/60 mb-1 group-hover:text-foreground transition-colors">{act.label}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-foreground/60 mb-0.5 group-hover:text-foreground transition-colors">{act.label}</p>
               <div className="flex items-baseline gap-1">
-                <span className="text-xl font-bold tracking-tighter text-foreground leading-none">{act.count}</span>
+                <span className="text-lg font-bold tracking-tighter text-foreground leading-none">{act.count}</span>
                 <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest leading-none">{act.unit}</span>
               </div>
             </CardContent>
@@ -284,7 +307,7 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
   );
 }
 
-export function StudyTimeCard({ analytics }: ActivitySummaryProps) {
+export function StudyTimeCard({ analytics, className }: StudyTimeCardProps) {
   const summary = analytics.performanceSummary;
   const studyTime = summary.studyTime;
   const createdAt = useAuthStore((state) => state.createdAt);
@@ -295,7 +318,7 @@ export function StudyTimeCard({ analytics }: ActivitySummaryProps) {
   const goalProgress = Math.min(100, Math.round((thisWeekMinutes / dailyGoalMinutes / 7) * 100));
 
   return (
-    <Card className="h-full border-none ring-1 ring-primary/20 shadow-md shadow-primary/5 bg-gradient-to-br from-primary/5 via-card/50 to-background rounded-[1.5rem] overflow-hidden group">
+    <Card className={cn("border-none ring-1 ring-primary/20 shadow-md shadow-primary/5 bg-gradient-to-br from-primary/5 via-card/50 to-background rounded-[1.5rem] overflow-hidden group", className)}>
       <CardContent className="p-4 flex flex-col justify-between h-full">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">

@@ -67,9 +67,14 @@ class MeAttemptSummaryRead(BaseModel):
     band_score: Decimal | None = None
     total_questions: int = 0
     time_spent_sec: int = 0
+    answered_count: int = 0
+    progress_percent: int = 0
+    time_limit_seconds: int = 0
+    last_answered_question_number: int | None = None
     started_at: datetime
     completed_at: datetime | None = None
     updated_at: datetime | None = None
+    violation_count: int = 0
 
 
 class FavoriteTestRead(BaseModel):

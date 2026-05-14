@@ -241,6 +241,12 @@ export interface DashboardWeeklyActivityPoint {
   timeSpentMin: number;
 }
 
+export interface DashboardActivityPoint {
+  activityDate: string;
+  attemptsCount: number;
+  timeSpentSec: number;
+}
+
 export interface DashboardScoreDistribution {
   band1To3: number;
   band3_5To5: number;
@@ -284,7 +290,13 @@ export interface AttemptRow {
   band: string | null;
   totalQuestions: number | null;
   timeSpent: string;
+  timeSpentSec?: number | null;
+  answeredCount?: number;
+  progressPercent?: number;
+  timeLimitSeconds?: number;
+  lastAnsweredQuestionNumber?: number | null;
   status: "completed" | "in_progress" | "submitted";
+  violationCount?: number;
 }
 
 export interface TestCardAttemptSummary {

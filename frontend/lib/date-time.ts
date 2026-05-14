@@ -44,6 +44,21 @@ export function formatDateTime(value: string | null | undefined): string {
   }).format(parsed);
 }
 
+export function formatTime(value: string | null | undefined): string {
+  const parsed = toValidDate(value);
+  if (!parsed) {
+    return value ?? "-";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: APP_TIME_ZONE,
+  }).format(parsed);
+}
+
 export function formatCompletedAtLabel(value: string | null | undefined): string | null {
   const parsed = toValidDate(value);
   if (!parsed) {

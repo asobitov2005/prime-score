@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.models.enums import AiProvider, AiUseCase, WritingConfigStatus, WritingPromptFormat, WritingPromptKey, WritingTaskTypeScope
+
 
 class AdminAiWorkspaceScopeRead(BaseModel):
     type: Literal["test", "plan", "user", "analytics", "general"] = "general"
@@ -100,9 +102,204 @@ class AdminAiThreadDetailRead(AdminAiThreadSummaryRead):
 
 
 class AdminAiConfigRead(BaseModel):
-    provider: Literal["gemini"] = "gemini"
+    provider: str = "google"
     model_name: str
     has_api_key: bool = False
     background_supported: bool = True
     context_window_tokens: int = 1_048_576
     notes: list[str] = Field(default_factory=list)
+
+
+class AdminAiProviderConfigRead(BaseModel):
+    id: UUID
+    provider: AiProvider
+    label: str
+    api_key_masked: str | None = None
+    has_api_key: bool = False
+    base_url: str | None = None
+    is_enabled: bool = False
+    last_sync_at: datetime | None = None
+    last_sync_status: str | None = None
+    last_sync_error: str | None = None
+
+
+class AdminAiProviderConfigUpdateRequest(BaseModel):
+    label: str | None = None
+    api_key: str | None = None
+    base_url: str | None = None
+    is_enabled: bool | None = None
+
+
+class AdminAiProviderValidationRequest(BaseModel):
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class AdminAiProviderValidationRead(BaseModel):
+    ok: bool
+    provider: AiProvider
+    message: str
+    models_seen: int | None = None
+
+
+class AdminAiProviderModelRead(BaseModel):
+    id: UUID
+    model_id: str
+    display_name: str
+    family: str | None = None
+    capabilities: dict = Field(default_factory=dict)
+    context_window: int | None = None
+    is_accessible: bool = True
+    is_selectable: bool = True
+    sort_order: int = 0
+
+
+class AdminAiUseCaseBindingRead(BaseModel):
+    id: UUID | None = None
+    use_case: AiUseCase
+    provider_config_id: UUID | None = None
+    provider: AiProvider | None = None
+    provider_label: str | None = None
+    provider_model_id: UUID | None = None
+    model_id: str | None = None
+    model_display_name: str | None = None
+    settings_json: dict = Field(default_factory=dict)
+    resolved_source: str = "missing"
+
+
+class AdminAiUseCaseBindingUpdateRequest(BaseModel):
+    provider_config_id: UUID
+    provider_model_id: UUID
+    settings_json: dict = Field(default_factory=dict)
+
+
+class AdminWritingPromptEntryInput(BaseModel):
+    key: WritingPromptKey
+    body: str
+    format: WritingPromptFormat = WritingPromptFormat.TEXT
+
+
+class AdminWritingPromptProfileCreateRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    task_type_scope: WritingTaskTypeScope = WritingTaskTypeScope.ALL
+    entries: list[AdminWritingPromptEntryInput] = Field(default_factory=list)
+
+
+class AdminWritingPromptProfileUpdateRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    entries: list[AdminWritingPromptEntryInput] | None = None
+
+
+class AdminWritingPromptEntryRead(BaseModel):
+    id: UUID
+    key: WritingPromptKey
+    body: str
+    format: WritingPromptFormat
+
+
+class AdminWritingPromptProfileRead(BaseModel):
+    id: UUID
+    slug: str
+    title: str
+    description: str | None = None
+    task_type_scope: WritingTaskTypeScope
+    status: WritingConfigStatus
+    version: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    entries: list[AdminWritingPromptEntryRead] = Field(default_factory=list)
+
+
+class AdminWritingRubricCreateRequest(BaseModel):
+    task_type_scope: WritingTaskTypeScope = WritingTaskTypeScope.ALL
+    body: str = Field(min_length=1)
+
+
+class AdminWritingRubricUpdateRequest(BaseModel):
+    body: str | None = None
+
+
+class AdminWritingRubricRead(BaseModel):
+    id: UUID
+    task_type_scope: WritingTaskTypeScope
+    version: int
+    body: str
+    status: WritingConfigStatus
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminWritingAnchorItemInput(BaseModel):
+    band: float
+    essay: str
+    criteria: dict = Field(default_factory=dict)
+    rationale: str = ""
+
+
+class AdminWritingAnchorSetCreateRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    task_type_scope: WritingTaskTypeScope
+    items: list[AdminWritingAnchorItemInput] = Field(default_factory=list)
+
+
+class AdminWritingAnchorSetUpdateRequest(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    items: list[AdminWritingAnchorItemInput] | None = None
+
+
+class AdminWritingAnchorItemRead(BaseModel):
+    id: UUID
+    band: float
+    essay: str
+    criteria: dict = Field(default_factory=dict)
+    rationale: str = ""
+    sort_order: int = 0
+
+
+class AdminWritingAnchorSetRead(BaseModel):
+    id: UUID
+    slug: str
+    title: str
+    description: str | None = None
+    task_type_scope: WritingTaskTypeScope
+    version: int
+    status: WritingConfigStatus
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    items: list[AdminWritingAnchorItemRead] = Field(default_factory=list)
+
+
+class AdminWritingPromptPreviewRequest(BaseModel):
+    task_type: WritingTaskTypeScope
+    task_prompt_text: str = ""
+    image_summary: str = ""
+    essay_text: str = ""
+
+
+class AdminWritingPromptPreviewRead(BaseModel):
+    grader_system: str
+    grader_user: str
+    improved_version: str
+    roast_system: str
+    roast_user: str
+
+
+class AdminWritingConfigAuditRead(BaseModel):
+    id: UUID
+    actor_admin_id: UUID | None = None
+    entity_type: str
+    entity_id: UUID
+    action: str
+    previous_version: int | None = None
+    new_version: int | None = None
+    metadata_json: dict = Field(default_factory=dict)
+    created_at: datetime

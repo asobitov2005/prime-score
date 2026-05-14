@@ -61,7 +61,8 @@ from app.services.payment_service import (
     expire_stale_payments,
     serialize_wheel_options,
 )
-from app.services.runtime_store import iter_user_attempts
+from app.services.runtime_store import _band_for_raw_score, iter_user_attempts
+from app.services.scoring import mc_multiple_question_weight
 from app.services.user_names import normalize_user_name_parts
 from app.services.payment_events import payment_event_bus
 
@@ -128,6 +129,36 @@ def _safe_accuracy(correct_count: int, worked_count: int) -> float:
     if worked_count <= 0:
         return 0.0
     return round((correct_count / worked_count) * 100, 1)
+
+
+def _count_answered_slots(snapshot: dict[str, object], answers: dict[str, str] | None) -> int:
+    if not answers:
+        return 0
+
+    answered_slots = 0
+    for question in snapshot.get("questions", []):
+        if not isinstance(question, dict):
+            continue
+        question_id = str(question.get("question_id") or "").strip()
+        if not question_id:
+            continue
+        answer_value = str(answers.get(question_id) or "").strip()
+        if not answer_value:
+            continue
+
+        question_type = str(question.get("question_type") or "")
+        if "mc_multiple" in question_type:
+            slot_weight = mc_multiple_question_weight(
+                question_label=str(question.get("label") or question.get("question_number") or ""),
+                accepted_answers=[],
+            )
+            selected_count = len([part for part in answer_value.split(",") if part.strip()])
+            answered_slots += min(slot_weight, max(1, selected_count))
+            continue
+
+        answered_slots += 1
+
+    return answered_slots
 
 
 def _attempt_type_stats(attempt, include_module_prefix: bool = False) -> dict[str, dict[str, int]]:
@@ -807,6 +838,35 @@ def _filter_attempts_by_type(attempts, test_type: TestType | None):
     ]
 
 
+def _attempt_scope_value(attempt) -> str:
+    scope = attempt.test_snapshot.get("scope") if isinstance(attempt.test_snapshot, dict) else None
+    if scope is None:
+        scope = getattr(attempt, "scope", None)
+    return str(getattr(scope, "value", scope) or "")
+
+
+def _effective_attempt_band_score(attempt) -> Decimal | float | None:
+    if attempt.band_score is not None:
+        return attempt.band_score
+    if attempt.raw_score is None:
+        return None
+
+    snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
+    total_questions = int(
+        getattr(attempt, "total_questions", None)
+        or getattr(attempt, "max_score", None)
+        or snapshot.get("total_questions")
+        or 40
+    )
+    raw_score = int(attempt.raw_score)
+    if _attempt_scope_value(attempt) != TestScope.full.value and total_questions > 0:
+        raw_score = round((raw_score / total_questions) * 40)
+    raw_score = max(0, min(40, raw_score))
+
+    test_type = TestType(str(snapshot.get("test_type", TestType.reading)))
+    return _band_for_raw_score(test_type, raw_score) or Decimal("0.0")
+
+
 async def _load_writing_attempts(current_user: DebugPrincipal, session: AsyncSession):
     from app.models.writing import WritingSubmission, WritingEvaluation, WritingTask
     from app.models.enums import WritingSubmissionStatus
@@ -930,6 +990,8 @@ async def get_attempts(
 ) -> list[MeAttemptSummaryRead]:
     attempts = await _load_attempts(current_user, session)
     test_ids = {attempt.test_id for attempt in attempts}
+    attempt_ids = {attempt.attempt_id for attempt in attempts}
+    
     source_by_test_id: dict[UUID, str] = {}
     format_by_test_id: dict[UUID, str] = {}
     if test_ids:
@@ -937,12 +999,27 @@ async def get_attempts(
         for test_id, source, test_format in rows.all():
             source_by_test_id[test_id] = str(source.value if hasattr(source, "value") else source)
             format_by_test_id[test_id] = str(test_format.value if hasattr(test_format, "value") else test_format)
+            
+    violations_by_attempt_id: dict[UUID, int] = {}
+    if attempt_ids:
+        from app.models.attempt import AttemptEvent
+        violation_events = await session.execute(
+            select(AttemptEvent.attempt_id, func.count(AttemptEvent.id))
+            .where(AttemptEvent.attempt_id.in_(attempt_ids))
+            .where(AttemptEvent.event_type.in_(["violation_exit_fullscreen", "violation_tab_switch", "violation_window_blur", "violation_devtools"]))
+            .group_by(AttemptEvent.attempt_id)
+        )
+        violations_by_attempt_id = {row[0]: row[1] for row in violation_events.all()}
+
     items: list[MeAttemptSummaryRead] = []
     for attempt in attempts:
         snapshot = attempt.test_snapshot
         snapshot_source = snapshot.get("source")
         if snapshot_source is None and isinstance(snapshot.get("metadata"), dict):
             snapshot_source = snapshot["metadata"].get("source")
+        total_questions = max(0, int(getattr(attempt, "total_questions", 0) or 0))
+        answered_count = _count_answered_slots(snapshot, getattr(attempt, "answers", None))
+        progress_percent = round((answered_count / total_questions) * 100) if total_questions > 0 else 0
         items.append(
             MeAttemptSummaryRead(
                 attempt_id=attempt.attempt_id,
@@ -955,12 +1032,21 @@ async def get_attempts(
                 access_type=snapshot.get("access_type"),
                 source=snapshot_source or source_by_test_id.get(attempt.test_id),
                 raw_score=attempt.raw_score,
-                band_score=attempt.band_score,
-                total_questions=max(0, int(getattr(attempt, "total_questions", 0) or 0)),
+                band_score=_effective_attempt_band_score(attempt),
+                total_questions=total_questions,
                 time_spent_sec=max(0, int(getattr(attempt, "time_spent_sec", 0) or 0)),
+                answered_count=answered_count,
+                progress_percent=max(0, min(progress_percent, 100)),
+                time_limit_seconds=max(0, int(snapshot.get("time_limit_seconds", 0) or 0)),
+                last_answered_question_number=(
+                    int(attempt.metadata.get("last_answered_question_number"))
+                    if attempt.metadata.get("last_answered_question_number") is not None
+                    else None
+                ),
                 started_at=attempt.started_at,
                 completed_at=getattr(attempt, "completed_at", None),
                 updated_at=getattr(attempt, "updated_at", None) or attempt.started_at,
+                violation_count=violations_by_attempt_id.get(attempt.attempt_id, 0),
             )
         )
     return items

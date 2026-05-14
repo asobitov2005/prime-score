@@ -417,19 +417,19 @@ export default function WritingTaskDetailPage({ params }: { params: { taskId: st
                 {submissions.map((s) => (
                   <tr key={s.id} className="hover:bg-muted/20 transition-colors">
                     <td className="border-b border-border/50 px-4 py-3 text-sm">
-                      {s.user_username || s.user_email || s.user_id.slice(0, 8)}
+                      {s.user_display_name || s.user_username || s.user_phone || s.user_id.slice(0, 8)}
                     </td>
                     <td className="border-b border-border/50 px-3 py-3 text-sm font-semibold">
                       {s.word_count}
                     </td>
                     <td className="border-b border-border/50 px-3 py-3 text-sm font-bold">
-                      {s.evaluation?.overall_band ?? "—"}
+                      {s.overall_band ?? "—"}
                     </td>
                     <td className="border-b border-border/50 px-3 py-3">
                       <Badge tone={
-                        s.status === "completed" ? "success" :
-                        s.status === "failed" ? "danger" :
-                        s.status === "queued" || s.status === "running" ? "warning" : "neutral"
+                        s.status.toLowerCase() === "completed" ? "success" :
+                        s.status.toLowerCase() === "failed" ? "danger" :
+                        s.status.toLowerCase() === "queued" || s.status.toLowerCase() === "running" || s.status.toLowerCase() === "processing" ? "warning" : "neutral"
                       }>
                         {s.status}
                       </Badge>

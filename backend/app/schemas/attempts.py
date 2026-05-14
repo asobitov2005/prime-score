@@ -91,6 +91,17 @@ class AttemptBreakdownItemRead(BaseModel):
     total: int
 
 
+class AttemptEventCreate(BaseModel):
+    event_type: str
+    payload: dict | None = None
+
+
+class AttemptEventRead(BaseModel):
+    event_type: str
+    payload: dict | None = None
+    created_at: datetime
+
+
 class AttemptResultRead(BaseModel):
     attempt_id: UUID
     status: AttemptStatus
@@ -111,6 +122,7 @@ class AttemptResultRead(BaseModel):
     section_breakdown: list[AttemptBreakdownItemRead] = []
     question_type_breakdown: list[AttemptBreakdownItemRead] = []
     diagram_groups: list["AttemptDiagramGroupRead"] = []
+    events: list[AttemptEventRead] = []
 
 
 class AttemptDiagramGroupRead(BaseModel):

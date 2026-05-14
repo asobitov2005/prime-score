@@ -39,37 +39,41 @@ function SkeletonCard({ children, className }: { children: ReactNode; className?
 
 function TestsSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5">
-      <div className="space-y-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex w-full gap-2 rounded-2xl border border-border/45 bg-muted/35 p-1 md:w-[18rem]">
-            <SkeletonBlock className="h-10 flex-1 rounded-xl bg-background/75" />
-            <SkeletonBlock className="h-10 flex-1 rounded-xl" />
-          </div>
-          <SkeletonBlock className="h-11 w-full rounded-xl md:w-96" />
+    <div className="mx-auto w-full max-w-6xl space-y-4">
+      {/* Filters Container */}
+      <div className="space-y-4 bg-background pb-4 pt-2 sticky top-[var(--app-shell-sticky-top,5.5rem)] z-40">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+           <div className="flex gap-1.5 bg-muted/40 p-1 rounded-2xl border border-border/50 shadow-inner w-full md:w-max">
+             <SkeletonBlock className="h-10 w-full md:w-36 rounded-xl" />
+             <SkeletonBlock className="h-10 w-full md:w-36 rounded-xl" />
+           </div>
+           <SkeletonBlock className="h-10 w-full rounded-xl md:w-[24rem]" />
         </div>
-        <div className="flex flex-col gap-3 rounded-[2rem] border border-border/40 bg-card/40 p-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 gap-2 overflow-hidden">
-            {[76, 104, 86, 86, 86].map((width, index) => (
-              <SkeletonBlock key={index} className="h-8 shrink-0 rounded-full" style={{ width }} />
-            ))}
-          </div>
-          <SkeletonBlock className="h-9 w-24 rounded-full" />
+        <div className="flex flex-col gap-3 bg-card/40 border border-border/40 rounded-[2rem] p-1 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+           <div className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1">
+             {[50, 70, 70, 70, 70].map((w, i) => (
+                <SkeletonBlock key={i} className="h-8 shrink-0 rounded-full" style={{ width: w }} />
+             ))}
+           </div>
+           <SkeletonBlock className="h-10 w-24 rounded-full mx-1" />
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Grid */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 pt-4 pb-8">
         {Array.from({ length: 6 }).map((_, index) => (
-          <SkeletonCard key={index} className="space-y-5">
-            <div className="flex items-center justify-between">
+          <SkeletonCard key={index} className="flex h-full flex-col p-5 pb-5">
+            <div className="flex items-center justify-between mb-4">
               <SkeletonBlock className="h-5 w-20 rounded-md" />
-              <SkeletonBlock className="h-6 w-20 rounded-full" />
+              <SkeletonBlock className="h-5 w-20 rounded-full" />
             </div>
-            <div className="space-y-3">
-              <SkeletonBlock className="h-4 w-[86%]" />
-              <SkeletonBlock className="h-3 w-36" />
+            <div className="space-y-2 mt-1">
+              <SkeletonBlock className="h-5 w-[85%]" />
+              <SkeletonBlock className="h-4 w-32" />
             </div>
-            <SkeletonBlock className="h-9 w-full rounded-lg" />
+            <div className="mt-8 pt-3 border-t border-border/5">
+               <SkeletonBlock className="h-10 w-full rounded-xl" />
+            </div>
           </SkeletonCard>
         ))}
       </div>
@@ -79,37 +83,101 @@ function TestsSkeleton() {
 
 function DashboardSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <SkeletonCard key={index} className="space-y-4">
-            <SkeletonBlock className="h-8 w-8 rounded-lg" />
-            <div className="space-y-2">
-              <SkeletonBlock className="h-3 w-24" />
-              <SkeletonBlock className="h-7 w-20" />
-            </div>
-          </SkeletonCard>
-        ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-        <SkeletonCard className="space-y-5">
-          <div className="flex items-center justify-between">
-            <SkeletonBlock className="h-4 w-40" />
-            <SkeletonBlock className="h-8 w-24 rounded-full" />
-          </div>
-          <SkeletonBlock className="h-64 w-full rounded-xl" />
-        </SkeletonCard>
-        <SkeletonCard className="space-y-4">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="flex items-center gap-3">
-              <SkeletonBlock className="h-9 w-9 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <SkeletonBlock className="h-3 w-[70%]" />
-                <SkeletonBlock className="h-2.5 w-[45%]" />
+    <div className="space-y-5 mx-auto w-full max-w-6xl pb-12">
+      <div className="space-y-6">
+        {/* Welcome */}
+        <div className="space-y-2">
+           <SkeletonBlock className="h-8 w-64 rounded-lg" />
+           <SkeletonBlock className="h-4 w-48 rounded-md" />
+        </div>
+
+        {/* Top Row */}
+        <div className="grid lg:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
+           <SkeletonCard className="h-[220px] p-5 flex flex-col justify-between">
+              <div className="space-y-3">
+                 <SkeletonBlock className="h-5 w-32 rounded-full" />
+                 <SkeletonBlock className="h-8 w-64 rounded-lg" />
+                 <SkeletonBlock className="h-4 w-48 rounded-md" />
               </div>
-            </div>
-          ))}
-        </SkeletonCard>
+              <SkeletonBlock className="h-10 w-32 rounded-lg" />
+           </SkeletonCard>
+           
+           <div className="grid gap-3 sm:grid-cols-2 h-full">
+             {Array.from({ length: 4 }).map((_, i) => (
+               <SkeletonCard key={i} className="p-4 flex flex-col justify-center">
+                 <SkeletonBlock className="h-8 w-8 rounded-lg mb-3" />
+                 <SkeletonBlock className="h-6 w-20 mb-1" />
+                 <SkeletonBlock className="h-3 w-24" />
+               </SkeletonCard>
+             ))}
+           </div>
+        </div>
+
+        {/* Activity Row */}
+        <div className="grid lg:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
+           <SkeletonCard className="h-64">{null}</SkeletonCard>
+           <SkeletonCard className="h-64">{null}</SkeletonCard>
+        </div>
+
+        {/* Second Row Widgets */}
+        <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6 items-start">
+           <div className="space-y-4">
+              <SkeletonCard className="h-32">{null}</SkeletonCard>
+              <SkeletonCard className="h-40">{null}</SkeletonCard>
+           </div>
+           <div className="flex flex-col gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonCard key={i} className="h-20 flex items-center p-4">
+                  <SkeletonBlock className="h-10 w-10 rounded-xl mr-3" />
+                  <div className="space-y-2 flex-1">
+                    <SkeletonBlock className="h-4 w-32" />
+                    <SkeletonBlock className="h-3 w-24" />
+                  </div>
+                </SkeletonCard>
+              ))}
+           </div>
+        </div>
+      </div>
+      
+      {/* Charts */}
+      <SkeletonCard className="h-80 w-full mt-6">{null}</SkeletonCard>
+
+      {/* Recent Activity & Quick Tests */}
+      <div className="grid lg:grid-cols-[1.5fr_1fr] gap-8 mt-8">
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <SkeletonBlock className="h-6 w-32" />
+            <SkeletonBlock className="h-4 w-16" />
+          </div>
+          <SkeletonCard className="p-0">
+             {Array.from({ length: 3 }).map((_, i) => (
+               <div key={i} className="p-5 flex items-center gap-4 border-b border-border/40 last:border-0">
+                  <SkeletonBlock className="h-12 w-12 rounded-xl" />
+                  <div className="space-y-2 flex-1">
+                     <SkeletonBlock className="h-4 w-48" />
+                     <SkeletonBlock className="h-3 w-32" />
+                  </div>
+               </div>
+             ))}
+          </SkeletonCard>
+        </div>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <SkeletonBlock className="h-6 w-32" />
+            <SkeletonBlock className="h-4 w-16" />
+          </div>
+          <div className="space-y-3">
+             {Array.from({ length: 3 }).map((_, i) => (
+               <SkeletonCard key={i} className="p-4 flex items-center gap-4">
+                  <SkeletonBlock className="h-11 w-11 rounded-xl" />
+                  <div className="space-y-2 flex-1">
+                     <SkeletonBlock className="h-4 w-32" />
+                     <SkeletonBlock className="h-3 w-24" />
+                  </div>
+               </SkeletonCard>
+             ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -117,27 +185,94 @@ function DashboardSkeleton() {
 
 function HistorySkeleton() {
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <SkeletonBlock className="h-6 w-36" />
-          <SkeletonBlock className="h-3 w-56" />
+    <div className="space-y-6 mx-auto w-full max-w-5xl">
+      <SkeletonCard className="p-5 lg:px-6">
+        <div className="flex items-start justify-between mb-4">
+           <div className="space-y-2">
+             <SkeletonBlock className="h-7 w-32 rounded-lg" />
+             <SkeletonBlock className="h-4 w-64 rounded-md" />
+           </div>
+           <SkeletonBlock className="h-10 w-10 rounded-xl hidden md:block" />
         </div>
-        <SkeletonBlock className="h-9 w-28 rounded-full" />
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <SkeletonBlock className="h-10 w-full rounded-lg" />
+          <SkeletonBlock className="h-10 w-full md:w-[240px] rounded-xl" />
+        </div>
+      </SkeletonCard>
+
+      <SkeletonCard className="p-0 overflow-hidden divide-y divide-border/60">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-3 p-4 m-2 rounded-xl">
+             <SkeletonBlock className="h-4 w-4 shrink-0" />
+             <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1.7fr)_auto_auto_auto_auto] md:items-center">
+                <div className="space-y-2">
+                   <SkeletonBlock className="h-4 w-48 rounded-md" />
+                   <div className="flex gap-2">
+                     <SkeletonBlock className="h-4 w-16 rounded-md" />
+                     <SkeletonBlock className="h-4 w-24 rounded-md" />
+                   </div>
+                </div>
+                <div className="space-y-2"><SkeletonBlock className="h-3 w-12" /><SkeletonBlock className="h-4 w-16" /></div>
+                <div className="space-y-2"><SkeletonBlock className="h-3 w-12" /><SkeletonBlock className="h-4 w-16" /></div>
+                <div className="space-y-2"><SkeletonBlock className="h-3 w-12" /><SkeletonBlock className="h-4 w-16" /></div>
+                <SkeletonBlock className="h-8 w-24 rounded-lg" />
+             </div>
+          </div>
+        ))}
+      </SkeletonCard>
+    </div>
+  );
+}
+
+function WritingSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 mx-auto w-full max-w-6xl">
+      <SkeletonCard className="p-5 lg:px-6">
+         <div className="flex items-start justify-between">
+            <div className="space-y-2">
+               <SkeletonBlock className="h-7 w-32 rounded-lg" />
+               <SkeletonBlock className="h-4 w-64 rounded-md" />
+            </div>
+            <SkeletonBlock className="h-10 w-10 rounded-xl hidden md:block" />
+         </div>
+      </SkeletonCard>
+
+      <div className="-mt-3 space-y-3">
+         <div className="flex gap-3 p-1.5 border border-border/50 rounded-2xl">
+           <SkeletonBlock className="h-10 flex-1 rounded-xl" />
+           <SkeletonBlock className="h-10 flex-1 rounded-xl" />
+         </div>
+         <SkeletonBlock className="h-14 w-full rounded-2xl" />
+         <SkeletonCard className="p-0">
+           <div className="p-3 border-b flex justify-between items-center">
+             <SkeletonBlock className="h-6 w-48" />
+             <SkeletonBlock className="h-7 w-24" />
+           </div>
+           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 p-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonBlock key={i} className="h-[78px] rounded-xl" />
+              ))}
+           </div>
+         </SkeletonCard>
       </div>
-      {Array.from({ length: 4 }).map((_, index) => (
-        <SkeletonCard key={index} className="space-y-3">
-          <div className="flex items-center justify-between">
-            <SkeletonBlock className="h-4 w-48" />
-            <SkeletonBlock className="h-6 w-20 rounded-full" />
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <SkeletonBlock className="h-12 w-full rounded-xl" />
-            <SkeletonBlock className="h-12 w-full rounded-xl" />
-            <SkeletonBlock className="h-12 w-full rounded-xl" />
-          </div>
-        </SkeletonCard>
-      ))}
+
+      <SkeletonCard className="h-64">{null}</SkeletonCard>
+
+      <div className="space-y-3 mt-6">
+        <SkeletonBlock className="h-6 w-48 mb-4" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} className="h-72 p-0 flex flex-col">
+              <SkeletonBlock className="h-40 w-full rounded-b-none" />
+              <div className="p-5 flex-1 flex flex-col gap-3">
+                <SkeletonBlock className="h-4 w-20" />
+                <SkeletonBlock className="h-5 w-full" />
+                <SkeletonBlock className="h-4 w-full mt-auto" />
+              </div>
+            </SkeletonCard>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -241,7 +376,10 @@ function skeletonForPath(pathname: string, isOverlay: boolean) {
   if (pathname.startsWith("/history")) {
     return <HistorySkeleton />;
   }
-  if (pathname.startsWith("/settings") || pathname.startsWith("/writing")) {
+  if (pathname.startsWith("/writing")) {
+    return <WritingSkeleton />;
+  }
+  if (pathname.startsWith("/settings")) {
     return <FormSkeleton />;
   }
   if (pathname.startsWith("/login")) {

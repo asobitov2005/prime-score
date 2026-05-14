@@ -47,7 +47,7 @@ start_if_needed "worker" "$ROOT_DIR/backend" "$LOG_DIR/worker.log" \
   --filter python \
   --ignore-paths "$ROOT_DIR/backend/.venv,$ROOT_DIR/backend/__pycache__,$ROOT_DIR/backend/.pytest_cache,$ROOT_DIR/backend/alembic/versions/__pycache__" \
   --target-type command \
-  "$ROOT_DIR/backend/.venv/bin/celery -A app.tasks.celery_app worker --loglevel=info -Q default,heavy,notifications,admin_ai --concurrency=4 -Ofair" \
+  "$ROOT_DIR/backend/.venv/bin/celery -A app.tasks.celery_app worker --loglevel=info -Q default,heavy,notifications,admin_ai,writing --concurrency=4 -Ofair" \
   "$ROOT_DIR/backend/app" "$ROOT_DIR/backend/alembic"
 
 start_if_needed "frontend" "$ROOT_DIR/frontend" "$LOG_DIR/frontend.log" \

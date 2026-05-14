@@ -4,6 +4,7 @@ import type {
   AttemptRow,
   DashboardAnalytics,
   DashboardBandProgressPoint,
+  DashboardActivityPoint,
   DashboardErrorDistributionItem,
   DashboardPerformanceSummary,
   DashboardQuestionTypeAnalysisItem,
@@ -22,6 +23,12 @@ type BackendMeStats = {
   active_sessions: number;
 };
 
+type BackendMeActivityPoint = {
+  activity_date: string;
+  attempts_count: number;
+  time_spent_sec: number;
+};
+
 type BackendMeAttempt = {
   attempt_id: string;
   test_id: string;
@@ -35,9 +42,14 @@ type BackendMeAttempt = {
   band_score?: number | string | null;
   total_questions?: number | null;
   time_spent_sec?: number | null;
+  answered_count?: number | null;
+  progress_percent?: number | null;
+  time_limit_seconds?: number | null;
+  last_answered_question_number?: number | null;
   started_at: string;
   completed_at?: string | null;
   updated_at?: string | null;
+  violation_count?: number;
 };
 
 type BackendQuestionTypeAnalysisItem = {
@@ -225,7 +237,13 @@ function mapBackendAttempt(attempt: BackendMeAttempt): AttemptRow {
     band: formatBandScore(attempt.band_score),
     totalQuestions: attempt.total_questions ?? null,
     timeSpent: formatAttemptDuration(attempt.time_spent_sec),
-    status: attempt.status === "auto_submitted" ? "submitted" : attempt.status === "completed" ? "completed" : "in_progress"
+    timeSpentSec: attempt.time_spent_sec ?? null,
+    answeredCount: attempt.answered_count ?? 0,
+    progressPercent: attempt.progress_percent ?? 0,
+    timeLimitSeconds: attempt.time_limit_seconds ?? 0,
+    lastAnsweredQuestionNumber: attempt.last_answered_question_number ?? null,
+    status: attempt.status === "auto_submitted" ? "submitted" : attempt.status === "completed" ? "completed" : "in_progress",
+    violationCount: attempt.violation_count ?? 0
   };
 }
 
@@ -451,6 +469,19 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
       speedMetrics: { avgTimePerQuestionSec: null, readingAvgSecPerQuestion: null, listeningAvgSecPerQuestion: null },
       improvementRate: { last5AvgBand: null, prev5AvgBand: null, delta: null, percentChange: null },
     };
+  }
+}
+
+export async function getDashboardActivity(): Promise<DashboardActivityPoint[]> {
+  try {
+    const activity = await requestBackend<BackendMeActivityPoint[]>("/me/activity");
+    return activity.map((point) => ({
+      activityDate: point.activity_date,
+      attemptsCount: point.attempts_count,
+      timeSpentSec: point.time_spent_sec,
+    }));
+  } catch {
+    return [];
   }
 }
 

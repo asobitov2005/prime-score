@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.core.enums import TestMode, TestScope, TestType
 from app.db.session import get_db_session
+from app.models.attempt import AttemptEvent
 from app.schemas.common import DebugPrincipal, MessageResponse
 from app.schemas.attempts import (
     AttemptAnswerRequest,
     AttemptAnswerResponse,
     AttemptBreakdownItemRead,
     AttemptDiagramGroupRead,
+    AttemptEventCreate,
+    AttemptEventRead,
     AttemptProgressRequest,
     AttemptProgressResponse,
     AttemptRead,
@@ -70,6 +75,30 @@ def _count_answered_slots(snapshot: dict[str, object], answers: dict[str, str] |
         answered_slots += 1
 
     return answered_slots
+
+
+def _effective_band_score(
+    snapshot: dict[str, object],
+    raw_score: int | None,
+    band_score,
+    total_questions: int | None,
+):
+    if band_score is not None:
+        return band_score
+    if raw_score is None:
+        return None
+
+    scope = str(snapshot.get("scope") or "")
+    scaled_raw_score = int(raw_score)
+    safe_total_questions = int(total_questions or snapshot.get("total_questions") or 40)
+    if scope != TestScope.full.value and safe_total_questions > 0:
+        scaled_raw_score = round((scaled_raw_score / safe_total_questions) * 40)
+    scaled_raw_score = max(0, min(40, scaled_raw_score))
+
+    return _band_for_raw_score(
+        TestType(str(snapshot.get("test_type", TestType.reading))),
+        scaled_raw_score,
+    ) or Decimal("0.0")
 
 
 def _normalize_attempt_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
@@ -361,7 +390,12 @@ async def get_attempt_view(
         total_questions=attempt.total_questions,
         answers_count=_count_answered_values(attempt.answers),
         raw_score=attempt.raw_score,
-        band_score=attempt.band_score,
+        band_score=_effective_band_score(
+            attempt.test_snapshot,
+            attempt.raw_score,
+            attempt.band_score,
+            attempt.total_questions,
+        ),
         score_status=str(attempt.metadata.get("score_status", "queued")),
         time_limit_seconds=int(attempt.test_snapshot.get("time_limit_seconds", 0)),
         last_answered_question_number=attempt.metadata.get("last_answered_question_number"),
@@ -462,6 +496,32 @@ async def save_attempt_progress(
     )
 
 
+@router.post("/{attempt_id}/events", response_model=AttemptEventRead)
+async def record_attempt_event(
+    attempt_id: UUID,
+    payload: AttemptEventCreate,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> AttemptEventRead:
+    _ = await _require_attempt_owner(attempt_id, current_user, session)
+    
+    event = AttemptEvent(
+        attempt_id=attempt_id,
+        event_type=payload.event_type,
+        payload=payload.payload or {},
+        created_at=datetime.now(timezone.utc),
+    )
+    session.add(event)
+    await session.commit()
+    await session.refresh(event)
+    
+    return AttemptEventRead(
+        event_type=event.event_type,
+        payload=event.payload,
+        created_at=event.created_at,
+    )
+
+
 @router.post("/{attempt_id}/submit", response_model=AttemptSubmitResponse)
 async def submit_attempt_view(
     attempt_id: UUID,
@@ -497,7 +557,12 @@ async def submit_attempt_view(
         total_questions=attempt.total_questions,
         answers_count=_count_answered_values(attempt.answers),
         raw_score=attempt.raw_score,
-        band_score=attempt.band_score,
+        band_score=_effective_band_score(
+            attempt.test_snapshot,
+            attempt.raw_score,
+            attempt.band_score,
+            attempt.total_questions,
+        ),
         score_status=str(attempt.metadata.get("score_status", "queued")),
         time_limit_seconds=int(attempt.test_snapshot.get("time_limit_seconds", 0)),
         last_answered_question_number=attempt.metadata.get("last_answered_question_number"),
@@ -512,15 +577,24 @@ async def get_result(
     session: AsyncSession = Depends(get_db_session),
 ) -> AttemptResultRead:
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
+    
+    events_result = await session.execute(
+        select(AttemptEvent)
+        .where(AttemptEvent.attempt_id == attempt_id)
+        .where(AttemptEvent.event_type.in_(["violation_exit_fullscreen", "violation_tab_switch", "violation_window_blur", "violation_devtools"]))
+        .order_by(AttemptEvent.created_at.asc())
+    )
+    events = events_result.scalars().all()
+    
     snapshot = attempt.test_snapshot
     answered_slots_count = _count_answered_slots(snapshot, attempt.answers)
     diagram_groups = _extract_diagram_groups(snapshot)
-    effective_band_score = attempt.band_score
-    if effective_band_score is None and attempt.raw_score is not None:
-        effective_band_score = _band_for_raw_score(
-            TestType(str(snapshot.get("test_type", TestType.reading))),
-            int(attempt.raw_score),
-        )
+    effective_band_score = _effective_band_score(
+        snapshot,
+        attempt.raw_score,
+        attempt.band_score,
+        attempt.total_questions,
+    )
     return AttemptResultRead(
         attempt_id=attempt.attempt_id,
         status=attempt.status,
@@ -551,6 +625,13 @@ async def get_result(
             for item in attempt.question_type_breakdown
         ],
         diagram_groups=diagram_groups,
+        events=[
+            AttemptEventRead(
+                event_type=event.event_type,
+                payload=event.payload,
+                created_at=event.created_at,
+            ) for event in events
+        ],
     )
 
 

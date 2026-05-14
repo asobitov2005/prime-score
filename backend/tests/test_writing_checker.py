@@ -2,16 +2,38 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
+from app.models.enums import AiProvider, AiUseCase, WritingTaskType
+from app.services.ai_config import ResolvedAiUseCaseConfig
 from app.services.writing_checker import (
     _AnnotationPayload,
     _CriterionPayload,
     _GraderPayload,
+    _augment_vocabulary_suggestions,
+    _build_grading_prompt,
+    _build_system_instruction,
     _build_payload,
     _call_annotation_recovery,
     _call_grader,
     _dedupe_annotations,
+    _skip_groq_aux_call,
     _validate_annotations,
 )
+
+
+def _groq_resolved_config() -> ResolvedAiUseCaseConfig:
+    return ResolvedAiUseCaseConfig(
+        use_case=AiUseCase.WRITING_GRADER,
+        provider=AiProvider.GROQ,
+        provider_config_id=None,
+        provider_label="Groq",
+        api_key="test-key",
+        base_url=None,
+        model_id="openai/gpt-oss-120b",
+        model_record_id=None,
+        settings_json={},
+    )
 
 
 def _valid_grader_json() -> str:
@@ -99,6 +121,113 @@ def test_call_grader_repairs_invalid_json() -> None:
     assert len(calls) == 4
 
 
+def test_call_grader_omits_thinking_config_for_writing_model() -> None:
+    seen_config: object | None = None
+
+    class _Models:
+        def generate_content(self, **kwargs: object) -> SimpleNamespace:
+            nonlocal seen_config
+            seen_config = kwargs.get("config")
+            return SimpleNamespace(text=_valid_grader_json())
+
+    client = SimpleNamespace(models=_Models())
+
+    payload = _call_grader(
+        client=client,
+        system_instruction="system",
+        prompt="prompt",
+        essay_text="This is a complete essay with enough words to count as a real attempt in the checker.",
+        seed=123,
+    )
+
+    assert payload.task_achievement.band == 6.0
+    assert seen_config is not None
+    assert getattr(seen_config, "thinkingConfig", None) is None
+
+
+def test_call_grader_caps_groq_output_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_generate_text_sync(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _valid_grader_json()
+
+    monkeypatch.setattr("app.services.writing_checker.generate_text_sync", fake_generate_text_sync)
+
+    payload = _call_grader(
+        resolved_config=_groq_resolved_config(),
+        prompts=None,
+        system_instruction="system",
+        prompt="prompt",
+        essay_text="This is a complete essay with enough words to count as a real attempt in the checker.",
+        seed=123,
+    )
+
+    assert payload.task_achievement.band == 6.0
+    assert seen["max_output_tokens"] == 2048
+
+
+def test_groq_prompt_path_is_compact() -> None:
+    config = _groq_resolved_config()
+    rubric = SimpleNamespace(
+        body=(
+            "1. TASK ACHIEVEMENT\n\nBand 8\n- Task 2: Fully developed ideas.\n\n"
+            "Band 7\n- Task 2: Clear position with support.\n\n"
+            "Band 6\n- Task 2: Relevant position but some ideas unclear.\n\n"
+            "Band 5\n- Task 2: Partial response.\n\n"
+            "2. COHERENCE AND COHESION\n\nBand 8\n- Logical sequencing.\n\n"
+            "Band 7\n- Clear progression.\n\nBand 6\n- Clear overall progression.\n\n"
+            "Band 5\n- Limited progression.\n\n3. LEXICAL RESOURCE\n\nBand 8\n- Precise vocabulary.\n\n"
+            "Band 7\n- Some flexibility.\n\nBand 6\n- Adequate range.\n\nBand 5\n- Limited range.\n\n"
+            "4. GRAMMATICAL RANGE AND ACCURACY\n\nBand 8\n- Mostly error-free.\n\n"
+            "Band 7\n- Frequent error-free sentences.\n\nBand 6\n- Some grammar errors.\n\n"
+            "Band 5\n- Frequent grammatical errors.\n\nGRADING INSTRUCTIONS"
+        ),
+        version=1,
+    )
+    prompts = SimpleNamespace(entries={})
+    anchors = SimpleNamespace(
+        items=[
+            {
+                "band": 5.0,
+                "criteria": {
+                    "task_achievement": 5.0,
+                    "coherence": 5.0,
+                    "lexical": 5.0,
+                    "grammar": 5.0,
+                },
+                "rationale": "Limited development with weak control.",
+                "essay": "Long anchor essay that should not appear in the compact Groq prompt.",
+            }
+        ]
+    )
+
+    system = _build_system_instruction(
+        prompts=prompts,
+        rubric=rubric,
+        resolved_config=config,
+        task_type=WritingTaskType.TASK_2.value,
+    )
+    prompt = _build_grading_prompt(
+        prompts=prompts,
+        anchors=anchors,
+        resolved_config=config,
+        task_type=WritingTaskType.TASK_2.value,
+        task_prompt_text="Discuss both views and give your opinion.",
+        image_summary="",
+        essay_text="This is a candidate essay.",
+    )
+
+    assert "strict json response schema" not in prompt.lower()
+    assert "Long anchor essay" not in prompt
+    assert "inline_annotations: return []" in prompt
+    assert "Task Response bands ->" in system
+
+
+def test_skip_groq_aux_calls() -> None:
+    assert _skip_groq_aux_call(_groq_resolved_config()) is True
+
+
 def test_validate_annotations_realigns_nearby_original_text() -> None:
     essay = "The table show the averge band scores."
     annotations = [
@@ -173,6 +302,97 @@ def test_call_annotation_recovery_parses_annotation_array() -> None:
     assert len(payload) == 1
     assert payload[0].original == "show"
     assert payload[0].band_impact == "This hurts Grammatical Range & Accuracy."
+
+
+def test_call_annotation_recovery_omits_thinking_config_for_writing_model() -> None:
+    seen_config: object | None = None
+
+    class _Models:
+        def generate_content(self, **kwargs: object) -> SimpleNamespace:
+            nonlocal seen_config
+            seen_config = kwargs.get("config")
+            return SimpleNamespace(
+                text="""
+                [
+                  {
+                    "offset": 10,
+                    "length": 4,
+                    "original": "show",
+                    "replacements": ["shows"],
+                    "category": "grammar",
+                    "severity": "error",
+                    "short_message": "Use singular verb.",
+                    "explanation": "Singular subject takes singular verb.",
+                    "band_impact": "This hurts Grammatical Range & Accuracy.",
+                    "examiner_tip": "Use the singular verb form after 'table'.",
+                    "improved_sentence": "The table shows the average band scores."
+                  }
+                ]
+                """.strip()
+            )
+
+    client = SimpleNamespace(models=_Models())
+
+    payload = _call_annotation_recovery(
+        client=client,
+        essay_text="The table show the average band scores.",
+        hints=["Use singular verb."],
+        seed=123,
+    )
+
+    assert len(payload) == 1
+    assert seen_config is not None
+    assert getattr(seen_config, "thinkingConfig", None) is None
+
+
+def test_call_annotation_recovery_caps_groq_output_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_generate_text_sync(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return """
+        [
+          {
+            "offset": 10,
+            "length": 4,
+            "original": "show",
+            "replacements": ["shows"],
+            "category": "grammar",
+            "severity": "error",
+            "short_message": "Use singular verb.",
+            "explanation": "Singular subject takes singular verb.",
+            "band_impact": "This hurts Grammatical Range & Accuracy.",
+            "examiner_tip": "Use the singular verb form after 'table'.",
+            "improved_sentence": "The table shows the average band scores."
+          }
+        ]
+        """.strip()
+
+    monkeypatch.setattr("app.services.writing_checker.generate_text_sync", fake_generate_text_sync)
+
+    payload = _call_annotation_recovery(
+        resolved_config=_groq_resolved_config(),
+        prompts=None,
+        essay_text="The table show the average band scores.",
+        hints=["Use singular verb."],
+        seed=123,
+    )
+
+    assert len(payload) == 1
+    assert seen["max_output_tokens"] == 8000
+
+
+def test_augment_vocabulary_suggestions_does_not_invent_missing_phrases() -> None:
+    items = _augment_vocabulary_suggestions(
+        task_type=WritingTaskType.TASK_2.value,
+        essay_text="This essay is already concise and does not repeat any of the canned weak phrases.",
+        annotations=[],
+        items=[],
+    )
+
+    assert items == []
 
 
 def test_dedupe_annotations_prefers_richer_detail() -> None:
@@ -345,4 +565,12 @@ def test_build_payload_rewrites_generic_summary_and_backfills_vocab() -> None:
     assert "weakest" in payload["feedback"]["overall_summary"].lower() or "score limit" in payload["feedback"]["overall_summary"].lower()
     assert len(payload["feedback"]["next_steps"]) == 3
     assert payload["feedback"]["next_steps"][0].startswith("Replace 'very big problem'")
-    assert len(payload["feedback"]["vocabulary_suggestions"]) >= 10
+    assert payload["feedback"]["vocabulary_suggestions"] == [
+        {
+            "current_phrase": "very big problem",
+            "improved_phrase": "pressing concern",
+            "level": "C1",
+            "why_it_works": "The phrase is understandable but too plain for a stronger IELTS lexical profile.",
+            "example_sentence": "Traffic congestion has become a pressing concern in many large cities.",
+        }
+    ]

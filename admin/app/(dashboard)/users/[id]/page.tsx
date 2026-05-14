@@ -28,7 +28,73 @@ type UserDetail = {
   average_band: number | null;
 };
 
-function fmt(iso: string | null): string {
+type AttemptBreakdownItem = {
+  label: string;
+  correct: number;
+  total: number;
+};
+
+type AttemptReviewItem = {
+  question_id: string;
+  question_number: number;
+  question_label?: string | null;
+  prompt: string;
+  section_title: string;
+  group_title: string;
+  question_type: string;
+  options: string[];
+  answer_value?: string | null;
+  is_correct?: boolean | null;
+  correct_answers: string[];
+  explanation?: string | null;
+};
+
+type UserAttemptActivity = {
+  attempt_id: string;
+  test_id: string;
+  test_title?: string | null;
+  test_type?: "reading" | "listening" | null;
+  scope: string;
+  mode: string;
+  status: string;
+  score_status: string;
+  raw_score?: number | null;
+  band_score?: number | string | null;
+  answers_count: number;
+  answered_slots_count: number;
+  total_questions: number;
+  time_spent_sec: number;
+  started_at: string;
+  completed_at?: string | null;
+  result?: {
+    section_breakdown: AttemptBreakdownItem[];
+    question_type_breakdown: AttemptBreakdownItem[];
+  } | null;
+  review?: {
+    can_show_explanations: boolean;
+    items: AttemptReviewItem[];
+  } | null;
+};
+
+type UserWritingSubmissionActivity = {
+  id: string;
+  task_id: string;
+  task_title: string;
+  task_type: "task_1" | "task_2";
+  word_count: number;
+  status: string;
+  submitted_at: string;
+  graded_at?: string | null;
+  overall_band?: number | null;
+  error_message?: string | null;
+};
+
+type UserActivity = {
+  attempts: UserAttemptActivity[];
+  writing_submissions: UserWritingSubmissionActivity[];
+};
+
+function fmt(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -55,12 +121,34 @@ const IconTrash = () => <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24"
 const IconBan = () => <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M8.5 8.5 15.5 15.5" /></svg>;
 const IconAlert = () => <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01" /><path strokeLinecap="round" strokeLinejoin="round" d="M10.29 3.86 2.82 17a2 2 0 0 0 1.71 3h15.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z" /></svg>;
 
+function humanizeStatus(value: string | null | undefined): string {
+  if (!value) return "Unknown";
+  const normalized = value.toLowerCase();
+  if (normalized === "queued") return "Queued";
+  if (normalized === "running" || normalized === "processing" || normalized === "in_progress") return "Running";
+  if (normalized === "completed") return "Completed";
+  if (normalized === "failed") return "Failed";
+  if (normalized === "auto_submitted") return "Auto-submitted";
+  return value.replace(/_/g, " ");
+}
+
+function statusTone(value: string | null | undefined): "success" | "warning" | "danger" | "neutral" {
+  const normalized = (value ?? "").toLowerCase();
+  if (normalized === "completed") return "success";
+  if (normalized === "failed") return "danger";
+  if (normalized === "queued" || normalized === "running" || normalized === "processing" || normalized === "in_progress") return "warning";
+  return "neutral";
+}
+
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [user, setUser] = useState<UserDetail | null>(null);
+  const [activity, setActivity] = useState<UserActivity | null>(null);
+  const [selectedAttemptId, setSelectedAttemptId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activityError, setActivityError] = useState("");
   const [actionMsg, setActionMsg] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
@@ -75,18 +163,43 @@ export default function UserDetailPage() {
 
   const token = useCallback(() => getClientAdminAccessToken(), []);
 
-  const fetchUser = useCallback(() => {
+  const fetchUser = useCallback(async () => {
     if (!id) return;
     const t = token();
     if (!t) { setLoading(false); return; }
-    fetch(`${API_BASE}/users/${id}`, { headers: { Authorization: `Bearer ${t}` } })
-      .then((r) => { if (!r.ok) throw new Error("Failed"); return r.json(); })
-      .then(setUser)
-      .catch(() => setError("Foydalanuvchini yuklab bo'lmadi."))
-      .finally(() => setLoading(false));
+    setLoading(true);
+    setError("");
+    setActivityError("");
+    try {
+      const [userRes, activityRes] = await Promise.all([
+        fetch(`${API_BASE}/users/${id}`, { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API_BASE}/users/${id}/activity`, { headers: { Authorization: `Bearer ${t}` } }),
+      ]);
+      if (!userRes.ok) {
+        throw new Error("user");
+      }
+      const userPayload = await userRes.json() as UserDetail;
+      setUser(userPayload);
+
+      if (!activityRes.ok) {
+        throw new Error("activity");
+      }
+      const activityPayload = await activityRes.json() as UserActivity;
+      setActivity(activityPayload);
+      setSelectedAttemptId((current) => current || activityPayload.attempts[0]?.attempt_id || "");
+    } catch (fetchError) {
+      if (fetchError instanceof Error && fetchError.message === "activity") {
+        setActivity(null);
+        setActivityError("User activity yuklab bo'lmadi.");
+      } else {
+        setError("Foydalanuvchini yuklab bo'lmadi.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [id, token]);
 
-  useEffect(() => { fetchUser(); }, [fetchUser]);
+  useEffect(() => { void fetchUser(); }, [fetchUser]);
 
   const doAction = async (fn: () => Promise<Response>, successMsg: string) => {
     setActionLoading(true); setActionMsg("");
@@ -94,7 +207,7 @@ export default function UserDetailPage() {
       const res = await fn();
       if (!res.ok) throw new Error();
       setActionMsg(successMsg);
-      fetchUser();
+      void fetchUser();
     } catch { setActionMsg("Xatolik yuz berdi."); }
     finally { setActionLoading(false); }
   };
@@ -159,6 +272,7 @@ export default function UserDetailPage() {
   const memberSince = new Date(user.created_at ?? "");
   const memberDays = Math.floor((Date.now() - memberSince.getTime()) / 86400000);
   const premiumExpired = user.premium_until ? new Date(user.premium_until).getTime() < Date.now() : false;
+  const selectedAttempt = activity?.attempts.find((item) => item.attempt_id === selectedAttemptId) ?? activity?.attempts[0] ?? null;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -283,6 +397,205 @@ export default function UserDetailPage() {
             <InfoRow label="Status" value={user.is_premium && !premiumExpired ? "Premium" : premiumExpired ? "Expired" : "Free"} badge={user.is_premium && !premiumExpired ? "success" : premiumExpired ? "warning" : "neutral"} />
             <InfoRow label="Premium tugashi" value={user.premium_until ? `${fmtDate(user.premium_until)} ${daysLeft(user.premium_until)}` : "—"} />
             <InfoRow label="Leaderboard" value={user.show_on_leaderboard ? "Ko'rinadi" : "Yashirin"} badge={user.show_on_leaderboard ? "success" : "paused"} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-bold">Writing submissions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {activityError ? (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600">
+              {activityError}
+            </div>
+          ) : activity?.writing_submissions.length ? (
+            activity.writing_submissions.map((submission) => (
+              <div key={submission.id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link href={`/writing/submissions/${submission.id}`} className="font-semibold text-foreground hover:text-primary">
+                      {submission.task_title}
+                    </Link>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{submission.task_type === "task_1" ? "Task 1" : "Task 2"}</span>
+                      <span>{submission.word_count} words</span>
+                      <span>{fmt(submission.submitted_at)}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={statusTone(submission.status)} className="text-[10px] uppercase font-black tracking-widest">
+                      {humanizeStatus(submission.status)}
+                    </Badge>
+                    <Badge tone="neutral" className="text-[10px] uppercase font-black tracking-widest">
+                      Band {submission.overall_band != null ? submission.overall_band.toFixed(1) : "—"}
+                    </Badge>
+                  </div>
+                </div>
+                {submission.error_message ? (
+                  <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-600">
+                    {submission.error_message}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <div className="rounded-lg border border-border/60 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+              Writing submissions topilmadi.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-bold">Reading / Listening attempts</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {activityError ? (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600">
+                {activityError}
+              </div>
+            ) : activity?.attempts.length ? (
+              activity.attempts.map((attempt) => (
+                <button
+                  key={attempt.attempt_id}
+                  type="button"
+                  onClick={() => setSelectedAttemptId(attempt.attempt_id)}
+                  className={cn(
+                    "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                    selectedAttempt?.attempt_id === attempt.attempt_id
+                      ? "border-primary bg-primary/8"
+                      : "border-border/60 bg-muted/10 hover:bg-muted/20"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground">{attempt.test_title || "Untitled attempt"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {(attempt.test_type ?? "test").toUpperCase()} · {fmt(attempt.completed_at || attempt.started_at)}
+                      </p>
+                    </div>
+                    <Badge tone={statusTone(attempt.status)} className="text-[10px] uppercase font-black tracking-widest">
+                      {humanizeStatus(attempt.status)}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>Band: {attempt.band_score ?? "—"}</span>
+                    <span>Raw: {attempt.raw_score ?? "—"}</span>
+                    <span>{attempt.answers_count}/{attempt.total_questions} answered</span>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-lg border border-border/60 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+                Attemptlar topilmadi.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-bold">Selected attempt detail</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {!selectedAttempt ? (
+              <div className="rounded-lg border border-border/60 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+                Ko‘rish uchun attempt tanlang.
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={statusTone(selectedAttempt.status)} className="text-[10px] uppercase font-black tracking-widest">
+                    {humanizeStatus(selectedAttempt.status)}
+                  </Badge>
+                  <Badge tone="neutral" className="text-[10px] uppercase font-black tracking-widest">
+                    Score {humanizeStatus(selectedAttempt.score_status)}
+                  </Badge>
+                  <Badge tone="neutral" className="text-[10px] uppercase font-black tracking-widest">
+                    Band {selectedAttempt.band_score ?? "—"}
+                  </Badge>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <InfoRow label="Test" value={selectedAttempt.test_title || "—"} />
+                  <InfoRow label="Type" value={selectedAttempt.test_type?.toUpperCase() ?? "—"} />
+                  <InfoRow label="Mode" value={selectedAttempt.mode} />
+                  <InfoRow label="Scope" value={selectedAttempt.scope} />
+                  <InfoRow label="Started" value={fmt(selectedAttempt.started_at)} />
+                  <InfoRow label="Completed" value={fmt(selectedAttempt.completed_at)} />
+                  <InfoRow label="Answered" value={`${selectedAttempt.answers_count}/${selectedAttempt.total_questions}`} />
+                  <InfoRow label="Worked slots" value={String(selectedAttempt.answered_slots_count)} />
+                </div>
+
+                {selectedAttempt.result?.section_breakdown.length ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Section breakdown</p>
+                    {selectedAttempt.result.section_breakdown.map((item) => (
+                      <div key={item.label} className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3 text-sm">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="font-medium text-foreground">{item.label}</span>
+                          <span className="text-muted-foreground">{item.correct}/{item.total}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {selectedAttempt.result?.question_type_breakdown.length ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Question types</p>
+                    {selectedAttempt.result.question_type_breakdown.map((item) => (
+                      <div key={item.label} className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3 text-sm">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="font-medium text-foreground">{item.label}</span>
+                          <span className="text-muted-foreground">{item.correct}/{item.total}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {selectedAttempt.review?.items.length ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Answer review</p>
+                    {selectedAttempt.review.items.map((item) => (
+                      <div key={item.question_id} className="rounded-2xl border border-border/60 bg-muted/10 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-foreground">
+                              Q{item.question_number}{item.question_label ? ` · ${item.question_label}` : ""}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">{item.prompt}</p>
+                          </div>
+                          <Badge tone={item.is_correct ? "success" : "danger"} className="text-[10px] uppercase font-black tracking-widest">
+                            {item.is_correct ? "Correct" : "Wrong"}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2 text-sm">
+                          <div className="rounded-xl border border-border/60 bg-background px-3 py-2">
+                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">User answer</p>
+                            <p className="mt-1 text-foreground">{item.answer_value || "—"}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/60 bg-background px-3 py-2">
+                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Correct answer</p>
+                            <p className="mt-1 text-foreground">{item.correct_answers.join(", ") || "—"}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 text-sm text-muted-foreground">
+                          {selectedAttempt.review?.can_show_explanations
+                            ? (item.explanation || "No explanation attached.")
+                            : "Premium required for explanations."}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

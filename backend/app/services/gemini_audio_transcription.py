@@ -18,7 +18,9 @@ import httpx
 from google import genai
 from google.genai import types as genai_types
 
-from app.core.config import get_settings
+from app.db.session import get_session_maker
+from app.models.enums import AiProvider, AiUseCase
+from app.services.ai_config import ResolvedAiUseCaseConfig, resolve_ai_use_case_config
 from app.services.object_storage import fetch_storage_object
 
 logger = logging.getLogger(__name__)
@@ -48,13 +50,6 @@ class ListeningTranscriptWord:
     start_sec: float
     end_sec: float
     normalized: str
-
-
-def _build_gemini_client() -> genai.Client:
-    settings = get_settings()
-    if not (settings.gemini_api_key or "").strip():
-        raise RuntimeError("GEMINI_API_KEY is not configured.")
-    return genai.Client(api_key=settings.gemini_api_key)
 
 
 def _optimize_audio_file_for_transcription(
@@ -96,21 +91,12 @@ def _optimize_audio_file_for_transcription(
         return input_path, audio_content_type
 
 
-def _resolve_transcription_model() -> str:
-    settings = get_settings()
-    configured = str(settings.gemini_model or "").strip()
-    if configured:
-        return configured
-    # Official fast-lite audio-capable stable model.
-    return "gemini-2.5-flash-lite"
-
-
-def _resolve_location_model() -> str:
-    settings = get_settings()
-    configured = str(settings.gemini_model or "").strip()
-    if configured:
-        return configured
-    return "gemini-2.5-flash-lite"
+def _build_gemini_client(resolved_config: ResolvedAiUseCaseConfig) -> genai.Client:
+    if resolved_config.provider != AiProvider.GOOGLE:
+        raise RuntimeError("Audio transcription currently requires a Google provider binding.")
+    if not resolved_config.api_key.strip():
+        raise RuntimeError("Audio transcription provider has no API key configured.")
+    return genai.Client(api_key=resolved_config.api_key)
 
 
 def _guess_audio_content_type(
@@ -768,6 +754,7 @@ def _locate_question_locations_sync(
 
 def _transcribe_audio_bytes_sync(
     *,
+    resolved_config: ResolvedAiUseCaseConfig,
     audio_bytes: bytes,
     audio_filename: str | None,
     audio_content_type: str,
@@ -777,8 +764,7 @@ def _transcribe_audio_bytes_sync(
     existing_transcript_segments: list[dict[str, object]] | None,
     questions: list[ListeningTranscriptQuestion],
 ) -> dict[str, object]:
-    settings = get_settings()
-    client = _build_gemini_client()
+    client = _build_gemini_client(resolved_config)
     suffix = os.path.splitext(audio_filename or "")[1] or mimetypes.guess_extension(audio_content_type) or ".mp3"
     uploaded_file_name: str | None = None
     temp_path: str | None = None
@@ -806,7 +792,7 @@ def _transcribe_audio_bytes_sync(
         uploaded_file_name = uploaded_file.name
 
         response = client.models.generate_content(
-            model=_resolve_transcription_model(),
+            model=resolved_config.model_id,
             contents=[_build_transcript_prompt(section_label=section_label, section_title=section_title), uploaded_file],
             config=genai_types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -875,6 +861,9 @@ async def transcribe_listening_audio_from_url(
     existing_transcript_segments: list[dict[str, object]] | None,
     questions: list[ListeningTranscriptQuestion],
 ) -> dict[str, object]:
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        resolved_config = await resolve_ai_use_case_config(session, AiUseCase.AUDIO_TRANSCRIPTION)
     normalized_existing_segments = _normalize_existing_segments(existing_transcript_segments)
     normalized_existing_transcript = str(existing_transcript or "").strip()
     has_calibrated_timing = bool(normalized_existing_segments) and all(
@@ -915,6 +904,7 @@ async def transcribe_listening_audio_from_url(
 
     return await asyncio.to_thread(
         _transcribe_audio_bytes_sync,
+        resolved_config=resolved_config,
         audio_bytes=audio_bytes,
         audio_filename=audio_filename,
         audio_content_type=resolved_content_type,

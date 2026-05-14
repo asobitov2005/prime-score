@@ -28,6 +28,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const actionLabel = activeAttempt ? "Continue Test" : completedAttempt ? "Retake Test" : "Start Test";
   const loadingLabel = activeAttempt ? "Opening..." : "Starting...";
 
@@ -41,6 +42,14 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
     }
     return () => { document.body.style.overflow = "unset"; };
   }, [open, showPremiumModal]);
+
+  function requestExamFullscreen() {
+    if (typeof document === "undefined" || document.fullscreenElement) {
+      return;
+    }
+
+    void document.documentElement.requestFullscreen().catch(() => undefined);
+  }
 
   function openAttempt(attempt: TestCardAttemptSummary) {
     const resumeToken = Date.now();
@@ -70,12 +79,21 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
       void startTest("practice");
     } else {
       setOpen(true);
+      setShowRules(false);
     }
+  }
+
+  function handleStartExamChoice() {
+    setShowRules(true);
   }
 
   async function startTest(mode: "exam" | "practice") {
     const effectiveScope = isFullTest ? "full" : "section";
     const effectiveMode = isFullTest ? mode : "practice";
+    if (effectiveMode === "exam") {
+      setOpen(false);
+      setShowRules(false);
+    }
     const payload = {
       testId: test.id,
       scope: effectiveScope,
@@ -94,12 +112,16 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
       const result = (await response.json()) as { attemptId: string };
       const resumeToken = Date.now();
       setOpen(false);
+      setShowRules(false);
       const href = test.type === "reading"
         ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`
         : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`;
       emitNavigationStart(href);
       router.push(href);
     } catch (err) {
+      if (effectiveMode === "exam" && document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => undefined);
+      }
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -210,7 +232,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
                   Full Test
                 </span>
               </div>
-              <h2 className="text-2xl font-black tracking-tight text-foreground leading-tight">{test.title}</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-foreground leading-tight">{test.title}</h2>
             </div>
           </div>
 
@@ -221,7 +243,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
                 <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-500 shadow-sm">
                   <TimerReset className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-lg font-black tracking-tight text-foreground">Practice Mode</CardTitle>
+                <CardTitle className="text-lg font-bold tracking-tight text-foreground">Practice Mode</CardTitle>
               </CardHeader>
               <CardContent className="pb-6 px-5 flex-1 flex flex-col justify-between">
                 <ul className="space-y-2.5 text-xs font-medium text-muted-foreground/90 mb-5 text-left">
@@ -244,7 +266,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
                 <div className="w-12 h-12 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-500 shadow-sm">
                   <Play className="h-6 w-6 fill-current" />
                 </div>
-                <CardTitle className="text-lg font-black tracking-tight text-foreground">Strict Exam Mode</CardTitle>
+                <CardTitle className="text-lg font-bold tracking-tight text-foreground">Strict Exam Mode</CardTitle>
               </CardHeader>
               <CardContent className="pb-6 px-5 flex-1 flex flex-col justify-between">
                 <ul className="space-y-2.5 text-xs font-medium text-muted-foreground/90 mb-5 text-left">
@@ -254,17 +276,67 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
                   <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Tab switching may end test</li>
                   <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Realistic simulation</li>
                 </ul>
-                <Button variant="destructive" disabled={isSubmitting} onClick={() => startTest("exam")} className="w-full h-10 rounded-lg font-bold text-sm shadow-md shadow-red-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
-                  {isSubmitting ? "Starting..." : "Start Exam"}
+                <Button variant="destructive" disabled={isSubmitting} onClick={handleStartExamChoice} className="w-full h-10 rounded-lg font-bold text-sm shadow-md shadow-red-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
+                  Select Exam Mode
                 </Button>
               </CardContent>
             </Card>
           </div>
+        </div>
+      </div>
+    </div>
+  );
 
-          <div className="pt-2 text-center">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-50">
-              Redirection to workspace activated
+  const RulesModal = () => (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-[340px] overflow-hidden rounded-[1.5rem] border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 duration-300">
+        
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-400" />
+
+        <div className="p-5 pt-6 space-y-5">
+          <div className="text-center space-y-2">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 mb-3">
+              <Play className="h-5 w-5 fill-current" />
+            </div>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">Strict Exam Rules</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              This mode simulates a real exam. Focus is strictly monitored.
             </p>
+          </div>
+
+          <div className="rounded-xl border border-red-500/15 bg-red-500/5 p-3 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-red-500 text-center">Auto-submit triggers:</p>
+            <ul className="space-y-2 text-xs font-medium text-foreground">
+              <li className="flex items-start gap-2 leading-tight">
+                <div className="mt-0.5 rounded-full bg-red-500/20 p-0.5 shrink-0"><X className="h-2.5 w-2.5 text-red-500" /></div>
+                <span>Leaving <span className="font-bold text-red-500/80">Full Screen</span> mode</span>
+              </li>
+              <li className="flex items-start gap-2 leading-tight">
+                <div className="mt-0.5 rounded-full bg-red-500/20 p-0.5 shrink-0"><X className="h-2.5 w-2.5 text-red-500" /></div>
+                <span>Switching <span className="font-bold text-red-500/80">Tabs</span> or <span className="font-bold text-red-500/80">Windows</span></span>
+              </li>
+              <li className="flex items-start gap-2 leading-tight">
+                <div className="mt-0.5 rounded-full bg-red-500/20 p-0.5 shrink-0"><X className="h-2.5 w-2.5 text-red-500" /></div>
+                <span>Opening <span className="font-bold text-red-500/80">other apps</span> over the test</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="space-y-2 pt-1">
+            <Button
+              disabled={isSubmitting}
+              onClick={() => void startTest("exam")}
+              className="h-10 w-full rounded-xl bg-foreground text-background font-bold hover:bg-foreground/90 transition-all text-sm shadow-sm"
+            >
+              {isSubmitting ? "Starting..." : "I understand, start test"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setShowRules(false)}
+              className="h-10 w-full rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+            >
+              Go back
+            </Button>
           </div>
         </div>
       </div>
@@ -313,6 +385,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
 
       {mounted && open && createPortal(<TestModal />, document.body)}
       {mounted && showPremiumModal && createPortal(<PremiumModal />, document.body)}
+      {mounted && showRules && createPortal(<RulesModal />, document.body)}
     </>
   );
 }

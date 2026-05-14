@@ -187,12 +187,17 @@ function groupSubmittedAttempts(attempts: AttemptRow[]): HistoryGroup[] {
     }
   }
 
-  return Array.from(grouped.entries()).map(([key, groupAttempts]) => ({
-    key,
-    latestAttempt: groupAttempts[0],
-    bestAttempt: bestAttemptFor(groupAttempts),
-    attempts: groupAttempts,
-  }));
+  return Array.from(grouped.entries())
+    .map(([key, groupAttempts]) => {
+      const sortedAttempts = [...groupAttempts].sort((left, right) => attemptSortTimestamp(right) - attemptSortTimestamp(left));
+      return {
+        key,
+        latestAttempt: sortedAttempts[0],
+        bestAttempt: bestAttemptFor(sortedAttempts),
+        attempts: sortedAttempts,
+      };
+    })
+    .sort((left, right) => attemptSortTimestamp(right.latestAttempt) - attemptSortTimestamp(left.latestAttempt));
 }
 
 function matchesFilter(attempt: AttemptRow, filter: FilterValue) {
@@ -252,12 +257,46 @@ function writingBandClass(band: number) {
   return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
 }
 
+const HISTORY_MONTHS: Record<string, number> = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
+};
+
 function sortTimestamp(value: string | null | undefined): number {
   if (!value) {
     return 0;
   }
   const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? 0 : parsed;
+  if (!Number.isNaN(parsed)) {
+    return parsed;
+  }
+
+  const match = value.match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4}), (\d{2}):(\d{2})$/);
+  if (!match) {
+    return 0;
+  }
+
+  const [, day, month, year, hour, minute] = match;
+  const monthIndex = HISTORY_MONTHS[month];
+  if (monthIndex === undefined) {
+    return 0;
+  }
+
+  return Date.UTC(Number(year), monthIndex, Number(day), Number(hour), Number(minute));
+}
+
+function attemptSortTimestamp(attempt: AttemptRow): number {
+  return Math.max(sortTimestamp(attempt.lastSavedAt), sortTimestamp(attempt.date));
 }
 
 function WritingHistoryRow({ item }: { item: WritingHistoryItem }) {
@@ -360,7 +399,14 @@ function AttemptHistoryGroup({ group }: { group: HistoryGroup }) {
         <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-[minmax(0,1.7fr)_auto_auto_auto_auto] md:items-center">
           <div className="min-w-0 space-y-2">
-            <div className="truncate text-sm font-bold text-foreground">{latestAttempt.testTitle}</div>
+            <div className="truncate text-sm font-bold flex items-center gap-2">
+              <span className={cn(group.attempts.some(a => a.violationCount && a.violationCount > 0) ? "text-red-500" : "text-foreground")}>{latestAttempt.testTitle}</span>
+              {group.attempts.some(a => a.violationCount && a.violationCount > 0) && (
+                <Badge variant="outline" className="rounded-md border-red-500/40 text-red-500 bg-red-500/10 px-1.5 py-0 text-[9px] uppercase tracking-widest shrink-0">
+                  Violated
+                </Badge>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={cn("rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-sm", typeBadgeClass(latestAttempt.type))}>
                 {formatType(latestAttempt.type)}
@@ -408,23 +454,34 @@ function AttemptHistoryGroup({ group }: { group: HistoryGroup }) {
               key={attempt.id}
               className={cn(
                 "relative rounded-lg border bg-background px-4 py-3 shadow-sm",
-                attempt.type === "reading"
-                  ? "border-sky-500/20"
-                  : attempt.type === "listening"
-                  ? "border-amber-500/20"
-                  : "border-violet-500/20"
+                attempt.violationCount && attempt.violationCount > 0
+                  ? "border-red-500/40 bg-red-500/5"
+                  : attempt.type === "reading"
+                    ? "border-sky-500/20"
+                    : attempt.type === "listening"
+                    ? "border-amber-500/20"
+                    : "border-violet-500/20"
               )}
             >
               <span
                 className={cn(
                   "absolute -left-[17px] top-4 h-2.5 w-2.5 rounded-full border-2 border-background shadow-sm",
-                  historyTypeAccentClass(attempt.type)
+                  attempt.violationCount && attempt.violationCount > 0
+                    ? "bg-red-500"
+                    : historyTypeAccentClass(attempt.type)
                 )}
               />
               <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_auto_auto_auto] md:items-center">
                 <div className="min-w-0 space-y-1">
-                  <div className="text-sm font-bold text-foreground">Attempt #{group.attempts.length - index}</div>
-                  <div className="text-xs text-muted-foreground">{attempt.lastSavedAt}</div>
+                  <div className="text-sm font-bold flex items-center gap-2">
+                    <span className={cn(attempt.violationCount && attempt.violationCount > 0 ? "text-red-500" : "text-foreground")}>Attempt #{group.attempts.length - index}</span>
+                    {attempt.violationCount && attempt.violationCount > 0 ? (
+                      <Badge variant="outline" className="rounded-md border-red-500/40 text-red-500 bg-red-500/10 px-1.5 py-0 text-[9px] uppercase tracking-widest">
+                        {attempt.violationCount} Violation{attempt.violationCount > 1 ? "s" : ""}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className={cn("text-xs", attempt.violationCount && attempt.violationCount > 0 ? "text-red-500/70" : "text-muted-foreground")}>{attempt.lastSavedAt}</div>
                 </div>
                 <div className="space-y-1 text-xs">
                   <div className="font-bold uppercase tracking-widest text-muted-foreground">Mode</div>
@@ -515,7 +572,7 @@ export function HistoryClient({
       ...groupSubmittedAttempts(filteredAttempts).map((group) => ({
         kind: "attempt" as const,
         key: group.key,
-        sortAt: group.latestAttempt.date || group.latestAttempt.lastSavedAt,
+        sortAt: group.latestAttempt.lastSavedAt || group.latestAttempt.date,
         group,
       })),
       ...filteredWritingItems.map((item) => ({

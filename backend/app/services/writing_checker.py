@@ -9,23 +9,36 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from google import genai
 from google.genai import types as genai_types
-from pydantic import BaseModel, Field, TypeAdapter, ValidationError
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError, field_validator
 from sqlalchemy import select
 
-from app.core.config import get_settings
 from app.db.session import get_session_maker
 from app.models.enums import (
+    AiProvider,
+    AiUseCase,
     WritingErrorCategory,
     WritingSubmissionStatus,
     WritingTaskType,
 )
 from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
-from app.services.writing_anchors import ANCHORS, ANCHORS_VERSION, PROMPT_VERSION
+from app.services.ai_config import ResolvedAiUseCaseConfig, resolve_ai_use_case_config
+from app.services.ai_generation import generate_text_sync
+from app.services.writing_config import (
+    WritingAnchorBundle,
+    WritingPromptBundle,
+    WritingRubricBundle,
+    get_active_anchor_bundle,
+    get_active_prompt_bundle,
+    get_active_rubric_bundle,
+    render_annotation_repair_prompt,
+    render_grader_system_prompt,
+    render_grader_user_prompt,
+    render_improved_version_prompt,
+    render_json_repair_prompt,
+)
 from app.services.writing_roast import generate_roast
 from app.services.writing_rubric import (
-    IELTS_WRITING_RUBRIC_TEXT,
     calculate_overall_band,
     round_to_ielts_band,
 )
@@ -36,6 +49,17 @@ logger = logging.getLogger(__name__)
 _HTML_TAG_RE = re.compile(r"</?[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
 _ALLOWED_SEVERITIES = {"error", "warning", "suggestion"}
+_DEFAULT_GRADER_MAX_OUTPUT_TOKENS = 8192
+_DEFAULT_ANNOTATION_MAX_OUTPUT_TOKENS = 8192
+_DEFAULT_REPAIR_MAX_OUTPUT_TOKENS = 4096
+_DEFAULT_IMPROVED_MAX_OUTPUT_TOKENS = 4096
+_GROQ_GRADER_MAX_OUTPUT_TOKENS = 2048
+_GROQ_ANNOTATION_MAX_OUTPUT_TOKENS = 1024
+_GROQ_REPAIR_MAX_OUTPUT_TOKENS = 1024
+_GROQ_IMPROVED_MAX_OUTPUT_TOKENS = 1536
+_GROQ_RUBRIC_CHAR_LIMIT = 2800
+_GROQ_ANCHOR_RATIONALE_LIMIT = 240
+_GROQ_ANCHOR_COUNT = 3
 
 
 class _CriterionPayload(BaseModel):
@@ -45,6 +69,13 @@ class _CriterionPayload(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     improvements: list[str] = Field(default_factory=list)
     evidence_quotes: list[str] = Field(default_factory=list)
+
+    @field_validator("strengths", "improvements", "evidence_quotes", mode="before")
+    @classmethod
+    def _coerce_to_list(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            return [v]
+        return v
 
 
 class _AnnotationPayload(BaseModel):
@@ -81,8 +112,7 @@ class _GraderPayload(BaseModel):
 
 
 _ANNOTATION_LIST_ADAPTER = TypeAdapter(list[_AnnotationPayload])
-_VOCAB_TARGET_COUNT = 10
-_VOCAB_MAX_COUNT = 12
+_VOCAB_MAX_COUNT = 8
 _GENERIC_PATTERNS = (
     "improve grammar",
     "improve your grammar",
@@ -301,16 +331,11 @@ def compute_essay_hash(task_id: str, essay_text: str, task_type: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _build_gemini_client() -> genai.Client:
-    settings = get_settings()
-    if not (settings.gemini_api_key or "").strip():
-        raise RuntimeError("GEMINI_API_KEY is not configured.")
-    return genai.Client(api_key=settings.gemini_api_key)
-
-
-def _writing_model_name() -> str:
-    settings = get_settings()
-    return (settings.gemini_writing_model or settings.gemini_model).strip()
+def _writing_generate_config(**kwargs: Any) -> genai_types.GenerateContentConfig:
+    # Writing uses a dedicated Gemini model, and some model IDs reject
+    # thinkingLevel/thinkingConfig entirely. Keep writing requests free of
+    # thinking controls unless that model contract is revisited explicitly.
+    return genai_types.GenerateContentConfig(**kwargs)
 
 
 def _criterion_schema() -> genai_types.Schema:
@@ -441,16 +466,6 @@ def _annotation_list_schema() -> genai_types.Schema:
     )
 
 
-def _grader_thinking_level() -> genai_types.ThinkingLevel:
-    value = (get_settings().gemini_thinking_level or "MEDIUM").strip().upper()
-    return {
-        "MINIMAL": genai_types.ThinkingLevel.MINIMAL,
-        "LOW": genai_types.ThinkingLevel.LOW,
-        "MEDIUM": genai_types.ThinkingLevel.MEDIUM,
-        "HIGH": genai_types.ThinkingLevel.HIGH,
-    }.get(value, genai_types.ThinkingLevel.MEDIUM)
-
-
 def _seed_from_hash(essay_hash: str) -> int:
     return int(essay_hash[:8], 16) % (2**31)
 
@@ -459,8 +474,189 @@ def _essay_word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text or ""))
 
 
-def _format_anchors_block(task_type: str) -> str:
-    anchors = ANCHORS.get(task_type, [])
+def _is_groq_config(config: ResolvedAiUseCaseConfig | None) -> bool:
+    return config is not None and config.provider == AiProvider.GROQ
+
+
+def _grader_max_output_tokens(config: ResolvedAiUseCaseConfig | None) -> int:
+    if _is_groq_config(config):
+        return _GROQ_GRADER_MAX_OUTPUT_TOKENS
+    return _DEFAULT_GRADER_MAX_OUTPUT_TOKENS
+
+
+def _annotation_max_output_tokens(config: ResolvedAiUseCaseConfig | None) -> int:
+    if _is_groq_config(config):
+        return _GROQ_ANNOTATION_MAX_OUTPUT_TOKENS
+    return _DEFAULT_ANNOTATION_MAX_OUTPUT_TOKENS
+
+
+def _repair_max_output_tokens(config: ResolvedAiUseCaseConfig | None) -> int:
+    if _is_groq_config(config):
+        return _GROQ_REPAIR_MAX_OUTPUT_TOKENS
+    return _DEFAULT_REPAIR_MAX_OUTPUT_TOKENS
+
+
+def _improved_max_output_tokens(config: ResolvedAiUseCaseConfig) -> int:
+    if _is_groq_config(config):
+        return _GROQ_IMPROVED_MAX_OUTPUT_TOKENS
+    return _DEFAULT_IMPROVED_MAX_OUTPUT_TOKENS
+
+
+def _skip_groq_aux_call(config: ResolvedAiUseCaseConfig | None) -> bool:
+    return _is_groq_config(config)
+
+
+def _compact_text_block(value: str | None, *, limit: int) -> str:
+    cleaned = _clean_text(value)
+    if len(cleaned) <= limit:
+        return cleaned
+    shortened = cleaned[:limit].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return f"{shortened}..."
+
+
+def _extract_band_block(section_text: str, band: int) -> str:
+    pattern = re.compile(rf"Band {band}\n(?P<body>.*?)(?=\n\nBand \d+\n|\Z)", re.DOTALL)
+    match = pattern.search(section_text)
+    if match is None:
+        return ""
+    lines = [line.strip(" -\t") for line in match.group("body").splitlines() if line.strip()]
+    return " ".join(lines)
+
+
+def _select_task_specific_band_text(raw_text: str, *, task_type: str) -> str:
+    if "Task 1:" not in raw_text and "Task 2:" not in raw_text:
+        return raw_text
+    wanted = "Task 1:" if task_type == WritingTaskType.TASK_1.value else "Task 2:"
+    for chunk in raw_text.split("Task "):
+        normalized = chunk.strip()
+        if normalized.startswith(wanted.replace("Task ", "")):
+            return f"Task {normalized}"
+    return raw_text
+
+
+def _extract_rubric_section(body: str, heading: str, next_heading: str | None) -> str:
+    start = body.find(heading)
+    if start == -1:
+        return ""
+    end = body.find(next_heading, start + len(heading)) if next_heading else -1
+    if end == -1:
+        end = len(body)
+    return body[start:end]
+
+
+def _build_groq_rubric_reference(rubric: WritingRubricBundle, *, task_type: str) -> str:
+    body = rubric.body or ""
+    sections = [
+        (
+            "Task Response",
+            _extract_rubric_section(body, "1. TASK ACHIEVEMENT", "2. COHERENCE AND COHESION"),
+        ),
+        (
+            "Coherence",
+            _extract_rubric_section(body, "2. COHERENCE AND COHESION", "3. LEXICAL RESOURCE"),
+        ),
+        (
+            "Lexical",
+            _extract_rubric_section(body, "3. LEXICAL RESOURCE", "4. GRAMMATICAL RANGE AND ACCURACY"),
+        ),
+        (
+            "Grammar",
+            _extract_rubric_section(body, "4. GRAMMATICAL RANGE AND ACCURACY", "GRADING INSTRUCTIONS"),
+        ),
+    ]
+    summary_lines = [
+        "Use IELTS descriptors conservatively. If the essay sits between bands, choose the lower band.",
+    ]
+    for label, section in sections:
+        if not section:
+            continue
+        band_parts: list[str] = []
+        for band in (8, 7, 6, 5):
+            excerpt = _extract_band_block(section, band)
+            excerpt = _select_task_specific_band_text(excerpt, task_type=task_type)
+            excerpt = _compact_text_block(excerpt, limit=220)
+            if excerpt:
+                band_parts.append(f"{band}: {excerpt}")
+        if band_parts:
+            summary_lines.append(f"{label} bands -> " + " | ".join(band_parts))
+    return _compact_text_block("\n".join(summary_lines), limit=_GROQ_RUBRIC_CHAR_LIMIT)
+
+
+def _build_groq_anchor_reference(anchors: WritingAnchorBundle) -> str:
+    if not anchors.items:
+        return "No anchor snapshots provided."
+    lines: list[str] = []
+    for anchor in anchors.items[:_GROQ_ANCHOR_COUNT]:
+        criteria = anchor.get("criteria", {})
+        rationale = _compact_text_block(anchor.get("rationale", ""), limit=_GROQ_ANCHOR_RATIONALE_LIMIT)
+        lines.append(
+            "Band {band}: TA {ta}, CC {cc}, LR {lr}, GRA {gra}. Snapshot: {rationale}".format(
+                band=anchor.get("band"),
+                ta=criteria.get("task_achievement"),
+                cc=criteria.get("coherence"),
+                lr=criteria.get("lexical"),
+                gra=criteria.get("grammar"),
+                rationale=rationale or "No rationale provided.",
+            )
+        )
+    return "\n".join(lines)
+
+
+def _build_groq_system_instruction(
+    *,
+    rubric: WritingRubricBundle,
+    task_type: str,
+) -> str:
+    return "\n\n".join(
+        [
+            "You are a strict IELTS Writing examiner.",
+            "Score only what is on the page. Do not reward effort, memorised polish, or generic AI-style fluency.",
+            "Quote short phrases from the essay as evidence. Keep summaries concrete and essay-specific.",
+            _build_groq_rubric_reference(rubric, task_type=task_type),
+        ]
+    )
+
+
+def _build_groq_grading_prompt(
+    *,
+    anchors: WritingAnchorBundle,
+    task_type: str,
+    task_prompt_text: str,
+    image_summary: str,
+    essay_text: str,
+) -> str:
+    prompt_parts = [
+        f"TASK TYPE: {task_type.upper()}",
+        f"TASK PROMPT:\n{task_prompt_text.strip()}",
+    ]
+    if task_type == WritingTaskType.TASK_1.value and image_summary.strip():
+        prompt_parts.append(
+            "VISUAL DESCRIPTION (ground truth, do not reinterpret):\n"
+            + image_summary.strip()
+        )
+    prompt_parts.extend(
+        [
+            "CALIBRATION SNAPSHOTS:",
+            _build_groq_anchor_reference(anchors),
+            "OUTPUT CONTRACT:",
+            "Return JSON only.",
+            "Top-level keys: task_achievement, coherence, lexical, grammar, overall_summary, next_steps, inline_annotations, vocabulary_suggestions.",
+            "Each criterion object must contain: band, reasoning, summary, strengths, improvements, evidence_quotes.",
+            "Use 0.5 band increments from 0 to 9.",
+            "Keep strengths/improvements/evidence_quotes short and specific: 1-2 items each.",
+            "overall_summary: exactly 2 short sentences.",
+            "next_steps: exactly 3 short strings tied to this essay.",
+            "inline_annotations: return [].",
+            "vocabulary_suggestions: return [].",
+            "===== CANDIDATE ESSAY START =====",
+            essay_text,
+            "===== CANDIDATE ESSAY END =====",
+        ]
+    )
+    return "\n\n".join(part for part in prompt_parts if part)
+
+
+def _format_anchors_block(anchors: list[dict[str, Any]]) -> str:
     blocks: list[str] = []
     for anchor in anchors:
         criteria = anchor.get("criteria", {})
@@ -481,96 +677,44 @@ def _format_anchors_block(task_type: str) -> str:
     return "\n\n".join(blocks)
 
 
-def _build_system_instruction() -> str:
-    return (
-        "You are an experienced IELTS Writing examiner. Score essays strictly "
-        "according to the official band descriptors below. For every criterion, "
-        "first reason internally about the descriptors and the evidence in the "
-        "essay (placed in the 'reasoning' field), then issue a band in 0.5 "
-        "increments between 0 and 9. Quote short verbatim phrases from the "
-        "candidate's essay as evidence. Be conservative: when the essay sits "
-        "between two bands, choose the lower band unless the higher-band "
-        "descriptors are clearly met. Use the provided anchor essays as "
-        "calibration references; never reveal them in your output. Do NOT "
-        "reward length, topic, or apparent effort beyond what the descriptors "
-        "describe. Be specific and critical when giving improvement advice: "
-        "avoid vague comments such as 'use better vocabulary' or 'improve "
-        "grammar'. Name the exact weakness, quote or paraphrase the weak "
-        "phrase, and, when possible, suggest the stronger grammar pattern, "
-        "collocation, or academic wording that would raise the band. Every "
-        "summary, strength, improvement, and next step must be tied to a real "
-        "feature of THIS essay. Do not write generic praise or generic study "
-        "advice. The `overall_summary` must identify the strongest criterion, "
-        "the weakest criterion, and the clearest score-limiting issue. Each "
-        "`next_steps` item must be an action the student can apply on the next "
-        "draft. The `vocabulary_suggestions` field must contain 10-12 genuinely "
-        "useful C1/C2 lexical upgrades based on weak, repetitive, or too-basic "
-        "phrases from the essay. Prefer natural, slightly less common IELTS-appropriate "
-        "collocations or phrasing that an examiner would notice positively, but "
-        "avoid forced, old-fashioned, or unnatural wording. Each suggestion must "
-        "include a natural example sentence and stay compact.\n\n"
-        + IELTS_WRITING_RUBRIC_TEXT
-    )
+def _build_system_instruction(
+    *,
+    prompts: WritingPromptBundle,
+    rubric: WritingRubricBundle,
+    resolved_config: ResolvedAiUseCaseConfig | None = None,
+    task_type: str,
+) -> str:
+    if _is_groq_config(resolved_config):
+        return _build_groq_system_instruction(rubric=rubric, task_type=task_type)
+    return render_grader_system_prompt(prompts=prompts, rubric=rubric)
 
 
 def _build_grading_prompt(
     *,
+    prompts: WritingPromptBundle,
+    anchors: WritingAnchorBundle,
+    resolved_config: ResolvedAiUseCaseConfig | None = None,
     task_type: str,
     task_prompt_text: str,
     image_summary: str,
     essay_text: str,
 ) -> str:
-    parts: list[str] = []
-    parts.append(f"TASK TYPE: {task_type.upper()}")
-    parts.append("TASK PROMPT:\n" + (task_prompt_text or "").strip())
-    if task_type == WritingTaskType.TASK_1.value and image_summary:
-        parts.append("VISUAL DESCRIPTION (ground truth, do not re-interpret):\n" + image_summary.strip())
-    parts.append("CALIBRATION ANCHORS:\n" + _format_anchors_block(task_type))
-    parts.append(
-        "COACHING OUTPUT RULES:\n"
-        "1. `overall_summary` must be 2-3 sentences only.\n"
-        "2. Sentence 1: state the current overall level and the strongest criterion.\n"
-        "3. Sentence 2: state the weakest criterion and quote or paraphrase one exact score-limiting feature from the essay.\n"
-        "4. Sentence 3: state the single fastest revision move that would raise the score.\n"
-        "5. `next_steps` must contain exactly 3 concise actions. Each action must mention a concrete pattern, phrase, or paragraph move from the essay. Do not write generic advice.\n"
-        "6. `strengths` and `improvements` inside each criterion must be essay-specific, not template language.\n"
-        "7. `vocabulary_suggestions` must contain 10-12 items. Each item must upgrade a phrase that appears in the essay or clearly reflects the essay's repeated wording.\n"
-        "8. The vocabulary level must be either C1 or C2. Prefer C1 unless a C2 phrase sounds natural and useful in IELTS Writing.\n"
-        "9. Prefer lexical upgrades that feel natural, precise, and slightly uncommon rather than flashy or memorised.\n"
-        "10. Keep each suggestion compact: phrase, upgrade, and one example sentence only."
+    if _is_groq_config(resolved_config):
+        return _build_groq_grading_prompt(
+            anchors=anchors,
+            task_type=task_type,
+            task_prompt_text=task_prompt_text,
+            image_summary=image_summary,
+            essay_text=essay_text,
+        )
+    return render_grader_user_prompt(
+        prompts=prompts,
+        anchors=anchors,
+        task_type=task_type,
+        task_prompt_text=task_prompt_text,
+        image_summary=image_summary,
+        essay_text=essay_text,
     )
-    parts.append(
-        "INLINE ANNOTATIONS:\n"
-        "Identify concrete, fixable language errors in the candidate's essay. "
-        "For each error, return offset (0-based character index into the essay "
-        "text exactly as provided between the markers), length (number of "
-        "characters of the original span), original (the exact substring), "
-        "replacements (1-3 corrected alternatives), category (one of: "
-        "spelling, grammar, lexical, cohesion, style, punctuation), severity "
-        "(error, warning, or suggestion), a short_message, a brief "
-        "explanation, band_impact, examiner_tip, and improved_sentence. "
-        "`short_message` should be a direct label such as 'Subject-verb "
-        "agreement' or 'Misspelled academic term'. `explanation` must name the "
-        "exact grammar, vocabulary, or cohesion problem in this context rather "
-        "than giving generic advice. `band_impact` should say which IELTS "
-        "criterion is affected and why. `examiner_tip` should say what a "
-        "stronger Band 7-9 writer would do instead. `improved_sentence` should "
-        "rewrite only the sentence containing the error with minimal change. "
-        "STRICTLY copy `original` verbatim from the essay, "
-        "character-for-character. `length` must exactly equal the number of "
-        "characters in `original`. Before outputting each annotation, verify "
-        "that essay[offset:offset+length] == original in the exact raw essay "
-        "text, including spaces and newlines. If you cannot verify an "
-        "annotation exactly, omit it. Do not annotate stylistic preferences "
-        "as errors."
-    )
-    parts.append(
-        "OUTPUT: Return JSON only that matches the provided response schema. "
-        "Do not include markdown fences. Do not add fields. Bands MUST be "
-        "0-9 in 0.5 increments."
-    )
-    parts.append("===== CANDIDATE ESSAY START =====\n" + essay_text + "\n===== CANDIDATE ESSAY END =====")
-    return "\n\n".join(parts)
 
 
 def _clean_text(value: str | None) -> str:
@@ -622,6 +766,7 @@ def _build_precise_summary(
     grader: _GraderPayload,
     overall_band: float,
     penalty: float,
+    word_count: int,
     word_minimum: int,
     ta: float,
     cc: float,
@@ -643,13 +788,17 @@ def _build_precise_summary(
         f"The main score limit is {weakest_name} at Band {weakest_band:.1f}"
         + (f", where {weakest_anchor!r} still sounds underdeveloped or imprecise." if weakest_anchor else "."),
     ]
-    if priority:
+    if priority and word_count >= 120:
         parts.append(f"The fastest improvement now is to {priority.rstrip('.')}.")
     if penalty > 0:
         parts.append(
             f"Length also cost you {penalty:.1f} band because the response stayed below the {word_minimum}-word minimum."
         )
-    return " ".join(parts)
+    if word_count < 90:
+        return " ".join(parts[:1])
+    if word_count < 180:
+        return " ".join(parts[:2])
+    return " ".join(parts[:4])
 
 
 def _annotation_action(annotation: dict[str, Any]) -> str | None:
@@ -683,6 +832,7 @@ def _build_precise_next_steps(
     *,
     grader: _GraderPayload,
     annotations: list[dict[str, Any]],
+    word_count: int,
     ta: float,
     cc: float,
     lr: float,
@@ -719,7 +869,8 @@ def _build_precise_next_steps(
             steps.append(item)
         if len(steps) >= 3:
             break
-    return steps[:3]
+    target_count = 2 if word_count < 180 else 3
+    return steps[:target_count]
 
 
 def _normalize_vocabulary_suggestions(
@@ -812,32 +963,9 @@ def _augment_vocabulary_suggestions(
         seen=seen,
     )
 
-    if len(items) < _VOCAB_TARGET_COUNT:
-        fallback_rules = _TASK_2_VOCAB_RULES + _TASK_1_VOCAB_RULES + _GENERAL_VOCAB_RULES
-        for rule in fallback_rules:
-            if len(items) >= _VOCAB_TARGET_COUNT:
-                break
-            current_phrase = _clean_text(str(rule.get("current_phrase", "")))
-            improved_phrase = _clean_text(str(rule.get("improved_phrase", "")))
-            if not current_phrase or not improved_phrase:
-                continue
-            key = (current_phrase.lower(), improved_phrase.lower())
-            if key in seen:
-                continue
-            seen.add(key)
-            items.append(
-                {
-                    "current_phrase": current_phrase,
-                    "improved_phrase": improved_phrase,
-                    "level": str(rule.get("level", "C1")).upper(),
-                    "why_it_works": _trim_sentence(str(rule.get("why", "")), limit=180),
-                    "example_sentence": _trim_sentence(str(rule.get("example", "")), limit=220),
-                }
-            )
-
-    if len(items) < _VOCAB_TARGET_COUNT:
+    if len(items) < _VOCAB_MAX_COUNT:
         for annotation in annotations:
-            if len(items) >= _VOCAB_TARGET_COUNT:
+            if len(items) >= _VOCAB_MAX_COUNT:
                 break
             category = str(annotation.get("category", "")).lower()
             if category not in {"lexical", "style", "cohesion"}:
@@ -1016,33 +1144,47 @@ def _dedupe_annotations(annotations: list[dict[str, Any]]) -> list[dict[str, Any
 
 def _call_grader(
     *,
-    client: genai.Client,
+    resolved_config: ResolvedAiUseCaseConfig | None = None,
+    prompts: WritingPromptBundle | None = None,
+    client: Any | None = None,
     system_instruction: str,
     prompt: str,
     essay_text: str,
     seed: int,
 ) -> _GraderPayload:
-    settings = get_settings()
-    config = genai_types.GenerateContentConfig(
+    max_output_tokens = _grader_max_output_tokens(resolved_config)
+    config = _writing_generate_config(
         systemInstruction=system_instruction,
         temperature=0,
         topP=1,
         seed=seed,
-        maxOutputTokens=8192,
+        maxOutputTokens=max_output_tokens,
         responseMimeType="application/json",
         responseSchema=_response_schema(),
-        thinkingConfig=genai_types.ThinkingConfig(
-            thinkingLevel=_grader_thinking_level(),
-        ),
     )
     last_error: Exception | None = None
     for _ in range(2):
-        response = client.models.generate_content(
-            model=_writing_model_name(),
-            contents=prompt,
-            config=config,
-        )
-        raw_text = (response.text or "").strip()
+        if client is not None:
+            response = client.models.generate_content(
+                model="test-model",
+                contents=prompt,
+                config=config,
+            )
+            raw_text = (response.text or "").strip()
+        else:
+            if resolved_config is None:
+                raise RuntimeError("resolved_config is required when client is not provided.")
+            raw_text = generate_text_sync(
+                config=resolved_config,
+                system_instruction=system_instruction,
+                prompt=prompt,
+                temperature=0,
+                top_p=1,
+                max_output_tokens=max_output_tokens,
+                response_mime_type="application/json",
+                response_schema=_response_schema(),
+                seed=seed,
+            )
         if not raw_text:
             last_error = RuntimeError("Empty response from grader")
             continue
@@ -1054,6 +1196,8 @@ def _call_grader(
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = exc
             repaired_text = _repair_grader_json(
+                resolved_config=resolved_config,
+                prompts=prompts,
                 client=client,
                 raw_text=raw_text,
                 seed=seed,
@@ -1122,77 +1266,171 @@ def _build_annotation_recovery_prompt(*, essay_text: str, hints: list[str]) -> s
 
 def _call_annotation_recovery(
     *,
-    client: genai.Client,
+    resolved_config: ResolvedAiUseCaseConfig | None = None,
+    prompts: WritingPromptBundle | None = None,
+    client: Any | None = None,
     essay_text: str,
     hints: list[str],
     seed: int,
 ) -> list[_AnnotationPayload]:
-    settings = get_settings()
-    response = client.models.generate_content(
-        model=_writing_model_name(),
-        contents=_build_annotation_recovery_prompt(
-            essay_text=essay_text,
-            hints=hints,
-        ),
-        config=genai_types.GenerateContentConfig(
-            temperature=0,
-            topP=1,
-            seed=seed,
-            maxOutputTokens=8192,
-            responseMimeType="application/json",
-            responseSchema=_annotation_list_schema(),
-            thinkingConfig=genai_types.ThinkingConfig(
-                thinkingLevel=genai_types.ThinkingLevel.MINIMAL,
-            ),
-        ),
+    max_output_tokens = _annotation_max_output_tokens(resolved_config)
+    prompt = _build_annotation_recovery_prompt(
+        essay_text=essay_text,
+        hints=hints,
     )
-    raw_text = (response.text or "").strip()
+    if resolved_config and resolved_config.provider == AiProvider.GROQ:
+        prompt += (
+            "\n\nReturn JSON array only. Every item must contain: "
+            "offset, length, original, replacements, category, severity, "
+            "short_message, explanation, band_impact, examiner_tip, improved_sentence."
+        )
+    if client is not None:
+        response = client.models.generate_content(
+            model="test-model",
+            contents=prompt,
+            config=_writing_generate_config(
+                temperature=0,
+                topP=1,
+                seed=seed,
+                maxOutputTokens=max_output_tokens,
+                responseMimeType="application/json",
+                responseSchema=_annotation_list_schema(),
+            ),
+        )
+        raw_text = (response.text or "").strip()
+    else:
+        if resolved_config is None:
+            raise RuntimeError("resolved_config is required when client is not provided.")
+        raw_text = generate_text_sync(
+            config=resolved_config,
+            prompt=prompt,
+            temperature=0,
+            top_p=1,
+            seed=seed,
+            max_output_tokens=max_output_tokens,
+            response_mime_type="application/json",
+            response_schema=_annotation_list_schema(),
+        )
     if not raw_text:
         return []
-    data = json.loads(_extract_json_payload(raw_text))
-    return _ANNOTATION_LIST_ADAPTER.validate_python(data)
+    try:
+        data = json.loads(_extract_json_payload(raw_text))
+        return _ANNOTATION_LIST_ADAPTER.validate_python(data)
+    except (json.JSONDecodeError, ValidationError):
+        repaired_text = _repair_annotation_json(
+            resolved_config=resolved_config,
+            prompts=prompts,
+            client=client,
+            raw_text=raw_text,
+            seed=seed,
+        )
+        if not repaired_text:
+            raise
+        data = json.loads(_extract_json_payload(repaired_text))
+        return _ANNOTATION_LIST_ADAPTER.validate_python(data)
+
+
+def _repair_annotation_json(
+    *,
+    resolved_config: ResolvedAiUseCaseConfig | None,
+    prompts: WritingPromptBundle | None,
+    client: Any | None = None,
+    raw_text: str,
+    seed: int,
+) -> str | None:
+    max_output_tokens = _repair_max_output_tokens(resolved_config)
+    if client is not None:
+        response = client.models.generate_content(
+            model="test-model",
+            contents=(
+                "Repair the broken JSON annotation array below so it becomes valid JSON "
+                "matching the annotation schema exactly. Preserve meaning when possible, "
+                "use [] for missing arrays, use \"\" for missing strings, and output JSON only.\n\n"
+                f"BROKEN JSON:\n{raw_text}"
+            ),
+            config=_writing_generate_config(
+                temperature=0,
+                topP=1,
+                seed=seed,
+                maxOutputTokens=max_output_tokens,
+                responseMimeType="application/json",
+                responseSchema=_annotation_list_schema(),
+            ),
+        )
+        repaired = (response.text or "").strip()
+    else:
+        if resolved_config is None or prompts is None:
+            raise RuntimeError("resolved_config and prompts are required when client is not provided.")
+        repaired = generate_text_sync(
+            config=resolved_config,
+            prompt=render_annotation_repair_prompt(prompts, raw_text),
+            temperature=0,
+            top_p=1,
+            seed=seed,
+            max_output_tokens=max_output_tokens,
+            response_mime_type="application/json",
+            response_schema=_annotation_list_schema(),
+        )
+    return repaired or None
 
 
 def _repair_grader_json(
     *,
-    client: genai.Client,
+    resolved_config: ResolvedAiUseCaseConfig | None,
+    prompts: WritingPromptBundle | None,
+    client: Any | None = None,
     raw_text: str,
     seed: int,
 ) -> str | None:
-    settings = get_settings()
-    response = client.models.generate_content(
-        model=_writing_model_name(),
-        contents=(
-            "Repair the broken IELTS grader JSON below so it becomes valid JSON "
-            "that matches the response schema exactly. Preserve meaning when possible, "
-            "use [] for missing arrays, use \"\" for missing strings, and output JSON only.\n\n"
-            f"BROKEN JSON:\n{raw_text}"
-        ),
-        config=genai_types.GenerateContentConfig(
-            temperature=0,
-            topP=1,
-            seed=seed,
-            maxOutputTokens=4096,
-            responseMimeType="application/json",
-            responseSchema=_response_schema(),
-            thinkingConfig=genai_types.ThinkingConfig(
-                thinkingLevel=genai_types.ThinkingLevel.MINIMAL,
+    max_output_tokens = _repair_max_output_tokens(resolved_config)
+    if client is not None:
+        response = client.models.generate_content(
+            model="test-model",
+            contents=(
+                "Repair the broken IELTS grader JSON below so it becomes valid JSON "
+                "that matches the response schema exactly. Preserve meaning when possible, "
+                "use [] for missing arrays, use \"\" for missing strings, and output JSON only.\n\n"
+                f"BROKEN JSON:\n{raw_text}"
             ),
-        ),
-    )
-    repaired = (response.text or "").strip()
+            config=_writing_generate_config(
+                temperature=0,
+                topP=1,
+                seed=seed,
+                maxOutputTokens=max_output_tokens,
+                responseMimeType="application/json",
+                responseSchema=_response_schema(),
+            ),
+        )
+        repaired = (response.text or "").strip()
+    else:
+        if resolved_config is None or prompts is None:
+            raise RuntimeError("resolved_config and prompts are required when client is not provided.")
+        repaired = generate_text_sync(
+            config=resolved_config,
+            prompt=render_json_repair_prompt(prompts, raw_text),
+            temperature=0,
+            top_p=1,
+            seed=seed,
+            max_output_tokens=max_output_tokens,
+            response_mime_type="application/json",
+            response_schema=_response_schema(),
+        )
     return repaired or None
 
 
 def _generate_improved_version(
     *,
-    client: genai.Client,
+    resolved_config: ResolvedAiUseCaseConfig,
+    prompts: WritingPromptBundle,
     essay_text: str,
     annotations: list[dict[str, Any]],
+    task_prompt_text: str,
+    overall_band: float,
+    word_count: int,
+    word_minimum: int,
 ) -> str:
     if not annotations:
         return essay_text
-    settings = get_settings()
     annotations_lines = [
         (
             f"- offset {a['offset']} length {a['length']} "
@@ -1202,31 +1440,23 @@ def _generate_improved_version(
         )
         for a in annotations
     ]
-    prompt = (
-        "You will receive a candidate IELTS essay and a list of inline "
-        "annotations. Apply ONLY those annotations to fix the listed errors "
-        "WITHOUT rewriting the essay. Keep the same arguments, structure, "
-        "paragraph breaks, examples and overall length. Output the corrected "
-        "essay as plain text only. No commentary.\n\n"
-        f"Annotations:\n" + "\n".join(annotations_lines) + "\n\n"
-        "===== ESSAY START =====\n"
-        f"{essay_text}\n"
-        "===== ESSAY END ====="
+    prompt = render_improved_version_prompt(
+        prompts=prompts,
+        essay_text=essay_text,
+        annotations_lines=annotations_lines,
+        task_prompt_text=task_prompt_text,
+        current_band=overall_band,
+        target_band=min(9.0, overall_band + 1.0),
+        word_count=word_count,
+        word_minimum=word_minimum,
     )
-    config = genai_types.GenerateContentConfig(
+    text = generate_text_sync(
+        config=resolved_config,
+        prompt=prompt,
         temperature=0,
-        topP=1,
-        maxOutputTokens=4096,
-        thinkingConfig=genai_types.ThinkingConfig(
-            thinkingLevel=genai_types.ThinkingLevel.MINIMAL,
-        ),
+        top_p=1,
+        max_output_tokens=_improved_max_output_tokens(resolved_config),
     )
-    response = client.models.generate_content(
-        model=_writing_model_name(),
-        contents=prompt,
-        config=config,
-    )
-    text = (response.text or "").strip()
     return text or essay_text
 
 
@@ -1239,7 +1469,10 @@ def _build_payload(
     word_count: int,
     word_minimum: int,
     model_version: str,
-    latency_ms: int,
+    prompt_profile_version: int = 1,
+    rubric_version: int = 1,
+    anchor_set_version: int = 1,
+    latency_ms: int = 0,
 ) -> dict[str, Any]:
     ta = round_to_ielts_band(grader.task_achievement.band)
     cc = round_to_ielts_band(grader.coherence.band)
@@ -1260,6 +1493,7 @@ def _build_payload(
         grader=grader,
         overall_band=overall_after_penalty,
         penalty=penalty,
+        word_count=word_count,
         word_minimum=word_minimum,
         ta=ta,
         cc=cc,
@@ -1269,6 +1503,7 @@ def _build_payload(
     precise_next_steps = _build_precise_next_steps(
         grader=grader,
         annotations=annotations,
+        word_count=word_count,
         ta=ta,
         cc=cc,
         lr=lr,
@@ -1320,12 +1555,8 @@ def _build_payload(
             "evidence_quotes": grader.grammar.evidence_quotes,
             "reasoning": grader.grammar.reasoning,
         },
-        "overall_summary": precise_summary if _is_generic_text(grader.overall_summary) else _trim_sentence(grader.overall_summary, limit=340),
-        "next_steps": (
-            precise_next_steps
-            if len(generated_next_steps) != 3 or any(_is_generic_text(step) for step in generated_next_steps)
-            else [step if step.endswith(".") else f"{step}." for step in generated_next_steps[:3]]
-        ),
+        "overall_summary": precise_summary,
+        "next_steps": precise_next_steps,
         "vocabulary_suggestions": normalized_vocabulary[:_VOCAB_MAX_COUNT],
     }
 
@@ -1352,8 +1583,14 @@ def _build_payload(
         "rubric_reasoning": rubric_reasoning,
         "roast_feedback": {},
         "model_version": model_version,
-        "prompt_version": PROMPT_VERSION,
-        "anchors_version": ANCHORS_VERSION,
+        "prompt_version": f"profile:{prompt_profile_version}",
+        "anchors_version": f"anchor:{anchor_set_version}",
+        "grader_profile_version": prompt_profile_version,
+        "rubric_version": rubric_version,
+        "anchor_set_version": anchor_set_version,
+        "roast_profile_version": prompt_profile_version,
+        "improved_profile_version": prompt_profile_version,
+        "annotation_profile_version": prompt_profile_version,
         "latency_ms": latency_ms,
     }
 
@@ -1364,14 +1601,26 @@ def grade_essay_sync(
     essay_text: str,
     word_count: int,
     essay_hash: str,
+    grader_config: ResolvedAiUseCaseConfig,
+    improver_config: ResolvedAiUseCaseConfig,
+    roast_config: ResolvedAiUseCaseConfig | None,
+    prompts: WritingPromptBundle,
+    rubric: WritingRubricBundle,
+    anchors: WritingAnchorBundle,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    client = _build_gemini_client()
     task_type_value = (
         task.task_type.value if isinstance(task.task_type, WritingTaskType) else str(task.task_type)
     )
-    system_instruction = _build_system_instruction()
+    system_instruction = _build_system_instruction(
+        prompts=prompts,
+        rubric=rubric,
+        resolved_config=grader_config,
+        task_type=task_type_value,
+    )
     prompt = _build_grading_prompt(
+        prompts=prompts,
+        anchors=anchors,
+        resolved_config=grader_config,
         task_type=task_type_value,
         task_prompt_text=_strip_html(task.prompt_html or ""),
         image_summary=task.image_summary or "",
@@ -1381,7 +1630,8 @@ def grade_essay_sync(
 
     started = time.perf_counter()
     grader = _call_grader(
-        client=client,
+        resolved_config=grader_config,
+        prompts=prompts,
         system_instruction=system_instruction,
         prompt=prompt,
         essay_text=essay_text,
@@ -1401,19 +1651,26 @@ def grade_essay_sync(
         ),
     ]
     annotations = grader_annotations
-    try:
-        recovered_annotations = _call_annotation_recovery(
-            client=client,
-            essay_text=essay_text,
-            hints=[hint for hint in annotation_hints if hint],
-            seed=seed + 17,
-        )
-        annotations = _dedupe_annotations(
-            _validate_annotations(recovered_annotations, essay_text) + grader_annotations
-        )
-    except Exception:  # noqa: BLE001
-        logger.exception("Annotation recovery failed")
+    if _skip_groq_aux_call(grader_config):
         annotations = _dedupe_annotations(grader_annotations)
+        logger.info(
+            "Skipping annotation recovery for Groq writing grader to stay within provider TPM limits."
+        )
+    else:
+        try:
+            recovered_annotations = _call_annotation_recovery(
+                resolved_config=grader_config,
+                prompts=prompts,
+                essay_text=essay_text,
+                hints=[hint for hint in annotation_hints if hint],
+                seed=seed + 17,
+            )
+            annotations = _dedupe_annotations(
+                _validate_annotations(recovered_annotations, essay_text) + grader_annotations
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Annotation recovery failed")
+            annotations = _dedupe_annotations(grader_annotations)
 
     word_minimum = int(task.word_minimum or 0)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -1425,76 +1682,142 @@ def grade_essay_sync(
         task_type=task_type_value,
         word_count=word_count,
         word_minimum=word_minimum,
-        model_version=_writing_model_name(),
+        model_version=f"{grader_config.provider.value}:{grader_config.model_id}",
+        prompt_profile_version=prompts.profile_version,
+        rubric_version=rubric.version,
+        anchor_set_version=anchors.version,
         latency_ms=elapsed_ms,
     )
 
     improved_text: str | None = None
     potential_band: float | None = None
-    try:
-        improved_text = _generate_improved_version(
-            client=client,
-            essay_text=essay_text,
-            annotations=annotations,
+    if _skip_groq_aux_call(improver_config):
+        logger.info(
+            "Skipping improved-version generation for Groq writing improver to stay within provider TPM limits."
         )
-        if improved_text and improved_text != essay_text:
-            regrade_prompt = _build_grading_prompt(
-                task_type=task_type_value,
+    else:
+        try:
+            improved_text = _generate_improved_version(
+                resolved_config=improver_config,
+                prompts=prompts,
+                essay_text=essay_text,
+                annotations=annotations,
                 task_prompt_text=_strip_html(task.prompt_html or ""),
-                image_summary=task.image_summary or "",
-                essay_text=improved_text,
+                overall_band=payload["overall_band"],
+                word_count=word_count,
+                word_minimum=word_minimum,
             )
-            improved_seed = _seed_from_hash(
-                hashlib.sha256(improved_text.encode("utf-8")).hexdigest()
-            )
-            regrade = _call_grader(
-                client=client,
-                system_instruction=system_instruction,
-                prompt=regrade_prompt,
-                essay_text=improved_text,
-                seed=improved_seed,
-            )
-            potential_band = calculate_overall_band(
-                round_to_ielts_band(regrade.task_achievement.band),
-                round_to_ielts_band(regrade.coherence.band),
-                round_to_ielts_band(regrade.lexical.band),
-                round_to_ielts_band(regrade.grammar.band),
-            )
-        else:
-            potential_band = payload["overall_band"]
-    except Exception:  # noqa: BLE001
-        logger.exception("Improved version generation failed")
-        improved_text = None
-        potential_band = None
+            if improved_text and improved_text != essay_text:
+                if _skip_groq_aux_call(grader_config):
+                    logger.info(
+                        "Skipping Groq improved-version regrade to stay within provider TPM limits."
+                    )
+                    potential_band = None
+                else:
+                    regrade_prompt = _build_grading_prompt(
+                        prompts=prompts,
+                        anchors=anchors,
+                        task_type=task_type_value,
+                        task_prompt_text=_strip_html(task.prompt_html or ""),
+                        image_summary=task.image_summary or "",
+                        essay_text=improved_text,
+                    )
+                    improved_seed = _seed_from_hash(
+                        hashlib.sha256(improved_text.encode("utf-8")).hexdigest()
+                    )
+                    regrade = _call_grader(
+                        resolved_config=grader_config,
+                        prompts=prompts,
+                        system_instruction=system_instruction,
+                        prompt=regrade_prompt,
+                        essay_text=improved_text,
+                        seed=improved_seed,
+                    )
+                    potential_band = calculate_overall_band(
+                        round_to_ielts_band(regrade.task_achievement.band),
+                        round_to_ielts_band(regrade.coherence.band),
+                        round_to_ielts_band(regrade.lexical.band),
+                        round_to_ielts_band(regrade.grammar.band),
+                    )
+                    potential_band = round_to_ielts_band(
+                        min(potential_band, payload["overall_band"] + 1.0)
+                    )
+            else:
+                potential_band = payload["overall_band"]
+        except Exception:  # noqa: BLE001
+            logger.exception("Improved version generation failed")
+            improved_text = None
+            potential_band = None
 
     payload["improved_version"] = improved_text
     payload["potential_band"] = potential_band
 
     # Roast feedback: completely independent call, must NOT affect bands.
-    try:
-        roast = generate_roast(
-            essay_text=essay_text,
-            bands={
-                "task_achievement": payload["task_achievement_band"],
-                "coherence": payload["coherence_band"],
-                "lexical": payload["lexical_band"],
-                "grammar": payload["grammar_band"],
-                "overall": payload["overall_band"],
-            },
-            word_count=word_count,
-            word_minimum=word_minimum,
-            annotation_count=len(annotations),
-            overall_summary=payload["feedback"].get("overall_summary", ""),
-        )
-    except Exception:  # noqa: BLE001
-        logger.exception("Roast generation crashed; ignoring.")
+    if _skip_groq_aux_call(roast_config):
         roast = {}
+        logger.info("Skipping Groq roast generation to stay within provider TPM limits.")
+    else:
+        try:
+            roast = generate_roast(
+                resolved_config=roast_config,
+                prompts=prompts,
+                essay_text=essay_text,
+                bands={
+                    "task_achievement": payload["task_achievement_band"],
+                    "coherence": payload["coherence_band"],
+                    "lexical": payload["lexical_band"],
+                    "grammar": payload["grammar_band"],
+                    "overall": payload["overall_band"],
+                },
+                word_count=word_count,
+                word_minimum=word_minimum,
+                annotation_count=len(annotations),
+                overall_summary=payload["feedback"].get("overall_summary", ""),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Roast generation crashed; ignoring.")
+            roast = {}
     payload["roast_feedback"] = roast or {}
 
     return payload
 
 
-async def grade_submission(submission_id: UUID) -> None:
+async def _set_submission_state(
+    submission_id: UUID,
+    *,
+    status: WritingSubmissionStatus,
+    error_message: str | None,
+) -> None:
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        result = await session.execute(
+            select(WritingSubmission).where(WritingSubmission.id == submission_id)
+        )
+        submission = result.scalar_one_or_none()
+        if submission is None:
+            return
+        submission.status = status
+        submission.error_message = error_message[:500] if error_message else None
+        await session.commit()
+
+
+async def mark_submission_retrying(submission_id: UUID) -> None:
+    await _set_submission_state(
+        submission_id,
+        status=WritingSubmissionStatus.QUEUED,
+        error_message=None,
+    )
+
+
+async def mark_submission_failed(submission_id: UUID, error_message: str) -> None:
+    await _set_submission_state(
+        submission_id,
+        status=WritingSubmissionStatus.FAILED,
+        error_message=error_message,
+    )
+
+
+async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> None:
     session_maker = get_session_maker()
     async with session_maker() as session:
         submission_result = await session.execute(
@@ -1529,6 +1852,15 @@ async def grade_submission(submission_id: UUID) -> None:
         essay_hash = submission.essay_hash or compute_essay_hash(
             task_id_str, essay_text, task_type_value
         )
+        grader_config = await resolve_ai_use_case_config(session, AiUseCase.WRITING_GRADER)
+        improver_config = await resolve_ai_use_case_config(session, AiUseCase.WRITING_IMPROVER)
+        try:
+            roast_config = await resolve_ai_use_case_config(session, AiUseCase.WRITING_ROAST)
+        except Exception:
+            roast_config = None
+        prompts = await get_active_prompt_bundle(session, task.task_type)
+        rubric = await get_active_rubric_bundle(session, task.task_type)
+        anchors = await get_active_anchor_bundle(session, task.task_type)
 
     try:
         payload = grade_essay_sync(
@@ -1536,18 +1868,17 @@ async def grade_submission(submission_id: UUID) -> None:
             essay_text=essay_text,
             word_count=word_count,
             essay_hash=essay_hash,
+            grader_config=grader_config,
+            improver_config=improver_config,
+            roast_config=roast_config,
+            prompts=prompts,
+            rubric=rubric,
+            anchors=anchors,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Writing grading failed for submission %s", submission_id)
-        async with session_maker() as session:
-            result = await session.execute(
-                select(WritingSubmission).where(WritingSubmission.id == submission_id)
-            )
-            submission = result.scalar_one_or_none()
-            if submission is not None:
-                submission.status = WritingSubmissionStatus.FAILED
-                submission.error_message = str(exc)[:500]
-                await session.commit()
+        if mark_failed:
+            await mark_submission_failed(submission_id, str(exc))
         raise
 
     async with session_maker() as session:
@@ -1574,8 +1905,14 @@ async def grade_submission(submission_id: UUID) -> None:
                 rubric_reasoning=payload.get("rubric_reasoning", {}),
                 roast_feedback=payload.get("roast_feedback", {}),
                 model_version=payload.get("model_version", ""),
-                prompt_version=payload.get("prompt_version", PROMPT_VERSION),
-                anchors_version=payload.get("anchors_version", ANCHORS_VERSION),
+                prompt_version=payload.get("prompt_version", "profile:1"),
+                anchors_version=payload.get("anchors_version", "anchor:1"),
+                grader_profile_version=payload.get("grader_profile_version"),
+                rubric_version=payload.get("rubric_version"),
+                anchor_set_version=payload.get("anchor_set_version"),
+                roast_profile_version=payload.get("roast_profile_version"),
+                improved_profile_version=payload.get("improved_profile_version"),
+                annotation_profile_version=payload.get("annotation_profile_version"),
                 latency_ms=payload.get("latency_ms", 0),
                 cache_hit=False,
                 graded_at=graded_at,
@@ -1595,8 +1932,14 @@ async def grade_submission(submission_id: UUID) -> None:
             evaluation.rubric_reasoning = payload.get("rubric_reasoning", {})
             evaluation.roast_feedback = payload.get("roast_feedback", {})
             evaluation.model_version = payload.get("model_version", "")
-            evaluation.prompt_version = payload.get("prompt_version", PROMPT_VERSION)
-            evaluation.anchors_version = payload.get("anchors_version", ANCHORS_VERSION)
+            evaluation.prompt_version = payload.get("prompt_version", "profile:1")
+            evaluation.anchors_version = payload.get("anchors_version", "anchor:1")
+            evaluation.grader_profile_version = payload.get("grader_profile_version")
+            evaluation.rubric_version = payload.get("rubric_version")
+            evaluation.anchor_set_version = payload.get("anchor_set_version")
+            evaluation.roast_profile_version = payload.get("roast_profile_version")
+            evaluation.improved_profile_version = payload.get("improved_profile_version")
+            evaluation.annotation_profile_version = payload.get("annotation_profile_version")
             evaluation.latency_ms = payload.get("latency_ms", 0)
             evaluation.cache_hit = False
             evaluation.graded_at = graded_at

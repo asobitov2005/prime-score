@@ -23,7 +23,12 @@ import {
   cn
 } from "@/components/ui";
 import type { WritingSubmission } from "@/lib/writing-api";
-import { formatTaskType, writingApi } from "@/lib/writing-api";
+import {
+  describeSubmissionStatus,
+  formatSubmissionStatus,
+  formatTaskType,
+  writingApi
+} from "@/lib/writing-api";
 
 const PAGE_SIZE = 50;
 
@@ -41,9 +46,10 @@ function formatDateTime(value: string | null | undefined): string {
 }
 
 function badgeToneForStatus(status: string): "neutral" | "success" | "warning" | "danger" {
-  if (status === "completed") return "success";
-  if (status === "failed") return "danger";
-  if (status === "queued" || status === "running") return "warning";
+  const normalized = status.toLowerCase();
+  if (normalized === "completed") return "success";
+  if (normalized === "failed") return "danger";
+  if (normalized === "queued" || normalized === "running" || normalized === "processing") return "warning";
   return "neutral";
 }
 
@@ -335,10 +341,12 @@ export default function WritingSubmissionsPage() {
                     <tr key={s.id} className="hover:bg-muted/20 transition-colors">
                       <td className="border-b border-border/50 px-4 py-3 text-sm">
                         <div className="font-medium">
-                          {s.user_username || s.user_email || s.user_id.slice(0, 8)}
+                          {s.user_display_name || s.user_username || s.user_phone || s.user_id.slice(0, 8)}
                         </div>
-                        {s.user_email && s.user_username ? (
-                          <div className="text-xs text-muted-foreground">{s.user_email}</div>
+                        {s.user_username || s.user_phone ? (
+                          <div className="text-xs text-muted-foreground">
+                            {[s.user_username ? `@${s.user_username}` : null, s.user_phone].filter(Boolean).join(" · ")}
+                          </div>
                         ) : null}
                       </td>
                       <td className="border-b border-border/50 px-3 py-3 text-sm">
@@ -358,10 +366,20 @@ export default function WritingSubmissionsPage() {
                         {s.word_count}
                       </td>
                       <td className="border-b border-border/50 px-3 py-3 text-sm font-bold">
-                        {s.evaluation?.overall_band ?? "—"}
+                        {s.overall_band ?? "—"}
                       </td>
                       <td className="border-b border-border/50 px-3 py-3">
-                        <Badge tone={badgeToneForStatus(s.status)}>{s.status}</Badge>
+                        <div className="space-y-1">
+                          <Badge tone={badgeToneForStatus(s.status)}>{formatSubmissionStatus(s.status)}</Badge>
+                          <div className="text-[11px] text-muted-foreground">
+                            {describeSubmissionStatus(s.status)}
+                          </div>
+                          {s.error_message ? (
+                            <div className="text-[11px] text-danger line-clamp-2">
+                              {s.error_message}
+                            </div>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="border-b border-border/50 px-3 py-3 text-xs text-muted-foreground">
                         {formatDateTime(s.submitted_at)}

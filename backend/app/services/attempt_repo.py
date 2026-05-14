@@ -93,6 +93,8 @@ def _should_grant_premium_bonus(
 ) -> bool:
     if metadata.get("premium_bonus_granted"):
         return False
+    if int(metadata.get("answers_count", 0) or 0) <= 0:
+        return False
 
     return (
         attempt.scope == ModelAttemptScope.FULL
@@ -549,6 +551,9 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
     attempt = await session.get(Attempt, attempt_id)
     if attempt is None:
         raise KeyError("attempt_not_found")
+    if attempt.status in {ModelAttemptStatus.COMPLETED, ModelAttemptStatus.AUTO_SUBMITTED}:
+        answers = await _load_answers(session, attempt_id)
+        return _to_runtime(attempt, answers=answers)
 
     answers = await _load_answers(session, attempt_id)
     answer_map = {str(answer.question_id): str(answer.value.get("value") or "") for answer in answers}

@@ -126,6 +126,12 @@ export type BackendAttemptRead = {
   test_snapshot?: BackendAttemptSnapshot | null;
 };
 
+export type BackendAttemptEvent = {
+  event_type: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
 export type BackendAttemptResult = {
   attempt_id: string;
   status: string;
@@ -162,6 +168,7 @@ export type BackendAttemptResult = {
     diagram_title?: string | null;
     diagram_image_url: string;
   }>;
+  events?: BackendAttemptEvent[];
 };
 
 export type BackendAttemptReview = {

@@ -3,6 +3,7 @@ import { LandingPageClient } from "@/components/marketing/landing-page-client";
 import { getLandingOnlineCount } from "@/lib/server-live-stats";
 import { getPublicPlans } from "@/lib/server-plans";
 import { getPublicReviews } from "@/lib/server-reviews";
+import { getCatalogTests } from "@/lib/server-data";
 import {
   absoluteUrl,
   buildFaqStructuredData,
@@ -56,11 +57,22 @@ const structuredDataBlocks = [
 ];
 
 export default async function LandingPage() {
-  const [plans, reviews, onlineCount] = await Promise.all([
+  const [plans, reviews, onlineCount, allTests] = await Promise.all([
     getPublicPlans(),
     getPublicReviews(6),
     getLandingOnlineCount(),
+    getCatalogTests().catch(() => []),
   ]);
+
+  const featuredTests = allTests.filter((t) => t.status === "published").map((t) => ({
+    id: t.id,
+    title: t.title,
+    type: t.type,
+    source: t.source,
+    questionCount: t.questionCount,
+    estimatedMinutes: t.estimatedMinutes,
+    isPremiumLocked: t.accessType === "premium",
+  }));
 
   return (
     <>
@@ -72,7 +84,7 @@ export default async function LandingPage() {
         />
       ))}
 
-      <LandingPageClient plans={plans} reviews={reviews} onlineCount={onlineCount} />
+      <LandingPageClient plans={plans} reviews={reviews} onlineCount={onlineCount} initialTests={featuredTests} />
     </>
   );
 }

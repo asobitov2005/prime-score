@@ -25,9 +25,6 @@ services:
     entrypoint: ["sh", "/app/docker-entrypoint.sh"]
     command:
       [
-        "python",
-        "/app/dev_autoreload.py",
-        "--",
         "celery",
         "-A",
         "app.tasks.celery_app",

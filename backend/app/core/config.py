@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     gemini_writing_model: str | None = None
     gemini_thinking_level: str = "HIGH"
     gemini_max_tool_loops: int = 80
+    cerebras_api_key: str | None = None
+    cerebras_base_url: str | None = None
     minio_endpoint: str = "127.0.0.1:9200"
     minio_access_key: str = "minio"
     minio_secret_key: str = "minio123"

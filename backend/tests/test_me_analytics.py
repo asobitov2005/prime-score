@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -37,6 +39,42 @@ class _FakeSession:
 
     async def commit(self) -> None:
         self.commits += 1
+
+
+def test_effective_attempt_band_score_falls_back_for_full_attempts() -> None:
+    attempt = SimpleNamespace(
+        band_score=None,
+        raw_score=35,
+        total_questions=40,
+        scope=None,
+        test_snapshot={"test_type": "reading", "scope": "full"},
+    )
+
+    assert me_routes._effective_attempt_band_score(attempt) == Decimal("8.0")
+
+
+def test_effective_attempt_band_score_scales_section_attempts() -> None:
+    attempt = SimpleNamespace(
+        band_score=None,
+        raw_score=9,
+        total_questions=13,
+        scope=None,
+        test_snapshot={"test_type": "reading", "scope": "section"},
+    )
+
+    assert me_routes._effective_attempt_band_score(attempt) == Decimal("6.5")
+
+
+def test_effective_attempt_band_score_returns_zero_for_low_scores() -> None:
+    attempt = SimpleNamespace(
+        band_score=None,
+        raw_score=1,
+        total_questions=40,
+        scope=None,
+        test_snapshot={"test_type": "reading", "scope": "full"},
+    )
+
+    assert me_routes._effective_attempt_band_score(attempt) == Decimal("0.0")
 
 
 @pytest.mark.asyncio

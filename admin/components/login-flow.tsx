@@ -173,7 +173,7 @@ export function LoginFlow() {
                     type="tel"
                     value={phoneNumber}
                     onChange={(event) => updatePhoneNumber(event.target.value)}
-                    placeholder="940034424"
+                    placeholder="xxxx"
                     inputMode="numeric"
                     maxLength={9}
                     autoComplete="username"

@@ -218,7 +218,7 @@
     inset: -2px;
     border-radius: inherit;
     background: conic-gradient(from 90deg at 50% 50%, #00000000 50%, #ff6b00, #ff0055, #ff6b00, #00000000 100%);
-    opacity: 0;
+    opacity: 1;
     transition: opacity 0.3s ease;
     animation: aurora-spin 2s linear infinite;
     z-index: -1;
@@ -318,3 +318,50 @@
   50% { transform: translate(50px, -100px); }
   100% { transform: translate(0, 0); }
 }
+
+/* --- SMART ANIMATION ENGINE --- */
+.smart-anim {
+  opacity: 1;
+  will-change: transform, opacity, filter;
+  transition: all 1s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* Deep Z-Space Fly-in -> 2D fallback for smooth scroll */
+.anim-fly-deep { transform: scale(0.6) translateY(100px); filter: blur(20px); }
+.anim-fly-deep.is-visible { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+
+/* 3D Flip from Top */
+.anim-3d-flip-top { transform: perspective(1000px) rotateX(-60deg) translateY(50px); opacity: 1; }
+.anim-3d-flip-top.is-visible { opacity: 1; transform: perspective(1000px) rotateX(0deg) translateY(0); }
+
+/* 3D Flip from Bottom */
+.anim-3d-flip-bottom { transform: perspective(1000px) rotateX(60deg) translateY(-50px); opacity: 1; }
+.anim-3d-flip-bottom.is-visible { opacity: 1; transform: perspective(1000px) rotateX(0deg) translateY(0); }
+
+/* Slide & Skew */
+.anim-slide-skew-left { transform: translateX(-100px) skewX(10deg); opacity: 1; }
+.anim-slide-skew-right { transform: translateX(100px) skewX(-10deg); opacity: 1; }
+.anim-slide-skew-left.is-visible, .anim-slide-skew-right.is-visible { opacity: 1; transform: translateX(0) skewX(0); }
+
+/* Scale Up */
+.anim-scale-up { transform: scale(0.8); filter: blur(10px); opacity: 1; }
+.anim-scale-up.is-visible { opacity: 1; transform: scale(1); filter: blur(0); }
+
+/* Delays */
+.delay-1 { transition-delay: 0.1s; }
+.delay-2 { transition-delay: 0.2s; }
+.delay-3 { transition-delay: 0.3s; }
+.delay-4 { transition-delay: 0.4s; }
+.delay-5 { transition-delay: 0.5s; }
+.delay-6 { transition-delay: 0.6s; }
+.delay-7 { transition-delay: 0.7s; }
+.delay-8 { transition-delay: 0.8s; }
+
+/* Continuous Float */
+@keyframes float-smart {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+.anim-float { animation: float-smart 6s ease-in-out infinite; }
+.anim-float-alt { animation: float-smart 8s ease-in-out infinite alternate; }

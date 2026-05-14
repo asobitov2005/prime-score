@@ -8,7 +8,7 @@ import { ResultViewTracker } from "./result-view-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCompletedAtLabel } from "@/lib/date-time";
+import { formatCompletedAtLabel, formatTime } from "@/lib/date-time";
 import { getLeaderboardRank } from "@/lib/server-me";
 import { getBackendAttempt, getBackendAttemptResult, getBackendAttemptReview } from "@/lib/server-attempts";
 import { getTestSourceDetail } from "@/lib/test-source";
@@ -109,6 +109,53 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
         items={result.section_breakdown}
         testType={result.test_type}
       />
+
+      {result.events && result.events.length > 0 ? (
+        <Card className="overflow-hidden border-rose-500/20 bg-rose-500/5 shadow-none">
+          <CardHeader className="border-b border-rose-500/10 bg-rose-500/10 pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400">
+                <XCircle className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-lg text-rose-600 dark:text-rose-400">
+                    Exam Integrity Violations
+                  </CardTitle>
+                  <Badge variant="outline" className="shrink-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold uppercase tracking-widest text-[10px]">
+                    {result.events.length} Violation{result.events.length > 1 ? "s" : ""}
+                  </Badge>
+                </div>
+                <CardDescription className="mt-0.5 text-rose-600/70 dark:text-rose-400/70">
+                  These actions would result in disqualification in a real exam environment.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="rounded-xl border border-rose-500/15 bg-background/50 divide-y divide-rose-500/10">
+              {[...result.events].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((event, index) => {
+                let message = "Unknown violation";
+                if (event.event_type === "violation_exit_fullscreen") message = "Exited full screen mode";
+                if (event.event_type === "violation_tab_switch") message = "Switched to another tab or window";
+                if (event.event_type === "violation_window_blur") message = "Lost focus (another app opened or overlay)";
+                if (event.event_type === "violation_devtools") message = "Opened developer tools";
+                
+                return (
+                  <div key={index} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                    <span className="text-sm font-semibold text-foreground">
+                      {message}
+                    </span>
+                    <Badge variant="outline" className="shrink-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-mono text-sm px-3 py-1">
+                      {formatTime(event.created_at)}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6">
         <BreakdownCard

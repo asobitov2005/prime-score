@@ -69,6 +69,16 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
 
     const handleAutoSubmit = (reason: string) => {
       console.warn(`Exam integrity event: ${reason}`);
+      let eventType = "violation_unknown";
+      if (reason === "tab_switch") eventType = "violation_tab_switch";
+      if (reason === "exit_fullscreen") eventType = "violation_exit_fullscreen";
+      
+      void fetch(`/internal-api/attempts/${attemptId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({ event_type: eventType, payload: {} })
+      }).catch(() => undefined);
     };
 
     const handleVisibilityChange = () => {
@@ -118,7 +128,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
         })
-        .then(() => {
+        .then(async () => {
           trackAttemptSubmit({
             attemptId,
             testTitle,
@@ -128,7 +138,10 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
             submitReason: "time_up",
           });
           emitNotificationRefresh();
-          if (document.fullscreenElement) document.exitFullscreen();
+          if (document.fullscreenElement) {
+            await document.exitFullscreen().catch(() => undefined);
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
         })
         .catch(() => setIsSubmitting(false));
@@ -405,6 +418,16 @@ export function ListeningAttemptWorkspace({
 
     const handleAutoSubmit = (reason: string) => {
       console.warn(`Exam integrity event: ${reason}`);
+      let eventType = "violation_unknown";
+      if (reason === "tab_switch") eventType = "violation_tab_switch";
+      if (reason === "exit_fullscreen") eventType = "violation_exit_fullscreen";
+      
+      void fetch(`/internal-api/attempts/${attemptId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({ event_type: eventType, payload: {} })
+      }).catch(() => undefined);
     };
 
     const handleVisibilityChange = () => {
@@ -453,7 +476,7 @@ export function ListeningAttemptWorkspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
         })
-        .then(() => {
+        .then(async () => {
           trackAttemptSubmit({
             attemptId,
             testTitle,
@@ -463,7 +486,10 @@ export function ListeningAttemptWorkspace({
             submitReason: "time_up",
           });
           emitNotificationRefresh();
-          if (document.fullscreenElement) document.exitFullscreen();
+          if (document.fullscreenElement) {
+            await document.exitFullscreen().catch(() => undefined);
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
           router.push(`/attempts/${attemptId}/result?reason=time_up`);
         })
         .catch(() => setIsSubmitting(false));

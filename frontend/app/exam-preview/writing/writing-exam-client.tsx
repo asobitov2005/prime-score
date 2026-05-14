@@ -118,7 +118,7 @@ export function WritingExamClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasAcknowledgedTimeUp, setHasAcknowledgedTimeUp] = useState(false);
   const essayRef = useRef<HTMLTextAreaElement>(null);
@@ -244,7 +244,7 @@ export function WritingExamClient({
         return null;
       }
     })();
-    const nextTheme = savedTheme ?? (document.documentElement.classList.contains("light") ? "light" : "dark");
+    const nextTheme = savedTheme ?? "light";
     updateTheme(nextTheme);
 
     const syncFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));

@@ -235,6 +235,12 @@ class WritingEvaluationRead(BaseModel):
     cache_hit: bool = False
     model_version: str = ""
     prompt_version: str = "v1"
+    grader_profile_version: int | None = None
+    rubric_version: int | None = None
+    anchor_set_version: int | None = None
+    roast_profile_version: int | None = None
+    improved_profile_version: int | None = None
+    annotation_profile_version: int | None = None
 
 
 class WritingHistoryItem(BaseModel):

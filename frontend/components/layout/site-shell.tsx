@@ -47,7 +47,7 @@ const highlights = [
 
 export function SiteShell({ children }: SiteShellProps) {
   // This shell owns the authenticated navigation frame for the user-facing app.
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const { isAuthenticated, name, phoneNumber, avatarUrl, sessionId, refreshToken, clearSession, syncSession, hasHydrated, welcomeBonusDays, dismissWelcomeBonus } = useAuthStore();
   const [showWelcomeBonusModal, setShowWelcomeBonusModal] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -96,7 +96,7 @@ export function SiteShell({ children }: SiteShellProps) {
   // Load theme from localStorage on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem("prime-theme") as "light" | "dark" | null;
-    const initialTheme = savedTheme || "dark";
+    const initialTheme = savedTheme || "light";
     setTheme(initialTheme);
     document.documentElement.classList.add(initialTheme);
     // Ensure the other one is removed

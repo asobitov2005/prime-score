@@ -3,6 +3,7 @@ from __future__ import annotations
 from celery import Task
 from typing import Any
 
+from app.db.session import reset_session_state
 from app.services.admin_ai_agent import run_admin_ai_job
 from app.tasks.celery_app import celery_app
 
@@ -63,9 +64,29 @@ def evaluate_writing_submission_task(self: Task[Any, Any], submission_id: str) -
     import asyncio
     from uuid import UUID
 
-    from app.services.writing_checker import grade_submission
+    from app.services.writing_checker import (
+        grade_submission,
+        mark_submission_failed,
+        mark_submission_retrying,
+    )
 
-    asyncio.run(grade_submission(UUID(submission_id)))
+    submission_uuid = UUID(submission_id)
+
+    def _run_async(coro: Any) -> Any:
+        reset_session_state()
+        try:
+            return asyncio.run(coro)
+        finally:
+            reset_session_state()
+
+    try:
+        _run_async(grade_submission(submission_uuid, mark_failed=False))
+    except Exception as exc:  # noqa: BLE001
+        if self.request.retries >= int(self.max_retries or 0):
+            _run_async(mark_submission_failed(submission_uuid, str(exc)))
+            raise
+        _run_async(mark_submission_retrying(submission_uuid))
+        raise self.retry(exc=exc, countdown=int(self.default_retry_delay or 15))
     return {"submission_id": submission_id, "status": "completed"}
 
 

@@ -224,7 +224,11 @@ async def test_attempt_lifecycle(app):
         assert answer.json()["question_number"] == 1
         assert answer.json()["score_status"] == "draft"
 
-        submit = await client.post(f"/api/attempts/{attempt_id}/submit", headers=USER_HEADERS)
+        submit = await client.post(
+            f"/api/attempts/{attempt_id}/submit",
+            headers=USER_HEADERS,
+            json={"confirm": True},
+        )
         assert submit.status_code == 200
         assert submit.json()["score_status"] == "ready"
         assert submit.json()["raw_score"] == 1
@@ -254,7 +258,7 @@ async def test_listening_snapshot_time_limit(app):
 
 
 @pytest.mark.asyncio
-async def test_section_attempt_has_no_band_score(app):
+async def test_section_attempt_returns_estimated_band_score(app):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         start = await client.post(
             f"/api/tests/{READING_TEST_ID}/start",
@@ -274,9 +278,13 @@ async def test_section_attempt_has_no_band_score(app):
             headers=USER_HEADERS,
             json={"question_id": "eee10c17-4108-529c-80fe-aadbd729034c", "value": "TRUE"},
         )
-        submit = await client.post(f"/api/attempts/{attempt_id}/submit", headers=USER_HEADERS)
+        submit = await client.post(
+            f"/api/attempts/{attempt_id}/submit",
+            headers=USER_HEADERS,
+            json={"confirm": True},
+        )
         assert submit.status_code == 200
-        assert submit.json()["band_score"] is None
+        assert submit.json()["band_score"] is not None
 
 
 @pytest.mark.asyncio

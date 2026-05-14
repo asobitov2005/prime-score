@@ -17,8 +17,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_admin, get_current_super_admin
 from app.core.security import create_access_token, create_refresh_token, decode_token
-from app.core.enums import AccessType, PaymentMethod, TestStatus
+from app.core.enums import AccessType, PaymentMethod, TestStatus, TestType
 from app.db.session import get_db_session, get_session_maker
+from app.api.routes.admin_writing import AdminWritingSubmissionRead, _serialize_submission_read
+from app.api.routes.attempts import (
+    _count_answered_slots,
+    _count_answered_values,
+    _effective_band_score,
+    _extract_diagram_groups,
+    _extract_question_labels,
+)
 from app.models.admin import Admin, AdminLoginOtp
 from app.models.commerce import GiftCode, GiftCodeRedemption, Payment, PaymentCard, PaymentSetting, Plan, PromoCode
 from app.models.attempt import Attempt, UserAnswer
@@ -33,9 +41,16 @@ from app.models.user import Session as UserSession
 from app.models.user import User
 from app.models.ops import AuditLog, Notification
 from app.models.review import Review
+from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
 from app.core.enums import NotificationType
 from app.core.enums import ReviewSource
 from app.models.enums import ReviewSource as ModelReviewSource
+from app.schemas.attempts import (
+    AttemptBreakdownItemRead,
+    AttemptResultRead,
+    AttemptReviewItemRead,
+    AttemptReviewRead,
+)
 from app.schemas.admin import (
     AdminAudioTranscriptRequest,
     AdminAudioTranscriptJobCreateResponse,
@@ -114,6 +129,7 @@ from app.services.admin_auth import (
     normalize_phone_number,
     update_admin_security_settings,
 )
+from app.services.attempt_repo import iter_user_attempts_from_db
 from app.services.notification_sender import edit_telegram_message, send_telegram_message_with_id
 from app.services.code_store import get_code_store
 from app.services.plan_catalog import (
@@ -179,6 +195,32 @@ class AdminUserDetailRead(BaseModel):
     average_band: float | None = None
 
 
+class AdminUserAttemptRead(BaseModel):
+    attempt_id: UUID
+    test_id: UUID
+    test_title: str | None = None
+    test_type: TestType | None = None
+    scope: str
+    mode: str
+    status: str
+    score_status: str = "queued"
+    raw_score: int | None = None
+    band_score: Decimal | None = None
+    answers_count: int = 0
+    answered_slots_count: int = 0
+    total_questions: int = 0
+    time_spent_sec: int = 0
+    started_at: datetime
+    completed_at: datetime | None = None
+    result: AttemptResultRead | None = None
+    review: AttemptReviewRead | None = None
+
+
+class AdminUserActivityRead(BaseModel):
+    attempts: list[AdminUserAttemptRead]
+    writing_submissions: list[AdminWritingSubmissionRead]
+
+
 class AdminUserCreateRequest(BaseModel):
     telegram_id: int
     phone: str
@@ -227,6 +269,80 @@ def apply_admin_filters(stmt, model_class, params: AdminFilterParams, date_colum
         stmt = stmt.where(model_class.test_type == params.test_type)
 
     return stmt
+
+
+def _serialize_admin_attempt_result(attempt) -> AttemptResultRead:
+    snapshot = attempt.test_snapshot
+    answered_slots_count = _count_answered_slots(snapshot, attempt.answers)
+    diagram_groups = _extract_diagram_groups(snapshot)
+    effective_band_score = _effective_band_score(
+        snapshot,
+        attempt.raw_score,
+        attempt.band_score,
+        attempt.total_questions,
+    )
+    return AttemptResultRead(
+        attempt_id=attempt.attempt_id,
+        status=attempt.status,
+        test_id=attempt.test_id,
+        test_type=snapshot.get("test_type", TestType.reading),
+        test_format=str(snapshot.get("format") or "full"),
+        source=snapshot.get("source"),
+        source_detail=(str(snapshot.get("source_detail")) if snapshot.get("source_detail") is not None else None),
+        test_title=str(snapshot.get("title")),
+        raw_score=attempt.raw_score,
+        band_score=effective_band_score,
+        answers_count=_count_answered_values(attempt.answers),
+        answered_slots_count=answered_slots_count,
+        total_questions=attempt.total_questions,
+        time_spent_sec=attempt.time_spent_sec,
+        score_status=str(attempt.metadata.get("score_status", "queued")),
+        completed_at=attempt.completed_at,
+        section_breakdown=[
+            AttemptBreakdownItemRead(label=item["title"], correct=item["correct"], total=item["total"])
+            for item in attempt.section_breakdown
+        ],
+        question_type_breakdown=[
+            AttemptBreakdownItemRead(
+                label=str(item["question_type"]),
+                correct=item["correct"],
+                total=item["total"],
+            )
+            for item in attempt.question_type_breakdown
+        ],
+        diagram_groups=diagram_groups,
+    )
+
+
+def _serialize_admin_attempt_review(attempt, *, can_show_explanations: bool) -> AttemptReviewRead:
+    diagram_groups = _extract_diagram_groups(attempt.test_snapshot)
+    question_labels = _extract_question_labels(attempt.test_snapshot)
+    items = [
+        AttemptReviewItemRead(
+            question_id=item["question_id"],
+            question_number=item["question_number"],
+            question_label=str(item.get("question_label") or question_labels.get(str(item["question_id"])) or ""),
+            prompt=str(item["prompt"]),
+            section_title=str(item["section_title"]),
+            group_title=str(item["group_title"]),
+            question_type=str(item["question_type"]),
+            options=[str(option) for option in item.get("options", [])],
+            answer_value=item["answer_value"],
+            is_correct=item["is_correct"],
+            correct_answers=list(item["correct_answers"]),
+            explanation=item.get("explanation") if can_show_explanations else None,
+            explanation_reference=item.get("explanation_reference") if can_show_explanations else None,
+        )
+        for item in attempt.scoring_items
+    ]
+    return AttemptReviewRead(
+        attempt_id=attempt.attempt_id,
+        test_title=str(attempt.test_snapshot.get("title")),
+        test_type=attempt.test_snapshot.get("test_type"),
+        can_show_explanations=can_show_explanations,
+        diagram_groups=diagram_groups,
+        items=items,
+    )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -2026,6 +2142,93 @@ async def get_user(
         except Exception:
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load user.")
+
+
+@router.get("/users/{user_id}/activity", response_model=AdminUserActivityRead)
+async def get_user_activity(
+    user_id: UUID,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminUserActivityRead:
+    _ = current_admin
+    try:
+        user = await _get_active_user_or_404(session, user_id)
+
+        attempts = await iter_user_attempts_from_db(session, user_id=user.id)
+        attempt_items: list[AdminUserAttemptRead] = []
+        for attempt in attempts:
+            result = None
+            review = None
+            if attempt.raw_score is not None or attempt.status in COMPLETED_ATTEMPT_STATUSES:
+                result = _serialize_admin_attempt_result(attempt)
+                review = _serialize_admin_attempt_review(
+                    attempt,
+                    can_show_explanations=user.is_premium,
+                )
+
+            attempt_items.append(
+                AdminUserAttemptRead(
+                    attempt_id=attempt.attempt_id,
+                    test_id=attempt.test_id,
+                    test_title=str(attempt.test_snapshot.get("title") or "") or None,
+                    test_type=attempt.test_snapshot.get("test_type"),
+                    scope=str(attempt.scope.value),
+                    mode=str(attempt.mode.value),
+                    status=str(attempt.status.value),
+                    score_status=str(attempt.metadata.get("score_status", "queued")),
+                    raw_score=attempt.raw_score,
+                    band_score=_effective_band_score(
+                        attempt.test_snapshot,
+                        attempt.raw_score,
+                        attempt.band_score,
+                        attempt.total_questions,
+                    ),
+                    answers_count=_count_answered_values(attempt.answers),
+                    answered_slots_count=_count_answered_slots(attempt.test_snapshot, attempt.answers),
+                    total_questions=attempt.total_questions,
+                    time_spent_sec=attempt.time_spent_sec,
+                    started_at=attempt.started_at,
+                    completed_at=attempt.completed_at,
+                    result=result,
+                    review=review,
+                )
+            )
+
+        writing_rows = (
+            await session.execute(
+                select(WritingSubmission, WritingTask, WritingEvaluation)
+                .join(WritingTask, WritingTask.id == WritingSubmission.task_id)
+                .outerjoin(
+                    WritingEvaluation,
+                    WritingEvaluation.submission_id == WritingSubmission.id,
+                )
+                .where(WritingSubmission.user_id == user.id)
+                .order_by(WritingSubmission.submitted_at.desc())
+            )
+        ).all()
+        writing_submissions = [
+            _serialize_submission_read(
+                submission=submission,
+                task=task,
+                evaluation=evaluation,
+                user=user,
+            )
+            for submission, task, evaluation in writing_rows
+        ]
+
+        return AdminUserActivityRead(
+            attempts=attempt_items,
+            writing_submissions=writing_submissions,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to load admin user activity")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load user activity.") from exc
 
 
 class BulkPremiumRequest(BaseModel):

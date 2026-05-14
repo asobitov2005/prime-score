@@ -17,7 +17,12 @@ from app.schemas.common import AdminPrincipal
 from app.schemas.writing import (
     AdminWritingTaskCreateRequest,
     AdminWritingTaskUpdateRequest,
+    WritingCriterionFeedback,
+    WritingEvaluationRead,
+    WritingInlineAnnotation,
+    WritingRoastFeedback,
     WritingTaskRead,
+    WritingVocabularySuggestion,
 )
 from app.services.object_storage import upload_test_diagram_image
 
@@ -38,6 +43,8 @@ class AdminWritingSubmissionItem(BaseModel):
     id: UUID
     user_id: UUID
     user_display_name: str | None = None
+    user_username: str | None = None
+    user_phone: str | None = None
     task_id: UUID
     task_title: str
     task_type: WritingTaskType
@@ -46,11 +53,32 @@ class AdminWritingSubmissionItem(BaseModel):
     overall_band: float | None = None
     submitted_at: datetime
     graded_at: datetime | None = None
+    error_message: str | None = None
 
 
 class AdminWritingSubmissionListResponse(BaseModel):
     items: list[AdminWritingSubmissionItem]
     total: int
+
+
+class AdminWritingSubmissionRead(BaseModel):
+    id: UUID
+    user_id: UUID
+    user_display_name: str | None = None
+    user_username: str | None = None
+    user_phone: str | None = None
+    task_id: UUID
+    task_title: str
+    task_type: WritingTaskType
+    essay_text: str
+    word_count: int
+    status: WritingSubmissionStatus
+    submitted_at: datetime
+    time_spent_seconds: int
+    error_message: str | None = None
+    graded_at: datetime | None = None
+    overall_band: float | None = None
+    evaluation: WritingEvaluationRead | None = None
 
 
 def _serialize_task_read(task: WritingTask) -> WritingTaskRead:
@@ -82,6 +110,121 @@ def _resolve_user_display_name(user: User | None) -> str | None:
     if name:
         return name
     return user.username
+
+
+def _criterion_from_dict(payload: dict | None) -> WritingCriterionFeedback:
+    payload = payload or {}
+    return WritingCriterionFeedback(
+        band=float(payload.get("band", 0.0) or 0.0),
+        summary=str(payload.get("summary", "") or ""),
+        strengths=list(payload.get("strengths", []) or []),
+        improvements=list(payload.get("improvements", []) or []),
+        evidence_quotes=list(payload.get("evidence_quotes", []) or []),
+        reasoning=str(payload.get("reasoning", "") or ""),
+    )
+
+
+def _serialize_evaluation_read(
+    *,
+    submission: WritingSubmission,
+    task: WritingTask,
+    evaluation: WritingEvaluation,
+) -> WritingEvaluationRead:
+    feedback = evaluation.feedback or {}
+    roast_raw = evaluation.roast_feedback or {}
+    roast: WritingRoastFeedback | None = None
+    if isinstance(roast_raw, dict) and roast_raw:
+        try:
+            roast = WritingRoastFeedback.model_validate(roast_raw)
+        except Exception:
+            roast = None
+
+    annotations_raw = evaluation.inline_annotations or []
+    annotations: list[WritingInlineAnnotation] = []
+    for item in annotations_raw:
+        try:
+            annotations.append(WritingInlineAnnotation.model_validate(item))
+        except Exception:
+            continue
+
+    vocabulary_raw = feedback.get("vocabulary_suggestions") or []
+    vocabulary_suggestions: list[WritingVocabularySuggestion] = []
+    for item in vocabulary_raw:
+        try:
+            vocabulary_suggestions.append(WritingVocabularySuggestion.model_validate(item))
+        except Exception:
+            continue
+
+    return WritingEvaluationRead(
+        submission_id=submission.id,
+        task_id=task.id,
+        task_type=submission.task_type,
+        task_title=task.title,
+        word_count=submission.word_count,
+        word_minimum=task.word_minimum,
+        time_spent_seconds=submission.time_spent_seconds,
+        submitted_at=submission.submitted_at,
+        graded_at=evaluation.graded_at,
+        essay_text=submission.essay_text,
+        overall_band=evaluation.overall_band,
+        potential_band=evaluation.potential_band,
+        word_count_penalty=evaluation.word_count_penalty,
+        task_achievement=_criterion_from_dict(feedback.get("task_achievement")),
+        coherence=_criterion_from_dict(feedback.get("coherence")),
+        lexical=_criterion_from_dict(feedback.get("lexical")),
+        grammar=_criterion_from_dict(feedback.get("grammar")),
+        inline_annotations=annotations,
+        vocabulary_suggestions=vocabulary_suggestions,
+        improved_version=evaluation.improved_version,
+        overall_summary=str(feedback.get("overall_summary", "") or ""),
+        next_steps=list(feedback.get("next_steps", []) or []),
+        cache_hit=evaluation.cache_hit,
+        model_version=evaluation.model_version,
+        prompt_version=evaluation.prompt_version,
+        grader_profile_version=evaluation.grader_profile_version,
+        rubric_version=evaluation.rubric_version,
+        anchor_set_version=evaluation.anchor_set_version,
+        roast_profile_version=evaluation.roast_profile_version,
+        improved_profile_version=evaluation.improved_profile_version,
+        annotation_profile_version=evaluation.annotation_profile_version,
+        roast=roast,
+    )
+
+
+def _serialize_submission_read(
+    *,
+    submission: WritingSubmission,
+    task: WritingTask,
+    evaluation: WritingEvaluation | None,
+    user: User | None,
+) -> AdminWritingSubmissionRead:
+    return AdminWritingSubmissionRead(
+        id=submission.id,
+        user_id=submission.user_id,
+        user_display_name=_resolve_user_display_name(user),
+        user_username=user.username if user is not None else None,
+        user_phone=user.phone if user is not None else None,
+        task_id=task.id,
+        task_title=task.title,
+        task_type=submission.task_type,
+        essay_text=submission.essay_text,
+        word_count=submission.word_count,
+        status=submission.status,
+        submitted_at=submission.submitted_at,
+        time_spent_seconds=int(submission.time_spent_seconds or 0),
+        error_message=submission.error_message,
+        graded_at=evaluation.graded_at if evaluation is not None else None,
+        overall_band=evaluation.overall_band if evaluation is not None else None,
+        evaluation=(
+            _serialize_evaluation_read(
+                submission=submission,
+                task=task,
+                evaluation=evaluation,
+            )
+            if evaluation is not None
+            else None
+        ),
+    )
 
 
 def _enqueue_image_summary(task_id: UUID) -> None:
@@ -419,6 +562,8 @@ async def list_submissions(
                 id=submission.id,
                 user_id=submission.user_id,
                 user_display_name=_resolve_user_display_name(user),
+                user_username=user.username if user is not None else None,
+                user_phone=user.phone if user is not None else None,
                 task_id=task.id,
                 task_title=task.title,
                 task_type=submission.task_type,
@@ -427,10 +572,42 @@ async def list_submissions(
                 overall_band=evaluation.overall_band if evaluation is not None else None,
                 submitted_at=submission.submitted_at,
                 graded_at=evaluation.graded_at if evaluation is not None else None,
+                error_message=submission.error_message,
             )
         )
 
     return AdminWritingSubmissionListResponse(items=items, total=int(total))
+
+
+@router.get("/submissions/{submission_id}", response_model=AdminWritingSubmissionRead)
+async def get_submission(
+    submission_id: UUID,
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminWritingSubmissionRead:
+    _ = current_admin
+    row = (
+        await session.execute(
+            select(WritingSubmission, WritingTask, WritingEvaluation, User)
+            .join(WritingTask, WritingTask.id == WritingSubmission.task_id)
+            .outerjoin(
+                WritingEvaluation,
+                WritingEvaluation.submission_id == WritingSubmission.id,
+            )
+            .outerjoin(User, User.id == WritingSubmission.user_id)
+            .where(WritingSubmission.id == submission_id)
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
+
+    submission, task, evaluation, user = row
+    return _serialize_submission_read(
+        submission=submission,
+        task=task,
+        evaluation=evaluation,
+        user=user,
+    )
 
 
 @router.post(

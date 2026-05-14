@@ -24,6 +24,21 @@ class AdminAiJobStatus(StrEnum):
     CANCELED = "canceled"
 
 
+class AiProvider(StrEnum):
+    GOOGLE = "google"
+    CEREBRAS = "cerebras"
+    GROQ = "groq"
+
+
+class AiUseCase(StrEnum):
+    ADMIN_CHAT = "admin_chat"
+    WRITING_GRADER = "writing_grader"
+    WRITING_IMPROVER = "writing_improver"
+    WRITING_ROAST = "writing_roast"
+    WRITING_IMAGE_SUMMARY = "writing_image_summary"
+    AUDIO_TRANSCRIPTION = "audio_transcription"
+
+
 class AccessType(StrEnum):
     PUBLIC = "public"
     PREMIUM = "premium"
@@ -116,10 +131,49 @@ class WritingTaskType(StrEnum):
     TASK_2 = "task_2"
 
 
+class WritingTaskTypeScope(StrEnum):
+    ALL = "all"
+    TASK_1 = "task_1"
+    TASK_2 = "task_2"
+
+
 class WritingTaskStatus(StrEnum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
+
+
+class WritingConfigStatus(StrEnum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
+class WritingPromptKey(StrEnum):
+    GRADER_SYSTEM = "grader_system"
+    GRADER_USER_TEMPLATE = "grader_user_template"
+    CRITERION_TASK_ACHIEVEMENT = "criterion_task_achievement"
+    CRITERION_COHERENCE_COHESION = "criterion_coherence_cohesion"
+    CRITERION_LEXICAL_RESOURCE = "criterion_lexical_resource"
+    CRITERION_GRAMMAR_ACCURACY = "criterion_grammar_accuracy"
+    ANNOTATION_PROMPT = "annotation_prompt"
+    ANNOTATION_REPAIR_PROMPT = "annotation_repair_prompt"
+    JSON_REPAIR_PROMPT = "json_repair_prompt"
+    IMPROVED_VERSION_PROMPT = "improved_version_prompt"
+    ROAST_SYSTEM = "roast_system"
+    ROAST_USER_TEMPLATE = "roast_user_template"
+    VOCABULARY_UPGRADE_POLICY = "vocabulary_upgrade_policy"
+
+
+class WritingPromptFormat(StrEnum):
+    TEXT = "text"
+    JSON = "json"
+
+
+class WritingConfigEntityType(StrEnum):
+    PROFILE = "profile"
+    RUBRIC = "rubric"
+    ANCHOR_SET = "anchor_set"
 
 
 class WritingSubmissionStatus(StrEnum):

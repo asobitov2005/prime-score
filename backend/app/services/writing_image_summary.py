@@ -5,13 +5,13 @@ from datetime import UTC, datetime
 from urllib.parse import unquote
 from uuid import UUID
 
-from google import genai
-from google.genai import types as genai_types
 from sqlalchemy import select
 
-from app.core.config import get_settings
 from app.db.session import get_session_maker
 from app.models.writing import WritingTask
+from app.models.enums import AiUseCase
+from app.services.ai_config import ResolvedAiUseCaseConfig, resolve_ai_use_case_config
+from app.services.ai_generation import generate_image_text_sync
 from app.services.object_storage import fetch_storage_object
 
 logger = logging.getLogger(__name__)
@@ -23,14 +23,6 @@ _IMAGE_SUMMARY_PROMPT = (
     "important trends or comparisons. Output as a detailed factual description "
     "(8-15 sentences). No commentary or interpretation."
 )
-
-
-def _build_gemini_client() -> genai.Client:
-    settings = get_settings()
-    if not (settings.gemini_api_key or "").strip():
-        raise RuntimeError("GEMINI_API_KEY is not configured.")
-    return genai.Client(api_key=settings.gemini_api_key)
-
 
 def _parse_storage_path(image_storage_path: str) -> tuple[str, str]:
     raw = (image_storage_path or "").strip()
@@ -45,7 +37,11 @@ def _parse_storage_path(image_storage_path: str) -> tuple[str, str]:
     return unquote(bucket_name), unquote(object_name)
 
 
-def generate_image_summary(image_storage_path: str) -> str:
+def generate_image_summary(
+    image_storage_path: str,
+    *,
+    resolved_config: ResolvedAiUseCaseConfig,
+) -> str:
     try:
         bucket_name, object_name = _parse_storage_path(image_storage_path)
         payload, content_type = fetch_storage_object(
@@ -54,31 +50,15 @@ def generate_image_summary(image_storage_path: str) -> str:
         if not payload:
             return ""
         mime_type = (content_type or "image/png").split(";")[0].strip() or "image/png"
-
-        client = _build_gemini_client()
-        config = genai_types.GenerateContentConfig(
+        text = generate_image_text_sync(
+            config=resolved_config,
+            image_bytes=payload,
+            mime_type=mime_type,
+            prompt=_IMAGE_SUMMARY_PROMPT,
             temperature=0,
-            topP=1,
-            maxOutputTokens=2048,
-            thinkingConfig=genai_types.ThinkingConfig(
-                thinkingLevel=genai_types.ThinkingLevel.MINIMAL,
-            ),
+            top_p=1,
+            max_output_tokens=2048,
         )
-        writing_model = (get_settings().gemini_writing_model or get_settings().gemini_model).strip()
-        response = client.models.generate_content(
-            model=writing_model,
-            contents=[
-                genai_types.Content(
-                    role="user",
-                    parts=[
-                        genai_types.Part.from_bytes(data=payload, mime_type=mime_type),
-                        genai_types.Part(text=_IMAGE_SUMMARY_PROMPT),
-                    ],
-                )
-            ],
-            config=config,
-        )
-        text = (response.text or "").strip()
         return text
     except Exception:  # noqa: BLE001
         logger.exception("Failed to generate writing image summary for %s", image_storage_path)
@@ -103,7 +83,8 @@ async def refresh_task_image_summary(task_id: UUID) -> None:
         task.updated_at = datetime.now(UTC)
         await session.commit()
 
-        summary = generate_image_summary(task.image_storage_path)
+        resolved_config = await resolve_ai_use_case_config(session, AiUseCase.WRITING_IMAGE_SUMMARY)
+        summary = generate_image_summary(task.image_storage_path, resolved_config=resolved_config)
 
         result = await session.execute(
             select(WritingTask).where(WritingTask.id == task_id)

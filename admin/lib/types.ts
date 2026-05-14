@@ -268,6 +268,145 @@ export interface AdminTranscriptSegment {
   needsReview?: boolean;
 }
 
+export type AiProvider = "google" | "cerebras" | "groq";
+export type AiUseCase =
+  | "admin_chat"
+  | "writing_grader"
+  | "writing_improver"
+  | "writing_roast"
+  | "writing_image_summary"
+  | "audio_transcription";
+
+export type WritingTaskTypeScope = "all" | "task_1" | "task_2";
+export type WritingConfigStatus = "draft" | "published" | "archived";
+export type WritingPromptKey =
+  | "grader_system"
+  | "grader_user_template"
+  | "criterion_task_achievement"
+  | "criterion_coherence_cohesion"
+  | "criterion_lexical_resource"
+  | "criterion_grammar_accuracy"
+  | "annotation_prompt"
+  | "annotation_repair_prompt"
+  | "json_repair_prompt"
+  | "improved_version_prompt"
+  | "roast_system"
+  | "roast_user_template"
+  | "vocabulary_upgrade_policy";
+
+export interface AdminAiProviderConfig {
+  id: string;
+  provider: AiProvider;
+  label: string;
+  apiKeyMasked: string | null;
+  hasApiKey: boolean;
+  baseUrl: string | null;
+  isEnabled: boolean;
+  lastSyncAt: string | null;
+  lastSyncStatus: string | null;
+  lastSyncError: string | null;
+}
+
+export interface AdminAiProviderModel {
+  id: string;
+  modelId: string;
+  displayName: string;
+  family: string | null;
+  capabilities: Record<string, unknown>;
+  contextWindow: number | null;
+  isAccessible: boolean;
+  isSelectable: boolean;
+  sortOrder: number;
+}
+
+export interface AdminAiUseCaseBinding {
+  id: string | null;
+  useCase: AiUseCase;
+  providerConfigId: string | null;
+  provider: AiProvider | null;
+  providerLabel: string | null;
+  providerModelId: string | null;
+  modelId: string | null;
+  modelDisplayName: string | null;
+  settingsJson: Record<string, unknown>;
+  resolvedSource: string;
+}
+
+export interface AdminWritingPromptEntry {
+  id?: string;
+  key: WritingPromptKey;
+  body: string;
+  format: "text" | "json";
+}
+
+export interface AdminWritingPromptProfile {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  taskTypeScope: WritingTaskTypeScope;
+  status: WritingConfigStatus;
+  version: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  entries: AdminWritingPromptEntry[];
+}
+
+export interface AdminWritingRubric {
+  id: string;
+  taskTypeScope: WritingTaskTypeScope;
+  version: number;
+  body: string;
+  status: WritingConfigStatus;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminWritingAnchorItem {
+  id?: string;
+  band: number;
+  essay: string;
+  criteria: Record<string, unknown>;
+  rationale: string;
+  sortOrder?: number;
+}
+
+export interface AdminWritingAnchorSet {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  taskTypeScope: WritingTaskTypeScope;
+  version: number;
+  status: WritingConfigStatus;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  items: AdminWritingAnchorItem[];
+}
+
+export interface AdminWritingPromptPreview {
+  graderSystem: string;
+  graderUser: string;
+  improvedVersion: string;
+  roastSystem: string;
+  roastUser: string;
+}
+
+export interface AdminWritingConfigAuditEntry {
+  id: string;
+  actorAdminId: string | null;
+  entityType: string;
+  entityId: string;
+  action: string;
+  previousVersion: number | null;
+  newVersion: number | null;
+  metadataJson: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface AdminTranscriptQuestionLocation {
   questionId?: string;
   questionLabel: string;
