@@ -10,6 +10,7 @@ from app.services.writing_checker import (
     _AnnotationPayload,
     _CriterionPayload,
     _GraderPayload,
+    _ScoreBoosterPayload,
     _augment_vocabulary_suggestions,
     _build_grading_prompt,
     _build_system_instruction,
@@ -17,9 +18,11 @@ from app.services.writing_checker import (
     _call_annotation_recovery,
     _call_grader,
     _dedupe_annotations,
+    _normalize_score_boosters,
     _skip_groq_aux_call,
     _validate_annotations,
 )
+from app.services.writing_config import DEFAULT_PROMPT_ENTRIES
 
 
 def _groq_resolved_config() -> ResolvedAiUseCaseConfig:
@@ -33,6 +36,7 @@ def _groq_resolved_config() -> ResolvedAiUseCaseConfig:
         model_id="openai/gpt-oss-120b",
         model_record_id=None,
         settings_json={},
+        context_window=None,
     )
 
 
@@ -85,6 +89,48 @@ def _valid_grader_json() -> str:
       ]
     }
     """.strip()
+
+
+def _criterion_payload() -> _CriterionPayload:
+    return _CriterionPayload(
+        band=7.0,
+        reasoning="Clear response with some limits.",
+        summary="Mostly controlled.",
+        strengths=["Clear central idea"],
+        improvements=["Develop one point more fully"],
+        evidence_quotes=["clear central idea"],
+    )
+
+
+def test_default_writing_prompt_contains_target_integrity_rules() -> None:
+    user_prompt = DEFAULT_PROMPT_ENTRIES["grader_user_template"]
+
+    assert "TARGET INTEGRITY" in user_prompt
+    assert "Desired Score is a coaching target only" in user_prompt
+    assert "It must not increase the awarded band" in user_prompt
+    assert "choose the lower band" in user_prompt
+
+
+def test_score_boosters_do_not_overclaim_full_band_support() -> None:
+    payload = _GraderPayload(
+        task_achievement=_criterion_payload(),
+        coherence=_criterion_payload(),
+        lexical=_criterion_payload(),
+        grammar=_criterion_payload(),
+        score_boosters=[
+            _ScoreBoosterPayload(
+                criterion="Task Achievement",
+                original="The essay keeps a clear position throughout.",
+                why_it_scores="This helps the response stay focused.",
+                keep_doing="Keep a consistent position.",
+                band_value="Band 8.0 support",
+            )
+        ],
+    )
+
+    boosters = _normalize_score_boosters(payload)
+
+    assert boosters[0]["band_value"] == "Supports the criterion"
 
 
 def test_call_grader_repairs_invalid_json() -> None:
@@ -381,7 +427,7 @@ def test_call_annotation_recovery_caps_groq_output_tokens(
     )
 
     assert len(payload) == 1
-    assert seen["max_output_tokens"] == 8000
+    assert seen["max_output_tokens"] == 1024
 
 
 def test_augment_vocabulary_suggestions_does_not_invent_missing_phrases() -> None:
@@ -557,6 +603,7 @@ def test_build_payload_rewrites_generic_summary_and_backfills_vocab() -> None:
         task_type="task_2",
         word_count=210,
         word_minimum=250,
+        desired_score=None,
         model_version="test-model",
         latency_ms=12,
     )

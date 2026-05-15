@@ -782,6 +782,8 @@ def _build_groq_system_instruction(
         [
             "You are a strict IELTS Writing examiner.",
             "Score only what is on the page. Do not reward effort, memorised polish, or generic AI-style fluency.",
+            "Do not award Band 8+ for safe, formulaic, or merely error-light writing unless descriptor evidence is unmistakable.",
+            "Clear but predictable ideas, mechanical transitions, safe repeated vocabulary, or conventional grammar usually cap the relevant criterion around Band 7.0-7.5.",
             "Quote short phrases from the essay as evidence. Keep summaries concrete and essay-specific.",
             _build_groq_rubric_reference(rubric, task_type=task_type),
         ]
@@ -831,7 +833,9 @@ def _build_groq_grading_prompt(
             "ielts_checklist: 5 task-specific items with label, status, detail, how_to_fix.",
             "error_taxonomy: 3-6 repeated weak patterns with category, subcategory, label, count, examples, fix.",
             "sentence_fixes: 3-8 priority sentence-level corrections with original, replacement, corrected_sentence, why, band_impact, category.",
-            "score_boosters: 3-6 original phrases/sentences that helped the band. Include criterion, exact original text, why_it_scores, keep_doing, band_value.",
+            "score_boosters: 3-6 original phrases/sentences that helped the band. Include criterion, exact original text, why_it_scores, keep_doing, band_value. band_value must describe scoring effect, not overclaim a full band.",
+            "STRICT SCORING CALIBRATION: Band 8 requires clear descriptor evidence, not just good structure and few mistakes. Predictable ideas, formulaic transitions, safe vocabulary, or conventional grammar usually cap that criterion at 7.0-7.5.",
+            "TARGET INTEGRITY: Desired Score is only a coaching goal, not a scoring boost. Never inflate a band so the learner passes the target. If evidence is between two bands, choose the lower band unless the higher descriptor is consistently proven across the whole essay.",
             "inline_annotations: return [].",
             "vocabulary_suggestions: return [].",
             "===== CANDIDATE ESSAY START =====",
@@ -1064,10 +1068,11 @@ def _build_precise_next_steps(
 
 def _target_context_label(*, current_band: float, desired_score: float | None) -> str:
     stretch_target = min(9.0, current_band + 1.0)
+    passed_target = min(9.0, current_band + 0.5)
     if desired_score is None:
         return f"Band {current_band:.1f} -> {stretch_target:.1f}"
     if current_band >= desired_score:
-        return f"Band {current_band:.1f} -> {stretch_target:.1f}"
+        return f"Band {current_band:.1f} -> {passed_target:.1f}"
     return f"Band {current_band:.1f} -> {min(desired_score, stretch_target):.1f}"
 
 
@@ -1278,13 +1283,16 @@ def _normalize_score_boosters(grader: _GraderPayload) -> list[dict[str, str]]:
         if not original or original in seen:
             continue
         seen.add(original)
+        band_value = _trim_sentence(item.band_value, limit=80)
+        if band_value.lower().startswith("band "):
+            band_value = "Supports the criterion"
         items.append(
             {
                 "criterion": _trim_sentence(item.criterion, limit=70),
                 "original": original,
                 "why_it_scores": _trim_sentence(item.why_it_scores, limit=150),
                 "keep_doing": _trim_sentence(item.keep_doing, limit=130),
-                "band_value": _trim_sentence(item.band_value, limit=80),
+                "band_value": band_value,
             }
         )
         if len(items) >= 6:
@@ -1310,7 +1318,7 @@ def _normalize_score_boosters(grader: _GraderPayload) -> list[dict[str, str]]:
                     "original": original,
                     "why_it_scores": _trim_sentence(criterion.strengths[0] if criterion.strengths else criterion.summary, limit=150),
                     "keep_doing": "Keep this pattern in future essays.",
-                    "band_value": f"Band {round_to_ielts_band(criterion.band):.1f} support",
+                    "band_value": f"Supports {name}",
                 }
             )
             if len(items) >= 6:

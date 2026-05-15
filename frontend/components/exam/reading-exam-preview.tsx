@@ -2629,10 +2629,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     const isListeningMatchingGroup = group.type.includes("listening_matching");
     const isWordBankGroup = group.type.includes("wordbank");
-    if (isWordBankGroup) {
-      return null;
-    }
-
     const baseOptions = typedOptionLines(group);
     const baseOptionEntries = baseOptions.map((option, index) => ({
       option,
@@ -2747,13 +2743,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   group.type.includes("matching_headings")
                     ? "w-full min-w-0 border border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
                     : group.type.includes("wordbank")
-                      ? "inline-flex min-w-[16rem] max-w-full cursor-grab items-center border border-border/55 bg-card active:cursor-grabbing hover:bg-muted/20"
+                      ? "inline-flex w-fit max-w-full cursor-grab items-center border border-border/55 bg-card px-3.5 py-1.5 active:cursor-grabbing hover:bg-muted/20"
                       : isListeningMatchingGroup
                         ? "w-full min-w-0 px-0 py-1"
                       : "border border-border/55 bg-card",
                   hasPrefix ? "flex items-start gap-0.5" : "block"
                 )}
-                style={group.type.includes("matching_headings") || isWordBankGroup || isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
+                style={group.type.includes("matching_headings") || isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
               >
               {hasPrefix ? (
                   <>
@@ -2810,7 +2806,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       className={cn(
                         "select-text whitespace-nowrap text-[16px] font-bold leading-6 text-foreground",
                         group.type.includes("matching_headings") && "whitespace-normal",
-                        group.type.includes("wordbank") ? "block" : "block flex-1"
+                        group.type.includes("wordbank") ? "block leading-5" : "block flex-1"
                       )}
                     >
                       {group.type.includes("matching_headings") ? (
@@ -2946,6 +2942,20 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     });
   }
 
+  function renderCustomGroupTitle(group: PreviewGroup) {
+    if (!shouldRenderCustomGroupTitle(group)) {
+      return null;
+    }
+
+    return (
+      <div className="px-2">
+        <h2 className="text-center text-[17px] font-bold tracking-tight text-foreground md:text-[19px]">
+          {renderFormattedText(group.title, `group-title-${group.id}`)}
+        </h2>
+      </div>
+    );
+  }
+
   function renderMatchingHeadingDropArea(paragraph: PreviewParagraph) {
     const paragraphKey = `${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`;
     const target = matchingHeadingTargets.get(paragraphKey);
@@ -3048,64 +3058,42 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   function renderCompletionAnswer(group: PreviewGroup, question: PreviewQuestion, key: string) {
     const isWordBankGroup = isWordBankCompletion(question.type);
-    const wordBankOptions = isWordBankGroup ? typedQuestionOptionLines(group, question, []) : [];
-    const normalizedWordBankValue = isWordBankGroup
-      ? normalizeMatchingAnswerValue(answers[question.id] ?? "", wordBankOptions, question.type)
-      : "";
-    const isFreeTextSummary = isFreeTextSummaryCompletion(question.type);
 
-    if (isWordBankGroup && wordBankOptions.length > 0) {
+    if (isWordBankGroup) {
       return (
-        <span key={`${key}-wordbank-select`} className="relative mx-1 inline-flex align-middle">
-          <select
-            value={normalizedWordBankValue}
-            onFocus={() => setActiveQuestionId(question.id)}
-            onChange={(event) => persistAnswer(question.id, event.target.value)}
-            data-question-anchor={question.id}
-            className={cn(
-              "inline-flex h-8 min-w-[132px] appearance-none rounded-md border px-3 pr-8 text-left text-[15px] font-medium shadow-none outline-none transition",
-              theme === "light"
-                ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
-                : "border-slate-500/55 bg-card text-foreground",
-              inputFocusClass,
-              activeQuestionId === question.id && activeInputClass
-            )}
-            style={{ width: `${inlineAnswerWidth(normalizedWordBankValue, question.label ?? String(question.number))}px` }}
-          >
-            <option value="">{question.label ?? String(question.number)}</option>
-            {wordBankOptions.map((option, index) => {
-              const optionView = typedOptionView(option, index, question.type);
-              return (
-                <option key={`${question.id}-inline-wordbank-${index}`} value={optionView.value}>
-                  {optionView.label}
-                </option>
-              );
-            })}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        </span>
-      );
-    }
-
-    if (isWordBankGroup && !isFreeTextSummary) {
-      return (
-        <select
-          key={`${key}-empty-wordbank-select`}
-          value=""
-          onFocus={() => setActiveQuestionId(question.id)}
+        <button
+          type="button"
+          key={`${key}-wordbank`}
           data-question-anchor={question.id}
+          data-wordbank-drop-question-id={question.id}
+          data-wordbank-drop-group-id={group.id}
+          onClick={() => setActiveQuestionId(question.id)}
+          onPointerDown={(event) => {
+            const currentValue = answers[question.id] ?? "";
+            if (!currentValue) {
+              return;
+            }
+            beginWordBankPointerDrag(event, {
+              groupId: group.id,
+              value: currentValue,
+              sourceQuestionId: question.id,
+            });
+          }}
           className={cn(
-            "mx-1 inline-flex h-8 min-w-[132px] appearance-none rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none outline-none transition",
+            "mx-1 inline-flex h-8 min-w-[132px] items-center rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none transition",
             theme === "light"
               ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
               : "border-slate-500/55 bg-card text-foreground",
-            inputFocusClass,
+            dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
+            answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
             activeQuestionId === question.id && activeInputClass
           )}
-          style={{ width: `${inlineAnswerWidth("", question.label ?? String(question.number))}px` }}
+          style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
         >
-          <option value="">{question.label ?? String(question.number)}</option>
-        </select>
+          <span className={cn(!answers[question.id] && numberedPlaceholderClass)}>
+            {answers[question.id] || (question.label ?? String(question.number))}
+          </span>
+        </button>
       );
     }
 
@@ -4530,19 +4518,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       "min-w-0",
                       isListeningMatchingGroup ? "w-[32rem] max-w-full flex-none space-y-4" : "space-y-4"
                     )}>
-                    {shouldRenderCustomGroupTitle(group) ? (
-                      <div className="px-2">
-                        <h2 className="text-center text-[17px] font-bold tracking-tight text-foreground md:text-[19px]">
-                          {renderFormattedText(group.title, `group-title-${group.id}`)}
-                        </h2>
-                      </div>
-                    ) : null}
                     {isPlanMapGroup ? (
                       <div className="grid gap-3 lg:grid-cols-[560px_312px] lg:items-start lg:justify-start">
                         <div className="min-w-0 w-[560px] justify-self-start">
                           {renderDiagramBlock(group)}
                         </div>
                         <div className="min-w-0 justify-self-start space-y-3 lg:self-center">
+                          {renderCustomGroupTitle(group)}
                           {renderGroupQuestionList(group)}
                         </div>
                       </div>
@@ -4550,6 +4532,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       <>
                         {renderDiagramBlock(group)}
                         {!isListeningMatchingGroup ? renderOptionBank(group) : null}
+                        {renderCustomGroupTitle(group)}
                         {renderGroupQuestionList(group)}
                       </>
                     )}

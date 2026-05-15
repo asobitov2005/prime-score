@@ -29,7 +29,6 @@ import {
   fetchWritingSubmissionResult,
   pollWritingSubmission,
   retryWritingSubmission,
-  submitWritingSubmission,
 } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 import type {
@@ -434,7 +433,7 @@ function getTargetBandActions({
   ];
   fallback.forEach(add);
 
-  const target = currentBand >= desiredScore ? Math.min(9, currentBand + 1) : Math.min(desiredScore, currentBand + 1);
+  const target = currentBand >= desiredScore ? Math.min(9, currentBand + 0.5) : Math.min(desiredScore, currentBand + 1);
   return steps.slice(0, 3).map((step, index) => ({
     title: step.split(";")[0].split(".")[0].slice(0, 72),
     why: `Band ${currentBand.toFixed(1)} -> ${target.toFixed(1)}`,
@@ -544,7 +543,7 @@ function TargetActionPlanPanel({
 }) {
   const gap = Math.max(0, desiredScore - currentBand);
   const targetExceeded = currentBand >= desiredScore;
-  const nextTarget = targetExceeded ? Math.min(9, currentBand + 1) : Math.min(desiredScore, currentBand + 1);
+  const nextTarget = targetExceeded ? Math.min(9, currentBand + 0.5) : Math.min(desiredScore, currentBand + 1);
   return (
     <Card className="rounded-2xl border-border/60 bg-card/50 shadow-sm">
       <CardHeader className="pb-2">
@@ -553,7 +552,7 @@ function TargetActionPlanPanel({
             <CardTitle className="text-lg">{targetExceeded ? "Target passed" : "Target gap"}</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
               Band {currentBand.toFixed(1)} <ArrowRight className="mx-1 inline h-3.5 w-3.5" /> {nextTarget.toFixed(1)}
-              {gap > 0 ? ` · aim +0.5 to +1.0` : " · protect this score"}
+              {gap > 0 ? ` · aim +0.5 to +1.0` : " · protect this score, then +0.5"}
             </p>
           </div>
           {actionPlan?.main_limiter ? (
@@ -706,7 +705,7 @@ function ScoreBoostersPanel({ items }: { items: WritingScoreBooster[] }) {
                 <th className="px-3 py-2 font-semibold">Original</th>
                 <th className="px-3 py-2 font-semibold">Why it scores</th>
                 <th className="px-3 py-2 font-semibold">Keep doing</th>
-                <th className="px-3 py-2 font-semibold">Value</th>
+                <th className="px-3 py-2 font-semibold">Score effect</th>
               </tr>
             </thead>
             <tbody>
@@ -731,10 +730,8 @@ function ScoreBoostersPanel({ items }: { items: WritingScoreBooster[] }) {
 
 function SentenceFixPanel({
   fixes,
-  onApply,
 }: {
   fixes: WritingSentenceFix[];
-  onApply: (fix: WritingSentenceFix) => void;
 }) {
   if (!fixes.length) return null;
   return (
@@ -751,7 +748,6 @@ function SentenceFixPanel({
                 <th className="px-3 py-2 font-semibold">Original</th>
                 <th className="px-3 py-2 font-semibold">Improved</th>
                 <th className="px-3 py-2 font-semibold">Why</th>
-                <th className="px-3 py-2 font-semibold">Apply</th>
               </tr>
             </thead>
             <tbody>
@@ -761,11 +757,6 @@ function SentenceFixPanel({
                   <td className="px-3 py-3 align-top text-rose-700 line-through decoration-rose-500 dark:text-rose-300">{fix.original}</td>
                   <td className="px-3 py-3 align-top text-emerald-700 dark:text-emerald-300">{fix.corrected_sentence || fix.replacement}</td>
                   <td className="px-3 py-3 align-top text-muted-foreground">{fix.why || fix.band_impact}</td>
-                  <td className="px-3 py-3 align-top">
-                    <Button type="button" size="sm" variant="outline" onClick={() => onApply(fix)}>
-                      Apply
-                    </Button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1160,7 +1151,7 @@ function VocabularySuggestionCard({
           <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Natural upgrade
           </div>
-          <div className="mt-1 text-sm font-semibold text-foreground line-clamp-1">
+          <div className="mt-1 text-sm font-semibold leading-snug text-foreground break-words">
             {suggestion.current_phrase}
           </div>
         </div>
@@ -1174,14 +1165,14 @@ function VocabularySuggestionCard({
           {suggestion.level}
         </Badge>
       </div>
-      <div className="mt-2 flex items-center gap-2 rounded-xl border border-emerald-500/15 bg-emerald-500/5 px-3 py-2">
+      <div className="mt-2 flex items-start gap-2 rounded-xl border border-emerald-500/15 bg-emerald-500/5 px-3 py-2">
         <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600" />
-        <span className="text-sm font-medium leading-snug text-emerald-700 dark:text-emerald-300 line-clamp-2">
+        <span className="text-sm font-medium leading-snug text-emerald-700 dark:text-emerald-300 break-words">
           {suggestion.improved_phrase}
         </span>
       </div>
       {suggestion.example_sentence ? (
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground line-clamp-2">
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground break-words">
           <span className="font-semibold text-foreground/80">Example:</span> {suggestion.example_sentence}
         </p>
       ) : null}
@@ -1211,11 +1202,7 @@ export function WritingResultClient({
   const [sseAvailable, setSseAvailable] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const [desiredScore, setDesiredScore] = useState(7.5);
-  const [showRoast, setShowRoast] = useState(true);
   const [copiedAnnotation, setCopiedAnnotation] = useState<number | null>(null);
-  const [revisionText, setRevisionText] = useState(initialResult?.improved_version || initialResult?.essay_text || "");
-  const [regrading, setRegrading] = useState(false);
-  const [revisionError, setRevisionError] = useState<string | null>(null);
   const annotatedRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1352,12 +1339,6 @@ export function WritingResultClient({
   );
 
   useEffect(() => {
-    if (!result) return;
-    setRevisionText(result.improved_version || result.essay_text);
-    setRevisionError(null);
-  }, [result]);
-
-  useEffect(() => {
     if (activeAnnotation === null) return;
     const root = annotatedRef.current;
     if (!root) return;
@@ -1394,43 +1375,6 @@ export function WritingResultClient({
       setCopiedAnnotation(annotationIndex);
       window.setTimeout(() => setCopiedAnnotation(null), 1500);
     } catch {}
-  };
-
-  const applySentenceFix = (fix: WritingSentenceFix) => {
-    const replacement = fix.corrected_sentence || fix.replacement;
-    if (!fix.original || !replacement) return;
-    setRevisionText((current) => {
-      if (current.includes(fix.original)) {
-        return current.replace(fix.original, replacement);
-      }
-      return `${current.trim()}\n\n${replacement}`.trim();
-    });
-  };
-
-  const submitRevision = async () => {
-    if (!result || regrading) return;
-    const clean = revisionText.trim();
-    if (!clean) {
-      setRevisionError("Revision text is empty.");
-      return;
-    }
-    setRegrading(true);
-    setRevisionError(null);
-    try {
-      const record = await submitWritingSubmission({
-        task_id: result.task_id,
-        essay_text: clean,
-        time_spent_seconds: result.time_spent_seconds,
-        desired_score: result.desired_score !== null && result.desired_score !== undefined
-          ? toBandNumber(result.desired_score)
-          : desiredScore,
-      });
-      window.location.href = `/writing/submissions/${record.id}/result`;
-    } catch (error) {
-      setRevisionError(error instanceof Error ? error.message : "Could not submit revision.");
-    } finally {
-      setRegrading(false);
-    }
   };
 
   if (stage === "failed") {
@@ -1560,7 +1504,7 @@ export function WritingResultClient({
               icon={ArrowUpRight}
               label="Potential band"
               value={potential !== null ? potential.toFixed(1) : "—"}
-              hint={potential !== null && delta > 0 ? `+${delta.toFixed(1)} possible` : "Apply suggestions"}
+              hint={potential !== null && delta > 0 ? `+${delta.toFixed(1)} possible` : "Review suggestions"}
               tone={potential !== null && delta > 0 ? "positive" : undefined}
             />
             <StatTile
@@ -1579,19 +1523,19 @@ export function WritingResultClient({
         </Card>
       </div>
 
-      <TargetActionPlanPanel
-        actionPlan={result.action_plan}
-        currentBand={overall}
-        desiredScore={effectiveDesiredScore}
-        targetActions={targetActions}
-      />
-
       <div className="grid gap-4 xl:grid-cols-2">
         <CriterionCard title="Task Achievement" data={result.task_achievement} accent="text-violet-600 dark:text-violet-400" />
         <CriterionCard title="Coherence & Cohesion" data={result.coherence} accent="text-blue-600 dark:text-blue-400" />
         <CriterionCard title="Lexical Resource" data={result.lexical} accent="text-emerald-600 dark:text-emerald-400" />
         <CriterionCard title="Grammatical Range & Accuracy" data={result.grammar} accent="text-amber-600 dark:text-amber-400" />
       </div>
+
+      <TargetActionPlanPanel
+        actionPlan={result.action_plan}
+        currentBand={overall}
+        desiredScore={effectiveDesiredScore}
+        targetActions={targetActions}
+      />
 
       <ScoreBoostersPanel items={scoreBoosters} />
 
@@ -1601,40 +1545,7 @@ export function WritingResultClient({
 
       <ErrorPatternPanel current={errorPatterns} history={historyErrorTrends} />
 
-      <SentenceFixPanel fixes={sentenceFixes} onApply={applySentenceFix} />
-
-      <Card className="rounded-2xl border-border/60 bg-card/50">
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-lg">Revision</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Apply fixes, edit the draft, then regrade against Band {effectiveDesiredScore.toFixed(1)}.
-              </p>
-            </div>
-            {result.improved_version ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => setRevisionText(result.improved_version || "")}>
-                Use improved
-              </Button>
-            ) : null}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <textarea
-            value={revisionText}
-            onChange={(event) => setRevisionText(event.target.value)}
-            className="min-h-[220px] w-full resize-y rounded-xl border border-border/50 bg-background px-4 py-3 text-sm leading-7 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-          />
-          {revisionError ? <p className="text-sm text-rose-600 dark:text-rose-300">{revisionError}</p> : null}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">{revisionText.trim().split(/\s+/).filter(Boolean).length} words</p>
-            <Button type="button" onClick={submitRevision} disabled={regrading}>
-              {regrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
-              Regrade revision
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <SentenceFixPanel fixes={sentenceFixes} />
 
       <Card className="rounded-3xl border-border/60 bg-card/40 mt-2">
         <CardHeader className="pb-3">
@@ -2055,40 +1966,6 @@ export function WritingResultClient({
         </Card>
       ) : null}
 
-      {result.roast && (result.roast.overall_roast || result.roast.savage_tips?.length) ? (
-        <Card className="rounded-3xl border-border/60 bg-card/40">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-lg">Fun feedback</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Savage feedback. It does not affect your IELTS band or action plan.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowRoast((value) => !value)}
-              >
-                <Flame className="h-4 w-4" />
-                {showRoast ? "Hide roast" : "Show roast"}
-              </Button>
-            </div>
-          </CardHeader>
-        </Card>
-      ) : null}
-
-      {showRoast && result.roast && (result.roast.overall_roast || result.roast.savage_tips?.length) ? (
-        <FeedbackPanel
-          roast={result.roast}
-          taBand={toBandNumber(result.task_achievement.band)}
-          ccBand={toBandNumber(result.coherence.band)}
-          lrBand={toBandNumber(result.lexical.band)}
-          graBand={toBandNumber(result.grammar.band)}
-        />
-      ) : null}
-
       {vocabularySuggestions.length ? (
         <Card className="rounded-3xl border-border/60 bg-card/40 mt-2">
           <CardHeader className="pb-3">
@@ -2111,6 +1988,16 @@ export function WritingResultClient({
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {result.roast && (result.roast.overall_roast || result.roast.savage_tips?.length) ? (
+        <FeedbackPanel
+          roast={result.roast}
+          taBand={toBandNumber(result.task_achievement.band)}
+          ccBand={toBandNumber(result.coherence.band)}
+          lrBand={toBandNumber(result.lexical.band)}
+          graBand={toBandNumber(result.grammar.band)}
+        />
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">

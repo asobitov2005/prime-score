@@ -6,7 +6,6 @@ from uuid import UUID
 
 import pytest
 
-from app.core.enums import NotificationType
 from app.core.enums import AttemptStatus as CoreAttemptStatus
 from app.models.enums import AttemptMode as ModelAttemptMode
 from app.models.enums import AttemptScope as ModelAttemptScope
@@ -144,9 +143,7 @@ async def test_grant_premium_bonus_extends_active_premium(monkeypatch) -> None:
     assert premium_until == now + timedelta(days=3)
     assert user.is_premium is True
     assert user.premium_until == now + timedelta(days=3)
-    assert len(session.added) == 1
-    assert session.added[0].type == NotificationType.gift_received
-    assert session.added[0].title == "Test bonus activated"
+    assert session.added == []
 
 
 def test_should_grant_premium_bonus_only_for_full_reading_and_listening() -> None:

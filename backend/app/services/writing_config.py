@@ -45,7 +45,11 @@ _GRADER_SYSTEM_PROMPT = (
     "descriptors are clearly met. Use the provided anchor essays as "
     "calibration references; never reveal them in your output. Do NOT "
     "reward length, topic, or apparent effort beyond what the descriptors "
-    "describe. Be specific and critical when giving improvement advice."
+    "describe. Do not award Band 8+ for safe, formulaic, or merely error-light "
+    "writing unless the criterion clearly shows precision, flexibility, and depth. "
+    "Formulaic transitions, basic repeated vocabulary, generic examples, or shallow "
+    "development should normally cap the relevant criterion around Band 7.0-7.5. "
+    "Be specific and critical when giving improvement advice."
 )
 
 _GRADER_USER_TEMPLATE = """TASK TYPE: {{TASK_TYPE}}
@@ -74,7 +78,22 @@ COACHING OUTPUT RULES:
 11. `ielts_checklist` must contain exactly 5 task-specific checklist rows with label, status, detail, how_to_fix.
 12. `error_taxonomy` must group repeated weak patterns by subcategory, not just broad category. Include count, examples, and one fix.
 13. `sentence_fixes` must contain the highest-impact sentence corrections only. Use exact original text from the essay.
-14. `score_boosters` must contain 3-6 exact original phrases or sentences that helped the score. Show criterion, original, why_it_scores, keep_doing, and band_value.
+14. `score_boosters` must contain 3-6 exact original phrases or sentences that helped the score. Show criterion, original, why_it_scores, keep_doing, and band_value. `band_value` must describe the scoring effect, not overclaim a band (good: "supports Task Achievement"; bad: "Band 8 support").
+
+STRICT SCORING CALIBRATION:
+- Band 8 requires clear descriptor evidence, not just good structure and few mistakes.
+- If ideas are clear but predictable or not deeply developed, Task Achievement is usually 7.0-7.5.
+- If cohesion relies on obvious signals such as Firstly/Secondly/Another important point, Coherence is usually capped at 7.5 unless referencing and progression are genuinely sophisticated.
+- If vocabulary is accurate but safe, repeated, or mostly common words, Lexical Resource is usually 7.0-7.5.
+- If grammar is accurate but mostly safe and conventional, Grammar is usually 7.0-7.5.
+- Overall Band 8 should be rare and must be justified by all four criteria, not by one polished paragraph.
+
+TARGET INTEGRITY RULES:
+- Desired Score is a coaching target only. It must not increase the awarded band.
+- If evidence sits between two bands, choose the lower band unless the higher-band descriptor is consistently proven across the whole essay.
+- Do not mark the essay as target-ready unless the actual descriptor evidence meets or exceeds that band.
+- Penalize missing or weak required task features directly: Task 1 overview/key features/data/comparisons; Task 2 conclusion/position/full coverage/developed support.
+- If the learner already exceeds the desired score, actions should protect the current score and target only the next realistic +0.5, not over-praise.
 
 {{ANNOTATION_PROMPT}}
 
