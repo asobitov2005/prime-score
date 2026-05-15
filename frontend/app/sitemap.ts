@@ -3,6 +3,9 @@ import { absoluteUrl } from "@/lib/seo";
 import { seoLandingPages } from "@/lib/seo-pages";
 import { getLandingFeaturedTests } from "@/lib/server-data";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 900;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
 
