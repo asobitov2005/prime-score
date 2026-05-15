@@ -10,6 +10,7 @@ interface WritingExamPreviewPageProps {
   searchParams?: {
     taskId?: string;
     task_type?: string;
+    draft_key?: string;
     mode?: string;
   };
 }
@@ -43,6 +44,7 @@ export default async function WritingExamPreviewPage({ searchParams }: WritingEx
           : null
       }
       taskType={task?.task_type ?? asTaskType(searchParams?.task_type)}
+      draftKey={searchParams?.draft_key?.trim() || null}
     />
   );
 }

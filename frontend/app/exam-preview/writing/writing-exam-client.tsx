@@ -97,16 +97,18 @@ function formatTime(totalSeconds: number): string {
 export function WritingExamClient({
   task,
   taskType,
+  draftKey,
 }: {
   task: ExamWritingTask | null;
   taskType: WritingTaskType;
+  draftKey?: string | null;
 }) {
   const router = useRouter();
   const resolvedTaskType = task?.task_type ?? taskType;
   const config = TASK_CONFIG[resolvedTaskType];
   const wordMinimum = task?.word_minimum ?? config.words;
   const timeLimitSeconds = task?.time_limit_seconds ?? config.seconds;
-  const storageKey = `writing-exam-draft:${task?.id ?? `custom:${resolvedTaskType}`}`;
+  const storageKey = task ? `writing-exam-draft:${task.id}` : (draftKey || `writing-exam-draft:custom:${resolvedTaskType}`);
 
   const [isStarted, setIsStarted] = useState(true);
   const [topic, setTopic] = useState("");

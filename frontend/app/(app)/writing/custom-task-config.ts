@@ -52,8 +52,17 @@ export function getCustomTaskDraftKey(taskType: WritingTaskType): string {
   return CUSTOM_TASK_DRAFT_KEYS[taskType];
 }
 
-export function getCustomTaskWorkspaceHref(taskType: WritingTaskType): string {
-  return `/exam-preview/writing?task_type=${taskType}`;
+export function createCustomTaskDraftKey(taskType: WritingTaskType): string {
+  const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${getCustomTaskDraftKey(taskType)}:${suffix}`;
+}
+
+export function getCustomTaskWorkspaceHref(taskType: WritingTaskType, draftKey?: string): string {
+  const params = new URLSearchParams({ task_type: taskType });
+  if (draftKey) {
+    params.set("draft_key", draftKey);
+  }
+  return `/exam-preview/writing?${params.toString()}`;
 }
 
 export function getCustomTaskConfig(taskType: WritingTaskType): CustomTaskConfig {

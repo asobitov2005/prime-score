@@ -700,7 +700,7 @@ async def get_writing_draft(
         task_type = WritingTaskType.TASK_1
         if draft_key.startswith("writing-exam-draft:custom:"):
             suffix = draft_key.removeprefix("writing-exam-draft:custom:")
-            if suffix == WritingTaskType.TASK_2.value:
+            if suffix == WritingTaskType.TASK_2.value or suffix.startswith(f"{WritingTaskType.TASK_2.value}:"):
                 task_type = WritingTaskType.TASK_2
         elif draft_key.startswith("writing-exam-draft:"):
             raw_task_id = draft_key.removeprefix("writing-exam-draft:")

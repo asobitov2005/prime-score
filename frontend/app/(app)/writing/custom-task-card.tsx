@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { emitNavigationStart } from "@/lib/navigation-transition";
 import { cn } from "@/lib/utils";
 import type { WritingTaskType } from "@/lib/server-writing";
-import { getCustomTaskConfig, getCustomTaskDraftKey, getCustomTaskWorkspaceHref } from "./custom-task-config";
+import { createCustomTaskDraftKey, getCustomTaskConfig, getCustomTaskWorkspaceHref } from "./custom-task-config";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -179,11 +179,12 @@ function CustomTaskDialog({
       timeSpentSeconds: 0,
     };
 
+    const draftKey = createCustomTaskDraftKey(taskType);
     try {
-      window.localStorage.setItem(getCustomTaskDraftKey(taskType), JSON.stringify(payload));
+      window.localStorage.setItem(draftKey, JSON.stringify(payload));
     } catch {}
 
-    const href = getCustomTaskWorkspaceHref(taskType);
+    const href = getCustomTaskWorkspaceHref(taskType, draftKey);
     emitNavigationStart(href);
     router.push(href);
   }, [canContinue, config.requiresImage, imageDataUrl, isStarting, prompt, router, taskType]);

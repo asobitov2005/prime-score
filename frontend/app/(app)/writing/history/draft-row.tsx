@@ -45,7 +45,7 @@ export function DraftRow({ draft }: { draft: WritingDraftListItem }) {
   const [isDeleted, setIsDeleted] = useState(false);
   const href = draft.task_id
     ? `/exam-preview/writing?taskId=${draft.task_id}`
-    : `/exam-preview/writing?task_type=${draft.task_type}`;
+    : `/exam-preview/writing?task_type=${draft.task_type}&draft_key=${encodeURIComponent(draft.draft_key)}`;
   const preview = draft.topic.trim() || draft.task_title || draft.essay_text.trim().slice(0, 120) || "Untitled draft";
   const words = draftWordCount(draft.essay_text);
 
