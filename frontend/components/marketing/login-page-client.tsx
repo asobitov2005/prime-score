@@ -11,7 +11,7 @@ import {
   Fingerprint,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
@@ -23,18 +23,23 @@ import { cn } from "@/lib/utils";
 
 export function LoginPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setSession = useAuthStore((state) => state.setSession);
   const setWelcomeBonus = useAuthStore((state) => state.setWelcomeBonus);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const [step, setStep] = useState<"guide" | "verify">("guide");
+  const rawReturnUrl = searchParams.get("returnUrl");
+  const safeReturnUrl = rawReturnUrl?.startsWith("/") && !rawReturnUrl.startsWith("//")
+    ? rawReturnUrl
+    : "/dashboard";
 
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) {
       return;
     }
-    router.replace("/dashboard");
-  }, [hasHydrated, isAuthenticated, router]);
+    router.replace(safeReturnUrl);
+  }, [hasHydrated, isAuthenticated, router, safeReturnUrl]);
 
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +99,7 @@ export function LoginPageClient() {
       });
 
       window.setTimeout(() => {
-        window.location.assign("/dashboard");
+        window.location.assign(safeReturnUrl);
       }, 0);
     } catch (error: unknown) {
       console.error("Login verification error:", error);

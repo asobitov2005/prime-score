@@ -96,6 +96,7 @@ LISTENING_SECTIONS = [
 TEST_CATALOG_FIXTURES: list[dict[str, object]] = [
     {
         "id": READING_TEST_ID,
+        "slug": "primescore-reading-skeleton",
         "title": "PrimeScore Reading Skeleton",
         "test_type": TestType.reading,
         "access_type": AccessType.public,
@@ -110,6 +111,7 @@ TEST_CATALOG_FIXTURES: list[dict[str, object]] = [
     },
     {
         "id": LISTENING_TEST_ID,
+        "slug": "primescore-listening-skeleton",
         "title": "PrimeScore Listening Skeleton",
         "test_type": TestType.listening,
         "access_type": AccessType.premium,

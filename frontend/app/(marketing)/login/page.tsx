@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { LoginPageClient } from "@/components/marketing/login-page-client";
+import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
 import { absoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -15,5 +17,9 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
-  return <LoginPageClient />;
+  return (
+    <Suspense fallback={<AppLoadingPlaceholder mode="overlay" />}>
+      <LoginPageClient />
+    </Suspense>
+  );
 }

@@ -1,18 +1,47 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Clock3, FileText, FolderOpen, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StartTestModal } from "@/components/start-test-modal";
-import { buildAttemptWorkspaceMeta, getTestById } from "@/lib/mock-data";
 import { getCatalogTestDetail } from "@/lib/server-data";
+import { absoluteUrl } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 interface TestDetailPageProps {
   params: {
     testId: string;
+  };
+}
+
+export async function generateMetadata({ params }: TestDetailPageProps): Promise<Metadata> {
+  const test = await getCatalogTestDetail(params.testId);
+
+  if (!test) {
+    return {
+      title: "IELTS Practice Test Not Found | PrimeScore",
+    };
+  }
+
+  const title = `${test.title} | IELTS ${test.type} Practice Test`;
+  const description = test.description || `Practice ${test.questionCount} IELTS ${test.type} questions on PrimeScore.`;
+  const canonicalPath = `/tests/${test.slug}`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: canonicalPath,
+    },
+    openGraph: {
+      title,
+      description,
+      url: absoluteUrl(canonicalPath),
+      type: "article",
+    },
   };
 }
 
@@ -22,6 +51,10 @@ export default async function TestDetailPage({ params }: TestDetailPageProps) {
 
   if (!test) {
     notFound();
+  }
+
+  if (test.slug && test.slug !== testId) {
+    permanentRedirect(`/tests/${test.slug}`);
   }
 
   const formatDisplay = (testFormat: string) => {

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 import logging
 import re
+import unicodedata
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, func, select
@@ -22,7 +23,7 @@ from app.models.enums import TestSource as ModelTestSource
 from app.models.enums import TestStatus as ModelTestStatus
 from app.models.enums import TestType as ModelTestType
 from app.models.attempt import Attempt, UserAnswer
-from app.models.test import AnswerVariant, Question, QuestionGroup, Test, TestSection
+from app.models.test import AnswerVariant, Question, QuestionGroup, Test, TestSection, TestSlugRedirect
 from app.services.admin_example_reading_seed import (
     ADMIN_EXAMPLE_READING_TEST_ID,
     build_admin_example_reading_draft,
@@ -57,6 +58,69 @@ def _model_test_status(value: TestStatus) -> ModelTestStatus:
 _EXAM_PRACTICE_TITLE_RE = re.compile(r"^Exam Practice Test (\d+)$", re.IGNORECASE)
 _EXAM_PRACTICE_PLACEHOLDER_RE = re.compile(r"^Exam Practice Test$", re.IGNORECASE)
 _CUSTOM_TEST_SUFFIX_RE = re.compile(r"^(?P<base>.+?)\s+-\s+Test\s+(?P<number>\d+)$", re.IGNORECASE)
+_SLUG_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify_test_title(title: str | None, *, fallback: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(title or ""))
+    ascii_title = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    slug = _SLUG_SEPARATOR_RE.sub("-", ascii_title).strip("-")
+    return slug or fallback
+
+
+async def _is_test_slug_available(session: AsyncSession, *, slug: str, test_id: UUID) -> bool:
+    existing_test_id = await session.scalar(select(Test.id).where(Test.slug == slug))
+    if existing_test_id is not None and existing_test_id != test_id:
+        return False
+
+    existing_redirect_test_id = await session.scalar(select(TestSlugRedirect.test_id).where(TestSlugRedirect.slug == slug))
+    if existing_redirect_test_id is not None and existing_redirect_test_id != test_id:
+        return False
+
+    return True
+
+
+async def _build_unique_test_slug(
+    session: AsyncSession,
+    *,
+    title: str,
+    test_type: ModelTestType | str,
+    test_id: UUID,
+) -> str:
+    raw_type = test_type.value if hasattr(test_type, "value") else str(test_type)
+    base = _slugify_test_title(title, fallback=f"{raw_type or 'test'}-test")[:300].strip("-")
+    base = base or "test"
+
+    candidate = base
+    suffix = 2
+    while not await _is_test_slug_available(session, slug=candidate, test_id=test_id):
+        suffix_text = f"-{suffix}"
+        candidate = f"{base[:320 - len(suffix_text)]}{suffix_text}".strip("-")
+        suffix += 1
+    return candidate
+
+
+async def _sync_test_slug(session: AsyncSession, test: Test) -> None:
+    next_slug = await _build_unique_test_slug(
+        session,
+        title=test.title,
+        test_type=test.type,
+        test_id=test.id,
+    )
+    current_slug = str(getattr(test, "slug", "") or "").strip()
+    if current_slug == next_slug:
+        return
+
+    if current_slug:
+        existing_redirect = await session.scalar(
+            select(TestSlugRedirect).where(TestSlugRedirect.slug == current_slug)
+        )
+        if existing_redirect is None:
+            session.add(TestSlugRedirect(slug=current_slug, test_id=test.id))
+        elif existing_redirect.test_id != test.id:
+            logger.warning("Slug redirect collision for %s while updating test %s", current_slug, test.id)
+
+    test.slug = next_slug
 
 
 def _is_exam_practice_auto_title(value: str | None) -> bool:
@@ -231,6 +295,7 @@ def _serialize_catalog_item(test: Test) -> dict[str, object]:
 
     return {
         "id": test.id,
+        "slug": test.slug,
         "title": test.title,
         "test_type": test.type.value,
         "format": test.format.value if hasattr(test, "format") and test.format else "full",
@@ -467,6 +532,7 @@ async def ensure_fixture_tests_seeded(session: AsyncSession) -> None:
     for fixture in TEST_CATALOG_FIXTURES:
         test = Test(
             id=fixture["id"],
+            slug=str(fixture["slug"]),
             title=str(fixture["title"]),
             type=ModelTestType(str(fixture["test_type"])),
             format=ModelTestFormat.FULL,
@@ -705,6 +771,29 @@ async def get_test_from_db(session: AsyncSession, test_id: UUID) -> dict[str, ob
     return _serialize_catalog_item(test)
 
 
+async def get_test_by_identifier_from_db(session: AsyncSession, identifier: str) -> dict[str, object] | None:
+    try:
+        return await get_test_from_db(session, UUID(identifier))
+    except ValueError:
+        pass
+
+    normalized_identifier = identifier.strip().lower()
+    if not normalized_identifier:
+        return None
+
+    query = _tests_query().where(Test.slug == normalized_identifier)
+    test = (await session.scalars(query)).unique().first()
+    if test is not None and test.id != LISTENING_TEST_ID:
+        return _serialize_catalog_item(test)
+
+    redirect_test_id = await session.scalar(
+        select(TestSlugRedirect.test_id).where(TestSlugRedirect.slug == normalized_identifier)
+    )
+    if redirect_test_id is None:
+        return None
+    return await get_test_from_db(session, redirect_test_id)
+
+
 def _question_number(label: str, fallback: int) -> int:
     match = re.search(r"\d+", label)
     return int(match.group(0)) if match else fallback
@@ -934,10 +1023,18 @@ async def save_test_draft_to_db(
     resolved_title = await _resolve_admin_test_title(session, metadata=metadata, existing_test=existing_test_for_title)
 
     if test is None:
+        new_test_id = uuid4() if preserve_existing_version else (test_id or uuid4())
+        new_test_type = ModelTestType(str(metadata["type"]))
         test = Test(
-            id=uuid4() if preserve_existing_version else (test_id or uuid4()),
+            id=new_test_id,
+            slug=await _build_unique_test_slug(
+                session,
+                title=resolved_title,
+                test_type=new_test_type,
+                test_id=new_test_id,
+            ),
             title=resolved_title,
-            type=ModelTestType(str(metadata["type"])),
+            type=new_test_type,
             format=ModelTestFormat(str(metadata.get("format", "full"))),
             access_type=ModelAccessType(str(metadata["access_type"])),
             status=ModelTestStatus.DRAFT,
@@ -968,6 +1065,7 @@ async def save_test_draft_to_db(
         test.total_questions = weighted_total_questions
         test.status = ModelTestStatus.DRAFT
         test.review_status = "needs_review"
+        await _sync_test_slug(session, test)
 
         for section in test.sections:
             for group in section.question_groups:
@@ -1187,6 +1285,7 @@ async def quick_fix_published_test_in_db(
     test.description = f"{resolved_title} quick fixed from admin builder."
     test.total_questions = weighted_total_questions
     test.exam_time_limit_seconds = requested_time_limit_seconds
+    await _sync_test_slug(session, test)
 
     for index, section_payload in enumerate(sections, start=1):
         section_id = str(section_payload.get("id") or "")
@@ -1331,6 +1430,7 @@ async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[st
 
     test.status = ModelTestStatus.PUBLISHED
     test.version += 1
+    await _sync_test_slug(session, test)
 
     test_type = test.type.value if hasattr(test.type, "value") else str(test.type)
     test_title = test.title
@@ -1347,7 +1447,7 @@ async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[st
             title="New test available!",
             body=body,
             telegram_text=f"📝 <b>New test available!</b>\n\n{body}",
-            inline_keyboard=[[{"text": "🚀 Try Now", "url": f"https://primescore.uz/tests/{test_id}"}]],
+            inline_keyboard=[[{"text": "🚀 Try Now", "url": f"https://primescore.uz/tests/{test.slug}"}]],
         )
         await session.commit()
     except Exception:

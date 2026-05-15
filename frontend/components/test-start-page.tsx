@@ -152,7 +152,7 @@ export function TestStartPage({ test }: TestStartPageProps) {
             <Button
               variant="outline"
               onClick={() => {
-                const href = `/tests/${test.id}`;
+                const href = `/tests/${test.slug}`;
                 emitNavigationStart(href);
                 router.push(href);
               }}

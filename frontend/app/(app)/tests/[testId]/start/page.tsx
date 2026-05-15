@@ -29,7 +29,7 @@ export default async function TestStartPage({ params }: TestStartRoutePageProps)
       <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-300">
         
         <div className="mb-4">
-          <Link href={`/tests/${testId}`} className="inline-flex items-center text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">
+          <Link href={`/tests/${test.slug}`} className="inline-flex items-center text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
             Back to details
           </Link>

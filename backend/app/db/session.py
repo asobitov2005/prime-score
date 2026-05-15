@@ -1,24 +1,44 @@
-from functools import lru_cache
+from __future__ import annotations
+
+import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 
 
-@lru_cache(maxsize=1)
+_engines: dict[int, object] = {}
+_session_makers: dict[int, async_sessionmaker[AsyncSession]] = {}
+
+
+def _current_loop_key() -> int:
+    try:
+        return id(asyncio.get_running_loop())
+    except RuntimeError:
+        return 0
+
+
 def get_engine():
+    loop_key = _current_loop_key()
+    if loop_key in _engines:
+        return _engines[loop_key]
+
     settings = get_settings()
-    return create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
+    engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
+    _engines[loop_key] = engine
+    return engine
 
 
-@lru_cache(maxsize=1)
 def get_session_maker() -> async_sessionmaker[AsyncSession]:
-    return async_sessionmaker(bind=get_engine(), expire_on_commit=False, class_=AsyncSession)
+    loop_key = _current_loop_key()
+    if loop_key not in _session_makers:
+        _session_makers[loop_key] = async_sessionmaker(bind=get_engine(), expire_on_commit=False, class_=AsyncSession)
+    return _session_makers[loop_key]
 
 
 def reset_session_state() -> None:
-    get_session_maker.cache_clear()
-    get_engine.cache_clear()
+    _session_makers.clear()
+    _engines.clear()
 
 
 async def get_async_session() -> AsyncSession:

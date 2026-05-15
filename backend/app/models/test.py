@@ -13,6 +13,7 @@ class Test(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "tests"
 
     title: Mapped[str] = mapped_column(String(255))
+    slug: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     type: Mapped[TestType] = mapped_column(Enum(TestType, native_enum=False), index=True)
     format: Mapped[TestFormat] = mapped_column(Enum(TestFormat, native_enum=False), index=True, default=TestFormat.FULL)
     access_type: Mapped[AccessType] = mapped_column(Enum(AccessType, native_enum=False), index=True)
@@ -29,6 +30,13 @@ class Test(UUIDMixin, TimestampMixin, Base):
     review_status: Mapped[str] = mapped_column(String(32), default="needs_review", index=True)
 
     sections: Mapped[list["TestSection"]] = relationship(back_populates="test")
+
+
+class TestSlugRedirect(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "test_slug_redirects"
+
+    slug: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    test_id: Mapped[UUID] = mapped_column(ForeignKey("tests.id"), index=True)
 
 
 class TestSection(UUIDMixin, TimestampMixin, Base):

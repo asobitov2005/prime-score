@@ -266,6 +266,52 @@ export function buildFaqStructuredData() {
   };
 }
 
+export function buildLandingPracticeItemListStructuredData(
+  tests: Array<{
+    id: string;
+    slug?: string;
+    title: string;
+    type: string;
+    source?: string;
+    questionCount?: number;
+    estimatedMinutes?: number;
+  }>,
+) {
+  const testPath = (test: { id: string; slug?: string }) => `/tests/${test.slug ?? test.id}`;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "@id": absoluteUrl("/#featured-tests"),
+    name: "Featured IELTS practice tests on PrimeScore",
+    itemListOrder: "https://schema.org/ItemListOrderAscending",
+    numberOfItems: tests.length,
+    itemListElement: tests.map((test, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      url: absoluteUrl(testPath(test)),
+      item: {
+        "@type": "LearningResource",
+        "@id": absoluteUrl(`${testPath(test)}#learning-resource`),
+        name: test.title,
+        url: absoluteUrl(testPath(test)),
+        learningResourceType: `${test.type} IELTS practice test`,
+        educationalLevel: "IELTS",
+        about: [
+          "IELTS mock test",
+          `IELTS ${test.type} practice`,
+          test.source ? `${test.source} IELTS practice` : "online IELTS practice",
+        ].filter(Boolean),
+        timeRequired: test.estimatedMinutes ? `PT${test.estimatedMinutes}M` : undefined,
+        numberOfItems: test.questionCount,
+        provider: {
+          "@id": absoluteUrl("/#organization"),
+        },
+      },
+    })),
+  };
+}
+
 export function buildPricingWebPageStructuredData() {
   return {
     "@context": "https://schema.org",

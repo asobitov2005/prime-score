@@ -143,6 +143,7 @@ class AdminTestUpsertRequest(BaseModel):
 
 class AdminTestRead(AdminTestUpsertRequest):
     id: UUID
+    slug: str = ""
     format: str | None = None
     status: TestStatus = TestStatus.draft
     review_status: Literal["needs_review", "approved", "rejected"] = "needs_review"

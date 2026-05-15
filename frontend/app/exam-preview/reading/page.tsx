@@ -409,7 +409,10 @@ async function buildGuestPreviewData(testId: string): Promise<ReadingExamPreview
 
   return {
     attemptId: `guest-${testId}`,
-    exitHref: "/tests?type=reading",
+    exitHref: `/tests/${snapshot.slug ?? snapshot.id}`,
+    testId: snapshot.id,
+    testSlug: snapshot.slug ?? snapshot.id,
+    testType: "reading",
     title: snapshot.title,
     subtitle: buildSubtitle(firstQuestionNumber, lastQuestionNumber, sections.length > 1),
     partLabel: sections.length > 1

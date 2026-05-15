@@ -124,6 +124,8 @@ interface PreviewSection {
 export interface ReadingExamPreviewData {
   attemptId?: string;
   exitHref?: string;
+  testId?: string;
+  testSlug?: string;
   title: string;
   subtitle: string;
   partLabel: string;
@@ -4057,7 +4059,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               <div className="flex flex-col gap-2 pt-2">
                 <Button
                   onClick={() => {
-                    const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                    const returnPath = examData.testSlug ? `/tests/${examData.testSlug}` : (examData.exitHref ?? "/tests");
+                    const returnUrl = encodeURIComponent(returnPath);
                     router.push(`/login?returnUrl=${returnUrl}`);
                   }}
                   className="h-10 w-full rounded-xl font-bold bg-orange-500 text-white hover:bg-orange-600 transition-all shadow-sm"

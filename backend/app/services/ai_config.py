@@ -42,8 +42,8 @@ class ResolvedAiUseCaseConfig:
     base_url: str | None
     model_id: str
     model_record_id: UUID | None
-    context_window: int | None
     settings_json: dict[str, Any]
+    context_window: int | None = None
     source: str = "db"
 
 

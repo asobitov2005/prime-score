@@ -16,4 +16,6 @@ async def test_list_tests() -> None:
         response = await client.get("/api/tests")
 
     assert response.status_code == 200
-    assert len(response.json()) == 2
+    payload = response.json()
+    assert len(payload) >= 2
+    assert all(item.get("id") and item.get("slug") for item in payload)

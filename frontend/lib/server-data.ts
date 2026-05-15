@@ -1,4 +1,4 @@
-import { getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
+import { getTestById, getTestsByAccess, getTestsByType, mockTests } from "@/lib/mock-data";
 import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 import { getTestSourceDetail, getTestSourceLabel, matchesTestSourceFilter } from "@/lib/test-source";
 import type { AccessType, TestCatalogItem, TestType } from "@/lib/types";
@@ -7,6 +7,7 @@ const baseUrl = getFrontendServerApiBaseUrl();
 
 type BackendTestCatalogItem = {
   id: string;
+  slug?: string | null;
   title: string;
   section_title?: string | null;
   test_type: TestType;
@@ -63,6 +64,29 @@ async function requestApi<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestCachedApi<T>(path: string, revalidateSeconds: number, tag: string): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      next: { revalidate: revalidateSeconds, tags: [tag] },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "no body");
+    console.error(`Frontend cached API request failed for ${path} with status ${response.status}: ${text}`);
+    throw new Error(`Frontend cached API request failed for ${path}`);
+  }
+
+  return (await response.json()) as T;
+}
+
 function buildPlaceholderSections(count: number): TestCatalogItem["sections"] {
   return Array.from({ length: count }, (_, index) => ({
     id: `placeholder-section-${index + 1}`,
@@ -76,7 +100,7 @@ function buildPlaceholderSections(count: number): TestCatalogItem["sections"] {
 function mapCatalogItem(item: BackendTestCatalogItem): TestCatalogItem {
   return {
     id: item.id,
-    slug: item.id,
+    slug: item.slug ?? item.id,
     title: item.title,
     sectionTitle: item.section_title ?? undefined,
     type: item.test_type,
@@ -138,6 +162,22 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
       results = results.filter((test) => matchesTestSourceFilter(test.source, test.sourceDetail, query.source));
     }
     return results;
+  }
+}
+
+export async function getLandingFeaturedTests(): Promise<TestCatalogItem[]> {
+  const search = new URLSearchParams();
+  search.set("status", "published");
+
+  try {
+    const items = await requestCachedApi<BackendTestCatalogItem[]>(
+      `/tests?${search.toString()}`,
+      900,
+      "landing-featured-tests",
+    );
+    return items.map(mapCatalogItem);
+  } catch {
+    return mockTests.filter((test) => test.status === "published");
   }
 }
 

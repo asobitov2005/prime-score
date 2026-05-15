@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
 import { absoluteUrl } from "@/lib/seo";
 import { seoLandingPages } from "@/lib/seo-pages";
+import { getLandingFeaturedTests } from "@/lib/server-data";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
 
   const publicRoutes: MetadataRoute.Sitemap = [
@@ -39,5 +40,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: page.slug === "ielts-mock-test-online" ? 0.95 : 0.86,
   }));
 
-  return [...publicRoutes, ...seoRoutes];
+  const testRoutes: MetadataRoute.Sitemap = (await getLandingFeaturedTests())
+    .filter((test) => test.status === "published")
+    .map((test) => ({
+      url: absoluteUrl(`/tests/${test.slug}`),
+      lastModified,
+      changeFrequency: "weekly",
+      priority: 0.72,
+    }));
+
+  return [...publicRoutes, ...seoRoutes, ...testRoutes];
 }

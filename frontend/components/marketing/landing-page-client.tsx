@@ -15,6 +15,9 @@ import { FloatingElements } from "@/components/marketing/floating-elements";
 
 
 
+const listeningWaveHeights = [42, 68, 35, 82, 58, 94, 46, 76, 28, 63, 88, 51, 72, 39, 96, 55, 80, 31, 66, 91, 44, 74, 36, 60];
+const speakingWaveHeights = [48, 72, 39, 83, 56, 90, 44, 78, 52];
+
 const sectionPages = [
   {
     id: "reading",
@@ -66,11 +69,11 @@ const sectionPages = [
           <div className="text-[10px] sm:text-xs font-mono text-blue-500 shrink-0">02:14 / 05:30</div>
         </div>
         <div className="flex items-end gap-1 h-16 w-full mt-auto">
-          {[...Array(24)].map((_, i) => (
+          {listeningWaveHeights.map((height, i) => (
             <div
               key={i}
               className="flex-1 bg-blue-500/40 rounded-t-sm"
-              style={{ height: `${Math.max(20, Math.random() * 100)}%` }}
+              style={{ height: `${height}%` }}
             ></div>
           ))}
         </div>
@@ -122,11 +125,11 @@ const sectionPages = [
           <div className="text-[10px] sm:text-xs font-mono text-foreground/80 mt-1 font-medium bg-background/80 px-2 py-0.5 rounded-full border border-border/50 backdrop-blur-sm">AI Examiner</div>
         </div>
         <div className="flex gap-1.5 items-end h-16 mt-auto mb-2 opacity-80">
-          {[...Array(9)].map((_, i) => (
+          {speakingWaveHeights.map((height, i) => (
             <div
               key={i}
               className="w-2 sm:w-2.5 rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400"
-              style={{ height: `${30 + Math.random() * 60}%` }}
+              style={{ height: `${height}%` }}
             ></div>
           ))}
         </div>
@@ -136,6 +139,17 @@ const sectionPages = [
 ];
 
 const skills = ["Reading.", "Listening.", "Writing.", "Speaking."];
+
+type LandingFeaturedTest = {
+  id: string;
+  slug: string;
+  title: string;
+  type: string;
+  source: string;
+  questionCount: number;
+  estimatedMinutes: number;
+  isPremiumLocked: boolean;
+};
 
 function ScrollReveal({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
   const [ref, inView] = useInView({ threshold: 0.1 });
@@ -158,14 +172,14 @@ interface LandingPageClientProps {
   plans: MarketingPlan[];
   reviews: ReviewItem[];
   onlineCount: number;
-  initialTests?: any;
+  initialTests?: LandingFeaturedTest[];
 }
 
 function formatOnlineCount(value: number): string {
   return value.toLocaleString("en-US");
 }
 
-export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageClientProps) {
+export function LandingPageClient({ plans, reviews, onlineCount, initialTests = [] }: LandingPageClientProps) {
   const [skillIndex, setSkillIndex] = useState(0);
   const [isReviewsVisible, setIsReviewsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
@@ -197,15 +211,16 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
   }, []);
 
   const getDisplayedTests = () => {
-    let filtered = mockTests;
+    const sourceTests = initialTests.length > 0 ? initialTests : mockTests;
+    let filtered = sourceTests;
 
     if (activeTab !== "All") {
-      filtered = mockTests.filter((test) => test.type.toLowerCase() === activeTab.toLowerCase());
+      filtered = sourceTests.filter((test) => test.type.toLowerCase() === activeTab.toLowerCase());
       return filtered.slice(0, 4);
     }
 
-    const readingTests = mockTests.filter((test) => test.type === "reading").slice(0, 2);
-    const listeningTests = mockTests.filter((test) => test.type === "listening").slice(0, 2);
+    const readingTests = sourceTests.filter((test) => test.type === "reading").slice(0, 2);
+    const listeningTests = sourceTests.filter((test) => test.type === "listening").slice(0, 2);
 
     return [...readingTests, ...listeningTests].slice(0, 4);
   };
@@ -355,16 +370,14 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
                     const badgeLabel = test.isPremiumLocked ? "Pro" : "Free";
 
                     return (
-                      <div
+                      <Link
                         key={test.id}
+                        href={`/tests/${test.slug}`}
                         className={cn(
                           "group flex items-center justify-between gap-4 p-3 md:p-4 rounded-2xl border transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer",
                           cardBg,
                           cardBorder,
                         )}
-                        onClick={() => {
-                          window.location.href = "/tests";
-                        }}
                       >
                         <div className="flex items-center gap-3 md:gap-4 min-w-0">
                           <div className={cn("flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300", iconBgColor, iconColor)}>
@@ -402,7 +415,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
                             </svg>
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   }) : (
                     <div className="p-6 text-center text-sm font-medium text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border/50">
@@ -427,14 +440,14 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
 
           <ScrollReveal className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-[1600px]">
             {sectionPages.map((mod, i) => (
-              <div
+              <Link
                 key={mod.id}
+                href={mod.href}
                 style={{ transitionDelay: `${i * 100}ms` }}
                 className={cn(
                   "group relative rounded-[2rem] border p-6 flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(var(--primary),0.15)] hover:border-primary/40 overflow-hidden cursor-pointer",
                   mod.className
                 )}
-                onClick={() => window.location.href = mod.href}
               >
                 {/* Hover Glow Effect */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
@@ -457,7 +470,7 @@ export function LandingPageClient({ plans, reviews, onlineCount }: LandingPageCl
                     {mod.content}
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </ScrollReveal>
         </section>

@@ -86,6 +86,7 @@ class TestCatalogItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    slug: str
     title: str
     test_type: TestType
     format: str | None = "full"

@@ -3,10 +3,11 @@ import { LandingPageClient } from "@/components/marketing/landing-page-client";
 import { getLandingOnlineCount } from "@/lib/server-live-stats";
 import { getPublicPlans } from "@/lib/server-plans";
 import { getPublicReviews } from "@/lib/server-reviews";
-import { getCatalogTests } from "@/lib/server-data";
+import { getLandingFeaturedTests } from "@/lib/server-data";
 import {
   absoluteUrl,
   buildFaqStructuredData,
+  buildLandingPracticeItemListStructuredData,
   buildLandingWebPageStructuredData,
   buildOrganizationStructuredData,
   buildWebsiteStructuredData,
@@ -14,8 +15,7 @@ import {
   landingKeywords,
 } from "@/lib/seo";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 900;
 
 export const metadata: Metadata = {
   title: "Free IELTS Mock Tests Online | Reading, Listening, Writing & Speaking",
@@ -49,23 +49,17 @@ export const metadata: Metadata = {
   },
 };
 
-const structuredDataBlocks = [
-  buildOrganizationStructuredData(),
-  buildWebsiteStructuredData(),
-  buildLandingWebPageStructuredData(),
-  buildFaqStructuredData(),
-];
-
 export default async function LandingPage() {
   const [plans, reviews, onlineCount, allTests] = await Promise.all([
     getPublicPlans(),
     getPublicReviews(6),
     getLandingOnlineCount(),
-    getCatalogTests().catch(() => []),
+    getLandingFeaturedTests(),
   ]);
 
   const featuredTests = allTests.filter((t) => t.status === "published").map((t) => ({
     id: t.id,
+    slug: t.slug,
     title: t.title,
     type: t.type,
     source: t.source,
@@ -73,6 +67,13 @@ export default async function LandingPage() {
     estimatedMinutes: t.estimatedMinutes,
     isPremiumLocked: t.accessType === "premium",
   }));
+  const structuredDataBlocks = [
+    buildOrganizationStructuredData(),
+    buildWebsiteStructuredData(),
+    buildLandingWebPageStructuredData(),
+    buildFaqStructuredData(),
+    buildLandingPracticeItemListStructuredData(featuredTests.slice(0, 8)),
+  ];
 
   return (
     <>

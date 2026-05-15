@@ -14,7 +14,7 @@ from app.schemas.tests import TestCatalogItemRead, TestDetailRead, TestSnapshotR
 from app.services.fixtures import build_test_snapshot, get_test_catalog, get_test_fixture
 from app.services.attempt_repo import start_attempt_in_db
 from app.services.runtime_store import start_attempt
-from app.services.test_content_repo import build_test_snapshot_from_db, get_test_from_db, list_tests_from_db
+from app.services.test_content_repo import build_test_snapshot_from_db, get_test_by_identifier_from_db, get_test_from_db, list_tests_from_db
 
 router = APIRouter()
 
@@ -139,30 +139,38 @@ async def list_tests(
     return items
 
 
-@router.get("/{test_id}", response_model=TestDetailRead)
-async def get_test(test_id: UUID, session: AsyncSession = Depends(get_db_session)) -> TestDetailRead:
+@router.get("/{test_identifier}", response_model=TestDetailRead)
+async def get_test(test_identifier: str, session: AsyncSession = Depends(get_db_session)) -> TestDetailRead:
     snapshot: dict[str, object] | None = None
     fixture: dict[str, object] | None = None
+    resolved_test_id: UUID | None = None
     try:
-        fixture = await get_test_from_db(session, test_id)
-        snapshot, _, _ = await _build_effective_snapshot(
-            session,
-            test_id=test_id,
-            test_format=str(fixture.get("format") or "full") if fixture else "full",
-            mode=TestMode.practice,
-        )
+        fixture = await get_test_by_identifier_from_db(session, test_identifier)
+        resolved_test_id = UUID(str(fixture["id"])) if fixture else None
+        if resolved_test_id is not None:
+            snapshot, _, _ = await _build_effective_snapshot(
+                session,
+                test_id=resolved_test_id,
+                test_format=str(fixture.get("format") or "full") if fixture else "full",
+                mode=TestMode.practice,
+            )
     except Exception:
         try:
             await session.rollback()
         except Exception:
             pass
 
-    if fixture is None and test_id != UUID("22222222-2222-2222-2222-222222222222"):
-        fixture = get_test_fixture(test_id)
+    try:
+        fixture_test_id = UUID(test_identifier)
+    except ValueError:
+        fixture_test_id = None
+
+    if fixture is None and fixture_test_id is not None and fixture_test_id != UUID("22222222-2222-2222-2222-222222222222"):
+        fixture = get_test_fixture(fixture_test_id)
         if fixture is not None:
             snapshot, _, _ = await _build_effective_snapshot(
                 session,
-                test_id=test_id,
+                test_id=fixture_test_id,
                 test_format=str(fixture.get("format") or "full"),
                 mode=TestMode.practice,
             )
