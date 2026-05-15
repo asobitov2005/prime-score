@@ -59,10 +59,28 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
         <CardHeader className="space-y-1 border-b border-border/40 bg-muted/5 p-5 lg:px-6 dark:border-slate-800 dark:bg-slate-900/50">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
-              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Writing</CardTitle>
+              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">IELTS Writing checker</CardTitle>
               <CardDescription className="max-w-2xl text-sm font-medium text-muted-foreground">
-                Practice in an IELTS-style writing workspace, or check an answer you already wrote.
+                Get band score, sentence fixes, and a desired-score action plan for Task 1 and Task 2.
               </CardDescription>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {["Band score in 30-60 sec", "Sentence-level corrections", "Band gap action plan", "Task-specific IELTS checklist"].map((item) => (
+                  <span key={item} className="rounded-full border border-border/60 bg-background/70 px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button asChild size="sm" className="h-9 rounded-xl">
+                  <Link href={`/exam-preview/writing?task_type=${activeTaskType}`}>
+                    Check my essay
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="h-9 rounded-xl">
+                  <Link href="#published-prompts">Pick a prompt</Link>
+                </Button>
+              </div>
             </div>
             <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary md:flex">
               <PenSquare className="h-5 w-5" />
@@ -144,7 +162,7 @@ function PublishedTasksSection({
     .find((item) => item.value === activeSubtype)?.label;
 
   return (
-    <section className="space-y-3">
+    <section id="published-prompts" className="space-y-3 scroll-mt-24">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
@@ -180,6 +198,8 @@ function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
   const stripped = stripHtml(task.description ?? "").slice(0, 120);
   const imgSrc = task.task_type === "task_1" ? resolveWritingAssetUrl(task.image_url) : null;
   const minutes = Math.round((task.time_limit_seconds ?? 0) / 60);
+  const subtypeLabel = subtypeDisplayLabel(task.question_subtype);
+  const skills = expectedSkills(task.question_subtype, task.task_type);
 
   return (
     <Link href={`/exam-preview/writing?taskId=${task.id}`} className="group block">
@@ -205,8 +225,8 @@ function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
               {task.task_type === "task_1" ? "Task 1" : "Task 2"}
             </Badge>
             {task.question_subtype ? (
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                {task.question_subtype.replace(/_/g, " ")}
+              <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-sky-700 dark:text-sky-300">
+                {subtypeLabel}
               </span>
             ) : null}
           </div>
@@ -216,6 +236,14 @@ function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
           {stripped ? (
             <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{stripped}{stripped.length === 120 ? "..." : ""}</p>
           ) : null}
+
+          <div className="flex flex-wrap gap-1.5">
+            {skills.map((skill) => (
+              <span key={skill} className="rounded-md border border-border/50 bg-muted/30 px-2 py-1 text-[10px] font-semibold text-muted-foreground">
+                {skill}
+              </span>
+            ))}
+          </div>
 
           <div className="mt-auto flex items-center justify-between pt-2">
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -228,7 +256,7 @@ function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
                 {minutes} min
               </span>
             </div>
-            <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
               Start <ArrowRight className="h-4 w-4" />
             </span>
           </div>
@@ -236,6 +264,25 @@ function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
       </Card>
     </Link>
   );
+}
+
+function subtypeDisplayLabel(subtype: WritingQuestionSubtype | null | undefined): string {
+  return [...QUESTION_SUBTYPES_TASK1, ...QUESTION_SUBTYPES_TASK2].find((item) => item.value === subtype)?.label
+    ?? (subtype ? subtype.replace(/_/g, " ") : "");
+}
+
+function expectedSkills(subtype: WritingQuestionSubtype | null | undefined, taskType: WritingTaskType): string[] {
+  if (taskType === "task_1") {
+    if (subtype === "process") return ["sequence", "stages", "overview"];
+    if (subtype === "map") return ["location", "changes", "overview"];
+    if (subtype === "table") return ["key figures", "comparison", "grouping"];
+    return ["overview", "comparison", "data support"];
+  }
+  if (subtype === "discussion") return ["both views", "position", "examples"];
+  if (subtype === "problem_solution") return ["causes", "solutions", "support"];
+  if (subtype === "advantages_disadvantages") return ["balance", "position", "examples"];
+  if (subtype === "two_part") return ["both parts", "paragraph focus", "examples"];
+  return ["position", "topic sentence", "support"];
 }
 
 function SummaryCard({

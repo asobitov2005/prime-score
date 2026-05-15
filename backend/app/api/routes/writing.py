@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.core.deps import get_current_user
 from app.db.session import get_db_session
 from app.models.enums import (
+    AiUseCase,
     WritingDifficulty,
     WritingQuestionSubtype,
     WritingSubmissionStatus,
@@ -25,14 +26,22 @@ from app.schemas.writing import (
     WritingCriterionFeedback,
     WritingDashboardSummary,
     WritingEvaluationRead,
+    WritingActionPlan,
+    WritingBandBoundary,
     WritingDraftListItem,
     WritingDraftListResponse,
     WritingDraftRead,
+    WritingErrorPattern,
     WritingDraftUpsertRequest,
     WritingHistoryItem,
     WritingHistoryResponse,
     WritingInlineAnnotation,
+    WritingChecklistItem,
+    WritingRevisionDiff,
     WritingRoastFeedback,
+    WritingScoreBooster,
+    WritingSentenceFix,
+    WritingTargetAction,
     WritingVocabularySuggestion,
     WritingSubmissionRead,
     WritingSubmitRequest,
@@ -42,6 +51,7 @@ from app.schemas.writing import (
     WritingUploadImageResponse,
 )
 from app.services.object_storage import upload_test_diagram_image
+from app.services.ai_config import resolve_ai_use_case_config
 
 
 router = APIRouter()
@@ -64,7 +74,6 @@ def _serialize_task_read(task: WritingTask) -> WritingTaskRead:
         image_summary_status=task.image_summary_status,
         word_minimum=task.word_minimum,
         time_limit_seconds=task.time_limit_seconds,
-        difficulty=task.difficulty,
         status=task.status,
         source=task.source,
         question_subtype=task.question_subtype.value if task.question_subtype else None,
@@ -82,7 +91,6 @@ def _serialize_task_list_item(task: WritingTask) -> WritingTaskListItem:
         image_url=task.image_storage_path,
         word_minimum=task.word_minimum,
         time_limit_seconds=task.time_limit_seconds,
-        difficulty=task.difficulty,
         source=task.source,
         question_subtype=task.question_subtype.value if task.question_subtype else None,
         description=task.description,
@@ -130,6 +138,417 @@ def _criterion_from_dict(payload: dict | None) -> WritingCriterionFeedback:
         evidence_quotes=list(payload.get("evidence_quotes", []) or []),
         reasoning=str(payload.get("reasoning", "") or ""),
     )
+
+
+def _build_action_plan(
+    *,
+    task_achievement: WritingCriterionFeedback,
+    coherence: WritingCriterionFeedback,
+    lexical: WritingCriterionFeedback,
+    grammar: WritingCriterionFeedback,
+    next_steps: list[str],
+) -> WritingActionPlan:
+    criteria = [
+        ("Task Achievement", task_achievement),
+        ("Coherence & Cohesion", coherence),
+        ("Lexical Resource", lexical),
+        ("Grammatical Range & Accuracy", grammar),
+    ]
+    strongest_name, strongest = max(criteria, key=lambda item: item[1].band)
+    weakest_name, weakest = min(criteria, key=lambda item: item[1].band)
+    fixes: list[str] = []
+    seen: set[str] = set()
+    for item in [*next_steps, *weakest.improvements, *coherence.improvements, *grammar.improvements, *lexical.improvements]:
+        clean = " ".join(str(item or "").split())
+        if clean and clean not in seen:
+            seen.add(clean)
+            fixes.append(clean)
+        if len(fixes) >= 3:
+            break
+    return WritingActionPlan(
+        main_limiter=weakest_name,
+        main_limiter_band=weakest.band,
+        strongest_area=strongest_name,
+        strongest_area_band=strongest.band,
+        fixes=fixes[:3],
+    )
+
+
+def _annotation_patterns(raw_items: list[dict], *, limit: int = 6) -> list[WritingErrorPattern]:
+    total = len(raw_items)
+    if total == 0:
+        return []
+    def classify(item: dict) -> tuple[str, str, str, str]:
+        category = str(item.get("category") or "style").lower()
+        text = " ".join(
+            str(item.get(key) or "")
+            for key in ("short_message", "explanation", "examiner_tip", "original")
+        ).lower()
+        rules = [
+            ("grammar", "articles", "Articles", "Check a/an/the before every noun.", ("article", " a ", " an ", " the ")),
+            ("grammar", "prepositions", "Prepositions", "Use one natural preposition per phrase, then reread the sentence.", ("preposition", " in ", " on ", " at ", " to ", " for ")),
+            ("grammar", "subject_verb_agreement", "Subject-verb agreement", "Match each verb to its real subject.", ("agreement", "subject", "verb form")),
+            ("grammar", "tense", "Tense control", "Keep the same time frame inside one sentence.", ("tense", "past", "present")),
+            ("punctuation", "commas", "Comma control", "Split long sentences or add commas around clauses.", ("comma", "punctuation")),
+            ("lexical", "collocation", "Collocation", "Replace translated phrases with natural academic collocations.", ("collocation", "word choice", "unnatural", "lexical")),
+            ("cohesion", "linking", "Linking and flow", "Use linkers only when they show a real logic relation.", ("cohesion", "linking", "transition", "flow")),
+        ]
+        for rule_category, subcategory, label, fix, needles in rules:
+            if any(needle in text for needle in needles):
+                return rule_category or category, subcategory, label, fix
+        labels = {
+            "spelling": ("spelling", "spelling", "Spelling", "Correct the spelling before improving style."),
+            "grammar": ("grammar", "general", "Grammar", "Fix sentence-level grammar before adding complex vocabulary."),
+            "lexical": ("lexical", "word_choice", "Word choice", "Use precise words from the topic, not vague substitutes."),
+            "cohesion": ("cohesion", "flow", "Cohesion", "Make each sentence connect to the previous one."),
+            "style": ("style", "tone", "Style", "Make the sentence more formal and direct."),
+            "punctuation": ("punctuation", "punctuation", "Punctuation", "Clean punctuation so the idea is easy to read."),
+        }
+        return labels.get(category, (category, "general", category.replace("_", " ").title(), "Fix this repeated pattern."))
+
+    buckets: dict[str, dict[str, object]] = {}
+    for item in raw_items:
+        category, subcategory, label, fix = classify(item)
+        key = f"{category}:{subcategory}"
+        bucket = buckets.setdefault(key, {"category": category, "subcategory": subcategory, "label": label, "fix": fix, "count": 0, "examples": []})
+        bucket["count"] = int(bucket["count"]) + 1
+        examples = bucket["examples"]
+        if isinstance(examples, list) and len(examples) < 3:
+            message = " ".join(str(item.get("short_message") or item.get("original") or "").split())
+            if message and message not in examples:
+                examples.append(message)
+    patterns = [
+        WritingErrorPattern(
+            category=str(bucket["category"]),
+            subcategory=str(bucket["subcategory"]),
+            label=str(bucket["label"]),
+            count=int(bucket["count"]),
+            percentage=round((int(bucket["count"]) / total) * 100, 1),
+            examples=list(bucket["examples"]) if isinstance(bucket["examples"], list) else [],
+            fix=str(bucket["fix"]),
+        )
+        for bucket in buckets.values()
+    ]
+    return sorted(patterns, key=lambda item: item.count, reverse=True)[:limit]
+
+
+def _status_from_signal(has_signal: bool, has_related_issue: bool) -> str:
+    if has_signal and not has_related_issue:
+        return "met"
+    if has_signal or not has_related_issue:
+        return "partial"
+    return "missing"
+
+
+def _build_checklist(
+    *,
+    task_type: WritingTaskType,
+    subtype: WritingQuestionSubtype | None,
+    essay_text: str,
+    feedback: dict,
+    annotations_raw: list[dict],
+) -> list[WritingChecklistItem]:
+    text = " ".join(essay_text.lower().split())
+    ta = _criterion_from_dict(feedback.get("task_achievement"))
+    cc = _criterion_from_dict(feedback.get("coherence"))
+    task_notes = " ".join([ta.summary, *ta.improvements, *ta.strengths]).lower()
+    cohesion_notes = " ".join([cc.summary, *cc.improvements, *cc.strengths]).lower()
+
+    def item(label: str, signal: bool, related_issue: bool, detail: str, how_to_fix: str | None = None) -> WritingChecklistItem:
+        return WritingChecklistItem(
+            label=label,
+            status=_status_from_signal(signal, related_issue),
+            detail=detail,
+            how_to_fix=how_to_fix or detail,
+        )
+
+    if task_type == WritingTaskType.TASK_1:
+        overview_signal = any(word in text for word in ["overall", "in general", "generally", "it is clear", "it can be seen"])
+        data_signal = any(ch.isdigit() for ch in essay_text)
+        comparison_signal = any(word in text for word in ["higher", "lower", "whereas", "while", "compared", "respectively", "largest", "smallest", "increase", "decrease"])
+        structure_signal = text.count(".") >= 4 or "\n\n" in essay_text
+        checklist = [
+            item("Clear overview", overview_signal, "overview" in task_notes, "State the main trend or the biggest contrast in one separate overview sentence."),
+            item("Key features selected", not any(word in task_notes for word in ["key feature", "main feature", "irrelevant"]), "key feature" in task_notes, "Choose the largest changes, highest/lowest values, and standout categories."),
+            item("Data support", data_signal, "data" in task_notes or "number" in task_notes, "Use exact numbers, units, years, or percentages where the visual provides them."),
+            item("Comparisons", comparison_signal, "comparison" in task_notes, "Compare categories instead of listing figures one by one."),
+            item("Report structure", structure_signal, "paragraph" in cohesion_notes or "structure" in cohesion_notes, "Use introduction, overview, and grouped detail paragraphs."),
+        ]
+        if subtype == WritingQuestionSubtype.PROCESS:
+            checklist[2] = item("Process stages", any(word in text for word in ["first", "next", "then", "finally", "stage"]), "stage" in task_notes, "Describe each major stage in sequence.")
+        if subtype == WritingQuestionSubtype.MAP:
+            checklist[3] = item("Location changes", any(word in text for word in ["north", "south", "east", "west", "near", "beside", "replaced"]), "location" in task_notes, "Describe what changed and where it happened.")
+        return checklist
+
+    position_signal = any(word in text for word in ["i believe", "i agree", "in my opinion", "this essay", "i strongly", "i partly"])
+    all_parts_signal = not any(word in task_notes for word in ["part of the question", "all parts", "only addresses", "partly addresses"])
+    topic_sentence_signal = any(word in text for word in ["firstly", "first,", "to begin", "another", "secondly", "on the one hand"])
+    support_signal = any(word in text for word in ["for example", "for instance", "because", "therefore", "as a result", "this means"])
+    conclusion_signal = any(word in text for word in ["in conclusion", "to conclude", "overall,"])
+    return [
+        item("Clear position", position_signal, "position" in task_notes, "Make your answer explicit in the introduction and keep it consistent."),
+        item("All parts answered", all_parts_signal, "all parts" in task_notes, "Cover every question part, especially for two-part or discussion prompts."),
+        item("Topic sentences", topic_sentence_signal, "topic sentence" in cohesion_notes, "Start each body paragraph with one controlling idea."),
+        item("Support and examples", support_signal, "example" in task_notes or "support" in task_notes, "Develop claims with explanation and a concrete example."),
+        item("Conclusion", conclusion_signal, "conclusion" in task_notes, "End with a concise final answer, not a new idea."),
+    ]
+
+
+async def _build_history_error_trends(
+    *,
+    session: AsyncSession,
+    user_id: UUID,
+) -> list[WritingErrorPattern]:
+    rows = (
+        await session.execute(
+            select(WritingEvaluation.inline_annotations)
+            .join(WritingSubmission, WritingSubmission.id == WritingEvaluation.submission_id)
+            .where(
+                WritingSubmission.user_id == user_id,
+                WritingSubmission.status == WritingSubmissionStatus.COMPLETED,
+            )
+            .order_by(WritingSubmission.submitted_at.desc())
+            .limit(20)
+        )
+    ).scalars().all()
+    merged: list[dict] = []
+    for row in rows:
+        if isinstance(row, list):
+            merged.extend(item for item in row if isinstance(item, dict))
+    return _annotation_patterns(merged, limit=5)
+
+
+def _parse_target_actions(feedback: dict, fallback: WritingActionPlan, overall_band: float, desired_score: float | None) -> list[WritingTargetAction]:
+    raw_items = feedback.get("target_action_plan") or []
+    actions: list[WritingTargetAction] = []
+    if isinstance(raw_items, list):
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                action = WritingTargetAction.model_validate(raw)
+            except Exception:
+                continue
+            if action.title or action.how:
+                actions.append(action)
+            if len(actions) >= 3:
+                break
+    if actions:
+        return actions
+    target = min(desired_score, overall_band + 1.0) if desired_score and desired_score > overall_band else min(9.0, overall_band + 1.0)
+    return [
+        WritingTargetAction(
+            title=(step.split(".")[0] or "Fix the limiter")[:80],
+            why=f"Needed for a realistic Band {overall_band:.1f} -> {target:.1f} push.",
+            how=step,
+            band_impact=f"{overall_band:.1f} -> {target:.1f}",
+            priority=index + 1,
+        )
+        for index, step in enumerate(fallback.fixes[:3])
+        if step
+    ]
+
+
+def _parse_band_boundaries(
+    feedback: dict,
+    *,
+    task_achievement: WritingCriterionFeedback,
+    coherence: WritingCriterionFeedback,
+    lexical: WritingCriterionFeedback,
+    grammar: WritingCriterionFeedback,
+) -> list[WritingBandBoundary]:
+    raw_items = feedback.get("band_boundaries") or []
+    boundaries: list[WritingBandBoundary] = []
+    if isinstance(raw_items, list):
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                item = WritingBandBoundary.model_validate(raw)
+            except Exception:
+                continue
+            if item.criterion:
+                boundaries.append(item)
+            if len(boundaries) >= 4:
+                break
+    if len(boundaries) >= 4:
+        return boundaries[:4]
+    criteria = [
+        ("Task Achievement", task_achievement),
+        ("Coherence & Cohesion", coherence),
+        ("Lexical Resource", lexical),
+        ("Grammar Range & Accuracy", grammar),
+    ]
+    return [
+        WritingBandBoundary(
+            criterion=name,
+            current_band=criterion.band,
+            next_band=min(9.0, criterion.band + 1.0),
+            why_current=criterion.reasoning or criterion.summary,
+            required_for_next=(criterion.improvements[0] if criterion.improvements else criterion.summary),
+        )
+        for name, criterion in criteria
+    ]
+
+
+def _parse_score_boosters(
+    feedback: dict,
+    *,
+    task_achievement: WritingCriterionFeedback,
+    coherence: WritingCriterionFeedback,
+    lexical: WritingCriterionFeedback,
+    grammar: WritingCriterionFeedback,
+) -> list[WritingScoreBooster]:
+    raw_items = feedback.get("score_boosters") or []
+    boosters: list[WritingScoreBooster] = []
+    seen: set[str] = set()
+    if isinstance(raw_items, list):
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                item = WritingScoreBooster.model_validate(raw)
+            except Exception:
+                continue
+            if item.original and item.original not in seen:
+                seen.add(item.original)
+                boosters.append(item)
+            if len(boosters) >= 6:
+                break
+    if boosters:
+        return boosters
+    criteria = [
+        ("Task Achievement", task_achievement),
+        ("Coherence & Cohesion", coherence),
+        ("Lexical Resource", lexical),
+        ("Grammar Range & Accuracy", grammar),
+    ]
+    for name, criterion in criteria:
+        for quote in criterion.evidence_quotes[:2]:
+            clean = " ".join(str(quote or "").split())
+            if not clean or clean in seen:
+                continue
+            seen.add(clean)
+            boosters.append(
+                WritingScoreBooster(
+                    criterion=name,
+                    original=clean,
+                    why_it_scores=(criterion.strengths[0] if criterion.strengths else criterion.summary),
+                    keep_doing="Keep this pattern in future essays.",
+                    band_value=f"Band {criterion.band:.1f} support",
+                )
+            )
+            if len(boosters) >= 6:
+                return boosters
+    return boosters
+
+
+def _parse_checklist(feedback: dict, fallback: list[WritingChecklistItem]) -> list[WritingChecklistItem]:
+    raw_items = feedback.get("ielts_checklist") or []
+    items: list[WritingChecklistItem] = []
+    if isinstance(raw_items, list):
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                item = WritingChecklistItem.model_validate(raw)
+            except Exception:
+                continue
+            if item.label:
+                items.append(item)
+            if len(items) >= 5:
+                break
+    return items or fallback
+
+
+def _parse_error_patterns(feedback: dict, fallback: list[WritingErrorPattern]) -> list[WritingErrorPattern]:
+    raw_items = feedback.get("error_taxonomy") or []
+    items: list[WritingErrorPattern] = []
+    total = sum(max(0, int(item.get("count") or 0)) for item in raw_items if isinstance(item, dict)) if isinstance(raw_items, list) else 0
+    if isinstance(raw_items, list):
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            payload = dict(raw)
+            count = max(0, int(payload.get("count") or 0))
+            payload.setdefault("percentage", round((count / total) * 100, 1) if total else 0.0)
+            try:
+                item = WritingErrorPattern.model_validate(payload)
+            except Exception:
+                continue
+            if item.label:
+                items.append(item)
+            if len(items) >= 6:
+                break
+    return items or fallback
+
+
+def _parse_sentence_fixes(feedback: dict, annotations: list[WritingInlineAnnotation]) -> list[WritingSentenceFix]:
+    raw_items = feedback.get("sentence_fixes") or []
+    fixes: list[WritingSentenceFix] = []
+    seen: set[str] = set()
+    if isinstance(raw_items, list):
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                item = WritingSentenceFix.model_validate(raw)
+            except Exception:
+                continue
+            if item.original and item.original not in seen:
+                seen.add(item.original)
+                fixes.append(item)
+            if len(fixes) >= 8:
+                break
+    for annotation in annotations:
+        if len(fixes) >= 8 or annotation.original in seen:
+            continue
+        replacement = annotation.replacements[0] if annotation.replacements else annotation.improved_sentence
+        if not replacement:
+            continue
+        seen.add(annotation.original)
+        fixes.append(
+            WritingSentenceFix(
+                priority=len(fixes) + 1,
+                original=annotation.original,
+                replacement=replacement,
+                corrected_sentence=annotation.improved_sentence or replacement,
+                why=annotation.explanation or annotation.short_message,
+                band_impact=annotation.band_impact,
+                category=annotation.category.value,
+            )
+        )
+    return fixes
+
+
+def _build_revision_diff(essay_text: str, improved_version: str | None, sentence_fixes: list[WritingSentenceFix]) -> list[WritingRevisionDiff]:
+    if not improved_version:
+        return []
+    diffs: list[WritingRevisionDiff] = []
+    for fix in sentence_fixes[:5]:
+        revised = fix.corrected_sentence or fix.replacement
+        if not fix.original or not revised:
+            continue
+        diffs.append(
+            WritingRevisionDiff(
+                original=fix.original,
+                revised=revised,
+                reason=fix.why,
+                criterion=fix.category,
+            )
+        )
+    if diffs:
+        return diffs
+    if essay_text.strip() != improved_version.strip():
+        return [
+            WritingRevisionDiff(
+                original=essay_text[:220],
+                revised=improved_version[:220],
+                reason="Improved draft changes wording, grammar, and clarity.",
+                criterion="overall",
+            )
+        ]
+    return []
 
 
 def _default_word_minimum(task_type: WritingTaskType) -> int:
@@ -222,7 +641,6 @@ async def upload_image(
 @router.get("/tasks", response_model=WritingTaskListResponse)
 async def list_published_tasks(
     task_type: WritingTaskType | None = Query(default=None),
-    difficulty: WritingDifficulty | None = Query(default=None),
     question_subtype: WritingQuestionSubtype | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -231,8 +649,6 @@ async def list_published_tasks(
     filters = [WritingTask.status == WritingTaskStatus.PUBLISHED]
     if task_type is not None:
         filters.append(WritingTask.task_type == task_type)
-    if difficulty is not None:
-        filters.append(WritingTask.difficulty == difficulty)
     if question_subtype is not None:
         filters.append(WritingTask.question_subtype == question_subtype)
 
@@ -416,7 +832,12 @@ async def submit_writing(
         if image_url:
             from app.services.writing_image_summary import generate_image_summary
 
-            image_summary = await asyncio.to_thread(generate_image_summary, image_url)
+            resolved_config = await resolve_ai_use_case_config(session, AiUseCase.WRITING_IMAGE_SUMMARY)
+            image_summary = await asyncio.to_thread(
+                generate_image_summary,
+                image_url,
+                resolved_config=resolved_config,
+            )
         task = _build_custom_task(
             task_type=task_type,
             topic=(payload.topic or "").strip(),
@@ -442,6 +863,7 @@ async def submit_writing(
         status=WritingSubmissionStatus.QUEUED,
         submitted_at=datetime.now(UTC),
         time_spent_seconds=payload.time_spent_seconds,
+        desired_score=payload.desired_score,
     )
     session.add(submission)
     await session.commit()
@@ -542,6 +964,61 @@ async def get_submission_result(
             vocabulary_suggestions.append(WritingVocabularySuggestion.model_validate(item))
         except Exception:
             continue
+    task_achievement = _criterion_from_dict(feedback.get("task_achievement"))
+    coherence = _criterion_from_dict(feedback.get("coherence"))
+    lexical = _criterion_from_dict(feedback.get("lexical"))
+    grammar = _criterion_from_dict(feedback.get("grammar"))
+    next_steps = list(feedback.get("next_steps", []) or [])
+    desired_score = getattr(submission, "desired_score", None)
+    action_plan = _build_action_plan(
+        task_achievement=task_achievement,
+        coherence=coherence,
+        lexical=lexical,
+        grammar=grammar,
+        next_steps=next_steps,
+    )
+    fallback_checklist = _build_checklist(
+        task_type=submission.task_type,
+        subtype=task.question_subtype,
+        essay_text=submission.essay_text,
+        feedback=feedback,
+        annotations_raw=[item for item in annotations_raw if isinstance(item, dict)],
+    )
+    fallback_error_patterns = _annotation_patterns(
+        [item for item in annotations_raw if isinstance(item, dict)]
+    )
+    checklist = _parse_checklist(feedback, fallback_checklist)
+    error_patterns = _parse_error_patterns(feedback, fallback_error_patterns)
+    target_action_plan = _parse_target_actions(
+        feedback,
+        action_plan,
+        evaluation.overall_band,
+        desired_score,
+    )
+    band_boundaries = _parse_band_boundaries(
+        feedback,
+        task_achievement=task_achievement,
+        coherence=coherence,
+        lexical=lexical,
+        grammar=grammar,
+    )
+    score_boosters = _parse_score_boosters(
+        feedback,
+        task_achievement=task_achievement,
+        coherence=coherence,
+        lexical=lexical,
+        grammar=grammar,
+    )
+    sentence_fixes = _parse_sentence_fixes(feedback, annotations)
+    revision_diff = _build_revision_diff(
+        submission.essay_text,
+        evaluation.improved_version,
+        sentence_fixes,
+    )
+    history_error_trends = await _build_history_error_trends(
+        session=session,
+        user_id=current_user.id,
+    )
 
     return WritingEvaluationRead(
         submission_id=submission.id,
@@ -550,6 +1027,7 @@ async def get_submission_result(
         task_title=task.title,
         word_count=submission.word_count,
         word_minimum=task.word_minimum,
+        desired_score=desired_score,
         time_spent_seconds=submission.time_spent_seconds,
         submitted_at=submission.submitted_at,
         graded_at=evaluation.graded_at,
@@ -557,15 +1035,24 @@ async def get_submission_result(
         overall_band=evaluation.overall_band,
         potential_band=evaluation.potential_band,
         word_count_penalty=evaluation.word_count_penalty,
-        task_achievement=_criterion_from_dict(feedback.get("task_achievement")),
-        coherence=_criterion_from_dict(feedback.get("coherence")),
-        lexical=_criterion_from_dict(feedback.get("lexical")),
-        grammar=_criterion_from_dict(feedback.get("grammar")),
+        task_achievement=task_achievement,
+        coherence=coherence,
+        lexical=lexical,
+        grammar=grammar,
         inline_annotations=annotations,
         vocabulary_suggestions=vocabulary_suggestions,
         improved_version=evaluation.improved_version,
         overall_summary=str(feedback.get("overall_summary", "") or ""),
-        next_steps=list(feedback.get("next_steps", []) or []),
+        next_steps=next_steps,
+        action_plan=action_plan,
+        target_action_plan=target_action_plan,
+        band_boundaries=band_boundaries,
+        score_boosters=score_boosters,
+        checklist=checklist,
+        error_patterns=error_patterns,
+        history_error_trends=history_error_trends,
+        sentence_fixes=sentence_fixes,
+        revision_diff=revision_diff,
         roast=roast,
         cache_hit=evaluation.cache_hit,
         model_version=evaluation.model_version,

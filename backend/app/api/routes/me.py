@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -176,9 +176,9 @@ def _attempt_type_stats(attempt, include_module_prefix: bool = False) -> dict[st
 
 
 def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
-    grouped: dict[object, MeBandProgressPointRead] = {}
+    grouped: dict[object, dict[str, object]] = {}
     scored_attempts = sorted(
-        [attempt for attempt in attempts if attempt.band_score is not None],
+        [attempt for attempt in attempts if _effective_attempt_band_score(attempt) is not None],
         key=lambda attempt: attempt.completed_at or attempt.started_at,
     )
 
@@ -187,25 +187,46 @@ def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
         key = occurred_at.date()
         point = grouped.setdefault(
             key,
-            MeBandProgressPointRead(
-                label=occurred_at.strftime("%d %b"),
-                occurred_at=occurred_at,
-                reading=None,
-                listening=None,
-                writing=None,
-            ),
+            {
+                "label": occurred_at.strftime("%d %b"),
+                "occurred_at": occurred_at,
+                "reading": [],
+                "listening": [],
+                "writing": [],
+            },
         )
-        point.occurred_at = occurred_at
-        band_value = float(attempt.band_score)
-        test_type = attempt.test_snapshot.get("test_type")
+        if occurred_at > point["occurred_at"]:
+            point["occurred_at"] = occurred_at
+        band_score = _effective_attempt_band_score(attempt)
+        if band_score is None:
+            continue
+        band_value = float(band_score)
+        test_type = str(attempt.test_snapshot.get("test_type"))
         if test_type == TestType.reading:
-            point.reading = band_value
+            point["reading"].append(band_value)
         elif test_type == TestType.listening:
-            point.listening = band_value
-        elif test_type == "writing":
-            point.writing = band_value
+            point["listening"].append(band_value)
+        elif test_type == TestType.writing:
+            point["writing"].append(band_value)
 
-    return sorted(grouped.values(), key=lambda item: item.occurred_at)
+    def _average(values: list[float]) -> float | None:
+        if not values:
+            return None
+        return round(sum(values) / len(values), 2)
+
+    return sorted(
+        [
+            MeBandProgressPointRead(
+                label=str(point["label"]),
+                occurred_at=point["occurred_at"],
+                reading=_average(point["reading"]),
+                listening=_average(point["listening"]),
+                writing=_average(point["writing"]),
+            )
+            for point in grouped.values()
+        ],
+        key=lambda item: item.occurred_at,
+    )
 
 
 def _build_question_type_analysis(attempts, test_type: TestType | None) -> list[MeQuestionTypeAnalysisItemRead]:
@@ -945,11 +966,6 @@ async def get_stats(
         for attempt in completed
         if attempt.band_score is not None and attempt.test_snapshot.get("test_type") == TestType.listening
     ]
-    writing_bands = [
-        attempt.band_score
-        for attempt in completed
-        if attempt.band_score is not None and attempt.test_snapshot.get("test_type") == "writing"
-    ]
     average_band = (
         sum(banded, start=banded[0].__class__("0")) / len(banded)
         if banded
@@ -971,12 +987,27 @@ async def get_activity(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[MeActivityPointRead]:
     attempts = await _load_attempts(current_user, session)
-    grouped: dict[object, dict[str, int]] = {}
+    grouped: dict[date, dict[str, int]] = {}
     for attempt in attempts:
         key = attempt.started_at.date()
-        entry = grouped.setdefault(key, {"attempts_count": 0, "time_spent_sec": 0})
+        entry = grouped.setdefault(key, {
+            "attempts_count": 0, 
+            "time_spent_sec": 0,
+            "reading_time_sec": 0,
+            "listening_time_sec": 0,
+            "writing_time_sec": 0,
+        })
         entry["attempts_count"] += 1
         entry["time_spent_sec"] += attempt.time_spent_sec
+        
+        test_type = str(attempt.test_snapshot.get("test_type", ""))
+        if test_type == "reading":
+            entry["reading_time_sec"] += attempt.time_spent_sec
+        elif test_type == "listening":
+            entry["listening_time_sec"] += attempt.time_spent_sec
+        elif test_type == "writing":
+            entry["writing_time_sec"] += attempt.time_spent_sec
+
     return [
         MeActivityPointRead(activity_date=activity_date, **values)
         for activity_date, values in sorted(grouped.items(), reverse=True)

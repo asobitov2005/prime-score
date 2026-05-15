@@ -245,6 +245,9 @@ export interface DashboardActivityPoint {
   activityDate: string;
   attemptsCount: number;
   timeSpentSec: number;
+  readingTimeSec: number;
+  listeningTimeSec: number;
+  writingTimeSec: number;
 }
 
 export interface DashboardScoreDistribution {

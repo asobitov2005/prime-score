@@ -94,44 +94,16 @@ function buildDailyProgressSeries(progressSeries: DashboardAnalytics["progressSe
   }
 
   const items: DashboardAnalytics["progressSeries"] = [];
-  let lastReading: number | null = null;
-  let lastListening: number | null = null;
-  let lastWriting: number | null = null;
-
-  for (const point of sorted) {
-    const pointDate = new Date(point.occurredAt);
-    pointDate.setHours(0, 0, 0, 0);
-    if (pointDate < start) {
-      if (point.reading !== null && point.reading !== undefined) {
-        lastReading = point.reading;
-      }
-      if (point.listening !== null && point.listening !== undefined) {
-        lastListening = point.listening;
-      }
-      if (point.writing !== null && point.writing !== undefined) {
-        lastWriting = point.writing;
-      }
-    }
-  }
 
   for (let current = new Date(start); current <= end; current.setDate(current.getDate() + 1)) {
     const key = toLocalDateKey(current);
     const entry = byDate.get(key);
-    if (entry?.reading !== null && entry?.reading !== undefined) {
-      lastReading = entry.reading;
-    }
-    if (entry?.listening !== null && entry?.listening !== undefined) {
-      lastListening = entry.listening;
-    }
-    if (entry?.writing !== null && entry?.writing !== undefined) {
-      lastWriting = entry.writing;
-    }
     items.push({
       label: new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(new Date(current)),
       occurredAt: `${key}T00:00:00`,
-      reading: lastReading,
-      listening: lastListening,
-      writing: lastWriting
+      reading: entry?.reading ?? 0,
+      listening: entry?.listening ?? 0,
+      writing: entry?.writing ?? 0
     });
   }
 
@@ -283,140 +255,155 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
 
   return (
     <section className="space-y-6">
-      <div className="px-1 space-y-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <h2 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">Performance Analytics</h2>
-        </div>
-      </div>
-
-      <Card className="overflow-hidden rounded-3xl border-border/40 shadow-sm">
-        <CardHeader className="border-b border-border/40 bg-card/60 px-4 py-4 md:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <Card className="overflow-hidden rounded-[2.5rem] border border-border/40 shadow-sm bg-card/60 backdrop-blur-md">
+        <CardHeader className="border-b border-border/40 bg-card/40 px-6 py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Progress Graph</p>
-              <CardTitle className="mt-1 text-lg md:text-xl font-semibold tracking-tight">Band score over time</CardTitle>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary/10 text-primary shadow-sm">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Progress Graph</p>
+              </div>
+              <CardTitle className="text-xl md:text-2xl font-semibold tracking-tight text-foreground">Band score over time</CardTitle>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[480px]">
-              <div className="rounded-2xl border border-border/50 bg-background/60 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day avg</p>
-              <div className="mt-2 flex items-end gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                <p className={cn(
-                  "text-2xl tracking-tight text-foreground",
-                  lastTenDayAverage.reading === null ? "font-semibold" : "font-black"
-                )}>
-                  {lastTenDayAverage.reading?.toFixed(1) ?? "0"}
-                </p>
+            <div className="grid gap-3 sm:grid-cols-3 min-w-full lg:min-w-[420px]">
+              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-center shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600/80 dark:text-blue-400/80 mb-1">Reading</p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <TrendingUp className="h-4 w-4 text-blue-500" />
+                  <p className="text-2xl font-semibold tracking-tight text-foreground">
+                    {lastTenDayAverage.reading?.toFixed(1) ?? "—"}
+                  </p>
+                </div>
               </div>
-              <p className="mt-1 text-xs font-medium text-muted-foreground">Reading</p>
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-center shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/80 dark:text-emerald-400/80 mb-1">Listening</p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+                  <p className="text-2xl font-semibold tracking-tight text-foreground">
+                    {lastTenDayAverage.listening?.toFixed(1) ?? "—"}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-2xl border border-border/50 bg-background/60 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day avg</p>
-              <div className="mt-2 flex items-end gap-2">
-                <TrendingUp className="h-5 w-5 text-emerald-600" />
-                <p className={cn(
-                  "text-2xl tracking-tight text-foreground",
-                  lastTenDayAverage.listening === null ? "font-semibold" : "font-black"
-                )}>
-                  {lastTenDayAverage.listening?.toFixed(1) ?? "0"}
-                </p>
-              </div>
-              <p className="mt-1 text-xs font-medium text-muted-foreground">Listening</p>
-              </div>
-              <div className="rounded-2xl border border-border/50 bg-background/60 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground">Last 10-day avg</p>
-              <div className="mt-2 flex items-end gap-2">
-                <TrendingUp className="h-5 w-5 text-violet-600" />
-                <p className={cn(
-                  "text-2xl tracking-tight text-foreground",
-                  lastTenDayAverage.writing === null ? "font-semibold" : "font-black"
-                )}>
-                  {lastTenDayAverage.writing?.toFixed(1) ?? "0"}
-                </p>
-              </div>
-              <p className="mt-1 text-xs font-medium text-muted-foreground">Writing</p>
+              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 px-4 py-3 text-center shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-violet-600/80 dark:text-violet-400/80 mb-1">Writing</p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <TrendingUp className="h-4 w-4 text-violet-500" />
+                  <p className="text-2xl font-semibold tracking-tight text-foreground">
+                    {lastTenDayAverage.writing?.toFixed(1) ?? "—"}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-4 md:p-6">
+        <CardContent className="p-5 md:p-8">
           {progressSeries.length === 0 ? (
             <EmptyState message="Complete scored Reading or Listening tests to unlock your progress graph." />
           ) : (
-            <div className="h-[312px]">
+            <div className="h-[360px] w-full relative">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={progressSeries} margin={{ left: 40, right: 24, top: 8, bottom: 12 }}>
-                    <CartesianGrid stroke="rgba(148, 163, 184, 0.16)" vertical={false} />
+                  <LineChart data={progressSeries} margin={{ left: -20, right: 10, top: 20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorReading" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorListening" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorWriting" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" strokeOpacity={0.4} vertical={false} />
                     <XAxis
                       dataKey="label"
-                      interval={0}
-                      minTickGap={0}
+                      interval="preserveStartEnd"
                       tickLine={false}
                       axisLine={false}
-                      tick={<ProgressDateTick />}
-                      height={36}
-                      padding={{ left: 28, right: 20 }}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 600 }}
+                      dy={10}
                     />
-                    <YAxis domain={[0, 9]} tickLine={false} axisLine={false} fontSize={11} />
+                    <YAxis 
+                      domain={[0, 9]} 
+                      ticks={[0, 3, 5, 7, 9]} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 600 }}
+                    />
                     <Tooltip
+                      cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
                       contentStyle={{
-                        borderRadius: 16,
+                        borderRadius: "16px",
                         border: "1px solid hsl(var(--border))",
-                        background: "hsl(var(--background))",
+                        background: "hsl(var(--card))",
                         color: "hsl(var(--foreground))",
-                        boxShadow: "0 20px 48px -24px rgba(15, 23, 42, 0.45)"
+                        boxShadow: "0 20px 40px -10px rgba(0,0,0,0.15)",
+                        padding: "12px 16px"
                       }}
                       labelStyle={{
                         color: "hsl(var(--muted-foreground))",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase"
+                        fontSize: "11px",
+                        fontWeight: 800,
+                        letterSpacing: "0.05em",
+                        textTransform: "uppercase",
+                        marginBottom: "8px"
                       }}
                       itemStyle={{
-                        color: "hsl(var(--foreground))",
-                        fontWeight: 700
+                        fontWeight: 700,
+                        fontSize: "13px",
+                        padding: "2px 0"
                       }}
                       formatter={(value, name) => {
                         const normalizedValue = Array.isArray(value) ? value[0] : value;
-                        const label = typeof name === "string" && name.trim().length > 0 ? name : "Score";
-                        return [
-                          normalizedValue === null || normalizedValue === undefined ? "0 band" : `${Number(normalizedValue).toFixed(1)} band`,
-                          label
-                        ];
+                        const label = typeof name === "string" ? name : "Score";
+                        const scoreText = normalizedValue === null || normalizedValue === undefined ? "—" : Number(normalizedValue).toFixed(1);
+                        return [`${scoreText} band`, label];
                       }}
-                      labelFormatter={(value: string) => `Date: ${value}`}
+                      labelFormatter={(value: string) => value}
                     />
-                    <Legend />
+                    <Legend 
+                      verticalAlign="top" 
+                      align="right" 
+                      iconType="circle" 
+                      wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', fontWeight: 600 }} 
+                    />
                     <Line
-                      type="linear"
+                      type="monotone"
                       dataKey="reading"
                       name="Reading"
                       connectNulls
-                      stroke="#2563eb"
-                      strokeWidth={3}
-                      dot={{ r: 4.5, fill: "#2563eb", strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "#2563eb", strokeWidth: 0 }}
+                      stroke="#3b82f6"
+                      strokeWidth={4}
+                      dot={{ r: 4, fill: "hsl(var(--background))", stroke: "#3b82f6", strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: "#3b82f6", strokeWidth: 0, className: "drop-shadow-md" }}
+                      animationDuration={1500}
                     />
                     <Line
-                      type="linear"
+                      type="monotone"
                       dataKey="listening"
                       name="Listening"
                       connectNulls
-                      stroke="#059669"
-                      strokeWidth={3}
-                      dot={{ r: 4.5, fill: "#059669", strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "#059669", strokeWidth: 0 }}
+                      stroke="#10b981"
+                      strokeWidth={4}
+                      dot={{ r: 4, fill: "hsl(var(--background))", stroke: "#10b981", strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: "#10b981", strokeWidth: 0, className: "drop-shadow-md" }}
+                      animationDuration={1500}
                     />
                     <Line
-                      type="linear"
+                      type="monotone"
                       dataKey="writing"
                       name="Writing"
                       connectNulls
-                      stroke="#7c3aed"
-                      strokeWidth={3}
-                      dot={{ r: 4.5, fill: "#7c3aed", strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }}
+                      stroke="#8b5cf6"
+                      strokeWidth={4}
+                      dot={{ r: 4, fill: "hsl(var(--background))", stroke: "#8b5cf6", strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: "#8b5cf6", strokeWidth: 0, className: "drop-shadow-md" }}
+                      animationDuration={1500}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -660,7 +647,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
                     contentStyle={{ borderRadius: 16, border: "1px solid hsl(var(--border))", background: "hsl(var(--background))", color: "hsl(var(--foreground))" }}
                     formatter={(value: number) => [`${value.toFixed(1)}%`, "Accuracy"]}
                   />
-                  <Area type="monotone" dataKey="accuracy" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#accuracyGrad)" dot={{ r: 3.5, fill: "#8b5cf6", strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="accuracy" connectNulls stroke="#8b5cf6" strokeWidth={2.5} fill="url(#accuracyGrad)" dot={{ r: 3.5, fill: "#8b5cf6", strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

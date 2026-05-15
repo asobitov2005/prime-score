@@ -51,6 +51,9 @@ class MeActivityPointRead(BaseModel):
     activity_date: date
     attempts_count: int = 0
     time_spent_sec: int = 0
+    reading_time_sec: int = 0
+    listening_time_sec: int = 0
+    writing_time_sec: int = 0
 
 
 class MeAttemptSummaryRead(BaseModel):

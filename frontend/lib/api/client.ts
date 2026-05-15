@@ -21,7 +21,7 @@ import type {
 import { FRONTEND_API_TIMEOUT_MS, getFrontendClientApiBaseUrl, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 import { getAttemptsByType, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
 import { useAuthStore } from "@/store/auth-store";
-import type { AccessType, AttemptRow, LeaderboardEntry, LeaderboardResponseData, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
+import type { AccessType, AttemptRow, DashboardActivityPoint, LeaderboardEntry, LeaderboardResponseData, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
 import {
   isUserAuthFailureStatus,
   performClientUserAuthedFetch,
@@ -72,6 +72,15 @@ type BackendLeaderboardResponse = {
   period: "week" | "month" | "all_time";
   items: BackendLeaderboardEntry[];
   current_user?: BackendLeaderboardEntry | null;
+};
+
+type BackendMeActivityPoint = {
+  activity_date: string;
+  attempts_count: number;
+  time_spent_sec: number;
+  reading_time_sec?: number | null;
+  listening_time_sec?: number | null;
+  writing_time_sec?: number | null;
 };
 
 function formatLeaderboardDuration(totalSeconds: number | null | undefined): string {
@@ -311,7 +320,17 @@ export function createApiClient(config: ApiClientConfig = {}) {
       const suffix = search.toString() ? `?${search.toString()}` : "";
       return request<DashboardAnalyticsResponse>(`/me/analytics${suffix}`, { method: "GET", headers });
     },
-    getActivity: () => request<unknown>("/me/activity"),
+    getActivity: () =>
+      request<BackendMeActivityPoint[]>("/me/activity").then<DashboardActivityPoint[]>((items) =>
+        items.map((item) => ({
+          activityDate: item.activity_date,
+          attemptsCount: item.attempts_count,
+          timeSpentSec: item.time_spent_sec,
+          readingTimeSec: item.reading_time_sec ?? 0,
+          listeningTimeSec: item.listening_time_sec ?? 0,
+          writingTimeSec: item.writing_time_sec ?? 0,
+        }))
+      ),
     getAttempts: () => request<{ data: AttemptRow[] }>("/me/attempts").catch(() => ({ data: getAttemptsByType() })),
     getFavorites: () => request<{ data: TestCatalogItem[] }>("/me/favorites").catch(() => ({ data: getTestsByType() })),
     getPlans: () => request<{ data: SubscriptionPlan[] }>("/plans").catch(() => ({ data: [] })),

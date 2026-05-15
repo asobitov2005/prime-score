@@ -437,6 +437,7 @@ async def preview_writing_config(
             task_prompt_text=payload.task_prompt_text,
             current_band=6.0,
             target_band=7.0,
+            desired_score=7.0,
             word_count=max(1, len(payload.essay_text.split())),
             word_minimum=250,
         ),

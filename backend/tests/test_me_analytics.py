@@ -77,6 +77,46 @@ def test_effective_attempt_band_score_returns_zero_for_low_scores() -> None:
     assert me_routes._effective_attempt_band_score(attempt) == Decimal("0.0")
 
 
+def test_build_progress_series_averages_daily_full_and_section_attempts() -> None:
+    day = datetime(2026, 5, 14, 10, 0, tzinfo=UTC)
+    attempts = [
+        SimpleNamespace(
+            band_score=Decimal("8.0"),
+            raw_score=35,
+            total_questions=40,
+            scope=None,
+            completed_at=day,
+            started_at=day - timedelta(minutes=30),
+            test_snapshot={"test_type": "reading", "scope": "full"},
+        ),
+        SimpleNamespace(
+            band_score=None,
+            raw_score=9,
+            total_questions=13,
+            scope=None,
+            completed_at=day + timedelta(hours=2),
+            started_at=day + timedelta(hours=1),
+            test_snapshot={"test_type": "reading", "scope": "section"},
+        ),
+        SimpleNamespace(
+            band_score=Decimal("7.0"),
+            raw_score=30,
+            total_questions=40,
+            scope=None,
+            completed_at=day + timedelta(hours=3),
+            started_at=day + timedelta(hours=2, minutes=30),
+            test_snapshot={"test_type": "listening", "scope": "full"},
+        ),
+    ]
+
+    series = me_routes._build_progress_series(attempts)
+
+    assert len(series) == 1
+    assert series[0].reading == 7.25
+    assert series[0].listening == 7.0
+    assert series[0].writing is None
+
+
 @pytest.mark.asyncio
 async def test_load_writing_attempts_maps_time_spent_seconds() -> None:
     current_user = DebugPrincipal(

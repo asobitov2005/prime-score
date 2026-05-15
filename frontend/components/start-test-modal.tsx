@@ -21,7 +21,7 @@ interface StartTestModalProps {
 
 export function StartTestModal({ test, activeAttempt, completedAttempt }: StartTestModalProps) {
   const router = useRouter();
-  const { isPremium } = useAuthStore();
+  const { isPremium, isAuthenticated } = useAuthStore();
   const isFullTest = !test.format || test.format === "full";
   const defaultSectionId = test.sections[0]?.id;
   const [open, setOpen] = useState(false);
@@ -71,6 +71,15 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   }
 
   function handleClick() {
+    if (!isAuthenticated) {
+      const href = test.type === "reading"
+        ? `/exam-preview/reading?testId=${test.id}&mode=guest`
+        : `/exam-preview/listening?testId=${test.id}&mode=guest`;
+      emitNavigationStart(href);
+      router.push(href);
+      return;
+    }
+
     if (test.accessType === "premium" && !isPremium) {
       setShowPremiumModal(true);
     } else if (activeAttempt) {

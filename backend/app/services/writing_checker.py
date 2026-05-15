@@ -100,6 +100,57 @@ class _VocabularySuggestionPayload(BaseModel):
     example_sentence: str = ""
 
 
+class _TargetActionPayload(BaseModel):
+    title: str = ""
+    why: str = ""
+    how: str = ""
+    example: str = ""
+    band_impact: str = ""
+    priority: int = 0
+
+
+class _BandBoundaryPayload(BaseModel):
+    criterion: str = ""
+    current_band: float = 0.0
+    next_band: float = 0.0
+    why_current: str = ""
+    required_for_next: str = ""
+
+
+class _ChecklistPayload(BaseModel):
+    label: str = ""
+    status: str = "partial"
+    detail: str = ""
+    how_to_fix: str = ""
+
+
+class _ErrorTaxonomyPayload(BaseModel):
+    category: str = ""
+    subcategory: str = ""
+    label: str = ""
+    count: int = 0
+    examples: list[str] = Field(default_factory=list)
+    fix: str = ""
+
+
+class _SentenceFixPayload(BaseModel):
+    priority: int = 0
+    original: str = ""
+    replacement: str = ""
+    corrected_sentence: str = ""
+    why: str = ""
+    band_impact: str = ""
+    category: str = ""
+
+
+class _ScoreBoosterPayload(BaseModel):
+    criterion: str = ""
+    original: str = ""
+    why_it_scores: str = ""
+    keep_doing: str = ""
+    band_value: str = ""
+
+
 class _GraderPayload(BaseModel):
     task_achievement: _CriterionPayload
     coherence: _CriterionPayload
@@ -109,6 +160,12 @@ class _GraderPayload(BaseModel):
     next_steps: list[str] = Field(default_factory=list)
     inline_annotations: list[_AnnotationPayload] = Field(default_factory=list)
     vocabulary_suggestions: list[_VocabularySuggestionPayload] = Field(default_factory=list)
+    target_action_plan: list[_TargetActionPayload] = Field(default_factory=list)
+    band_boundaries: list[_BandBoundaryPayload] = Field(default_factory=list)
+    ielts_checklist: list[_ChecklistPayload] = Field(default_factory=list)
+    error_taxonomy: list[_ErrorTaxonomyPayload] = Field(default_factory=list)
+    sentence_fixes: list[_SentenceFixPayload] = Field(default_factory=list)
+    score_boosters: list[_ScoreBoosterPayload] = Field(default_factory=list)
 
 
 _ANNOTATION_LIST_ADAPTER = TypeAdapter(list[_AnnotationPayload])
@@ -423,6 +480,90 @@ def _vocabulary_suggestion_schema() -> genai_types.Schema:
     )
 
 
+def _target_action_schema() -> genai_types.Schema:
+    return genai_types.Schema(
+        type=genai_types.Type.OBJECT,
+        properties={
+            "title": genai_types.Schema(type=genai_types.Type.STRING),
+            "why": genai_types.Schema(type=genai_types.Type.STRING),
+            "how": genai_types.Schema(type=genai_types.Type.STRING),
+            "example": genai_types.Schema(type=genai_types.Type.STRING),
+            "band_impact": genai_types.Schema(type=genai_types.Type.STRING),
+            "priority": genai_types.Schema(type=genai_types.Type.INTEGER),
+        },
+    )
+
+
+def _band_boundary_schema() -> genai_types.Schema:
+    return genai_types.Schema(
+        type=genai_types.Type.OBJECT,
+        properties={
+            "criterion": genai_types.Schema(type=genai_types.Type.STRING),
+            "current_band": genai_types.Schema(type=genai_types.Type.NUMBER),
+            "next_band": genai_types.Schema(type=genai_types.Type.NUMBER),
+            "why_current": genai_types.Schema(type=genai_types.Type.STRING),
+            "required_for_next": genai_types.Schema(type=genai_types.Type.STRING),
+        },
+    )
+
+
+def _checklist_schema() -> genai_types.Schema:
+    return genai_types.Schema(
+        type=genai_types.Type.OBJECT,
+        properties={
+            "label": genai_types.Schema(type=genai_types.Type.STRING),
+            "status": genai_types.Schema(type=genai_types.Type.STRING, enum=["met", "partial", "missing"]),
+            "detail": genai_types.Schema(type=genai_types.Type.STRING),
+            "how_to_fix": genai_types.Schema(type=genai_types.Type.STRING),
+        },
+    )
+
+
+def _error_taxonomy_schema() -> genai_types.Schema:
+    return genai_types.Schema(
+        type=genai_types.Type.OBJECT,
+        properties={
+            "category": genai_types.Schema(type=genai_types.Type.STRING),
+            "subcategory": genai_types.Schema(type=genai_types.Type.STRING),
+            "label": genai_types.Schema(type=genai_types.Type.STRING),
+            "count": genai_types.Schema(type=genai_types.Type.INTEGER),
+            "examples": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=genai_types.Schema(type=genai_types.Type.STRING),
+            ),
+            "fix": genai_types.Schema(type=genai_types.Type.STRING),
+        },
+    )
+
+
+def _sentence_fix_schema() -> genai_types.Schema:
+    return genai_types.Schema(
+        type=genai_types.Type.OBJECT,
+        properties={
+            "priority": genai_types.Schema(type=genai_types.Type.INTEGER),
+            "original": genai_types.Schema(type=genai_types.Type.STRING),
+            "replacement": genai_types.Schema(type=genai_types.Type.STRING),
+            "corrected_sentence": genai_types.Schema(type=genai_types.Type.STRING),
+            "why": genai_types.Schema(type=genai_types.Type.STRING),
+            "band_impact": genai_types.Schema(type=genai_types.Type.STRING),
+            "category": genai_types.Schema(type=genai_types.Type.STRING),
+        },
+    )
+
+
+def _score_booster_schema() -> genai_types.Schema:
+    return genai_types.Schema(
+        type=genai_types.Type.OBJECT,
+        properties={
+            "criterion": genai_types.Schema(type=genai_types.Type.STRING),
+            "original": genai_types.Schema(type=genai_types.Type.STRING),
+            "why_it_scores": genai_types.Schema(type=genai_types.Type.STRING),
+            "keep_doing": genai_types.Schema(type=genai_types.Type.STRING),
+            "band_value": genai_types.Schema(type=genai_types.Type.STRING),
+        },
+    )
+
+
 def _response_schema() -> genai_types.Schema:
     criterion = _criterion_schema()
     return genai_types.Schema(
@@ -436,6 +577,12 @@ def _response_schema() -> genai_types.Schema:
             "next_steps",
             "inline_annotations",
             "vocabulary_suggestions",
+            "target_action_plan",
+            "band_boundaries",
+            "ielts_checklist",
+            "error_taxonomy",
+            "sentence_fixes",
+            "score_boosters",
         ],
         properties={
             "task_achievement": criterion,
@@ -454,6 +601,30 @@ def _response_schema() -> genai_types.Schema:
             "vocabulary_suggestions": genai_types.Schema(
                 type=genai_types.Type.ARRAY,
                 items=_vocabulary_suggestion_schema(),
+            ),
+            "target_action_plan": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=_target_action_schema(),
+            ),
+            "band_boundaries": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=_band_boundary_schema(),
+            ),
+            "ielts_checklist": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=_checklist_schema(),
+            ),
+            "error_taxonomy": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=_error_taxonomy_schema(),
+            ),
+            "sentence_fixes": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=_sentence_fix_schema(),
+            ),
+            "score_boosters": genai_types.Schema(
+                type=genai_types.Type.ARRAY,
+                items=_score_booster_schema(),
             ),
         },
     )
@@ -624,6 +795,7 @@ def _build_groq_grading_prompt(
     task_prompt_text: str,
     image_summary: str,
     essay_text: str,
+    desired_score: float | None,
 ) -> str:
     prompt_parts = [
         f"TASK TYPE: {task_type.upper()}",
@@ -638,14 +810,28 @@ def _build_groq_grading_prompt(
         [
             "CALIBRATION SNAPSHOTS:",
             _build_groq_anchor_reference(anchors),
+            "TARGET SCORE CONTEXT:",
+            (
+                f"Dashboard Desired Score: Band {desired_score:.1f}. "
+                "If the essay is below that target, make next_steps a realistic +0.5 to +1.0 band path without overloading the learner. "
+                "If it already meets or exceeds the target, make next_steps preserve the current band and push toward the next realistic +0.5 to +1.0 band."
+                if desired_score is not None
+                else "No learner desired score provided. Make next_steps target the next realistic +0.5 to +1.0 band."
+            ),
             "OUTPUT CONTRACT:",
             "Return JSON only.",
-            "Top-level keys: task_achievement, coherence, lexical, grammar, overall_summary, next_steps, inline_annotations, vocabulary_suggestions.",
+            "Top-level keys: task_achievement, coherence, lexical, grammar, overall_summary, next_steps, inline_annotations, vocabulary_suggestions, target_action_plan, band_boundaries, ielts_checklist, error_taxonomy, sentence_fixes, score_boosters.",
             "Each criterion object must contain: band, reasoning, summary, strengths, improvements, evidence_quotes.",
             "Use 0.5 band increments from 0 to 9.",
             "Keep strengths/improvements/evidence_quotes short and specific: 1-2 items each.",
             "overall_summary: exactly 2 short sentences.",
             "next_steps: exactly 3 short strings tied to this essay.",
+            "target_action_plan: exactly 3 objects with title, why, how, example, band_impact, priority. Aim for realistic +0.5 to +1.0 improvement, not an impossible rewrite.",
+            "band_boundaries: 4 objects, one per IELTS criterion, explaining why current band holds and what the next realistic +0.5 to +1.0 needs.",
+            "ielts_checklist: 5 task-specific items with label, status, detail, how_to_fix.",
+            "error_taxonomy: 3-6 repeated weak patterns with category, subcategory, label, count, examples, fix.",
+            "sentence_fixes: 3-8 priority sentence-level corrections with original, replacement, corrected_sentence, why, band_impact, category.",
+            "score_boosters: 3-6 original phrases/sentences that helped the band. Include criterion, exact original text, why_it_scores, keep_doing, band_value.",
             "inline_annotations: return [].",
             "vocabulary_suggestions: return [].",
             "===== CANDIDATE ESSAY START =====",
@@ -698,6 +884,7 @@ def _build_grading_prompt(
     task_prompt_text: str,
     image_summary: str,
     essay_text: str,
+    desired_score: float | None = None,
 ) -> str:
     if _is_groq_config(resolved_config):
         return _build_groq_grading_prompt(
@@ -706,6 +893,7 @@ def _build_grading_prompt(
             task_prompt_text=task_prompt_text,
             image_summary=image_summary,
             essay_text=essay_text,
+            desired_score=desired_score,
         )
     return render_grader_user_prompt(
         prompts=prompts,
@@ -714,6 +902,7 @@ def _build_grading_prompt(
         task_prompt_text=task_prompt_text,
         image_summary=image_summary,
         essay_text=essay_text,
+        desired_score=desired_score,
     )
 
 
@@ -871,6 +1060,262 @@ def _build_precise_next_steps(
             break
     target_count = 2 if word_count < 180 else 3
     return steps[:target_count]
+
+
+def _target_context_label(*, current_band: float, desired_score: float | None) -> str:
+    stretch_target = min(9.0, current_band + 1.0)
+    if desired_score is None:
+        return f"Band {current_band:.1f} -> {stretch_target:.1f}"
+    if current_band >= desired_score:
+        return f"Band {current_band:.1f} -> {stretch_target:.1f}"
+    return f"Band {current_band:.1f} -> {min(desired_score, stretch_target):.1f}"
+
+
+def _normalize_target_actions(
+    *,
+    grader: _GraderPayload,
+    precise_next_steps: list[str],
+    annotations: list[dict[str, Any]],
+    overall_band: float,
+    desired_score: float | None,
+) -> list[dict[str, Any]]:
+    target = _target_context_label(current_band=overall_band, desired_score=desired_score)
+    normalized: list[dict[str, Any]] = []
+    for item in grader.target_action_plan:
+        title = _trim_sentence(item.title, limit=64)
+        how = _trim_sentence(item.how, limit=150)
+        why = _trim_sentence(item.why, limit=120)
+        if not title and how:
+            title = how.split(".")[0][:64].strip()
+        if not how and title:
+            how = title
+        if not title or not how:
+            continue
+        normalized.append(
+            {
+                "title": title,
+                "why": why or f"Needed for {target}.",
+                "how": how,
+                "example": _trim_sentence(item.example, limit=140),
+                "band_impact": _trim_sentence(item.band_impact, limit=100) or target,
+                "priority": item.priority or len(normalized) + 1,
+            }
+        )
+        if len(normalized) >= 3:
+            break
+
+    for step in precise_next_steps:
+        if len(normalized) >= 3:
+            break
+        clean = _trim_sentence(step, limit=150)
+        if not clean:
+            continue
+        normalized.append(
+            {
+                "title": clean.split(";")[0].split(".")[0][:64].strip() or "Fix the score limiter",
+                "why": f"This is the shortest move for {target}.",
+                "how": clean,
+                "example": "",
+                "band_impact": target,
+                "priority": len(normalized) + 1,
+            }
+        )
+
+    for annotation in annotations:
+        if len(normalized) >= 3:
+            break
+        action = _annotation_action(annotation)
+        if not action:
+            continue
+        normalized.append(
+            {
+                "title": "Fix this sentence first",
+                "why": _trim_sentence(str(annotation.get("short_message") or ""), limit=100) or f"It blocks {target}.",
+                "how": _trim_sentence(action, limit=150),
+                "example": _trim_sentence(str(annotation.get("improved_sentence") or ""), limit=140),
+                "band_impact": _trim_sentence(str(annotation.get("band_impact") or ""), limit=100) or target,
+                "priority": len(normalized) + 1,
+            }
+        )
+    return normalized[:3]
+
+
+def _normalize_band_boundaries(
+    *,
+    grader: _GraderPayload,
+    ta: float,
+    cc: float,
+    lr: float,
+    gra: float,
+) -> list[dict[str, Any]]:
+    supplied = []
+    for item in grader.band_boundaries:
+        criterion = _trim_sentence(item.criterion, limit=70)
+        if not criterion:
+            continue
+        supplied.append(
+            {
+                "criterion": criterion,
+                "current_band": round_to_ielts_band(item.current_band),
+                "next_band": round_to_ielts_band(item.next_band or min(9.0, item.current_band + 1.0)),
+                "why_current": _trim_sentence(item.why_current, limit=170),
+                "required_for_next": _trim_sentence(item.required_for_next, limit=170),
+            }
+        )
+    if len(supplied) >= 4:
+        return supplied[:4]
+
+    fallback: list[dict[str, Any]] = []
+    for name, band, criterion in _criterion_records(grader, ta=ta, cc=cc, lr=lr, gra=gra):
+        required = _clean_text(criterion.improvements[0] if criterion.improvements else criterion.summary)
+        fallback.append(
+            {
+                "criterion": name,
+                "current_band": band,
+                "next_band": min(9.0, band + 1.0),
+                "why_current": _trim_sentence(criterion.reasoning or criterion.summary, limit=170),
+                "required_for_next": _trim_sentence(required, limit=170),
+            }
+        )
+    return fallback
+
+
+def _normalize_checklist_payload(grader: _GraderPayload) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for item in grader.ielts_checklist:
+        label = _trim_sentence(item.label, limit=80)
+        if not label:
+            continue
+        status = item.status if item.status in {"met", "partial", "missing"} else "partial"
+        items.append(
+            {
+                "label": label,
+                "status": status,
+                "detail": _trim_sentence(item.detail, limit=140),
+                "how_to_fix": _trim_sentence(item.how_to_fix, limit=140),
+            }
+        )
+    return items[:5]
+
+
+def _normalize_error_taxonomy(grader: _GraderPayload) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for item in grader.error_taxonomy:
+        label = _trim_sentence(item.label, limit=80)
+        if not label:
+            continue
+        count = max(0, int(item.count or 0))
+        items.append(
+            {
+                "category": _clean_text(item.category).lower() or "style",
+                "subcategory": _clean_text(item.subcategory).lower(),
+                "label": label,
+                "count": count,
+                "examples": [_trim_sentence(example, limit=100) for example in item.examples[:3] if _clean_text(example)],
+                "fix": _trim_sentence(item.fix, limit=140),
+            }
+        )
+    return items[:6]
+
+
+def _normalize_sentence_fixes(
+    *,
+    grader: _GraderPayload,
+    annotations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in grader.sentence_fixes:
+        original = _trim_sentence(item.original, limit=180)
+        corrected = _trim_sentence(item.corrected_sentence or item.replacement, limit=220)
+        if not original or original in seen:
+            continue
+        seen.add(original)
+        items.append(
+            {
+                "priority": item.priority or len(items) + 1,
+                "original": original,
+                "replacement": _trim_sentence(item.replacement, limit=180),
+                "corrected_sentence": corrected,
+                "why": _trim_sentence(item.why, limit=130),
+                "band_impact": _trim_sentence(item.band_impact, limit=100),
+                "category": _clean_text(item.category).lower(),
+            }
+        )
+        if len(items) >= 8:
+            break
+
+    for annotation in annotations:
+        if len(items) >= 8:
+            break
+        original = _trim_sentence(str(annotation.get("original", "")), limit=180)
+        if not original or original in seen:
+            continue
+        replacement = _trim_sentence(str(((annotation.get("replacements") or [""])[0])), limit=180)
+        corrected = _trim_sentence(str(annotation.get("improved_sentence") or replacement), limit=220)
+        if not replacement and not corrected:
+            continue
+        seen.add(original)
+        items.append(
+            {
+                "priority": len(items) + 1,
+                "original": original,
+                "replacement": replacement,
+                "corrected_sentence": corrected,
+                "why": _trim_sentence(str(annotation.get("explanation") or annotation.get("short_message") or ""), limit=130),
+                "band_impact": _trim_sentence(str(annotation.get("band_impact") or ""), limit=100),
+                "category": _clean_text(str(annotation.get("category") or "")),
+            }
+        )
+    return items
+
+
+def _normalize_score_boosters(grader: _GraderPayload) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in grader.score_boosters:
+        original = _trim_sentence(item.original, limit=180)
+        if not original or original in seen:
+            continue
+        seen.add(original)
+        items.append(
+            {
+                "criterion": _trim_sentence(item.criterion, limit=70),
+                "original": original,
+                "why_it_scores": _trim_sentence(item.why_it_scores, limit=150),
+                "keep_doing": _trim_sentence(item.keep_doing, limit=130),
+                "band_value": _trim_sentence(item.band_value, limit=80),
+            }
+        )
+        if len(items) >= 6:
+            break
+    if items:
+        return items
+
+    for name, _, criterion in _criterion_records(
+        grader,
+        ta=grader.task_achievement.band,
+        cc=grader.coherence.band,
+        lr=grader.lexical.band,
+        gra=grader.grammar.band,
+    ):
+        for quote in criterion.evidence_quotes[:2]:
+            original = _trim_sentence(quote, limit=180)
+            if not original or original in seen:
+                continue
+            seen.add(original)
+            items.append(
+                {
+                    "criterion": name,
+                    "original": original,
+                    "why_it_scores": _trim_sentence(criterion.strengths[0] if criterion.strengths else criterion.summary, limit=150),
+                    "keep_doing": "Keep this pattern in future essays.",
+                    "band_value": f"Band {round_to_ielts_band(criterion.band):.1f} support",
+                }
+            )
+            if len(items) >= 6:
+                return items
+    return items
 
 
 def _normalize_vocabulary_suggestions(
@@ -1238,7 +1683,7 @@ def _build_annotation_recovery_prompt(*, essay_text: str, hints: list[str]) -> s
     prompt_parts = [
         "You are a strict IELTS writing line editor and annotation generator.",
         "Return ONLY a JSON array of annotation objects.",
-        "Find the specific text-level issues that are holding this essay below Band 9.",
+        "Find the specific text-level issues that are holding this essay below the learner's target band or the next realistic +0.5 band.",
         "Include real spelling mistakes, grammar mistakes, tense/form errors, article/preposition errors, punctuation problems, wrong word forms, awkward or imprecise vocabulary, weak collocations, and clearly broken cohesive phrasing.",
         "You may include lexical upgrades when the current wording is understandable but unnatural, inaccurate, or too weak for a higher IELTS band.",
         "Do NOT annotate mere style preferences that do not materially improve the IELTS result.",
@@ -1426,6 +1871,7 @@ def _generate_improved_version(
     annotations: list[dict[str, Any]],
     task_prompt_text: str,
     overall_band: float,
+    desired_score: float | None,
     word_count: int,
     word_minimum: int,
 ) -> str:
@@ -1440,13 +1886,20 @@ def _generate_improved_version(
         )
         for a in annotations
     ]
+    target_band = min(9.0, overall_band + 1.0)
+    if desired_score is not None:
+        if overall_band >= desired_score:
+            target_band = min(9.0, overall_band + 0.5)
+        else:
+            target_band = min(9.0, max(overall_band + 0.5, min(desired_score, overall_band + 1.0)))
     prompt = render_improved_version_prompt(
         prompts=prompts,
         essay_text=essay_text,
         annotations_lines=annotations_lines,
         task_prompt_text=task_prompt_text,
         current_band=overall_band,
-        target_band=min(9.0, overall_band + 1.0),
+        target_band=target_band,
+        desired_score=desired_score,
         word_count=word_count,
         word_minimum=word_minimum,
     )
@@ -1468,6 +1921,7 @@ def _build_payload(
     task_type: str,
     word_count: int,
     word_minimum: int,
+    desired_score: float | None,
     model_version: str,
     prompt_profile_version: int = 1,
     rubric_version: int = 1,
@@ -1521,6 +1975,18 @@ def _build_payload(
         annotations=annotations,
         items=normalized_vocabulary,
     )
+    target_action_plan = _normalize_target_actions(
+        grader=grader,
+        precise_next_steps=precise_next_steps,
+        annotations=annotations,
+        overall_band=overall_after_penalty,
+        desired_score=desired_score,
+    )
+    band_boundaries = _normalize_band_boundaries(grader=grader, ta=ta, cc=cc, lr=lr, gra=gra)
+    ielts_checklist = _normalize_checklist_payload(grader)
+    error_taxonomy = _normalize_error_taxonomy(grader)
+    sentence_fixes = _normalize_sentence_fixes(grader=grader, annotations=annotations)
+    score_boosters = _normalize_score_boosters(grader)
 
     feedback = {
         "task_achievement": {
@@ -1558,6 +2024,12 @@ def _build_payload(
         "overall_summary": precise_summary,
         "next_steps": precise_next_steps,
         "vocabulary_suggestions": normalized_vocabulary[:_VOCAB_MAX_COUNT],
+        "target_action_plan": target_action_plan,
+        "band_boundaries": band_boundaries,
+        "ielts_checklist": ielts_checklist,
+        "error_taxonomy": error_taxonomy,
+        "sentence_fixes": sentence_fixes,
+        "score_boosters": score_boosters,
     }
 
     rubric_reasoning = {
@@ -1601,6 +2073,7 @@ def grade_essay_sync(
     essay_text: str,
     word_count: int,
     essay_hash: str,
+    desired_score: float | None,
     grader_config: ResolvedAiUseCaseConfig,
     improver_config: ResolvedAiUseCaseConfig,
     roast_config: ResolvedAiUseCaseConfig | None,
@@ -1625,6 +2098,7 @@ def grade_essay_sync(
         task_prompt_text=_strip_html(task.prompt_html or ""),
         image_summary=task.image_summary or "",
         essay_text=essay_text,
+        desired_score=desired_score,
     )
     seed = _seed_from_hash(essay_hash)
 
@@ -1682,6 +2156,7 @@ def grade_essay_sync(
         task_type=task_type_value,
         word_count=word_count,
         word_minimum=word_minimum,
+        desired_score=desired_score,
         model_version=f"{grader_config.provider.value}:{grader_config.model_id}",
         prompt_profile_version=prompts.profile_version,
         rubric_version=rubric.version,
@@ -1704,6 +2179,7 @@ def grade_essay_sync(
                 annotations=annotations,
                 task_prompt_text=_strip_html(task.prompt_html or ""),
                 overall_band=payload["overall_band"],
+                desired_score=desired_score,
                 word_count=word_count,
                 word_minimum=word_minimum,
             )
@@ -1721,6 +2197,7 @@ def grade_essay_sync(
                         task_prompt_text=_strip_html(task.prompt_html or ""),
                         image_summary=task.image_summary or "",
                         essay_text=improved_text,
+                        desired_score=desired_score,
                     )
                     improved_seed = _seed_from_hash(
                         hashlib.sha256(improved_text.encode("utf-8")).hexdigest()
@@ -1868,6 +2345,7 @@ async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> 
             essay_text=essay_text,
             word_count=word_count,
             essay_hash=essay_hash,
+            desired_score=getattr(submission, "desired_score", None),
             grader_config=grader_config,
             improver_config=improver_config,
             roast_config=roast_config,

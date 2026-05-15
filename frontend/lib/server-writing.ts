@@ -2,7 +2,6 @@ import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-
 import { requestServerUserApi } from "@/lib/server-user-auth";
 
 export type WritingTaskType = "task_1" | "task_2";
-export type WritingDifficulty = "easy" | "medium" | "hard";
 export type WritingQuestionSubtype =
   | "bar_chart" | "line_graph" | "pie_chart" | "table"
   | "process" | "map" | "two_charts"
@@ -25,7 +24,6 @@ export interface WritingTaskListItem {
   image_url?: string | null;
   word_minimum: number;
   time_limit_seconds: number;
-  difficulty?: WritingDifficulty | null;
   question_subtype?: WritingQuestionSubtype | null;
   source?: string | null;
   description?: string | null;
@@ -49,6 +47,7 @@ export interface WritingSubmissionRecord {
   task_title?: string;
   task_type?: WritingTaskType;
   word_count?: number | null;
+  desired_score?: number | string | null;
   overall_band?: number | string | null;
   submitted_at?: string | null;
   graded_at?: string | null;
@@ -96,6 +95,73 @@ export interface WritingRoastFeedback {
   pep_talk: string;
 }
 
+export interface WritingActionPlan {
+  main_limiter: string;
+  main_limiter_band: number | string;
+  strongest_area: string;
+  strongest_area_band: number | string;
+  fixes: string[];
+}
+
+export interface WritingTargetAction {
+  title: string;
+  why: string;
+  how: string;
+  example: string;
+  band_impact: string;
+  priority: number;
+}
+
+export interface WritingBandBoundary {
+  criterion: string;
+  current_band: number | string;
+  next_band: number | string;
+  why_current: string;
+  required_for_next: string;
+}
+
+export interface WritingScoreBooster {
+  criterion: string;
+  original: string;
+  why_it_scores: string;
+  keep_doing: string;
+  band_value: string;
+}
+
+export interface WritingChecklistItem {
+  label: string;
+  status: "met" | "partial" | "missing" | string;
+  detail: string;
+  how_to_fix?: string;
+}
+
+export interface WritingErrorPattern {
+  category: string;
+  subcategory?: string;
+  label: string;
+  count: number;
+  percentage: number;
+  examples: string[];
+  fix?: string;
+}
+
+export interface WritingSentenceFix {
+  priority: number;
+  original: string;
+  replacement: string;
+  corrected_sentence: string;
+  why: string;
+  band_impact: string;
+  category: string;
+}
+
+export interface WritingRevisionDiff {
+  original: string;
+  revised: string;
+  reason: string;
+  criterion: string;
+}
+
 export interface WritingSubmissionResult {
   submission_id: string;
   task_id: string;
@@ -103,6 +169,7 @@ export interface WritingSubmissionResult {
   task_title: string;
   word_count: number;
   word_minimum: number;
+  desired_score?: number | string | null;
   time_spent_seconds: number;
   submitted_at: string | null;
   graded_at: string | null;
@@ -119,6 +186,15 @@ export interface WritingSubmissionResult {
   improved_version: string;
   overall_summary: string;
   next_steps: string[];
+  action_plan?: WritingActionPlan | null;
+  target_action_plan?: WritingTargetAction[];
+  band_boundaries?: WritingBandBoundary[];
+  score_boosters?: WritingScoreBooster[];
+  checklist?: WritingChecklistItem[];
+  error_patterns?: WritingErrorPattern[];
+  history_error_trends?: WritingErrorPattern[];
+  sentence_fixes?: WritingSentenceFix[];
+  revision_diff?: WritingRevisionDiff[];
   roast?: WritingRoastFeedback | null;
 }
 
@@ -193,14 +269,12 @@ async function requestPublicWritingApi<T>(path: string): Promise<T> {
 
 export async function listWritingTasks(params: {
   task_type?: WritingTaskType;
-  difficulty?: WritingDifficulty;
   question_subtype?: WritingQuestionSubtype;
   page?: number;
   page_size?: number;
 }): Promise<WritingTaskListResponse> {
   const search = new URLSearchParams();
   if (params.task_type) search.set("task_type", params.task_type);
-  if (params.difficulty) search.set("difficulty", params.difficulty);
   if (params.question_subtype) search.set("question_subtype", params.question_subtype);
   if (params.page) search.set("page", String(params.page));
   if (params.page_size) search.set("page_size", String(params.page_size));

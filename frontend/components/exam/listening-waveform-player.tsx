@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type MutableRefObject } from "react";
-import { Pause, Play } from "lucide-react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { Pause, Play, Volume2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -16,12 +16,35 @@ type ListeningWaveformPlayerProps = {
   audioRef: MutableRefObject<HTMLAudioElement | null>;
   src: string;
   className?: string;
+  hiddenUi?: boolean;
+  locked?: boolean;
+  autoPlayDelayMs?: number | null;
+  onEnded?: () => void;
+  onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onPlaybackBlocked?: (isBlocked: boolean) => void;
+  onTimeSnapshot?: (currentTime: number, duration: number) => void;
 };
 
-export function ListeningWaveformPlayer({ audioRef, src, className }: ListeningWaveformPlayerProps) {
+export function ListeningWaveformPlayer({
+  audioRef,
+  src,
+  className,
+  hiddenUi = false,
+  locked = false,
+  autoPlayDelayMs = null,
+  onEnded,
+  onPlaybackStateChange,
+  onPlaybackBlocked,
+  onTimeSnapshot,
+}: ListeningWaveformPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const callbacksRef = useRef({ onEnded, onPlaybackStateChange, onPlaybackBlocked, onTimeSnapshot });
+
+  useEffect(() => {
+    callbacksRef.current = { onEnded, onPlaybackStateChange, onPlaybackBlocked, onTimeSnapshot };
+  }, [onEnded, onPlaybackStateChange, onPlaybackBlocked, onTimeSnapshot]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -37,18 +60,39 @@ export function ListeningWaveformPlayer({ audioRef, src, className }: ListeningW
     setDuration(0);
     setIsPlaying(false);
 
+    const publishSnapshot = () => {
+      const nextDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      callbacksRef.current.onTimeSnapshot?.(audio.currentTime, nextDuration);
+    };
     const handleLoadedMetadata = () => {
-      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+      const nextDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      setDuration(nextDuration);
+      callbacksRef.current.onTimeSnapshot?.(audio.currentTime, nextDuration);
     };
     const handleDurationChange = () => {
-      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+      const nextDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      setDuration(nextDuration);
+      callbacksRef.current.onTimeSnapshot?.(audio.currentTime, nextDuration);
     };
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      publishSnapshot();
+    };
+    const handlePlay = () => {
+      setIsPlaying(true);
+      callbacksRef.current.onPlaybackBlocked?.(false);
+      callbacksRef.current.onPlaybackStateChange?.(true);
+    };
+    const handlePause = () => {
+      setIsPlaying(false);
+      callbacksRef.current.onPlaybackStateChange?.(false);
+    };
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(audio.duration || 0);
+      callbacksRef.current.onPlaybackStateChange?.(false);
+      callbacksRef.current.onTimeSnapshot?.(audio.duration || 0, Number.isFinite(audio.duration) ? audio.duration : 0);
+      callbacksRef.current.onEnded?.();
     };
 
     handleLoadedMetadata();
@@ -71,11 +115,58 @@ export function ListeningWaveformPlayer({ audioRef, src, className }: ListeningW
     };
   }, [audioRef, src]);
 
+  useEffect(() => {
+    if (autoPlayDelayMs === null) {
+      return;
+    }
+    let retryTimer: number | null = null;
+    const tryPlay = async () => {
+      const audio = audioRef.current;
+      if (!audio) {
+        return;
+      }
+      try {
+        audio.muted = false;
+        await audio.play();
+        callbacksRef.current.onPlaybackBlocked?.(false);
+      } catch {
+        callbacksRef.current.onPlaybackBlocked?.(true);
+        retryTimer = window.setTimeout(tryPlay, 1500);
+      }
+    };
+
+    const timer = window.setTimeout(() => {
+      void tryPlay();
+    }, autoPlayDelayMs);
+
+    return () => {
+      window.clearTimeout(timer);
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
+    };
+  }, [audioRef, autoPlayDelayMs, src]);
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  if (hiddenUi) {
+    return (
+      <audio
+        ref={audioRef}
+        className="hidden"
+        controlsList="nodownload noplaybackrate"
+        onContextMenu={(event) => event.preventDefault()}
+      />
+    );
+  }
 
   async function togglePlayback() {
     const audio = audioRef.current;
     if (!audio) {
+      return;
+    }
+    if (locked) {
+      await audio.play().catch(() => undefined);
       return;
     }
 
@@ -92,6 +183,9 @@ export function ListeningWaveformPlayer({ audioRef, src, className }: ListeningW
     if (!audio || !Number.isFinite(nextSeconds)) {
       return;
     }
+    if (locked) {
+      return;
+    }
 
     audio.currentTime = nextSeconds;
     setCurrentTime(nextSeconds);
@@ -103,10 +197,13 @@ export function ListeningWaveformPlayer({ audioRef, src, className }: ListeningW
       <button
         type="button"
         onClick={togglePlayback}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_28px_-16px_rgba(245,166,35,0.55)] transition hover:scale-[1.02] hover:opacity-95"
-        aria-label={isPlaying ? "Pause audio" : "Play audio"}
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_28px_-16px_rgba(245,166,35,0.55)] transition",
+          locked ? "cursor-default" : "hover:scale-[1.02] hover:opacity-95"
+        )}
+        aria-label={locked ? "Audio is playing" : isPlaying ? "Pause audio" : "Play audio"}
       >
-        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+        {locked ? <Volume2 className="h-4 w-4" /> : isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
       </button>
 
       <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -127,7 +224,11 @@ export function ListeningWaveformPlayer({ audioRef, src, className }: ListeningW
             step={0.1}
             value={Math.min(currentTime, duration || currentTime)}
             onChange={(event) => handleScrub(Number(event.target.value))}
-            className="relative z-10 h-8 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-[6px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:mt-[-2px] [&::-webkit-slider-thumb]:h-[14px] [&::-webkit-slider-thumb]:w-[14px] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-[0_6px_16px_rgba(245,166,35,0.4)]"
+            disabled={locked}
+            className={cn(
+              "relative z-10 h-8 w-full appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-[6px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:mt-[-2px] [&::-webkit-slider-thumb]:h-[14px] [&::-webkit-slider-thumb]:w-[14px] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-[0_6px_16px_rgba(245,166,35,0.4)]",
+              locked ? "cursor-default" : "cursor-pointer"
+            )}
             aria-label="Seek audio"
           />
         </div>

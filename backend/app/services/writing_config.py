@@ -57,15 +57,24 @@ TASK PROMPT:
 CALIBRATION ANCHORS:
 {{ANCHORS_BLOCK}}
 
+TARGET SCORE CONTEXT:
+{{TARGET_CONTEXT}}
+
 COACHING OUTPUT RULES:
 1. `overall_summary` must be 2-3 sentences only.
 2. Sentence 1: state the current overall level and the strongest criterion.
 3. Sentence 2: state the weakest criterion and quote or paraphrase one exact score-limiting feature from the essay.
-4. Sentence 3: state the single fastest revision move that would raise the score.
-5. `next_steps` must contain exactly 3 concise actions. Each action must mention a concrete pattern, phrase, or paragraph move from the essay. Do not write generic advice.
+4. Sentence 3: state the single fastest revision move for the target score context.
+5. `next_steps` must contain exactly 3 concise actions ordered by score impact toward the target score context. Each action must mention a concrete pattern, phrase, or paragraph move from the essay. Do not write generic advice.
 6. `strengths` and `improvements` inside each criterion must be essay-specific, not template language.
 7. `vocabulary_suggestions` must contain only real upgrade opportunities from the essay itself.
 8. Return 0-8 vocabulary suggestions. Do not pad the list.
+9. `target_action_plan` must contain exactly 3 target-gap actions. Each action has: title, why, how, example, band_impact, priority. Aim for a realistic +0.5 to +1.0 band improvement without making the task feel impossible.
+10. `band_boundaries` must contain 4 rows, one per IELTS criterion. Explain why the current band is locked and what exact change earns the next realistic +0.5 to +1.0.
+11. `ielts_checklist` must contain exactly 5 task-specific checklist rows with label, status, detail, how_to_fix.
+12. `error_taxonomy` must group repeated weak patterns by subcategory, not just broad category. Include count, examples, and one fix.
+13. `sentence_fixes` must contain the highest-impact sentence corrections only. Use exact original text from the essay.
+14. `score_boosters` must contain 3-6 exact original phrases or sentences that helped the score. Show criterion, original, why_it_scores, keep_doing, and band_value.
 
 {{ANNOTATION_PROMPT}}
 
@@ -92,7 +101,8 @@ _ANNOTATION_PROMPT = (
     "that essay[offset:offset+length] == original in the exact raw essay "
     "text, including spaces and newlines. If you cannot verify an "
     "annotation exactly, omit it. Do not annotate stylistic preferences "
-    "as errors."
+    "as errors. Prioritize issues that block the target score context "
+    "or the next realistic +0.5 to +1.0 band."
 )
 
 _ANNOTATION_REPAIR_PROMPT = (
@@ -119,6 +129,7 @@ Rules:
 - Do not add new ideas unrelated to the original argument.
 - Keep the paragraph structure very close to the original. If the original is one block, you may split it into sensible paragraphs.
 - Current band: {{CURRENT_BAND}}. Aim for no more than Band {{TARGET_BAND}}.
+- Desired score context: {{DESIRED_SCORE_CONTEXT}}
 - Current word count: {{WORD_COUNT}}. Minimum target: {{WORD_MINIMUM}}.
 - If the essay is under the minimum, expand it naturally with clearer support and explanation until it reaches the minimum.
 - If the essay already meets the minimum, do not pad it with filler.
@@ -137,13 +148,13 @@ Annotations:
 ===== ESSAY END ====="""
 
 _ROAST_SYSTEM = (
-    "You are a stand-up comedian who moonlights as an IELTS coach. Your job "
-    "is to roast the candidate's essay with sharp, witty, slightly rude "
-    "humour like a grumpy older sibling who still wants them to pass. "
-    "Do not change the locked IELTS bands. Tease the writing, not the writer. "
-    "Keep it in plain English. Quote only tiny real snippets from the essay. "
-    "Every criterion zinger must point to a real weakness shown in the essay "
-    "or in the score profile. End with a tiny supportive pep talk. Output JSON only."
+    "You are a brutally honest IELTS writing coach with a sharp comic voice. "
+    "Roast the essay hard, but attack only the writing, never the student's identity "
+    "or personal worth. Be direct, funny, and unforgiving about weak logic, vague ideas, "
+    "messy grammar, poor structure, and lazy vocabulary. Do not change the locked IELTS "
+    "bands. Keep it in plain English. Quote only tiny real snippets from the essay. "
+    "Every criterion zinger must point to a real weakness shown in the essay or in the "
+    "score profile. End with a short, firm push to revise. Output JSON only."
 )
 
 _ROAST_USER_TEMPLATE = """BANDS (locked, do not change):
@@ -158,12 +169,12 @@ DETECTED ERRORS: {{ANNOTATION_COUNT}}
 NEUTRAL EXAMINER SUMMARY (for context, do not copy):
 {{OVERALL_SUMMARY}}
 
-Now roast the essay. Use this structure:
-- overall_roast: 3-5 sentences. Set one clear comic theme and keep it going.
+Now roast the essay without softening the criticism. Use this structure:
+- overall_roast: 3-5 sentences. Be harsh, specific, and funny about the writing problems.
 - one_liner: a single savage sentence the candidate could put on a t-shirt.
-- task_achievement_zinger / coherence_zinger / lexical_zinger / grammar_zinger: one snarky sentence per criterion.
+- task_achievement_zinger / coherence_zinger / lexical_zinger / grammar_zinger: one sharp sentence per criterion.
 - savage_tips: exactly 4 short bullet points. Each must start with a concrete fix and then add attitude.
-- pep_talk: 1-2 sentences. Still cheeky, but ends on hope.
+- pep_talk: 1-2 sentences. No sugar-coating; end with a firm push to revise.
 
 ===== CANDIDATE ESSAY START =====
 {{ESSAY_TEXT}}
@@ -415,6 +426,7 @@ def render_grader_user_prompt(
     task_prompt_text: str,
     image_summary: str,
     essay_text: str,
+    desired_score: float | None = None,
 ) -> str:
     image_summary_block = ""
     task_type_value = task_type.value if isinstance(task_type, WritingTaskType) else str(task_type)
@@ -423,13 +435,27 @@ def render_grader_user_prompt(
             "VISUAL DESCRIPTION (ground truth, do not re-interpret):\n"
             f"{image_summary.strip()}\n\n"
         )
+    target_context = "No learner desired score was provided. Give actions for the next realistic +0.5 to +1.0 band."
+    if desired_score is not None:
+        target_context = (
+            f"The learner's dashboard Desired Score is Band {desired_score:.1f}. "
+            "If the current score is below this target, make `next_steps` a realistic +0.5 to +1.0 path toward that target without overloading the learner. "
+            "If the current score already meets or exceeds it, make `next_steps` preserve the current band and push toward the next realistic +0.5 to +1.0 band without unnecessary rewrites."
+        )
+    template = prompts.entries[WritingPromptKey.GRADER_USER_TEMPLATE]
+    if "{{TARGET_CONTEXT}}" not in template:
+        template = template.replace(
+            "COACHING OUTPUT RULES:",
+            "TARGET SCORE CONTEXT:\n{{TARGET_CONTEXT}}\n\nCOACHING OUTPUT RULES:",
+        )
     return _replace_tokens(
-        prompts.entries[WritingPromptKey.GRADER_USER_TEMPLATE],
+        template,
         {
             "TASK_TYPE": task_type_value.upper(),
             "TASK_PROMPT": task_prompt_text.strip(),
             "IMAGE_SUMMARY_BLOCK": image_summary_block,
             "ANCHORS_BLOCK": _format_anchors_block(anchors.items),
+            "TARGET_CONTEXT": target_context,
             "ANNOTATION_PROMPT": prompts.entries[WritingPromptKey.ANNOTATION_PROMPT],
             "ESSAY_TEXT": essay_text,
         },
@@ -458,6 +484,7 @@ def render_improved_version_prompt(
     task_prompt_text: str,
     current_band: float,
     target_band: float,
+    desired_score: float | None,
     word_count: int,
     word_minimum: int,
 ) -> str:
@@ -466,6 +493,11 @@ def render_improved_version_prompt(
         {
             "CURRENT_BAND": f"{current_band:.1f}",
             "TARGET_BAND": f"{target_band:.1f}",
+            "DESIRED_SCORE_CONTEXT": (
+                f"Band {desired_score:.1f}"
+                if desired_score is not None
+                else "No dashboard desired score was provided."
+            ),
             "WORD_COUNT": word_count,
             "WORD_MINIMUM": word_minimum,
             "TASK_PROMPT": task_prompt_text.strip(),

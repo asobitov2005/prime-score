@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { submitWritingSubmission } from "@/lib/client-writing";
+import { getStoredDesiredScore, submitWritingSubmission } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceTask {
@@ -104,6 +104,7 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
         task_id: task.id,
         essay_text: essay,
         time_spent_seconds: elapsed,
+        desired_score: getStoredDesiredScore(),
       });
       try {
         window.localStorage.removeItem(storageKey);

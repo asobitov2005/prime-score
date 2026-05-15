@@ -99,6 +99,7 @@ class WritingSubmission(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), index=True
     )
     time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    desired_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

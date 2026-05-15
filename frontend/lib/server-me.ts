@@ -27,6 +27,9 @@ type BackendMeActivityPoint = {
   activity_date: string;
   attempts_count: number;
   time_spent_sec: number;
+  reading_time_sec: number;
+  listening_time_sec: number;
+  writing_time_sec: number;
 };
 
 type BackendMeAttempt = {
@@ -479,6 +482,9 @@ export async function getDashboardActivity(): Promise<DashboardActivityPoint[]> 
       activityDate: point.activity_date,
       attemptsCount: point.attempts_count,
       timeSpentSec: point.time_spent_sec,
+      readingTimeSec: point.reading_time_sec ?? 0,
+      listeningTimeSec: point.listening_time_sec ?? 0,
+      writingTimeSec: point.writing_time_sec ?? 0,
     }));
   } catch {
     return [];

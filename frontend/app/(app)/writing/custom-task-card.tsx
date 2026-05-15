@@ -48,8 +48,10 @@ export function CustomTaskCard({ activeTaskType }: { activeTaskType: WritingTask
               <Plus className="h-5 w-5" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Add Custom Task</p>
-              <p className="text-sm font-medium tracking-tight text-muted-foreground">Add a question you've found elsewhere</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Check my essay</p>
+              <p className="text-sm font-medium tracking-tight text-muted-foreground">
+                Paste a real IELTS question, upload visuals, and get band + sentence fixes.
+              </p>
             </div>
           </div>
           <Badge tone="outline" className="border-[#9db7c6]/70 bg-white/65 text-[10px] uppercase tracking-[0.18em] text-[#466b80] dark:border-[#6f93a8]/45 dark:bg-[#6f93a8]/15 dark:text-[#c4d7e2]">
@@ -196,6 +198,19 @@ function CustomTaskDialog({
     >
       <div className={cn("grid gap-5", config.requiresImage && "lg:grid-cols-[minmax(0,1fr)_340px]")}>
         <div className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              "Paste your real IELTS question",
+              taskType === "task_1" ? "Upload chart, map, process, or table" : "Write Task 2 in timed exam mode",
+              "Get band score and sentence fixes",
+              "See actions for your desired score",
+            ].map((item) => (
+              <div key={item} className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2 text-xs font-semibold text-muted-foreground">
+                {item}
+              </div>
+            ))}
+          </div>
+
           <div className="space-y-2">
             <label htmlFor={`custom-${taskType}-prompt`} className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
               {config.promptLabel}

@@ -100,6 +100,16 @@ export function retryWritingSubmission(submissionId: string): Promise<WritingSub
   });
 }
 
+export function getStoredDesiredScore(): number {
+  try {
+    const saved = window.localStorage.getItem("prime-desired-score");
+    const parsed = saved ? parseFloat(saved) : 7.5;
+    return Number.isFinite(parsed) ? Math.min(9, Math.max(4, parsed)) : 7.5;
+  } catch {
+    return 7.5;
+  }
+}
+
 export function submitWritingSubmission(payload: {
   task_id?: string;
   task_type?: "task_1" | "task_2";
@@ -107,6 +117,7 @@ export function submitWritingSubmission(payload: {
   image_url?: string | null;
   essay_text: string;
   time_spent_seconds: number;
+  desired_score?: number | null;
 }): Promise<WritingSubmissionRecord> {
   return clientFetch<WritingSubmissionRecord>(`/writing/submissions`, {
     method: "POST",

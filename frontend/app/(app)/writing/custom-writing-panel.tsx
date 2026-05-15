@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitWritingSubmission, uploadWritingImage } from "@/lib/client-writing";
+import { getStoredDesiredScore, submitWritingSubmission, uploadWritingImage } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 
 type WritingTaskType = "task_1" | "task_2";
@@ -111,6 +111,7 @@ export function CustomWritingPanel({ initialTaskType = null }: { initialTaskType
         image_url: imageUrl,
         essay_text: essay,
         time_spent_seconds: 0,
+        desired_score: getStoredDesiredScore(),
       });
 
       try {

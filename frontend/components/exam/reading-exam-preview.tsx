@@ -12,7 +12,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, Check, CheckCircle2, ChevronDown, Eraser, Expand, GripVertical, Highlighter, Lightbulb, Minus, Moon, MoveHorizontal, Plus, SendHorizontal, Shrink, SunMedium } from "lucide-react";
+import { ArrowDown, Check, CheckCircle2, ChevronDown, Eraser, Expand, GripVertical, Highlighter, Lightbulb, LogIn, Minus, Moon, MoveHorizontal, Plus, Radio, SendHorizontal, Shrink, SunMedium } from "lucide-react";
 import {
   ListeningTranscriptPanel,
   type ListeningTranscriptQuestionLocation as PreviewTranscriptQuestionLocation,
@@ -34,10 +34,11 @@ import { cn } from "@/lib/utils";
 import type { QuestionType } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
 
-type PreviewMode = "practice" | "exam" | "review";
+type PreviewMode = "practice" | "exam" | "review" | "guest";
 type PreviewDialog = "submit" | "leave" | "fullscreen" | null;
 type SubmitReason = "user_confirmed" | "time_up" | "exit_fullscreen";
 type FullscreenDialogStage = "confirm-exit" | "exited-warning" | null;
+type StrictListeningPhase = "idle" | "waiting" | "playing" | "transfer" | "complete";
 type TextHighlight = { id: string; start: number; end: number };
 type PreviewUiState = {
   theme?: "light" | "dark";
@@ -53,6 +54,8 @@ type SelectionToolbarState = {
   top: number;
   left: number;
 } | null;
+
+const LISTENING_TRANSFER_SECONDS = 120;
 
 interface PreviewParagraph {
   paragraphKey: string;
@@ -367,6 +370,10 @@ function isCompletion(type: PreviewQuestion["type"]) {
 
 function isWordBankCompletion(type: PreviewQuestion["type"]) {
   return type.includes("summary_completion_wordbank");
+}
+
+function isFreeTextSummaryCompletion(type: PreviewQuestion["type"]) {
+  return type.includes("summary_completion_freetext");
 }
 
 function isPlanMapLabeling(type: PreviewQuestion["type"]) {
@@ -821,6 +828,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [activeDialog, setActiveDialog] = useState<PreviewDialog>(null);
   const [fullscreenDialogStage, setFullscreenDialogStage] = useState<FullscreenDialogStage>(null);
   const [fullscreenExitCountdown, setFullscreenExitCountdown] = useState(0);
+  const [strictListeningPhase, setStrictListeningPhase] = useState<StrictListeningPhase>("idle");
+  const [strictListeningTransferLeft, setStrictListeningTransferLeft] = useState(LISTENING_TRANSFER_SECONDS);
+  const [strictListeningIsPlaying, setStrictListeningIsPlaying] = useState(false);
+  const [strictListeningPlaybackBlocked, setStrictListeningPlaybackBlocked] = useState(false);
+  const [strictListeningElapsedSeconds, setStrictListeningElapsedSeconds] = useState(initialTimeSpentSeconds);
+  const [strictListeningAudioSectionId, setStrictListeningAudioSectionId] = useState(
+    findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs)
+  );
   const [activeQuestionId, setActiveQuestionId] = useState(initialQuestionId);
   const [activeSectionId, setActiveSectionId] = useState(
     findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs)
@@ -842,12 +857,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [textHighlights, setTextHighlights] = useState<Record<string, TextHighlight[]>>(examData.initialTextHighlights ?? {});
   const [explanationHighlightQuote, setExplanationHighlightQuote] = useState<string | null>(null);
   const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarState>(null);
+  const [showGuestLoginModal, setShowGuestLoginModal] = useState(false);
   const [syncState, setSyncState] = useState<"idle" | "saving" | "saved" | "error">(
     examData.attemptId ? "saved" : "idle"
   );
   const allowLeaveRef = useRef(false);
   const ignoreNextFullscreenExitRef = useRef(false);
   const hasExamFullscreenSessionRef = useRef(false);
+  const strictListeningCompletedAudioRef = useRef<Record<string, number>>({});
   const saveTimersRef = useRef<Record<string, number>>({});
   const pendingAnswerValuesRef = useRef<Record<string, string>>({});
   const latestAnswersRef = useRef<Record<string, string>>(examData.initialAnswers ?? {});
@@ -997,8 +1014,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const isExamMode = mode === "exam";
   const isReviewMode = mode === "review";
   const isSinglePaneListeningMode = isListeningPreview && !isReviewMode;
+  const isStrictListeningExam = isSinglePaneListeningMode && isExamMode;
   const currentTranscriptSegments = currentSection?.transcriptSegments ?? [];
   const currentTranscriptQuestionLocations = currentSection?.transcriptQuestionLocations ?? [];
+  const strictListeningAudioSection = useMemo(
+    () => previewSections.find((section) => section.id === strictListeningAudioSectionId) ?? previewSections[0],
+    [previewSections, strictListeningAudioSectionId]
+  );
   const reviewItems = examData.reviewItems ?? {};
   const candidateName = hasMounted ? (storedCandidateName || "Guest Candidate") : "Guest Candidate";
   const [showListeningTranscript, setShowListeningTranscript] = useState(false);
@@ -1082,6 +1104,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     setActiveDialog(null);
     setFullscreenDialogStage(null);
     setFullscreenExitCountdown(0);
+    setStrictListeningPhase(mode === "exam" && examData.testType === "listening" ? "waiting" : "idle");
+    setStrictListeningTransferLeft(LISTENING_TRANSFER_SECONDS);
+    setStrictListeningIsPlaying(false);
+    setStrictListeningPlaybackBlocked(false);
+    setStrictListeningElapsedSeconds(nextTimeSpentSeconds);
+    setStrictListeningAudioSectionId(nextSectionId);
+    strictListeningCompletedAudioRef.current = {};
     setSyncState(examData.attemptId ? "saved" : "idle");
     pendingAnswerValuesRef.current = {};
     ignoreNextFullscreenExitRef.current = false;
@@ -1157,6 +1186,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   useEffect(() => {
     if (isSubmitted) return;
+    if (isStrictListeningExam) {
+      if (strictListeningPhase !== "transfer") {
+        return;
+      }
+      const timer = window.setInterval(() => {
+        setStrictListeningTransferLeft((current) => (current <= 1 ? 0 : current - 1));
+        setStrictListeningElapsedSeconds((current) => current + 1);
+      }, 1000);
+      return () => window.clearInterval(timer);
+    }
     if (mode === "exam") {
       const timer = window.setInterval(() => {
         setTimeLeft((current) => (current <= 1 ? 0 : current - 1));
@@ -1172,13 +1211,26 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       setTimeLeft((current) => current + 1);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [isReviewMode, isSubmitted, mode]);
+  }, [isReviewMode, isStrictListeningExam, isSubmitted, mode, strictListeningPhase]);
 
   useEffect(() => {
+    if (isStrictListeningExam) {
+      return;
+    }
     if (timeLeft === 0 && mode === "exam" && !isSubmitted) {
       void submitAttempt("time_up");
     }
-  }, [timeLeft, mode, isSubmitted]);
+  }, [isStrictListeningExam, timeLeft, mode, isSubmitted]);
+
+  useEffect(() => {
+    if (!isStrictListeningExam || isSubmitted || strictListeningPhase !== "transfer") {
+      return;
+    }
+    if (strictListeningTransferLeft === 0) {
+      setStrictListeningPhase("complete");
+      void submitAttempt("time_up");
+    }
+  }, [isStrictListeningExam, isSubmitted, strictListeningPhase, strictListeningTransferLeft]);
 
   useEffect(() => {
     if (activeDialog !== "fullscreen" || fullscreenDialogStage !== "exited-warning" || isSubmitting) {
@@ -1309,6 +1361,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       ? formatCountdown(timeLeft)
       : formatMinutesLeft(timeLeft)
     : formatCountdown(timeLeft);
+  const strictListeningTimerDisplay = formatCountdown(strictListeningTransferLeft);
+  const strictListeningAutoPlayDelayMs = isStrictListeningExam && strictListeningPhase === "waiting"
+    ? Object.keys(strictListeningCompletedAudioRef.current).length === 0
+      ? 3000
+      : 250
+    : null;
+  const showStrictListeningTransferTimer = isStrictListeningExam && (strictListeningPhase === "transfer" || strictListeningPhase === "complete");
+  const submitDisabled = isSubmitted || isSubmitting || (isStrictListeningExam && (strictListeningPhase === "waiting" || strictListeningPhase === "playing"));
   const inputFocusClass = theme === "light"
     ? "focus-visible:border-[#2f436f] focus-visible:ring-1 focus-visible:ring-[#2f436f]/20"
     : "focus-visible:border-primary/45 focus-visible:ring-1 focus-visible:ring-primary/20";
@@ -1406,6 +1466,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function currentTimeSpentSeconds() {
+    if (isStrictListeningExam) {
+      return Math.max(0, Math.floor(strictListeningElapsedSeconds));
+    }
     if (mode === "exam") {
       return Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - timeLeft);
     }
@@ -1424,7 +1487,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         activeQuestionId,
       },
     };
-  }, [activeQuestionId, examData.timeLimitSeconds, fontScale, mode, splitRatio, textHighlights, theme, timeLeft]);
+  }, [activeQuestionId, examData.timeLimitSeconds, fontScale, isStrictListeningExam, mode, splitRatio, strictListeningElapsedSeconds, textHighlights, theme, timeLeft]);
 
   useEffect(() => {
     latestAnswersRef.current = answers;
@@ -1605,6 +1668,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       return;
     }
 
+    if (mode === "guest") {
+      setActiveQuestionId(questionId);
+      setShowGuestLoginModal(true);
+      return;
+    }
+
     setAnswers((current) => {
       const next = { ...current, [questionId]: value };
       latestAnswersRef.current = next;
@@ -1684,6 +1753,64 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       setIsCalculatingResults(false);
       setIsSubmitted(false);
       setIsSubmitting(false);
+    }
+  }
+
+  function updateStrictListeningTimeSnapshot(sectionId: string, currentTime: number, duration: number) {
+    if (!isStrictListeningExam) {
+      return;
+    }
+    const completedSeconds = Object.entries(strictListeningCompletedAudioRef.current).reduce((sum, [completedSectionId, seconds]) => {
+      if (completedSectionId === sectionId) {
+        return sum;
+      }
+      return sum + seconds;
+    }, 0);
+    const currentSeconds = Math.max(0, Math.min(
+      Number.isFinite(currentTime) ? currentTime : 0,
+      Number.isFinite(duration) && duration > 0 ? duration : currentTime
+    ));
+    const transferSeconds = strictListeningPhase === "transfer"
+      ? LISTENING_TRANSFER_SECONDS - strictListeningTransferLeft
+      : 0;
+    setStrictListeningElapsedSeconds(Math.floor(initialTimeSpentSeconds + completedSeconds + currentSeconds + transferSeconds));
+  }
+
+  function handleStrictListeningAudioEnded(sectionId: string, duration: number) {
+    if (!isStrictListeningExam) {
+      return;
+    }
+    const audioSection = previewSections.find((section) => section.id === sectionId);
+    const fallbackDuration = audioSection?.audioDurationSeconds ?? duration;
+    strictListeningCompletedAudioRef.current[sectionId] = Math.max(0, Math.floor(
+      Number.isFinite(duration) && duration > 0 ? duration : fallbackDuration ?? 0
+    ));
+
+    const audioSectionIndex = previewSections.findIndex((section) => section.id === sectionId);
+    const nextSection = previewSections[audioSectionIndex + 1];
+    if (nextSection?.audioUrl) {
+      setStrictListeningAudioSectionId(nextSection.id);
+      setStrictListeningIsPlaying(false);
+      setStrictListeningPhase("waiting");
+      return;
+    }
+
+    setStrictListeningIsPlaying(false);
+    setStrictListeningTransferLeft(LISTENING_TRANSFER_SECONDS);
+    setStrictListeningPhase("transfer");
+  }
+
+  async function startStrictListeningAudio() {
+    const audio = listeningAudioRef.current;
+    if (!audio) {
+      return;
+    }
+    try {
+      audio.muted = false;
+      await audio.play();
+      setStrictListeningPlaybackBlocked(false);
+    } catch {
+      setStrictListeningPlaybackBlocked(true);
     }
   }
 
@@ -2502,6 +2629,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     const isListeningMatchingGroup = group.type.includes("listening_matching");
     const isWordBankGroup = group.type.includes("wordbank");
+    if (isWordBankGroup) {
+      return null;
+    }
+
     const baseOptions = typedOptionLines(group);
     const baseOptionEntries = baseOptions.map((option, index) => ({
       option,
@@ -2916,43 +3047,69 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function renderCompletionAnswer(group: PreviewGroup, question: PreviewQuestion, key: string) {
-    const isWordBankGroup = group.type.includes("wordbank");
+    const isWordBankGroup = isWordBankCompletion(question.type);
+    const wordBankOptions = isWordBankGroup ? typedQuestionOptionLines(group, question, []) : [];
+    const normalizedWordBankValue = isWordBankGroup
+      ? normalizeMatchingAnswerValue(answers[question.id] ?? "", wordBankOptions, question.type)
+      : "";
+    const isFreeTextSummary = isFreeTextSummaryCompletion(question.type);
 
-    return isWordBankGroup ? (
-      <button
-        type="button"
-        key={`${key}-wordbank`}
-        data-question-anchor={question.id}
-        data-wordbank-drop-question-id={question.id}
-        data-wordbank-drop-group-id={group.id}
-        onClick={() => setActiveQuestionId(question.id)}
-        onPointerDown={(event) => {
-          const currentValue = answers[question.id] ?? "";
-          if (!currentValue) {
-            return;
-          }
-          beginWordBankPointerDrag(event, {
-            groupId: group.id,
-            value: currentValue,
-            sourceQuestionId: question.id,
-          });
-        }}
-        className={cn(
-          "mx-1 inline-flex h-8 min-w-[132px] items-center rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none transition",
-          theme === "light"
-            ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
-            : "border-slate-500/55 bg-card text-foreground",
-          dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
-          answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
-          activeQuestionId === question.id && activeInputClass
-        )}
-        style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
-      >
-        <span className={cn(!answers[question.id] && numberedPlaceholderClass)}>
-          {answers[question.id] || (question.label ?? String(question.number))}
+    if (isWordBankGroup && wordBankOptions.length > 0) {
+      return (
+        <span key={`${key}-wordbank-select`} className="relative mx-1 inline-flex align-middle">
+          <select
+            value={normalizedWordBankValue}
+            onFocus={() => setActiveQuestionId(question.id)}
+            onChange={(event) => persistAnswer(question.id, event.target.value)}
+            data-question-anchor={question.id}
+            className={cn(
+              "inline-flex h-8 min-w-[132px] appearance-none rounded-md border px-3 pr-8 text-left text-[15px] font-medium shadow-none outline-none transition",
+              theme === "light"
+                ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
+                : "border-slate-500/55 bg-card text-foreground",
+              inputFocusClass,
+              activeQuestionId === question.id && activeInputClass
+            )}
+            style={{ width: `${inlineAnswerWidth(normalizedWordBankValue, question.label ?? String(question.number))}px` }}
+          >
+            <option value="">{question.label ?? String(question.number)}</option>
+            {wordBankOptions.map((option, index) => {
+              const optionView = typedOptionView(option, index, question.type);
+              return (
+                <option key={`${question.id}-inline-wordbank-${index}`} value={optionView.value}>
+                  {optionView.label}
+                </option>
+              );
+            })}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         </span>
-      </button>
-    ) : (
+      );
+    }
+
+    if (isWordBankGroup && !isFreeTextSummary) {
+      return (
+        <select
+          key={`${key}-empty-wordbank-select`}
+          value=""
+          onFocus={() => setActiveQuestionId(question.id)}
+          data-question-anchor={question.id}
+          className={cn(
+            "mx-1 inline-flex h-8 min-w-[132px] appearance-none rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none outline-none transition",
+            theme === "light"
+              ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
+              : "border-slate-500/55 bg-card text-foreground",
+            inputFocusClass,
+            activeQuestionId === question.id && activeInputClass
+          )}
+          style={{ width: `${inlineAnswerWidth("", question.label ?? String(question.number))}px` }}
+        >
+          <option value="">{question.label ?? String(question.number)}</option>
+        </select>
+      );
+    }
+
+    return (
       <Input
         key={`${key}-input`}
         value={answers[question.id] ?? ""}
@@ -3891,6 +4048,47 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         </div>
       ) : null}
 
+      {showGuestLoginModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-auto">
+          <div className="relative w-full max-w-[340px] overflow-hidden rounded-[1.5rem] border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-400">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-orange-500" />
+            
+            <div className="p-6 space-y-6">
+              <div className="text-center space-y-3">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500 mb-2 shadow-sm">
+                  <LogIn className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-bold tracking-tight text-foreground">
+                  Login Required
+                </h3>
+                <p className="text-xs font-medium leading-relaxed text-muted-foreground">
+                  Please log in to answer questions and save your progress.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <Button
+                  onClick={() => {
+                    const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                    router.push(`/login?returnUrl=${returnUrl}`);
+                  }}
+                  className="h-10 w-full rounded-xl font-bold bg-orange-500 text-white hover:bg-orange-600 transition-all shadow-sm"
+                >
+                  Login
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => router.push(examData.exitHref ?? "/tests")}
+                  className="h-10 w-full rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                >
+                  Exit
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="z-40 shrink-0 border-b border-border/80 bg-background/95 text-foreground shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
         <div className={cn(
           "mx-auto grid min-h-[68px] max-w-[1800px] grid-cols-1 gap-3 px-4 py-3 lg:items-center lg:px-6",
@@ -3974,12 +4172,53 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           </div>
 
           <div className="flex items-center justify-center">
-            {isSinglePaneListeningMode && currentSection?.audioUrl ? (
-              <ListeningWaveformPlayer
-                audioRef={listeningAudioRef}
-                src={currentSection.audioUrl}
-                className="w-full max-w-[44rem]"
-              />
+            {isSinglePaneListeningMode && (isStrictListeningExam ? strictListeningAudioSection?.audioUrl : currentSection?.audioUrl) && !showStrictListeningTransferTimer ? (
+              <div className="flex w-full max-w-[48rem] flex-col items-center gap-2">
+	                {isStrictListeningExam ? (
+	                  <button
+	                    type="button"
+	                    onClick={() => void startStrictListeningAudio()}
+	                    className={cn(
+	                      "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] transition",
+	                      strictListeningPlaybackBlocked
+	                        ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+	                        : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+	                    )}
+	                  >
+	                    <Radio className={cn("h-3.5 w-3.5", strictListeningIsPlaying && "animate-pulse")} />
+	                    {strictListeningPlaybackBlocked ? "Tap to start audio" : strictListeningIsPlaying ? "Audio is playing" : "Audio starting"}
+	                  </button>
+	                ) : null}
+                <ListeningWaveformPlayer
+                  audioRef={listeningAudioRef}
+                  src={(isStrictListeningExam ? strictListeningAudioSection?.audioUrl : currentSection?.audioUrl) ?? ""}
+		                  className="w-full"
+		                  hiddenUi={isStrictListeningExam}
+	                  locked={isStrictListeningExam}
+                  autoPlayDelayMs={strictListeningAutoPlayDelayMs}
+	                  onPlaybackStateChange={(playing) => {
+	                    setStrictListeningIsPlaying(playing);
+	                    if (isStrictListeningExam && playing) {
+	                      setStrictListeningPlaybackBlocked(false);
+	                      setStrictListeningPhase("playing");
+	                    }
+	                  }}
+	                  onPlaybackBlocked={setStrictListeningPlaybackBlocked}
+	                  onTimeSnapshot={(currentTime, duration) => {
+	                    const audioSectionId = isStrictListeningExam ? strictListeningAudioSection?.id : currentSection?.id;
+	                    if (audioSectionId) {
+	                      updateStrictListeningTimeSnapshot(audioSectionId, currentTime, duration);
+	                    }
+	                  }}
+	                  onEnded={() => {
+	                    const audioSectionId = isStrictListeningExam ? strictListeningAudioSection?.id : currentSection?.id;
+	                    const audioDuration = isStrictListeningExam ? strictListeningAudioSection?.audioDurationSeconds : currentSection?.audioDurationSeconds;
+	                    if (audioSectionId) {
+	                      handleStrictListeningAudioEnded(audioSectionId, listeningAudioRef.current?.duration ?? audioDuration ?? 0);
+	                    }
+	                  }}
+                />
+              </div>
             ) : (
               <div
                 className={cn(
@@ -3995,8 +4234,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       : "tracking-[0.04em] text-foreground"
                   )}
                 >
-                  {timerDisplay}
+                  {showStrictListeningTransferTimer ? strictListeningTimerDisplay : timerDisplay}
                 </p>
+                {showStrictListeningTransferTimer ? (
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                    Transfer time
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
@@ -4045,10 +4289,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             </div>
             {!isReviewMode ? (
               <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitted || isSubmitting}
-                className={cn(
+	                type="button"
+	                onClick={handleSubmit}
+	                disabled={submitDisabled}
+	                className={cn(
                   "h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.12em]",
                   theme === "dark"
                     ? "border border-slate-400 bg-slate-300 text-slate-950 hover:bg-slate-200"

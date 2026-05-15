@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   deleteWritingDraftClient,
+  getStoredDesiredScore,
   getWritingDraftClient,
   saveWritingDraftClient,
   submitWritingSubmission,
@@ -395,6 +396,7 @@ export function WritingExamClient({
         image_url: task ? undefined : imageUrl,
         essay_text: essay,
         time_spent_seconds: elapsed,
+        desired_score: getStoredDesiredScore(),
       });
 
       try {

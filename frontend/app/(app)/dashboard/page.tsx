@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenText, ClipboardList, Headphones, Play, Target, Clock, PenSquare, Flame } from "lucide-react";
+import { AlertTriangle, ArrowRight, BookOpenText, Brain, Clock, Gauge, Headphones, Play, Target, PenSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DashboardCharts } from "@/components/charts/dashboard-charts";
 import { getCatalogTests } from "@/lib/server-data";
-import { getDashboardAnalytics, getUserAttempts } from "@/lib/server-me";
+import { getDashboardActivity, getDashboardAnalytics, getUserAttempts } from "@/lib/server-me";
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
 import { DashboardAverageCards } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
 import { ActivitySummary } from "./activity-summary";
+import { StreakHeatmap } from "./streak-heatmap";
 import { cn } from "@/lib/utils";
-import type { AttemptRow } from "@/lib/types";
+import type { AttemptRow, DashboardAnalytics } from "@/lib/types";
 import { pickQuickTests } from "./quick-tests";
 
 interface InProgressTestCardState {
@@ -28,6 +29,27 @@ interface InProgressTestCardState {
 type RecentActivityItem =
   | { kind: "attempt"; key: string; sortAt: string; attempt: AttemptRow }
   | { kind: "writing"; key: string; sortAt: string; submission: WritingHistoryItem };
+
+interface WeaknessDiagnosis {
+  label: string;
+  status: string;
+  severity: "critical" | "attention" | "steady";
+  title: string;
+  description: string;
+  primaryMetric: string;
+  primaryMetricLabel: string;
+  secondaryMetric: string;
+  secondaryMetricLabel: string;
+  focusItems: string[];
+  insights: Array<{
+    label: string;
+    value: string;
+    detail: string;
+    scorePercent: number;
+  }>;
+  href: string;
+  cta: string;
+}
 
 function formatSecondsAsClock(totalSeconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
@@ -78,12 +100,178 @@ function getInProgressTest(attempts: AttemptRow[]): InProgressTestCardState | nu
   };
 }
 
+function formatSecondsShort(seconds: number | null): string {
+  if (seconds === null) return "No data";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
+
+function buildWeaknessDiagnosis(
+  analytics: DashboardAnalytics,
+  attempts: AttemptRow[],
+  lastAttempt: AttemptRow | null,
+  daysSinceLast: number,
+): WeaknessDiagnosis {
+  const practicedWeaknesses = analytics.questionTypeAnalysis
+    .filter((item) => item.workedCount > 0)
+    .sort((left, right) => {
+      if (left.accuracy !== right.accuracy) return left.accuracy - right.accuracy;
+      return right.errorCount - left.errorCount;
+    });
+  const recentWeaknesses = analytics.comparison.items
+    .filter((item) => item.currentAccuracy !== null)
+    .sort((left, right) => {
+      const leftAccuracy = left.currentAccuracy ?? 100;
+      const rightAccuracy = right.currentAccuracy ?? 100;
+      if (leftAccuracy !== rightAccuracy) return leftAccuracy - rightAccuracy;
+      return (left.delta ?? 0) - (right.delta ?? 0);
+    });
+  const weakestType = practicedWeaknesses[0] ?? null;
+  const recentWeakestType = recentWeaknesses[0] ?? null;
+  const mostCommonError = analytics.errorDistribution[0] ?? null;
+  const lastType = lastAttempt?.type ?? "reading";
+  const href = `/tests?type=${lastType}`;
+  const avgSpeed = analytics.speedMetrics.avgTimePerQuestionSec;
+  const recentInsights = recentWeaknesses.slice(0, 3).map((item) => ({
+    label: item.label,
+    value: `${Math.round(item.currentAccuracy ?? 0)}%`,
+    detail: item.delta === null ? "From latest test" : `${item.delta > 0 ? "Improved" : "Dropped"} ${Math.abs(Math.round(item.delta))}%`,
+    scorePercent: Math.max(0, Math.min(100, Math.round(item.currentAccuracy ?? 0))),
+  }));
+  const aggregateInsights = practicedWeaknesses.slice(0, 3).map((item) => ({
+    label: item.label,
+    value: `${Math.round(item.accuracy)}%`,
+    detail: `${item.errorCount} mistakes in ${item.workedCount} questions`,
+    scorePercent: Math.max(0, Math.min(100, Math.round(item.accuracy))),
+  }));
+
+  if (attempts.length === 0) {
+    return {
+      label: "Weakness Diagnosis",
+      status: "Baseline needed",
+      severity: "attention",
+      title: "No reliable weak area yet",
+      description: "Start with one timed Reading or Listening test so the dashboard can detect real question-type gaps.",
+      primaryMetric: "0",
+      primaryMetricLabel: "completed tests",
+      secondaryMetric: "1 test",
+      secondaryMetricLabel: "needed for baseline",
+      focusItems: ["Take a timed test", "Review wrong answers", "Build first weakness profile"],
+      insights: [],
+      href: "/tests",
+      cta: "Create baseline",
+    };
+  }
+
+  if (daysSinceLast > 3) {
+    return {
+      label: "Weakness Diagnosis",
+      status: "Consistency gap",
+      severity: "attention",
+      title: `${daysSinceLast} days without practice`,
+      description: "The biggest current risk is retention loss. A short timed section is more useful than another passive review.",
+      primaryMetric: `${daysSinceLast}d`,
+      primaryMetricLabel: "inactive",
+      secondaryMetric: formatSecondsShort(avgSpeed),
+      secondaryMetricLabel: "avg/question",
+      focusItems: ["Restart with one section", "Keep strict timing", "Review errors immediately"],
+      insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
+      href,
+      cta: "Restart practice",
+    };
+  }
+
+  if (recentWeakestType && (recentWeakestType.currentAccuracy ?? 100) < 85) {
+    const currentAccuracy = recentWeakestType.currentAccuracy ?? 0;
+    const severity = currentAccuracy < 50 ? "critical" : currentAccuracy < 70 ? "attention" : "steady";
+    const status = currentAccuracy < 50 ? "Latest test risk" : currentAccuracy < 70 ? "Latest weak spot" : "Watchlist";
+    return {
+      label: "Weakness Diagnosis",
+      status,
+      severity,
+      title: recentWeakestType.label,
+      description: "Your latest test shows this is the fastest place to win back marks. Fix it first before starting random practice.",
+      primaryMetric: `${Math.round(currentAccuracy)}%`,
+      primaryMetricLabel: "latest score",
+      secondaryMetric: recentWeakestType.delta === null ? "New" : `${recentWeakestType.delta > 0 ? "+" : ""}${Math.round(recentWeakestType.delta)}%`,
+      secondaryMetricLabel: "trend",
+      focusItems: recentInsights.length > 0
+        ? recentInsights.map((item) => item.label)
+        : ["Review latest mistakes", "Redo same question type", "Retest under timing"],
+      insights: recentInsights,
+      href,
+      cta: "Practice latest weakness",
+    };
+  }
+
+  if (weakestType) {
+    const severity = weakestType.accuracy < 50 ? "critical" : weakestType.accuracy < 70 ? "attention" : "steady";
+    const status = weakestType.accuracy < 50 ? "High impact" : weakestType.accuracy < 70 ? "Needs work" : "Monitor";
+    return {
+      label: "Weakness Diagnosis",
+      status,
+      severity,
+      title: weakestType.label,
+      description: `You answered ${weakestType.correctCount}/${weakestType.workedCount} correctly. This question type should be your next targeted drill.`,
+      primaryMetric: `${Math.round(weakestType.accuracy)}%`,
+      primaryMetricLabel: "accuracy",
+      secondaryMetric: `${weakestType.errorCount}`,
+      secondaryMetricLabel: "missed",
+      focusItems: [
+        "Redo this question type",
+        "Write why each answer was wrong",
+        "Repeat under section timing",
+      ],
+      insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
+      href,
+      cta: "Practice weakness",
+    };
+  }
+
+  if (mostCommonError) {
+    return {
+      label: "Weakness Diagnosis",
+      status: "Error pattern",
+      severity: "attention",
+      title: mostCommonError.label,
+      description: `${Math.round(mostCommonError.share)}% of recent mistakes are concentrated here. Fixing this pattern should raise score faster than random practice.`,
+      primaryMetric: `${mostCommonError.errorCount}`,
+      primaryMetricLabel: "errors",
+      secondaryMetric: `${Math.round(mostCommonError.share)}%`,
+      secondaryMetricLabel: "mistake share",
+      focusItems: ["Review similar questions", "Compare traps", "Drill until stable"],
+      insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
+      href,
+      cta: "Start targeted test",
+    };
+  }
+
+  return {
+    label: "Weakness Diagnosis",
+    status: "Stable",
+    severity: "steady",
+    title: "No major weakness detected",
+    description: "Your recent data does not show a clear recurring gap yet. Use a full mock to expose the next bottleneck.",
+    primaryMetric: formatSecondsShort(avgSpeed),
+    primaryMetricLabel: "avg/question",
+    secondaryMetric: lastAttempt?.band ?? "N/A",
+    secondaryMetricLabel: "last band",
+    focusItems: ["Take a full mock", "Check timing pressure", "Compare section scores"],
+    insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
+    href: "/tests",
+    cta: "Run full mock",
+  };
+}
+
 export default async function DashboardPage() {
-  const [attempts, analytics, writingHistory, catalogTests] = await Promise.all([
+  const [attempts, analytics, writingHistory, catalogTests, activity] = await Promise.all([
     getUserAttempts(),
     getDashboardAnalytics(),
     getWritingHistory().catch(() => ({ items: [], total: 0 })),
     getCatalogTests().catch(() => []),
+    getDashboardActivity(),
   ]);
   const recentAttempts = attempts.filter((attempt) => attempt.status === "completed" || attempt.status === "submitted");
   const recentActivity: RecentActivityItem[] = [
@@ -158,6 +346,25 @@ export default async function DashboardPage() {
     recDesc = "You are scoring consistently well! Challenge yourself with a full mock test under strict exam conditions.";
     recBtnText = "Start Full Mock";
   }
+
+  const weaknessDiagnosis = buildWeaknessDiagnosis(analytics, attempts, lastAttempt, daysSinceLast);
+  const diagnosisAccent = {
+    critical: {
+      ring: "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300",
+      dot: "bg-red-500",
+      wash: "from-red-500/12 via-orange-500/8 to-transparent",
+    },
+    attention: {
+      ring: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      dot: "bg-amber-500",
+      wash: "from-amber-500/12 via-blue-500/8 to-transparent",
+    },
+    steady: {
+      ring: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      dot: "bg-emerald-500",
+      wash: "from-emerald-500/12 via-blue-500/8 to-transparent",
+    },
+  }[weaknessDiagnosis.severity];
 
   return (
     <div className="space-y-5 animate-in fade-in duration-500 pb-12">
@@ -281,154 +488,210 @@ export default async function DashboardPage() {
         </div>
 
         {/* Second Row: Remaining widgets */}
-        <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6 items-start">
-          <div className="space-y-4">
-            {/* Weekly Streak + Personal Bests */}
-            <Card className="border-border/40 shadow-sm rounded-2xl bg-card/60 overflow-hidden">
-              <CardContent className="p-5">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-                  {/* Weekly Streak */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Flame className="h-4 w-4 text-orange-500" />
-                      <h3 className="text-sm font-semibold text-foreground">
-                        {analytics.personalBests.currentStreak > 0
-                          ? `${analytics.personalBests.currentStreak} Day Streak 🔥`
-                          : "Start Your Streak"}
-                      </h3>
-                    </div>
-                    <div className="flex items-center justify-between gap-1 mt-2 relative">
-                      {/* Connecting line */}
-                      <div className="absolute top-4 left-4 right-4 h-0.5 bg-muted/30 -z-10" />
+        <div className="grid grid-cols-1 gap-6 items-start">
+          <div className="w-full">
+            <StreakHeatmap
+              activity={activity}
+              currentStreak={analytics.personalBests.currentStreak}
+              longestStreak={analytics.personalBests.longestStreak}
+            />
+          </div>
 
-                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => {
-                        const isActive = i < analytics.personalBests.currentStreak;
-                        const isToday = i === new Date().getDay() - 1 || (new Date().getDay() === 0 && i === 6);
-                        return (
-                          <div key={day} className="flex flex-col items-center gap-2 flex-1">
-                            <div
-                              className={cn(
-                                "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-all relative z-10 shadow-sm",
-                                isActive
-                                  ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white"
-                                  : isToday
-                                    ? "bg-background border-2 border-orange-500 text-orange-500"
-                                    : "bg-muted/60 text-muted-foreground/40 border-2 border-transparent"
-                              )}
-                            >
-                              {isActive ? <Flame className="h-3.5 w-3.5 fill-current" /> : i + 1}
-                            </div>
-                            <span className={cn(
-                              "text-[10px] font-bold uppercase tracking-tighter",
-                              isActive ? "text-orange-600" : isToday ? "text-foreground" : "text-muted-foreground/40"
-                            )}>
-                              {day}
-                            </span>
-                          </div>
-                        );
-                      })}
+          <div className="grid grid-cols-1 gap-6 items-start">
+            <Card className="relative h-full overflow-hidden rounded-3xl border-border/50 bg-card/80 shadow-sm">
+              <div className={cn("absolute inset-0 bg-gradient-to-br", diagnosisAccent.wash)} />
+              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full border border-border/40 bg-background/35 blur-sm" />
+              <CardContent className="relative z-10 p-5 md:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-2xl border border-primary/15 bg-primary/10 p-2.5 shadow-sm">
+                      <Brain className="h-5 w-5 text-primary" />
                     </div>
-
-                    {/* Streak Milestone */}
-                    <div className="mt-4 p-2.5 rounded-xl bg-orange-500/5 border border-orange-500/10 flex items-center justify-between">
-                      <p className="text-[11px] font-semibold text-orange-700/80 dark:text-orange-400/80 flex items-center gap-1.5">
-                        <Target className="h-3 w-3" />
-                        Next Milestone: 7-Day Master
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+                        {weaknessDiagnosis.label}
                       </p>
-                      <span className="text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest">
-                        {analytics.personalBests.currentStreak}/7
+                      <h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+                        Fix {weaknessDiagnosis.title} first
+                      </h3>
+                      <p className="mt-1 max-w-xl text-sm font-medium leading-6 text-muted-foreground">
+                        {weaknessDiagnosis.description}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className={cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold", diagnosisAccent.ring)}>
+                    <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-full", diagnosisAccent.dot)} />
+                    {weaknessDiagnosis.status}
+                  </Badge>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.72fr]">
+                  <div className="rounded-3xl border border-border/50 bg-background/55 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                          Weak areas
+                        </p>
+                        <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+                          Lower score means higher priority
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground">
+                        Latest first
                       </span>
                     </div>
+
+                    {weaknessDiagnosis.insights.length > 0 ? (
+                      <div className="space-y-3">
+                        {weaknessDiagnosis.insights.map((item, index) => (
+                          <div key={item.label} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className={cn(
+                                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                                  index === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                                )}>
+                                  {index + 1}
+                                </span>
+                                <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
+                              </div>
+                              <span className="text-sm font-semibold text-foreground">{item.value}</span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-[width]",
+                                  item.scorePercent < 50
+                                    ? "bg-red-500"
+                                    : item.scorePercent < 70
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-500",
+                                )}
+                                style={{ width: `${item.scorePercent}%` }}
+                              />
+                            </div>
+                            <p className="text-[11px] font-medium text-muted-foreground">{item.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-border/70 bg-card/50 p-4 text-sm font-medium text-muted-foreground">
+                        Complete one test to reveal your weakest question types.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col justify-between gap-3 rounded-3xl border border-border/50 bg-card/65 p-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-2xl bg-background/70 p-3">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <span className="text-[9px] font-bold uppercase tracking-[0.12em]">
+                            {weaknessDiagnosis.primaryMetricLabel}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                          {weaknessDiagnosis.primaryMetric}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-background/70 p-3">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Gauge className="h-3.5 w-3.5" />
+                          <span className="text-[9px] font-bold uppercase tracking-[0.12em]">
+                            {weaknessDiagnosis.secondaryMetricLabel}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                          {weaknessDiagnosis.secondaryMetric}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                        Next action
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {weaknessDiagnosis.focusItems.slice(0, 3).map((item) => (
+                          <div key={item} className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                            <span className={cn("h-1.5 w-1.5 rounded-full", diagnosisAccent.dot)} />
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Button asChild size="sm" className="mt-1 w-full rounded-xl font-semibold shadow-md transition-transform active:scale-95">
+                      <Link href={weaknessDiagnosis.href}>
+                        {weaknessDiagnosis.cta} <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Recommended Next Step */}
-            <Card className="border-border/40 shadow-sm relative overflow-hidden rounded-2xl group bg-card/40 hover:bg-card/80 transition-colors">
-              {/* Decorative icon — right side */}
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-30 -rotate-12 group-hover:scale-110 group-hover:-rotate-6 transition-all duration-500 hidden sm:block">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/images/recommended-icon.png" alt="" className="w-24 h-24 drop-shadow-lg blur-[0.5px]" />
+            {/* Section Suggestions */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <Link href="/tests?type=reading" className="block">
+                <Card className="bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
+                  <div className="bg-blue-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
+                    <BookOpenText className="h-5 w-5 text-blue-600 dark:text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-blue-950 dark:text-blue-100 text-sm">Start Reading Test</h3>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/80 mt-0.5">Academic · 60 min</p>
+                  </div>
+                  <ArrowRight className="ml-auto h-5 w-5 text-blue-500/50 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+                </Card>
+              </Link>
+
+              <Link href="/tests?type=listening" className="block">
+                <Card className="bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
+                  <div className="bg-emerald-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
+                    <Headphones className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-emerald-950 dark:text-emerald-100 text-sm">Start Listening Test</h3>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/80 mt-0.5">Academic · 30 min</p>
+                  </div>
+                  <ArrowRight className="ml-auto h-5 w-5 text-emerald-500/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+                </Card>
+              </Link>
+
+              <Link href="/writing" className="block">
+                <Card className="bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
+                  <div className="bg-violet-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
+                    <PenSquare className="h-5 w-5 text-violet-600 dark:text-violet-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-violet-950 dark:text-violet-100 text-sm">Start Writing Task</h3>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600/70 dark:text-violet-400/80 mt-0.5">AI Graded · Task 1 &amp; 2</p>
+                  </div>
+                  <ArrowRight className="ml-auto h-5 w-5 text-violet-500/50 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-1 transition-all" />
+                </Card>
+              </Link>
               </div>
-              <CardContent className="p-5 relative z-10 flex flex-col justify-center h-full">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="bg-primary/15 p-1.5 rounded-md">
-                    <ClipboardList className="h-4 w-4 text-primary" />
-                  </div>
-                  <h3 className="text-[10px] font-semibold uppercase tracking-widest text-primary">Recommended Next Step</h3>
-                </div>
-                <p className="font-semibold text-foreground text-base leading-tight mb-1.5">{recTitle}</p>
-                <p className="text-xs font-medium text-muted-foreground mb-3 leading-5 max-w-md">
-                  {recDesc}
-                </p>
-                <Button asChild size="sm" className="w-fit bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl shadow-md transition-transform active:scale-95">
-                  <Link href={recHref}>{recBtnText} <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              </div>
 
-          {/* Right Column: Quick Start */}
-          <div className="flex flex-col gap-4">
-            <Link href="/tests?type=reading" className="block">
-              <Card className="bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
-                <div className="bg-blue-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
-                  <BookOpenText className="h-5 w-5 text-blue-600 dark:text-blue-500" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-blue-950 dark:text-blue-100 text-sm">Start Reading Test</h3>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/80 mt-0.5">Academic · 60 min</p>
-                </div>
-                <ArrowRight className="ml-auto h-5 w-5 text-blue-500/50 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-              </Card>
-            </Link>
+              </div>
 
-            <Link href="/tests?type=listening" className="block">
-              <Card className="bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
-                <div className="bg-emerald-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
-                  <Headphones className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-emerald-950 dark:text-emerald-100 text-sm">Start Listening Test</h3>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/80 mt-0.5">Academic · 30 min</p>
-                </div>
-                <ArrowRight className="ml-auto h-5 w-5 text-emerald-500/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
-              </Card>
-            </Link>
+              <DashboardCharts analytics={analytics} />
 
-            <Link href="/writing" className="block">
-              <Card className="bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
-                <div className="bg-violet-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
-                  <PenSquare className="h-5 w-5 text-violet-600 dark:text-violet-500" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-violet-950 dark:text-violet-100 text-sm">Start Writing Task</h3>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600/70 dark:text-violet-400/80 mt-0.5">AI Graded · Task 1 &amp; 2</p>
-                </div>
-                <ArrowRight className="ml-auto h-5 w-5 text-violet-500/50 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-1 transition-all" />
-              </Card>
-            </Link>
-          </div>
-        </div>
-      </div>
+              {/* 4 & 5. Recent Activity & Featured Tests */}
+              <section className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
 
-      <DashboardCharts analytics={analytics} />
-
-      {/* 4 & 5. Recent Activity & Featured Tests */}
-      <section className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
-
-        {/* Left: Recent Activity */}
-        <div className="min-w-0 space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
-            <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
+              {/* Left: Recent Activity */}
+              <div className="min-w-0 space-y-4">
+              <div className="flex items-center justify-between px-1">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
+              <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
               <Link href="/history">View all <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
-            </Button>
-          </div>
+              </Button>
+              </div>
 
-          <Card className="border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">
-            <div className="divide-y divide-border/40">
+              <Card className="border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">            <div className="divide-y divide-border/40">
               {recentActivity.map((entry) =>
                 entry.kind === "attempt" ? (
                   <div key={entry.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">

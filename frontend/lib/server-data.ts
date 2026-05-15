@@ -25,12 +25,18 @@ type BackendTestCatalogItem = {
 type BackendTestDetail = BackendTestCatalogItem & {
   payment_paused: boolean;
   question_bank_enabled: boolean;
+  time_limit_seconds: number;
   sections: Array<{
     section_id: string;
     section_number: number;
     title: string | null;
     intro: string | null;
     question_count: number;
+    paragraphs?: any[];
+    content?: string | null;
+    show_labels?: boolean;
+    subtitle?: string | null;
+    question_groups?: any[];
   }>;
 };
 
@@ -145,6 +151,14 @@ export async function getCatalogTestDetail(testId: string): Promise<TestCatalogI
       return null;
     }
     return fallback;
+  }
+}
+
+export async function getGuestTestSnapshot(testId: string): Promise<BackendTestDetail | null> {
+  try {
+    return await requestApi<BackendTestDetail>(`/tests/${testId}`);
+  } catch {
+    return null;
   }
 }
 

@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
+  Copy,
   FileText,
   Flame,
   Lightbulb,
@@ -28,14 +29,22 @@ import {
   fetchWritingSubmissionResult,
   pollWritingSubmission,
   retryWritingSubmission,
+  submitWritingSubmission,
 } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 import type {
+  WritingActionPlan,
+  WritingBandBoundary,
+  WritingChecklistItem,
   WritingCriterionEvaluation,
+  WritingErrorPattern,
   WritingInlineAnnotation,
+  WritingSentenceFix,
   WritingRoastFeedback,
+  WritingScoreBooster,
   WritingSubmissionResult,
   WritingSubmissionStatus,
+  WritingTargetAction,
   WritingVocabularySuggestion,
 } from "@/lib/server-writing";
 
@@ -165,6 +174,55 @@ function formatDuration(totalSeconds: number) {
 
 function normalizedEssayText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function splitDiffTokens(value: string): string[] {
+  return (value.match(/\s+|[^\s]+/g) ?? []);
+}
+
+function buildInlineDiff(original: string, revised: string): Array<{ kind: "same" | "removed" | "added"; text: string }> {
+  const a = splitDiffTokens(original);
+  const b = splitDiffTokens(revised);
+  const rows = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      rows[i][j] = a[i] === b[j] ? rows[i + 1][j + 1] + 1 : Math.max(rows[i + 1][j], rows[i][j + 1]);
+    }
+  }
+  const parts: Array<{ kind: "same" | "removed" | "added"; text: string }> = [];
+  const push = (kind: "same" | "removed" | "added", text: string) => {
+    if (!text) return;
+    const last = parts[parts.length - 1];
+    if (last?.kind === kind) {
+      last.text += text;
+      return;
+    }
+    parts.push({ kind, text });
+  };
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      push("same", a[i]);
+      i += 1;
+      j += 1;
+    } else if (rows[i + 1][j] >= rows[i][j + 1]) {
+      push("removed", a[i]);
+      i += 1;
+    } else {
+      push("added", b[j]);
+      j += 1;
+    }
+  }
+  while (i < a.length) {
+    push("removed", a[i]);
+    i += 1;
+  }
+  while (j < b.length) {
+    push("added", b[j]);
+    j += 1;
+  }
+  return parts;
 }
 
 function buildAnnotationTooltip(annotation: WritingInlineAnnotation): string {
@@ -311,6 +369,104 @@ function buildCriterionInsights(result: WritingSubmissionResult) {
   ];
 }
 
+function getTargetBandActions({
+  actionPlan,
+  annotations,
+  checklist,
+  currentBand,
+  desiredScore,
+  errorPatterns,
+  result,
+}: {
+  actionPlan: WritingActionPlan | null | undefined;
+  annotations: WritingInlineAnnotation[];
+  checklist: WritingChecklistItem[];
+  currentBand: number;
+  desiredScore: number;
+  errorPatterns: WritingErrorPattern[];
+  result: WritingSubmissionResult;
+}): WritingTargetAction[] {
+  if (result.target_action_plan?.length) {
+    return result.target_action_plan.slice(0, 3);
+  }
+  const gap = Math.max(0, desiredScore - currentBand);
+  const steps: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: string | null | undefined) => {
+    const clean = (value ?? "").replace(/\s+/g, " ").trim();
+    if (!clean || seen.has(clean)) return;
+    seen.add(clean);
+    steps.push(clean);
+  };
+
+  const missingChecklist = checklist.filter((item) => item.status !== "met");
+  const topPattern = errorPatterns[0];
+  const firstFixable = annotations.find((item) => item.replacements?.[0] || item.improved_sentence);
+
+  if (gap <= 0) {
+    const nextTarget = Math.min(9, currentBand + 0.5);
+    add(`You passed the desired Band ${desiredScore.toFixed(1)} target. Keep Band ${currentBand.toFixed(1)} stable, then push toward Band ${nextTarget.toFixed(1)}.`);
+  } else if (gap <= 0.5) {
+    add(`To reach Band ${desiredScore.toFixed(1)}, protect the current structure and remove the highest-impact sentence errors first.`);
+  } else {
+    add(`To move from Band ${currentBand.toFixed(1)} to Band ${desiredScore.toFixed(1)}, fix the score limiter first: ${actionPlan?.main_limiter || "the weakest IELTS criterion"}.`);
+  }
+
+  if (actionPlan?.fixes?.length) {
+    actionPlan.fixes.forEach(add);
+  }
+  if (missingChecklist[0]) {
+    add(`${missingChecklist[0].label}: ${missingChecklist[0].detail}`);
+  }
+  if (topPattern) {
+    add(`Reduce ${topPattern.label.toLowerCase()} errors: ${topPattern.count} issue${topPattern.count === 1 ? "" : "s"} found${topPattern.examples[0] ? `, starting with "${topPattern.examples[0]}"` : ""}.`);
+  }
+  if (firstFixable) {
+    const replacement = firstFixable.improved_sentence || firstFixable.replacements?.[0];
+    add(`Fix this sentence first: replace "${firstFixable.original}"${replacement ? ` with "${replacement}"` : ""}.`);
+  }
+  result.next_steps?.forEach(add);
+
+  const fallback = [
+    "Rewrite the weakest body paragraph with one clear topic sentence, one explanation, and one concrete example or comparison.",
+    "Check every paragraph for one main idea only; split mixed ideas into separate sentences.",
+    "After revision, re-submit the essay and compare the new band against your desired score.",
+  ];
+  fallback.forEach(add);
+
+  const target = currentBand >= desiredScore ? Math.min(9, currentBand + 1) : Math.min(desiredScore, currentBand + 1);
+  return steps.slice(0, 3).map((step, index) => ({
+    title: step.split(";")[0].split(".")[0].slice(0, 72),
+    why: `Band ${currentBand.toFixed(1)} -> ${target.toFixed(1)}`,
+    how: step,
+    example: "",
+    band_impact: `${currentBand.toFixed(1)} -> ${target.toFixed(1)}`,
+    priority: index + 1,
+  }));
+}
+
+function checklistTone(status: string) {
+  if (status === "met") {
+    return {
+      icon: CheckCircle2,
+      label: "Done",
+      className: "border-emerald-500/25 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300",
+    };
+  }
+  if (status === "missing") {
+    return {
+      icon: AlertTriangle,
+      label: "Missing",
+      className: "border-rose-500/25 bg-rose-500/5 text-rose-700 dark:text-rose-300",
+    };
+  }
+  return {
+    icon: Target,
+    label: "Improve",
+    className: "border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-300",
+  };
+}
+
 function ScoreGauge({ band }: { band: number }) {
   const tone = bandTone(band);
   const radius = 72;
@@ -371,6 +527,310 @@ function StatTile({
         {value}
       </div>
       {hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}
+    </div>
+  );
+}
+
+function TargetActionPlanPanel({
+  actionPlan,
+  currentBand,
+  desiredScore,
+  targetActions,
+}: {
+  actionPlan: WritingActionPlan | null | undefined;
+  currentBand: number;
+  desiredScore: number;
+  targetActions: WritingTargetAction[];
+}) {
+  const gap = Math.max(0, desiredScore - currentBand);
+  const targetExceeded = currentBand >= desiredScore;
+  const nextTarget = targetExceeded ? Math.min(9, currentBand + 1) : Math.min(desiredScore, currentBand + 1);
+  return (
+    <Card className="rounded-2xl border-border/60 bg-card/50 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg">{targetExceeded ? "Target passed" : "Target gap"}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Band {currentBand.toFixed(1)} <ArrowRight className="mx-1 inline h-3.5 w-3.5" /> {nextTarget.toFixed(1)}
+              {gap > 0 ? ` · aim +0.5 to +1.0` : " · protect this score"}
+            </p>
+          </div>
+          {actionPlan?.main_limiter ? (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-right">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Limiter</div>
+              <div className="text-sm font-semibold">{actionPlan.main_limiter}</div>
+            </div>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-hidden rounded-xl border border-border/50">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-semibold">#</th>
+                <th className="px-3 py-2 font-semibold">Action</th>
+                <th className="px-3 py-2 font-semibold">Why</th>
+                <th className="px-3 py-2 font-semibold">Do this</th>
+                <th className="px-3 py-2 font-semibold">Impact</th>
+              </tr>
+            </thead>
+            <tbody>
+              {targetActions.map((action, index) => (
+                <tr key={`${action.title}-${index}`} className="border-t border-border/40">
+                  <td className="px-3 py-3 align-top text-xs font-semibold text-muted-foreground">{action.priority || index + 1}</td>
+                  <td className="px-3 py-3 align-top font-semibold text-foreground">{action.title}</td>
+                  <td className="px-3 py-3 align-top text-muted-foreground">{action.why}</td>
+                  <td className="px-3 py-3 align-top text-foreground/90">{action.how}</td>
+                  <td className="px-3 py-3 align-top text-sky-700 dark:text-sky-300">{action.band_impact || `${currentBand.toFixed(1)} -> ${nextTarget.toFixed(1)}`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChecklistPanel({ items }: { items: WritingChecklistItem[] }) {
+  if (!items.length) return null;
+  return (
+    <Card className="rounded-3xl border-border/60 bg-card/40">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">IELTS task checklist</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Task-specific requirements that usually decide whether the essay can move to the next band.
+        </p>
+      </CardHeader>
+      <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+        {items.map((item) => {
+          const tone = checklistTone(item.status);
+          const Icon = tone.icon;
+          return (
+            <div key={item.label} className={cn("rounded-2xl border p-3", tone.className)}>
+              <div className="flex items-center justify-between gap-2">
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider">{tone.label}</span>
+              </div>
+              <div className="mt-2 text-sm font-semibold text-foreground">{item.label}</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.detail}</p>
+              {item.how_to_fix ? (
+                <p className="mt-1 text-xs leading-5 text-foreground/80">{item.how_to_fix}</p>
+              ) : null}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ErrorPatternPanel({
+  current,
+  history,
+}: {
+  current: WritingErrorPattern[];
+  history: WritingErrorPattern[];
+}) {
+  if (!current.length && !history.length) return null;
+  return (
+    <Card className="rounded-3xl border-border/60 bg-card/40">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Error patterns</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Current essay issues plus your recent writing trend.
+        </p>
+      </CardHeader>
+      <CardContent className="grid gap-4 lg:grid-cols-2">
+        <PatternList title="This essay" patterns={current} empty="No repeated issue pattern found in this essay." />
+        <PatternList title="Recent trend" patterns={history} empty="Submit more essays to build a reliable trend." />
+      </CardContent>
+    </Card>
+  );
+}
+
+function BandBoundaryPanel({ items }: { items: WritingBandBoundary[] }) {
+  if (!items.length) return null;
+  return (
+    <Card className="rounded-2xl border-border/60 bg-card/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">Band boundary</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-hidden rounded-xl border border-border/50">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Criterion</th>
+                <th className="px-3 py-2 font-semibold">Now</th>
+                <th className="px-3 py-2 font-semibold">Next</th>
+                <th className="px-3 py-2 font-semibold">Why now</th>
+                <th className="px-3 py-2 font-semibold">Needed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.criterion} className="border-t border-border/40">
+                  <td className="px-3 py-3 align-top font-semibold">{item.criterion}</td>
+                  <td className="px-3 py-3 align-top tabular-nums">{toBandNumber(item.current_band).toFixed(1)}</td>
+                  <td className="px-3 py-3 align-top tabular-nums text-emerald-700 dark:text-emerald-300">{toBandNumber(item.next_band).toFixed(1)}</td>
+                  <td className="px-3 py-3 align-top text-muted-foreground">{item.why_current}</td>
+                  <td className="px-3 py-3 align-top text-foreground/90">{item.required_for_next}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ScoreBoostersPanel({ items }: { items: WritingScoreBooster[] }) {
+  if (!items.length) return null;
+  return (
+    <Card className="rounded-2xl border-border/60 bg-card/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">What already scores well</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Keep these original patterns. They are helping your band.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-hidden rounded-xl border border-border/50">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Original</th>
+                <th className="px-3 py-2 font-semibold">Why it scores</th>
+                <th className="px-3 py-2 font-semibold">Keep doing</th>
+                <th className="px-3 py-2 font-semibold">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.slice(0, 6).map((item, index) => (
+                <tr key={`${item.original}-${index}`} className="border-t border-border/40">
+                  <td className="px-3 py-3 align-top">
+                    <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{item.criterion}</div>
+                    <div className="mt-1 rounded-md bg-emerald-500/10 px-2 py-1 text-foreground/90">{item.original}</div>
+                  </td>
+                  <td className="px-3 py-3 align-top text-muted-foreground">{item.why_it_scores}</td>
+                  <td className="px-3 py-3 align-top text-foreground/90">{item.keep_doing}</td>
+                  <td className="px-3 py-3 align-top text-emerald-700 dark:text-emerald-300">{item.band_value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SentenceFixPanel({
+  fixes,
+  onApply,
+}: {
+  fixes: WritingSentenceFix[];
+  onApply: (fix: WritingSentenceFix) => void;
+}) {
+  if (!fixes.length) return null;
+  return (
+    <Card className="rounded-2xl border-border/60 bg-card/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">Sentence fixes</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-hidden rounded-xl border border-border/50">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-semibold">#</th>
+                <th className="px-3 py-2 font-semibold">Original</th>
+                <th className="px-3 py-2 font-semibold">Improved</th>
+                <th className="px-3 py-2 font-semibold">Why</th>
+                <th className="px-3 py-2 font-semibold">Apply</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fixes.slice(0, 8).map((fix, index) => (
+                <tr key={`${fix.original}-${index}`} className="border-t border-border/40">
+                  <td className="px-3 py-3 align-top text-xs font-semibold text-muted-foreground">{fix.priority || index + 1}</td>
+                  <td className="px-3 py-3 align-top text-rose-700 line-through decoration-rose-500 dark:text-rose-300">{fix.original}</td>
+                  <td className="px-3 py-3 align-top text-emerald-700 dark:text-emerald-300">{fix.corrected_sentence || fix.replacement}</td>
+                  <td className="px-3 py-3 align-top text-muted-foreground">{fix.why || fix.band_impact}</td>
+                  <td className="px-3 py-3 align-top">
+                    <Button type="button" size="sm" variant="outline" onClick={() => onApply(fix)}>
+                      Apply
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ImprovedDiffView({ original, improved }: { original: string; improved: string }) {
+  const diff = useMemo(() => buildInlineDiff(original, improved), [original, improved]);
+  return (
+    <div className="rounded-2xl border border-border/40 bg-muted/20 p-5 text-sm leading-7 whitespace-pre-wrap">
+      {diff.map((part, index) => {
+        if (part.kind === "removed") {
+          return (
+            <span key={index} className="rounded bg-rose-500/10 px-0.5 text-rose-700 line-through decoration-rose-500 decoration-2 dark:text-rose-300">
+              {part.text}
+            </span>
+          );
+        }
+        if (part.kind === "added") {
+          return (
+            <span key={index} className="rounded bg-emerald-500/15 px-0.5 font-medium text-emerald-800 dark:text-emerald-200">
+              {part.text}
+            </span>
+          );
+        }
+        return <span key={index}>{part.text}</span>;
+      })}
+    </div>
+  );
+}
+
+function PatternList({ title, patterns, empty }: { title: string; patterns: WritingErrorPattern[]; empty: string }) {
+  return (
+    <div className="rounded-2xl border border-border/40 bg-muted/15 p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</div>
+      {patterns.length ? (
+        <div className="mt-3 space-y-2">
+          {patterns.map((pattern) => (
+            <div key={`${title}-${pattern.category}-${pattern.subcategory || pattern.label}`} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-semibold text-foreground">{pattern.label}</span>
+                <span className="text-xs tabular-nums text-muted-foreground">{pattern.count} · {pattern.percentage.toFixed(0)}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-sky-500"
+                  style={{ width: `${Math.max(6, Math.min(100, pattern.percentage))}%` }}
+                />
+              </div>
+              {pattern.examples?.[0] ? (
+                <p className="text-xs leading-5 text-muted-foreground">{pattern.examples[0]}</p>
+              ) : null}
+              {pattern.fix ? (
+                <p className="text-xs leading-5 text-foreground/80">{pattern.fix}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">{empty}</p>
+      )}
     </div>
   );
 }
@@ -750,7 +1210,23 @@ export function WritingResultClient({
   const [activeStep, setActiveStep] = useState(0);
   const [sseAvailable, setSseAvailable] = useState(true);
   const [retrying, setRetrying] = useState(false);
+  const [desiredScore, setDesiredScore] = useState(7.5);
+  const [showRoast, setShowRoast] = useState(true);
+  const [copiedAnnotation, setCopiedAnnotation] = useState<number | null>(null);
+  const [revisionText, setRevisionText] = useState(initialResult?.improved_version || initialResult?.essay_text || "");
+  const [regrading, setRegrading] = useState(false);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
   const annotatedRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("prime-desired-score");
+      const parsed = saved ? parseFloat(saved) : 7.5;
+      if (Number.isFinite(parsed)) {
+        setDesiredScore(Math.min(9, Math.max(4, parsed)));
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (stage === "ready" || stage === "failed") return;
@@ -866,11 +1342,20 @@ export function WritingResultClient({
     };
   }, [sseAvailable, stage, submissionId]);
 
-  const annotations = result?.inline_annotations ?? [];
+  const annotations = useMemo(
+    () => result?.inline_annotations ?? [],
+    [result?.inline_annotations],
+  );
   const segments = useMemo(
     () => (result ? buildAnnotatedSegments(result.essay_text, annotations) : []),
     [result, annotations],
   );
+
+  useEffect(() => {
+    if (!result) return;
+    setRevisionText(result.improved_version || result.essay_text);
+    setRevisionError(null);
+  }, [result]);
 
   useEffect(() => {
     if (activeAnnotation === null) return;
@@ -902,6 +1387,52 @@ export function WritingResultClient({
     }
   };
 
+  const copyText = async (value: string, annotationIndex: number | null) => {
+    if (!value.trim()) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedAnnotation(annotationIndex);
+      window.setTimeout(() => setCopiedAnnotation(null), 1500);
+    } catch {}
+  };
+
+  const applySentenceFix = (fix: WritingSentenceFix) => {
+    const replacement = fix.corrected_sentence || fix.replacement;
+    if (!fix.original || !replacement) return;
+    setRevisionText((current) => {
+      if (current.includes(fix.original)) {
+        return current.replace(fix.original, replacement);
+      }
+      return `${current.trim()}\n\n${replacement}`.trim();
+    });
+  };
+
+  const submitRevision = async () => {
+    if (!result || regrading) return;
+    const clean = revisionText.trim();
+    if (!clean) {
+      setRevisionError("Revision text is empty.");
+      return;
+    }
+    setRegrading(true);
+    setRevisionError(null);
+    try {
+      const record = await submitWritingSubmission({
+        task_id: result.task_id,
+        essay_text: clean,
+        time_spent_seconds: result.time_spent_seconds,
+        desired_score: result.desired_score !== null && result.desired_score !== undefined
+          ? toBandNumber(result.desired_score)
+          : desiredScore,
+      });
+      window.location.href = `/writing/submissions/${record.id}/result`;
+    } catch (error) {
+      setRevisionError(error instanceof Error ? error.message : "Could not submit revision.");
+    } finally {
+      setRegrading(false);
+    }
+  };
+
   if (stage === "failed") {
     return (
       <div className="mx-auto max-w-3xl py-8">
@@ -919,6 +1450,11 @@ export function WritingResultClient({
   }
 
   const overall = toBandNumber(result.overall_band);
+  const storedDesiredScore = desiredScore;
+  const resultDesiredScore = result.desired_score !== null && result.desired_score !== undefined
+    ? toBandNumber(result.desired_score)
+    : null;
+  const effectiveDesiredScore = resultDesiredScore && resultDesiredScore > 0 ? resultDesiredScore : storedDesiredScore;
   const potential = result.potential_band !== null && result.potential_band !== undefined
     ? toBandNumber(result.potential_band)
     : null;
@@ -941,6 +1477,21 @@ export function WritingResultClient({
   const strongestCriterion = [...criterionInsights].sort((a, b) => b.band - a.band)[0] ?? null;
   const weakestCriterion = [...criterionInsights].sort((a, b) => a.band - b.band)[0] ?? null;
   const vocabularySuggestions = result.vocabulary_suggestions ?? [];
+  const checklist = result.checklist ?? [];
+  const errorPatterns = result.error_patterns ?? [];
+  const historyErrorTrends = result.history_error_trends ?? [];
+  const bandBoundaries = result.band_boundaries ?? [];
+  const scoreBoosters = result.score_boosters ?? [];
+  const sentenceFixes = result.sentence_fixes ?? [];
+  const targetActions = getTargetBandActions({
+    actionPlan: result.action_plan,
+    annotations,
+    checklist,
+    currentBand: overall,
+    desiredScore: effectiveDesiredScore,
+    errorPatterns,
+    result,
+  });
 
   return (
     <div className="space-y-3 animate-in fade-in duration-500">
@@ -1028,12 +1579,62 @@ export function WritingResultClient({
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2 mt-2">
+      <TargetActionPlanPanel
+        actionPlan={result.action_plan}
+        currentBand={overall}
+        desiredScore={effectiveDesiredScore}
+        targetActions={targetActions}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-2">
         <CriterionCard title="Task Achievement" data={result.task_achievement} accent="text-violet-600 dark:text-violet-400" />
         <CriterionCard title="Coherence & Cohesion" data={result.coherence} accent="text-blue-600 dark:text-blue-400" />
         <CriterionCard title="Lexical Resource" data={result.lexical} accent="text-emerald-600 dark:text-emerald-400" />
         <CriterionCard title="Grammatical Range & Accuracy" data={result.grammar} accent="text-amber-600 dark:text-amber-400" />
       </div>
+
+      <ScoreBoostersPanel items={scoreBoosters} />
+
+      <BandBoundaryPanel items={bandBoundaries} />
+
+      <ChecklistPanel items={checklist} />
+
+      <ErrorPatternPanel current={errorPatterns} history={historyErrorTrends} />
+
+      <SentenceFixPanel fixes={sentenceFixes} onApply={applySentenceFix} />
+
+      <Card className="rounded-2xl border-border/60 bg-card/50">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg">Revision</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Apply fixes, edit the draft, then regrade against Band {effectiveDesiredScore.toFixed(1)}.
+              </p>
+            </div>
+            {result.improved_version ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => setRevisionText(result.improved_version || "")}>
+                Use improved
+              </Button>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <textarea
+            value={revisionText}
+            onChange={(event) => setRevisionText(event.target.value)}
+            className="min-h-[220px] w-full resize-y rounded-xl border border-border/50 bg-background px-4 py-3 text-sm leading-7 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+          />
+          {revisionError ? <p className="text-sm text-rose-600 dark:text-rose-300">{revisionError}</p> : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">{revisionText.trim().split(/\s+/).filter(Boolean).length} words</p>
+            <Button type="button" onClick={submitRevision} disabled={regrading}>
+              {regrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
+              Regrade revision
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="rounded-3xl border-border/60 bg-card/40 mt-2">
         <CardHeader className="pb-3">
@@ -1273,8 +1874,22 @@ export function WritingResultClient({
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                      Corrected sentence
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        Corrected sentence
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (focusedAnnotationIndex !== null) {
+                            void copyText(activeAnnoSentencePreview.improvedSentence, focusedAnnotationIndex);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {focusedAnnotationIndex !== null && copiedAnnotation === focusedAnnotationIndex ? "Copied" : "Copy"}
+                      </button>
                     </div>
                     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm leading-7 whitespace-pre-wrap text-foreground/90">
                       {activeAnnoSentencePreview.improvedSentence}
@@ -1353,22 +1968,20 @@ export function WritingResultClient({
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="rounded-2xl border border-border/40 bg-muted/20 p-5 leading-7 text-sm whitespace-pre-wrap">
-              {activeVersion === "improved" ? result.improved_version : result.essay_text}
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-md bg-rose-500/10 px-2 py-1 text-rose-700 line-through decoration-rose-500 dark:text-rose-300">removed</span>
+              <span className="rounded-md bg-emerald-500/15 px-2 py-1 text-emerald-800 dark:text-emerald-200">added / improved</span>
             </div>
+            {activeVersion === "improved" ? (
+              <ImprovedDiffView original={result.essay_text} improved={result.improved_version} />
+            ) : (
+              <div className="rounded-2xl border border-border/40 bg-muted/20 p-5 leading-7 text-sm whitespace-pre-wrap">
+                {result.essay_text}
+              </div>
+            )}
           </CardContent>
         </Card>
-      ) : null}
-
-      {result.roast && (result.roast.overall_roast || result.roast.savage_tips?.length) ? (
-        <FeedbackPanel
-          roast={result.roast}
-          taBand={toBandNumber(result.task_achievement.band)}
-          ccBand={toBandNumber(result.coherence.band)}
-          lrBand={toBandNumber(result.lexical.band)}
-          graBand={toBandNumber(result.grammar.band)}
-        />
       ) : null}
 
       {(result.overall_summary || result.next_steps?.length) ? (
@@ -1440,6 +2053,40 @@ export function WritingResultClient({
             ) : null}
           </CardContent>
         </Card>
+      ) : null}
+
+      {result.roast && (result.roast.overall_roast || result.roast.savage_tips?.length) ? (
+        <Card className="rounded-3xl border-border/60 bg-card/40">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-lg">Fun feedback</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Savage feedback. It does not affect your IELTS band or action plan.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRoast((value) => !value)}
+              >
+                <Flame className="h-4 w-4" />
+                {showRoast ? "Hide roast" : "Show roast"}
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      {showRoast && result.roast && (result.roast.overall_roast || result.roast.savage_tips?.length) ? (
+        <FeedbackPanel
+          roast={result.roast}
+          taBand={toBandNumber(result.task_achievement.band)}
+          ccBand={toBandNumber(result.coherence.band)}
+          lrBand={toBandNumber(result.lexical.band)}
+          graBand={toBandNumber(result.grammar.band)}
+        />
       ) : null}
 
       {vocabularySuggestions.length ? (
