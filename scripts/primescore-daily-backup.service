@@ -1,0 +1,11 @@
+[Unit]
+Description=PrimeScore daily DB and MinIO backup
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/primescore_daily_backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
