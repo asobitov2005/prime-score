@@ -32,8 +32,7 @@ def _build_payment(*, status: str) -> Payment:
         status=status,
         card_label="Main HUMO",
         card_number="8600123412345678",
-        wheel_options=[56500, 57000],
-        meta={},
+        meta={"support_contact": "@TheBugCreator"},
     )
 
 
@@ -42,6 +41,7 @@ def test_serialize_me_payment_keeps_card_for_active_invoice() -> None:
 
     assert payload.card_label == "Main HUMO"
     assert payload.card_number == "8600123412345678"
+    assert payload.support_contact == "@TheBugCreator"
 
 
 def test_serialize_me_payment_hides_card_after_completion() -> None:

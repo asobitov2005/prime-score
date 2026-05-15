@@ -28,13 +28,7 @@ type PaymentDraft = {
 };
 
 type SettingsDraft = {
-  telegramApiId: string;
-  telegramApiHash: string;
-  phoneNumber: string;
-  activeBot: "HUMOcardbot" | "CardXabarBot";
   supportContact: string;
-  isEnabled: boolean;
-  pollFallbackEnabled: boolean;
 };
 
 type CardDraft = {
@@ -43,7 +37,6 @@ type CardDraft = {
   cardType: "humo" | "uzcard";
   holderName: string;
   priority: string;
-  botSource: "HUMOcardbot" | "CardXabarBot";
   isActive: boolean;
 };
 
@@ -59,13 +52,7 @@ const PAYMENT_STATUS_OPTIONS: Array<Exclude<PaymentStatus, "paused" | "refunded"
 
 function createSettingsDraft(settings: AdminPaymentSettingsSummary | null): SettingsDraft {
   return {
-    telegramApiId: settings?.telegramApiId ?? "",
-    telegramApiHash: settings?.telegramApiHash ?? "",
-    phoneNumber: settings?.phoneNumber ?? "",
-    activeBot: settings?.activeBot === "CardXabarBot" ? "CardXabarBot" : "HUMOcardbot",
-    supportContact: settings?.supportContact ?? "",
-    isEnabled: settings?.isEnabled ?? false,
-    pollFallbackEnabled: settings?.pollFallbackEnabled ?? true,
+    supportContact: settings?.supportContact ?? "@TheBugCreator",
   };
 }
 
@@ -76,7 +63,6 @@ function createCardDraft(): CardDraft {
     cardType: "humo",
     holderName: "",
     priority: "0",
-    botSource: "HUMOcardbot",
     isActive: false,
   };
 }
@@ -196,26 +182,20 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
     setSavingSettings(true);
     try {
       const nextSettings = await adminApi.updatePaymentSettings({
-        telegramApiId: settingsDraft.telegramApiId.trim() || null,
-        telegramApiHash: settingsDraft.telegramApiHash.trim() || null,
-        phoneNumber: settingsDraft.phoneNumber.trim() || null,
-        activeBot: settingsDraft.activeBot,
-        supportContact: settingsDraft.supportContact.trim() || null,
-        isEnabled: settingsDraft.isEnabled,
-        pollFallbackEnabled: settingsDraft.pollFallbackEnabled,
+        supportContact: settingsDraft.supportContact.trim() || "@TheBugCreator",
       });
       setSettings(nextSettings);
       setSettingsDraft(createSettingsDraft(nextSettings));
       setNotice({
         tone: "success",
         title: "Settings saved",
-        description: "Payment detector configuration was updated.",
+        description: "Manual payment support contact was updated.",
       });
     } catch (error) {
       setNotice({
         tone: "warning",
         title: "Settings failed",
-        description: error instanceof Error ? error.message : "Detector settings could not be saved.",
+        description: error instanceof Error ? error.message : "Payment settings could not be saved.",
       });
     } finally {
       setSavingSettings(false);
@@ -241,7 +221,6 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
         cardType: cardDraft.cardType,
         holderName: cardDraft.holderName.trim() || null,
         priority: Number(cardDraft.priority) || 0,
-        botSource: cardDraft.botSource,
         isActive: cardDraft.isActive,
       });
 
@@ -333,7 +312,7 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
       <SectionHeader
         eyebrow="Revenue ops"
         title="Payments"
-        description="Card-transfer invoice lifecycle, detector readiness, and manual settlement controls."
+        description="Manual card-transfer invoices, support screenshot flow, and premium activation controls."
         actions={
           <Button type="button" variant="outline" size="sm" onClick={() => void refreshAll()} disabled={refreshing}>
             {refreshing ? "Refreshing..." : "Refresh"}
@@ -344,13 +323,9 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
       {notice ? <Notice tone={notice.tone} title={notice.title} description={notice.description} /> : null}
 
       <Notice
-        tone={settings?.isEnabled ? "success" : "paused"}
-        title="Payment ingestion"
-        description={
-          settings?.isEnabled
-            ? "Detector settings are configured. Keep an eye on pending invoices and the currently active card."
-            : "Detector is still disabled. Add a live card, Telegram credentials, and support contact before enabling auto-detection."
-        }
+        tone="success"
+        title="Manual payment flow"
+        description={`Users transfer the exact plan amount to the active card, then send a screenshot to ${settings?.supportContact ?? "@TheBugCreator"} on Telegram.`}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -377,93 +352,26 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Detector settings</CardTitle>
-            <CardDescription>These values drive the Telethon worker and user-facing support instructions.</CardDescription>
+            <CardTitle>Support settings</CardTitle>
+            <CardDescription>This contact is shown to users after they create a manual card-transfer invoice.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSaveSettings}>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="telegram-api-id">Telegram API ID</Label>
-                  <Input
-                    id="telegram-api-id"
-                    value={settingsDraft.telegramApiId}
-                    onChange={(event) => setSettingsDraft((current) => ({ ...current, telegramApiId: event.target.value }))}
-                    placeholder="28943711"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="telegram-phone">Telegram phone</Label>
-                  <Input
-                    id="telegram-phone"
-                    value={settingsDraft.phoneNumber}
-                    onChange={(event) => setSettingsDraft((current) => ({ ...current, phoneNumber: event.target.value }))}
-                    placeholder="+998901234567"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <Label htmlFor="telegram-api-hash">Telegram API hash</Label>
+                <Label htmlFor="support-contact">Telegram support contact</Label>
                 <Input
-                  id="telegram-api-hash"
-                  value={settingsDraft.telegramApiHash}
-                  onChange={(event) => setSettingsDraft((current) => ({ ...current, telegramApiHash: event.target.value }))}
-                  placeholder="Paste API hash"
+                  id="support-contact"
+                  value={settingsDraft.supportContact}
+                  onChange={(event) => setSettingsDraft((current) => ({ ...current, supportContact: event.target.value }))}
+                  placeholder="@TheBugCreator"
                 />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="active-bot">Notification bot</Label>
-                  <Select
-                    id="active-bot"
-                    value={settingsDraft.activeBot}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        activeBot: event.target.value === "CardXabarBot" ? "CardXabarBot" : "HUMOcardbot",
-                      }))
-                    }
-                  >
-                    <option value="HUMOcardbot">HUMOcardbot</option>
-                    <option value="CardXabarBot">CardXabarBot</option>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="support-contact">Support contact</Label>
-                  <Input
-                    id="support-contact"
-                    value={settingsDraft.supportContact}
-                    onChange={(event) => setSettingsDraft((current) => ({ ...current, supportContact: event.target.value }))}
-                    placeholder="@primescore_support"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="flex items-center gap-3 rounded-md border border-border px-3 py-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settingsDraft.isEnabled}
-                    onChange={(event) => setSettingsDraft((current) => ({ ...current, isEnabled: event.target.checked }))}
-                  />
-                  <span>Enable detector</span>
-                </label>
-                <label className="flex items-center gap-3 rounded-md border border-border px-3 py-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settingsDraft.pollFallbackEnabled}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({ ...current, pollFallbackEnabled: event.target.checked }))
-                    }
-                  />
-                  <span>Enable fallback polling</span>
-                </label>
+                <p className="text-xs text-muted-foreground">
+                  User instruction: transfer the required amount, then send the receipt screenshot to this Telegram contact.
+                </p>
               </div>
 
               <Button type="submit" disabled={savingSettings}>
-                {savingSettings ? "Saving..." : "Save detector settings"}
+                {savingSettings ? "Saving..." : "Save support contact"}
               </Button>
             </form>
           </CardContent>
@@ -489,7 +397,7 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
                         <Badge tone={card.isActive ? "success" : "paused"}>{card.isActive ? "Active" : "Standby"}</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {card.cardType} • {card.cardNumber} • {card.botSource}
+                        {card.cardType} • {card.cardNumber}
                       </p>
                     </div>
                     <Button
@@ -546,25 +454,6 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bot-source">Bot source</Label>
-                  <Select
-                    id="bot-source"
-                    value={cardDraft.botSource}
-                    onChange={(event) =>
-                      setCardDraft((current) => ({
-                        ...current,
-                        botSource: event.target.value === "CardXabarBot" ? "CardXabarBot" : "HUMOcardbot",
-                      }))
-                    }
-                  >
-                    <option value="HUMOcardbot">HUMOcardbot</option>
-                    <option value="CardXabarBot">CardXabarBot</option>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
                   <Label htmlFor="holder-name">Holder name</Label>
                   <Input
                     id="holder-name"
@@ -573,17 +462,18 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
                     placeholder="Azizbek A."
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
-                  <Input
-                    id="priority"
-                    type="number"
-                    min="0"
-                    max="1000"
-                    value={cardDraft.priority}
-                    onChange={(event) => setCardDraft((current) => ({ ...current, priority: event.target.value }))}
-                  />
-                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Input
+                  id="priority"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  value={cardDraft.priority}
+                  onChange={(event) => setCardDraft((current) => ({ ...current, priority: event.target.value }))}
+                />
               </div>
 
               <label className="flex items-center gap-3 rounded-md border border-border px-3 py-3 text-sm">

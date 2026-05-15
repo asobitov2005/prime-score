@@ -464,7 +464,6 @@ type BackendPaymentCard = {
   holder_name?: string | null;
   is_active: boolean;
   priority: number;
-  bot_source: string;
 };
 
 type BackendAdminAudioTranscriptResponse = {
@@ -559,13 +558,7 @@ function mapTranscriptQuestionLocations(
 
 type BackendPaymentSettings = {
   id: string;
-  telegram_api_id?: string | null;
-  telegram_api_hash?: string | null;
-  phone_number?: string | null;
-  active_bot: string;
   support_contact?: string | null;
-  is_enabled: boolean;
-  poll_fallback_enabled: boolean;
 };
 
 type AdminPaymentCardInput = {
@@ -575,17 +568,10 @@ type AdminPaymentCardInput = {
   holderName?: string | null;
   isActive?: boolean;
   priority?: number;
-  botSource: "HUMOcardbot" | "CardXabarBot";
 };
 
 type AdminPaymentSettingsInput = {
-  telegramApiId?: string | null;
-  telegramApiHash?: string | null;
-  phoneNumber?: string | null;
-  activeBot?: "HUMOcardbot" | "CardXabarBot";
   supportContact?: string | null;
-  isEnabled?: boolean;
-  pollFallbackEnabled?: boolean;
 };
 
 const questionTypeAliases: Record<string, string> = {
@@ -1198,20 +1184,13 @@ function mapAdminPaymentCard(card: BackendPaymentCard): AdminPaymentCardSummary 
     holderName: card.holder_name ?? null,
     isActive: card.is_active,
     priority: card.priority,
-    botSource: card.bot_source,
   };
 }
 
 function mapAdminPaymentSettings(settings: BackendPaymentSettings): AdminPaymentSettingsSummary {
   return {
     id: settings.id,
-    telegramApiId: settings.telegram_api_id ?? null,
-    telegramApiHash: settings.telegram_api_hash ?? null,
-    phoneNumber: settings.phone_number ?? null,
-    activeBot: settings.active_bot,
     supportContact: settings.support_contact ?? null,
-    isEnabled: settings.is_enabled,
-    pollFallbackEnabled: settings.poll_fallback_enabled,
   };
 }
 
@@ -1712,7 +1691,6 @@ export const adminApi = {
         holder_name: input.holderName ?? null,
         is_active: input.isActive ?? false,
         priority: input.priority ?? 0,
-        bot_source: input.botSource,
       })
     });
     return mapAdminPaymentCard(response);
@@ -1730,7 +1708,6 @@ export const adminApi = {
         ...(input.holderName !== undefined ? { holder_name: input.holderName } : {}),
         ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
         ...(input.priority !== undefined ? { priority: input.priority } : {}),
-        ...(input.botSource !== undefined ? { bot_source: input.botSource } : {}),
       })
     });
     return mapAdminPaymentCard(response);
@@ -1743,13 +1720,7 @@ export const adminApi = {
     const response = await requestJson<BackendPaymentSettings>("/payment-settings", {
       method: "PATCH",
       body: JSON.stringify({
-        ...(input.telegramApiId !== undefined ? { telegram_api_id: input.telegramApiId } : {}),
-        ...(input.telegramApiHash !== undefined ? { telegram_api_hash: input.telegramApiHash } : {}),
-        ...(input.phoneNumber !== undefined ? { phone_number: input.phoneNumber } : {}),
-        ...(input.activeBot !== undefined ? { active_bot: input.activeBot } : {}),
         ...(input.supportContact !== undefined ? { support_contact: input.supportContact } : {}),
-        ...(input.isEnabled !== undefined ? { is_enabled: input.isEnabled } : {}),
-        ...(input.pollFallbackEnabled !== undefined ? { poll_fallback_enabled: input.pollFallbackEnabled } : {}),
       })
     });
     return mapAdminPaymentSettings(response);

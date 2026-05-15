@@ -84,7 +84,8 @@ export interface PaymentRecordResponse {
   currency: string;
   card_label?: string | null;
   card_number?: string | null;
-  wheel_options?: Array<string | number>;
+  support_contact?: string | null;
+  payment_instructions?: string | null;
   expires_at?: string | null;
   matched_at?: string | null;
   paid_at?: string | null;

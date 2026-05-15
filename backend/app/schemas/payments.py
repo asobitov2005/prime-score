@@ -17,7 +17,6 @@ class PaymentCardCreateRequest(BaseModel):
     holder_name: str | None = Field(default=None, max_length=120)
     is_active: bool = False
     priority: int = Field(default=0, ge=0, le=1000)
-    bot_source: Literal["HUMOcardbot", "CardXabarBot"] = "HUMOcardbot"
 
 
 class PaymentCardUpdateRequest(BaseModel):
@@ -27,7 +26,6 @@ class PaymentCardUpdateRequest(BaseModel):
     holder_name: str | None = Field(default=None, max_length=120)
     is_active: bool | None = None
     priority: int | None = Field(default=None, ge=0, le=1000)
-    bot_source: Literal["HUMOcardbot", "CardXabarBot"] | None = None
 
 
 class PaymentCardRead(BaseModel):
@@ -38,32 +36,19 @@ class PaymentCardRead(BaseModel):
     holder_name: str | None = None
     is_active: bool = False
     priority: int = 0
-    bot_source: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
 
 class PaymentSettingsRead(BaseModel):
     id: UUID
-    telegram_api_id: str | None = None
-    telegram_api_hash: str | None = None
-    phone_number: str | None = None
-    active_bot: str = "HUMOcardbot"
     support_contact: str | None = None
-    is_enabled: bool = False
-    poll_fallback_enabled: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
 
 class PaymentSettingsUpdateRequest(BaseModel):
-    telegram_api_id: str | None = Field(default=None, max_length=32)
-    telegram_api_hash: str | None = Field(default=None, max_length=128)
-    phone_number: str | None = Field(default=None, max_length=24)
-    active_bot: Literal["HUMOcardbot", "CardXabarBot"] | None = None
     support_contact: str | None = Field(default=None, max_length=120)
-    is_enabled: bool | None = None
-    poll_fallback_enabled: bool | None = None
 
 
 class MePaymentCreateRequest(BaseModel):
@@ -85,7 +70,8 @@ class MePaymentRead(BaseModel):
     currency: str = "UZS"
     card_label: str | None = None
     card_number: str | None = None
-    wheel_options: list[Decimal] = Field(default_factory=list)
+    support_contact: str = "@TheBugCreator"
+    payment_instructions: str = "Transfer the amount to the card, then send a screenshot to Telegram support."
     expires_at: datetime | None = None
     matched_at: datetime | None = None
     paid_at: datetime | None = None
@@ -130,7 +116,6 @@ class AdminPaymentRead(BaseModel):
     archived_at: datetime | None = None
     granted_until: datetime | None = None
     status_reason: str | None = None
-    detected_message_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

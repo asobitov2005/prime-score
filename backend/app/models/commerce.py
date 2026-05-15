@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -80,15 +80,12 @@ class Payment(UUIDMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
     card_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     card_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    wheel_options: Mapped[list[int]] = mapped_column(JSONB, default=list)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     matched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     granted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    detected_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    detected_message_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
@@ -101,16 +98,9 @@ class PaymentCard(UUIDMixin, TimestampMixin, Base):
     holder_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     priority: Mapped[int] = mapped_column(Integer, default=0)
-    bot_source: Mapped[str] = mapped_column(String(32), default="HUMOcardbot")
 
 
 class PaymentSetting(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "payment_settings"
 
-    telegram_api_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    telegram_api_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    phone_number: Mapped[str | None] = mapped_column(String(24), nullable=True)
-    active_bot: Mapped[str] = mapped_column(String(32), default="HUMOcardbot")
     support_contact: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    poll_fallback_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

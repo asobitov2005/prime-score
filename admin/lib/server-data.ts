@@ -523,18 +523,11 @@ type BackendPaymentCard = {
   holder_name?: string | null;
   is_active: boolean;
   priority: number;
-  bot_source: string;
 };
 
 type BackendPaymentSettings = {
   id: string;
-  telegram_api_id?: string | null;
-  telegram_api_hash?: string | null;
-  phone_number?: string | null;
-  active_bot: string;
   support_contact?: string | null;
-  is_enabled: boolean;
-  poll_fallback_enabled: boolean;
 };
 
 function emptyDashboardOverview(): AdminDashboardOverview {
@@ -707,7 +700,6 @@ export async function getAdminPaymentCards(): Promise<AdminPaymentCardSummary[]>
       holderName: item.holder_name ?? null,
       isActive: item.is_active,
       priority: item.priority,
-      botSource: item.bot_source,
     }));
   } catch {
     return [];
@@ -719,13 +711,7 @@ export async function getAdminPaymentSettings(): Promise<AdminPaymentSettingsSum
     const item = await requestAdmin<BackendPaymentSettings>("/payment-settings");
     return {
       id: item.id,
-      telegramApiId: item.telegram_api_id ?? null,
-      telegramApiHash: item.telegram_api_hash ?? null,
-      phoneNumber: item.phone_number ?? null,
-      activeBot: item.active_bot,
       supportContact: item.support_contact ?? null,
-      isEnabled: item.is_enabled,
-      pollFallbackEnabled: item.poll_fallback_enabled,
     };
   } catch {
     return null;

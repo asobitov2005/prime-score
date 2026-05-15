@@ -4,8 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,15 +55,14 @@ from app.services.attempt_repo import iter_user_attempts_from_db
 from app.services.notification_sender import create_and_send_notification
 from app.services.object_storage import upload_user_avatar_image
 from app.services.payment_service import (
+    DEFAULT_PAYMENT_SUPPORT_CONTACT,
     PENDING_PAYMENT_STATUSES,
     create_plan_payment,
     expire_stale_payments,
-    serialize_wheel_options,
 )
 from app.services.runtime_store import _band_for_raw_score, iter_user_attempts
 from app.services.scoring import mc_multiple_question_weight
 from app.services.user_names import normalize_user_name_parts
-from app.services.payment_events import payment_event_bus
 
 router = APIRouter()
 MAX_AVATAR_IMAGE_BYTES = 5 * 1024 * 1024
@@ -443,6 +441,11 @@ def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
     payment_method_values = {item.value for item in PaymentMethod}
     method_value = payment.provider if payment.provider in payment_method_values else PaymentMethod.card_transfer.value
     exposes_card_details = str(payment.status or "") in PENDING_PAYMENT_STATUSES
+    support_contact = str(payment.meta.get("support_contact") or DEFAULT_PAYMENT_SUPPORT_CONTACT)
+    payment_instructions = str(
+        payment.meta.get("payment_instructions")
+        or "Transfer the amount to the card, then send a screenshot to Telegram support."
+    )
     return MePaymentRead(
         id=payment.id,
         invoice_code=payment.invoice_code,
@@ -458,7 +461,8 @@ def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
         currency=payment.currency,
         card_label=payment.card_label if exposes_card_details else None,
         card_number=payment.card_number if exposes_card_details else None,
-        wheel_options=serialize_wheel_options(payment.wheel_options or []),
+        support_contact=support_contact,
+        payment_instructions=payment_instructions,
         expires_at=payment.expires_at,
         matched_at=payment.matched_at,
         paid_at=payment.paid_at,
@@ -731,7 +735,7 @@ async def create_my_payment(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create payment invoice.") from exc
 
     return MePaymentCreateResponse(
-        message="Invoice created. Pay the exact shown amount within 10 minutes.",
+        message="Invoice created. Transfer the amount to the card and send the screenshot to Telegram support.",
         payment=_serialize_me_payment(
             payment,
             await session.get(Plan, payment.plan_id) if payment.plan_id else None,
@@ -760,79 +764,6 @@ async def cancel_my_payment(
     return MePaymentCancelResponse(
         message="Payment invoice canceled.",
         payment=_serialize_me_payment(payment, plan),
-    )
-
-
-@router.get("/payments/stream")
-async def stream_payment_events(
-    request: Request,
-    token: str | None = Query(default=None),
-    authorization: str | None = Header(default=None, alias="Authorization"),
-    session: AsyncSession = Depends(get_db_session),
-) -> StreamingResponse:
-    """SSE endpoint for real-time payment status updates.
-
-    Accepts auth via:
-    - Authorization: Bearer <token> header
-    - ?token=<token> query param (for EventSource which can't set headers)
-
-    Events:
-    - payment_matched: detector found a matching transfer
-    - payment_completed: premium granted successfully
-    - payment_expired: invoice TTL exceeded
-    - heartbeat: keep-alive every 15s
-    """
-    import asyncio
-    from app.core.security import decode_token as _decode_token
-    from jose import JWTError
-
-    # Resolve user from token query param or Authorization header
-    raw_token = token
-    if not raw_token and authorization:
-        _scheme, _, _tok = authorization.partition(" ")
-        if _scheme.lower() == "bearer" and _tok:
-            raw_token = _tok
-
-    if not raw_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required for SSE stream.")
-
-    try:
-        payload = _decode_token(raw_token)
-        user_id = UUID(str(payload["sub"]))
-    except (JWTError, KeyError, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token.") from exc
-
-    if payload.get("scope") == "admin":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token scope.")
-
-    queue = payment_event_bus.subscribe(user_id)
-
-    async def event_generator():
-        try:
-            # Send initial connection event
-            yield "event: connected\ndata: {}\n\n"
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    message = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    if message is None:
-                        break
-                    yield message
-                except asyncio.TimeoutError:
-                    # Send heartbeat to keep connection alive
-                    yield ": heartbeat\n\n"
-        finally:
-            payment_event_bus.unsubscribe(user_id, queue)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
     )
 
 

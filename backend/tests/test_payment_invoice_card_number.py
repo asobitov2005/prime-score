@@ -76,10 +76,12 @@ async def test_create_plan_payment_keeps_full_normalized_card_number() -> None:
         card_number="8600 1234 1234 5678",
         card_type="humo",
         is_active=True,
-        bot_source="HUMOcardbot",
     )
     session = _FakeSession(active_card)
 
     payment = await create_plan_payment(session, user=user, plan=plan)
 
     assert payment.card_number == "8600123412345678"
+    assert payment.amount == Decimal("59000")
+    assert payment.discount_amount == Decimal("0")
+    assert payment.meta["support_contact"] == "@TheBugCreator"

@@ -488,7 +488,6 @@ def _serialize_payment_card(card: PaymentCard) -> PaymentCardRead:
         holder_name=card.holder_name,
         is_active=card.is_active,
         priority=card.priority,
-        bot_source=card.bot_source,
         created_at=card.created_at,
         updated_at=card.updated_at,
     )
@@ -497,13 +496,7 @@ def _serialize_payment_card(card: PaymentCard) -> PaymentCardRead:
 def _serialize_payment_settings(setting: PaymentSetting) -> PaymentSettingsRead:
     return PaymentSettingsRead(
         id=setting.id,
-        telegram_api_id=setting.telegram_api_id,
-        telegram_api_hash=setting.telegram_api_hash,
-        phone_number=setting.phone_number,
-        active_bot=setting.active_bot,
         support_contact=setting.support_contact,
-        is_enabled=setting.is_enabled,
-        poll_fallback_enabled=setting.poll_fallback_enabled,
         created_at=setting.created_at,
         updated_at=setting.updated_at,
     )
@@ -541,7 +534,6 @@ def _serialize_admin_payment(
         archived_at=payment.archived_at,
         granted_until=payment.granted_until,
         status_reason=payment.status_reason,
-        detected_message_id=payment.detected_message_id,
         created_at=payment.created_at,
         updated_at=payment.updated_at,
     )
@@ -2815,12 +2807,7 @@ async def update_payment(
     try:
         if next_status == "completed":
             if payment.status != "completed":
-                await complete_payment(
-                    session,
-                    payment=payment,
-                    detected_message_id=payment.detected_message_id or f"admin:{current_admin.id}",
-                    detected_message_text=payment.detected_message_text or "Completed manually from admin panel.",
-                )
+                await complete_payment(session, payment=payment)
             if payload.status_reason:
                 payment.status_reason = payload.status_reason
         else:
@@ -2873,7 +2860,6 @@ async def create_payment_card(
         holder_name=payload.holder_name.strip() if payload.holder_name else None,
         is_active=payload.is_active,
         priority=payload.priority,
-        bot_source=payload.bot_source,
     )
     session.add(card)
     await session.flush()

@@ -369,7 +369,8 @@ export interface UserPaymentRecord {
   currency: string;
   cardLabel: string | null;
   cardNumber: string | null;
-  wheelOptions: string[];
+  supportContact: string;
+  paymentInstructions: string;
   expiresAt: string | null;
   matchedAt: string | null;
   paidAt: string | null;

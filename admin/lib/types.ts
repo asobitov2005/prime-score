@@ -151,18 +151,11 @@ export interface AdminPaymentCardSummary {
   holderName: string | null;
   isActive: boolean;
   priority: number;
-  botSource: string;
 }
 
 export interface AdminPaymentSettingsSummary {
   id: string;
-  telegramApiId: string | null;
-  telegramApiHash: string | null;
-  phoneNumber: string | null;
-  activeBot: string;
   supportContact: string | null;
-  isEnabled: boolean;
-  pollFallbackEnabled: boolean;
 }
 
 export interface AdminAuditEntry {

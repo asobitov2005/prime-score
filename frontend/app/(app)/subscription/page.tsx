@@ -1,5 +1,4 @@
 import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
-import { Gem } from "lucide-react";
 import { RedeemCodePanel } from "@/components/subscription/redeem-code-panel";
 import { SubscriptionHeroStatus } from "@/components/subscription/subscription-hero-status";
 import { SubscriptionWorkspace } from "@/components/subscription/subscription-workspace";
@@ -30,7 +29,7 @@ export default async function SubscriptionPage() {
                 </span>
               </div>
               <p className="text-[11px] font-medium text-muted-foreground md:text-xs">
-                Spin after choosing a plan to reveal your discounted final amount.
+                Choose a plan, transfer the amount, then send the receipt screenshot to Telegram support.
               </p>
               <SubscriptionHeroStatus />
             </div>
