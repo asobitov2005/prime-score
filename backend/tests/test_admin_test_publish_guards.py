@@ -138,7 +138,7 @@ async def _load_tests_by_title(title: str) -> list[test_models.Test]:
 @pytest.mark.asyncio
 async def test_published_test_rejects_plain_draft_update(app, monkeypatch: pytest.MonkeyPatch) -> None:
     reset_session_state()
-    payload = _build_draft_payload(f"Publish Guard {uuid4().hex[:8]}")
+    payload = _build_draft_payload(f"Publish Flow Check {uuid4().hex[:8]}")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         admin_headers = await login_admin_headers(client, monkeypatch)
@@ -172,7 +172,7 @@ async def test_published_test_rejects_plain_draft_update(app, monkeypatch: pytes
 @pytest.mark.asyncio
 async def test_published_test_creates_new_version_only_when_explicitly_requested(app, monkeypatch: pytest.MonkeyPatch) -> None:
     reset_session_state()
-    payload = _build_draft_payload(f"New Version Guard {uuid4().hex[:8]}")
+    payload = _build_draft_payload(f"New Version Flow Check {uuid4().hex[:8]}")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         admin_headers = await login_admin_headers(client, monkeypatch)
@@ -201,3 +201,31 @@ async def test_published_test_creates_new_version_only_when_explicitly_requested
         title_rows = await _load_tests_by_title(created_title)
         assert len(title_rows) == 2
         assert [row.status.value for row in title_rows] == ["published", "draft"]
+
+
+@pytest.mark.asyncio
+async def test_admin_builder_rejects_guard_titles(app, monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_session_state()
+    payload = _build_draft_payload(f"New Version Guard {uuid4().hex[:8]}")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        admin_headers = await login_admin_headers(client, monkeypatch)
+
+        created = await client.post("/api/admin/tests/draft", headers=admin_headers, json=payload)
+
+        assert created.status_code == 400
+        assert created.json()["detail"] == "Guard/test regression titles are not allowed in the test catalog."
+
+
+@pytest.mark.asyncio
+async def test_admin_builder_rejects_regression_titles(app, monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_session_state()
+    payload = _build_draft_payload(f"Publish Regression {uuid4().hex[:8]}")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        admin_headers = await login_admin_headers(client, monkeypatch)
+
+        created = await client.post("/api/admin/tests/draft", headers=admin_headers, json=payload)
+
+        assert created.status_code == 400
+        assert created.json()["detail"] == "Guard/test regression titles are not allowed in the test catalog."

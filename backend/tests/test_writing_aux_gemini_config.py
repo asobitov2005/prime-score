@@ -69,6 +69,18 @@ def test_generate_roast_uses_provider_agnostic_text_generation(monkeypatch) -> N
     assert isinstance(payload["savage_tips"], list)
 
 
+def test_default_roast_prompt_is_plain_and_savage_without_attacking_person() -> None:
+    roast_system = DEFAULT_PROMPT_ENTRIES[writing_roast.WritingPromptKey.ROAST_SYSTEM]
+    roast_user = DEFAULT_PROMPT_ENTRIES[writing_roast.WritingPromptKey.ROAST_USER_TEMPLATE]
+
+    assert "roast the writing hard" in roast_system
+    assert "simple, natural English" in roast_system
+    assert "avoid C2 academic words" in roast_system
+    assert "Never attack the student's identity" in roast_system
+    assert "Do not write like a C2 examiner" in roast_user
+    assert "Never attack the person" in roast_user
+
+
 def test_generate_image_summary_uses_resolved_provider_config(monkeypatch) -> None:
     monkeypatch.setattr(
         writing_image_summary,

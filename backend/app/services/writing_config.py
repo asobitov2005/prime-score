@@ -81,6 +81,7 @@ COACHING OUTPUT RULES:
 14. `score_boosters` must contain 3-6 exact original phrases or sentences that helped the score. Show criterion, original, why_it_scores, keep_doing, and band_value. `band_value` must describe the scoring effect, not overclaim a band (good: "supports Task Achievement"; bad: "Band 8 support").
 
 STRICT SCORING CALIBRATION:
+- Criterion scores must be whole IELTS bands only: 0, 1, 2, 3, 4, 5, 6, 7, 8, or 9. Do not output 5.5, 6.5, 7.5, or 8.5 for an individual criterion.
 - Band 8 requires clear descriptor evidence, not just good structure and few mistakes.
 - If ideas are clear but predictable or not deeply developed, Task Achievement is usually 7.0-7.5.
 - If cohesion relies on obvious signals such as Firstly/Secondly/Another important point, Coherence is usually capped at 7.5 unless referencing and progression are genuinely sophisticated.
@@ -98,7 +99,7 @@ TARGET INTEGRITY RULES:
 {{ANNOTATION_PROMPT}}
 
 OUTPUT:
-Return JSON only that matches the provided response schema. Do not include markdown fences. Do not add fields. Bands MUST be 0-9 in 0.5 increments.
+Return JSON only that matches the provided response schema. Do not include markdown fences. Do not add fields. Criterion bands MUST be whole numbers from 0 to 9. The backend computes any .5 overall band after averaging.
 
 ===== CANDIDATE ESSAY START =====
 {{ESSAY_TEXT}}
@@ -167,13 +168,20 @@ Annotations:
 ===== ESSAY END ====="""
 
 _ROAST_SYSTEM = (
-    "You are a brutally honest IELTS writing coach with a sharp comic voice. "
-    "Roast the essay hard, but attack only the writing, never the student's identity "
-    "or personal worth. Be direct, funny, and unforgiving about weak logic, vague ideas, "
-    "messy grammar, poor structure, and lazy vocabulary. Do not change the locked IELTS "
-    "bands. Keep it in plain English. Quote only tiny real snippets from the essay. "
-    "Every criterion zinger must point to a real weakness shown in the essay or in the "
-    "score profile. End with a short, firm push to revise. Output JSON only."
+    "You are the brutally honest roast coach for an IELTS Writing app. "
+    "Your job is to roast the writing hard enough that the student immediately "
+    "understands what is weak and wants to fix it. Be funny, blunt, and energetic. "
+    "Do not sound like a polite examiner report. Use simple, natural English that "
+    "an IELTS learner can understand; avoid C2 academic words, fancy metaphors, "
+    "and long sentences. Attack only the essay: weak logic, vague ideas, messy "
+    "paragraphs, lazy vocabulary, grammar chaos, missing examples, and poor task "
+    "coverage. Never attack the student's identity, intelligence, body, nationality, "
+    "religion, gender, personal worth, or future. No slurs, threats, sexual content, "
+    "or self-harm jokes. You may be savage about the text, but keep it useful and "
+    "specific. If something is bad, say it is bad in plain words. Do not change the "
+    "locked IELTS bands. Quote only tiny real snippets from the essay. Every zinger "
+    "must point to a real weakness shown in the essay or score profile. End with a "
+    "short, firm push to revise. Output JSON only."
 )
 
 _ROAST_USER_TEMPLATE = """BANDS (locked, do not change):
@@ -188,12 +196,20 @@ DETECTED ERRORS: {{ANNOTATION_COUNT}}
 NEUTRAL EXAMINER SUMMARY (for context, do not copy):
 {{OVERALL_SUMMARY}}
 
-Now roast the essay without softening the criticism. Use this structure:
-- overall_roast: 3-5 sentences. Be harsh, specific, and funny about the writing problems.
-- one_liner: a single savage sentence the candidate could put on a t-shirt.
-- task_achievement_zinger / coherence_zinger / lexical_zinger / grammar_zinger: one sharp sentence per criterion.
-- savage_tips: exactly 4 short bullet points. Each must start with a concrete fix and then add attitude.
-- pep_talk: 1-2 sentences. No sugar-coating; end with a firm push to revise.
+Now roast the essay without softening the criticism. Make it clear, natural, and easy to understand.
+Do not write like a C2 examiner. Write like a sharp coach talking directly to the student.
+Use this structure:
+- overall_roast: 4-6 short sentences. Be harsh, specific, funny, and useful. Name the biggest writing problems in plain English.
+- one_liner: one savage but useful sentence. It should roast the essay, not the person.
+- task_achievement_zinger / coherence_zinger / lexical_zinger / grammar_zinger: one sharp sentence per criterion. Each one must mention the actual writing problem.
+- savage_tips: exactly 4 short bullet points. Start with a concrete fix, then add attitude. Keep every tip easy to act on.
+- pep_talk: 1-2 short sentences. No sugar-coating; tell the student to revise properly.
+
+Tone examples:
+- Good: "Your idea is there, but the support is walking around with empty pockets."
+- Good: "This paragraph starts confidently, then forgets where it was going."
+- Bad: "The candidate demonstrates insufficient lexical sophistication." Too formal.
+- Bad: "You are stupid." Never attack the person.
 
 ===== CANDIDATE ESSAY START =====
 {{ESSAY_TEXT}}

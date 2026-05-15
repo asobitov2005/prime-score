@@ -223,6 +223,80 @@ class WritingAnchorItem(UUIDMixin, TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class WritingDescriptor(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "writing_descriptors"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_type_scope",
+            "criterion_key",
+            "band",
+            "version",
+            name="uq_writing_descriptors_scope_criterion_band_version",
+        ),
+    )
+
+    task_type_scope: Mapped[WritingTaskTypeScope] = mapped_column(
+        EnumValueString(WritingTaskTypeScope), index=True
+    )
+    criterion_key: Mapped[str] = mapped_column(String(64), index=True)
+    band: Mapped[int] = mapped_column(Integer, index=True)
+    descriptor_text: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[WritingConfigStatus] = mapped_column(
+        EnumValueString(WritingConfigStatus), default=WritingConfigStatus.PUBLISHED, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(default=True, index=True)
+    created_by: Mapped[UUID | None] = mapped_column(
+        ForeignKey("admins.id"), nullable=True, index=True
+    )
+
+
+class WritingBenchmarkCard(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "writing_benchmark_cards"
+
+    card_id: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    task_type_scope: Mapped[WritingTaskTypeScope] = mapped_column(
+        EnumValueString(WritingTaskTypeScope), index=True
+    )
+    title: Mapped[str] = mapped_column(String(255))
+    band: Mapped[float] = mapped_column(Float, index=True)
+    use_when: Mapped[str] = mapped_column(Text)
+    benchmark_profile: Mapped[str] = mapped_column(Text)
+    tolerance_lesson: Mapped[str] = mapped_column(Text)
+    band_limiting_signs: Mapped[list] = mapped_column(JSONB, default=list)
+    do_not_use_when: Mapped[str] = mapped_column(Text)
+    tags: Mapped[list] = mapped_column(JSONB, default=list)
+    source: Mapped[str] = mapped_column(String(120), default="blueprint_v1")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[WritingConfigStatus] = mapped_column(
+        EnumValueString(WritingConfigStatus), default=WritingConfigStatus.PUBLISHED, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(default=True, index=True)
+    created_by: Mapped[UUID | None] = mapped_column(
+        ForeignKey("admins.id"), nullable=True, index=True
+    )
+
+
+class WritingEvaluationRun(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "writing_evaluation_runs"
+
+    submission_id: Mapped[UUID] = mapped_column(
+        ForeignKey("writing_submissions.id"), unique=True, index=True
+    )
+    evaluation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("writing_evaluations.id"), nullable=True, index=True
+    )
+    pipeline_version: Mapped[str] = mapped_column(String(32), default="blueprint_v1")
+    mode: Mapped[str] = mapped_column(String(32), default="full_diagnostic")
+    initial_scores: Mapped[dict] = mapped_column(JSONB, default=dict)
+    selected_benchmarks: Mapped[list] = mapped_column(JSONB, default=list)
+    calibration_result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    audit_result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    confidence: Mapped[str] = mapped_column(String(32), default="Medium")
+    possible_score_range: Mapped[str] = mapped_column(String(32), default="")
+    meta_learning_note: Mapped[str] = mapped_column(Text, default="")
+
+
 class WritingConfigAuditLog(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "writing_config_audit_logs"
 

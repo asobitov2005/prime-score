@@ -275,6 +275,15 @@ class WritingRevisionDiff(BaseModel):
     criterion: str = ""
 
 
+class WritingSelectedBenchmark(BaseModel):
+    card_id: str
+    title: str = ""
+    band: float
+    use_when: str = ""
+    tolerance_lesson: str = ""
+    band_limiting_signs: list[str] = Field(default_factory=list)
+
+
 class WritingEvaluationRead(BaseModel):
     submission_id: UUID
     task_id: UUID
@@ -309,6 +318,13 @@ class WritingEvaluationRead(BaseModel):
     sentence_fixes: list[WritingSentenceFix] = Field(default_factory=list)
     revision_diff: list[WritingRevisionDiff] = Field(default_factory=list)
     roast: WritingRoastFeedback | None = None
+    is_ai_estimate: bool = True
+    confidence: str = "Medium"
+    possible_score_range: str = ""
+    selected_benchmarks: list[WritingSelectedBenchmark] = Field(default_factory=list)
+    calibration_result: dict = Field(default_factory=dict)
+    audit_result: dict = Field(default_factory=dict)
+    meta_learning_note: str = ""
     cache_hit: bool = False
     model_version: str = ""
     prompt_version: str = "v1"

@@ -1461,6 +1461,17 @@ async def create_test_draft(
     _ = current_admin
     try:
         saved = await save_test_draft_to_db(session, draft=payload.model_dump())
+    except ValueError as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        if str(exc) == "test_guard_title_forbidden":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Guard/test regression titles are not allowed in the test catalog.",
+            ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Draft save failed.") from exc
     except Exception as exc:
         try:
             await session.rollback()
@@ -1541,6 +1552,11 @@ async def update_test_draft(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Published tests require Quick Fix or explicit New Version.",
+            ) from exc
+        if str(exc) == "test_guard_title_forbidden":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Guard/test regression titles are not allowed in the test catalog.",
             ) from exc
     except Exception as exc:
         try:

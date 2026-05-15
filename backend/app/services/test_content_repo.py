@@ -58,7 +58,18 @@ def _model_test_status(value: TestStatus) -> ModelTestStatus:
 _EXAM_PRACTICE_TITLE_RE = re.compile(r"^Exam Practice Test (\d+)$", re.IGNORECASE)
 _EXAM_PRACTICE_PLACEHOLDER_RE = re.compile(r"^Exam Practice Test$", re.IGNORECASE)
 _CUSTOM_TEST_SUFFIX_RE = re.compile(r"^(?P<base>.+?)\s+-\s+Test\s+(?P<number>\d+)$", re.IGNORECASE)
+_TEST_GUARD_TITLE_RE = re.compile(
+    r"\b(?:"
+    r"new\s+version\s+guard|publish\s+guard|guard\s+test|test\s+guard|"
+    r"new\s+version\s+regression|publish\s+regression|regression\s+test|test\s+regression"
+    r")\b",
+    re.IGNORECASE,
+)
 _SLUG_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _is_forbidden_test_guard_title(title: str | None) -> bool:
+    return _TEST_GUARD_TITLE_RE.search(str(title or "")) is not None
 
 
 def _slugify_test_title(title: str | None, *, fallback: str) -> str:
@@ -1021,6 +1032,8 @@ async def save_test_draft_to_db(
 
     source_detail = normalize_test_source_detail(metadata["source"], metadata.get("source_detail"))
     resolved_title = await _resolve_admin_test_title(session, metadata=metadata, existing_test=existing_test_for_title)
+    if _is_forbidden_test_guard_title(resolved_title):
+        raise ValueError("test_guard_title_forbidden")
 
     if test is None:
         new_test_id = uuid4() if preserve_existing_version else (test_id or uuid4())
@@ -1402,9 +1415,6 @@ async def quick_fix_published_test_in_db(
 
 
 async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[str, object] | None:
-    from app.core.enums import NotificationType
-    from app.services.notification_sender import notify_all_users
-
     test = await session.get(Test, test_id)
     if test is None:
         return None
@@ -1432,27 +1442,10 @@ async def publish_test_in_db(session: AsyncSession, *, test_id: UUID) -> dict[st
     test.version += 1
     await _sync_test_slug(session, test)
 
-    test_type = test.type.value if hasattr(test.type, "value") else str(test.type)
-    test_title = test.title
-    body = f'"{test_title}" ({test_type}) test has been published. Try it now!'
     test.review_status = "approved"
 
     await session.commit()
     refreshed = await _load_full_test_for_write(session, test_id)
-
-    try:
-        await notify_all_users(
-            session,
-            type=NotificationType.new_test,
-            title="New test available!",
-            body=body,
-            telegram_text=f"📝 <b>New test available!</b>\n\n{body}",
-            inline_keyboard=[[{"text": "🚀 Try Now", "url": f"https://primescore.uz/tests/{test.slug}"}]],
-        )
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        logger.exception("Failed to send publish notifications for test %s", test_id)
     return _serialize_admin_test(refreshed) if refreshed is not None else None
 
 

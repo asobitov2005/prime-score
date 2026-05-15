@@ -11,7 +11,9 @@ Each essay is scored on four criteria, each worth 25% of the writing score:
   3. Lexical Resource
   4. Grammatical Range and Accuracy
 
-Bands are awarded in whole or half points from 0 to 9.
+Each criterion is awarded as a whole band from 0 to 9. The final overall
+Writing estimate may be rounded to a whole or half band after the four criteria
+are averaged.
 
 ------------------------------------------------------------
 1. TASK ACHIEVEMENT (Task 1) / TASK RESPONSE (Task 2)
@@ -231,7 +233,9 @@ GRADING INSTRUCTIONS
 
 When grading:
 - Score each criterion independently before reporting an overall band.
-- Bands must be in 0.5 increments between 0 and 9.
+- Criterion bands must be whole numbers between 0 and 9. If a criterion sits
+  between two bands, choose the lower whole band unless the higher descriptor is
+  clearly met. The final overall estimate may use .5 after averaging.
 - Justify each band by quoting concrete evidence from the candidate's essay.
 - Do not reward effort, length or topic familiarity beyond what the descriptors
   describe.

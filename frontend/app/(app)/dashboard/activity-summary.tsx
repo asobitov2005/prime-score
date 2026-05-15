@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, Headphones, PenSquare, Mic, Clock, Trophy, X, Activity as ActivityIcon } from "lucide-react";
+import { BookOpen, Headphones, PenSquare, Clock, Trophy, X, Activity as ActivityIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { DashboardAnalytics } from "@/lib/types";
@@ -32,6 +32,11 @@ function getBucketTotal(bucket?: DashboardAnalytics["performanceSummary"]["readi
   );
 }
 
+function formatHours(value: number | null | undefined): string {
+  const safeHours = Math.max(0, Number(value ?? 0));
+  return `${safeHours === 0 ? 0 : safeHours.toFixed(1)}h`;
+}
+
 function formatJoinedDate(value: string | null): string | null {
   if (!value) {
     return null;
@@ -49,15 +54,11 @@ function formatJoinedDate(value: string | null): string | null {
   }).format(date);
 }
 
-function formatHours(value: number | null | undefined): string {
-  const safeHours = Math.max(0, Number(value ?? 0));
-  return `${safeHours === 0 ? 0 : safeHours.toFixed(1)}h`;
-}
-
 export function ActivitySummary({ analytics }: ActivitySummaryProps) {
   const summary = analytics.performanceSummary;
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const router = useRouter();
+  const isPremium = useAuthStore((state) => state.isPremium);
   const readingTimeHours = formatHours(summary.studyTime.readingTimeSec / 3600);
   const listeningTimeHours = formatHours(summary.studyTime.listeningTimeSec / 3600);
   const writingTimeHours = formatHours((summary.studyTime.writingTimeSec ?? 0) / 3600);
@@ -122,42 +123,32 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
         ]
       }
     },
-    {
-      id: "speaking",
-      label: "Speaking",
-      href: "#",
-      count: 0,
-      unit: "Sessions",
-      icon: Mic,
-      color: "text-slate-400 dark:text-slate-500",
-      bg: "bg-slate-100 dark:bg-slate-800/50",
-      disabled: true,
-      details: {
-        time: "0h",
-        breakdown: []
-      }
-    },
   ];
 
   const activeData = activities.find(a => a.id === selectedSection);
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {activities.map((act) => (
           <Card 
             key={act.label} 
-            onClick={() => !act.disabled && setSelectedSection(act.id)}
+            onClick={() => {
+              if (isPremium) {
+                setSelectedSection(act.id);
+              } else {
+                router.push("/subscription");
+              }
+            }}
             className={cn(
               "border border-border/50 shadow-sm transition-all duration-300 rounded-[1.5rem] overflow-hidden group relative min-h-[104px]",
-              act.disabled ? "opacity-60 cursor-not-allowed grayscale-[0.5]" : "cursor-pointer bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-md hover:shadow-md hover:shadow-primary/5 hover:border-primary/20 hover:-translate-y-1"
+              "cursor-pointer bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-md hover:shadow-md hover:shadow-primary/5 hover:border-primary/20 hover:-translate-y-1"
             )}
           >
-            {!act.disabled && <div className={cn("absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br via-transparent to-transparent pointer-events-none", act.bg.replace('/10', '/5'))} />}
-            
-            {act.disabled && (
-              <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[8px] font-black uppercase tracking-widest text-slate-500 shadow-sm z-20">
-                Soon
+            <div className={cn("absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br via-transparent to-transparent pointer-events-none", act.bg.replace('/10', '/5'))} />
+            {!isPremium && (
+              <div className="absolute right-2 top-2 z-20 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+                Premium
               </div>
             )}
             
@@ -244,7 +235,7 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between px-1">
                       <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Breakdown</p>
-                      <span className="text-[9px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded-full">Monthly</span>
+                      <span className="text-[9px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded-full">All time</span>
                     </div>
                     <div className="space-y-2">
                       {activeData.details.breakdown.map((item, idx) => {
@@ -312,31 +303,34 @@ export function StudyTimeCard({ analytics, className }: StudyTimeCardProps) {
   const studyTime = summary.studyTime;
   const createdAt = useAuthStore((state) => state.createdAt);
   const joinedDate = formatJoinedDate(createdAt);
-  const thisWeekMinutes = studyTime.thisWeekMinutes ?? Math.round(studyTime.totalTimeSec / 60);
-  const dailyGoalMinutes = studyTime.dailyGoalMinutes ?? 90;
-  const weeklyHours = (thisWeekMinutes / 60).toFixed(1);
-  const goalProgress = Math.min(100, Math.round((thisWeekMinutes / dailyGoalMinutes / 7) * 100));
+  const totalHours = formatHours(studyTime.totalTimeSec / 3600);
+  const totalSeconds = Math.max(0, studyTime.totalTimeSec);
+  const moduleTimes = [
+    { label: "Reading", value: studyTime.readingTimeSec, color: "bg-blue-500" },
+    { label: "Listening", value: studyTime.listeningTimeSec, color: "bg-emerald-500" },
+    { label: "Writing", value: studyTime.writingTimeSec ?? 0, color: "bg-violet-500" },
+  ];
 
   return (
     <Card className={cn("border-none ring-1 ring-primary/20 shadow-md shadow-primary/5 bg-gradient-to-br from-primary/5 via-card/50 to-background rounded-[1.5rem] overflow-hidden group", className)}>
-      <CardContent className="p-4 flex flex-col justify-between h-full">
-        <div className="flex items-center justify-between mb-3">
+      <CardContent className="flex h-full flex-col justify-between p-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="bg-primary/10 p-2 rounded-lg">
               <Clock className="h-4 w-4 text-primary" />
             </div>
             <h3 className="text-xs font-semibold text-foreground uppercase tracking-[0.12em]">Study Time</h3>
           </div>
-          <div className="bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-            <Trophy className="h-2.5 w-2.5 text-emerald-600" />
-            <span className="text-[9px] font-semibold text-emerald-600">{goalProgress}%</span>
+          <div className="bg-primary/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <Trophy className="h-2.5 w-2.5 text-primary" />
+            <span className="text-[9px] font-semibold text-primary">All time</span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-end justify-between gap-3">
             <div className="flex items-end gap-1.5">
-              <span className="text-[2rem] font-semibold tracking-tight text-foreground leading-none">{weeklyHours}</span>
+              <span className="text-[2rem] font-semibold tracking-tight text-foreground leading-none">{totalHours}</span>
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-[0.2em]">Hours</span>
             </div>
             {joinedDate && (
@@ -345,8 +339,15 @@ export function StudyTimeCard({ analytics, className }: StudyTimeCardProps) {
               </p>
             )}
           </div>
-          <div className="h-2 w-full bg-muted/30 rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${goalProgress}%` }} />
+          <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-muted/30">
+            {moduleTimes.map((item) => (
+              <div
+                key={item.label}
+                className={cn("h-full transition-[width]", item.color)}
+                style={{ width: `${totalSeconds > 0 ? (item.value / totalSeconds) * 100 : 0}%` }}
+                title={`${item.label}: ${formatHours(item.value / 3600)}`}
+              />
+            ))}
           </div>
         </div>
       </CardContent>

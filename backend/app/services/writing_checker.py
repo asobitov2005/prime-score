@@ -21,7 +21,7 @@ from app.models.enums import (
     WritingSubmissionStatus,
     WritingTaskType,
 )
-from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
+from app.models.writing import WritingEvaluation, WritingEvaluationRun, WritingSubmission, WritingTask
 from app.services.ai_config import ResolvedAiUseCaseConfig, resolve_ai_use_case_config
 from app.services.ai_generation import generate_text_sync
 from app.services.writing_config import (
@@ -41,6 +41,14 @@ from app.services.writing_roast import generate_roast
 from app.services.writing_rubric import (
     calculate_overall_band,
     round_to_ielts_band,
+)
+from app.services.writing_blueprint import (
+    WritingBenchmarkCardBundle,
+    WritingDescriptorBundle,
+    build_pipeline_run_payload,
+    get_active_benchmark_card_bundle,
+    get_active_descriptor_bundle,
+    round_criterion_band,
 )
 
 logger = logging.getLogger(__name__)
@@ -824,7 +832,7 @@ def _build_groq_grading_prompt(
             "Return JSON only.",
             "Top-level keys: task_achievement, coherence, lexical, grammar, overall_summary, next_steps, inline_annotations, vocabulary_suggestions, target_action_plan, band_boundaries, ielts_checklist, error_taxonomy, sentence_fixes, score_boosters.",
             "Each criterion object must contain: band, reasoning, summary, strengths, improvements, evidence_quotes.",
-            "Use 0.5 band increments from 0 to 9.",
+            "Use whole criterion bands only: 0, 1, 2, 3, 4, 5, 6, 7, 8, or 9. Do not output 5.5, 6.5, 7.5, or 8.5 for any individual criterion.",
             "Keep strengths/improvements/evidence_quotes short and specific: 1-2 items each.",
             "overall_summary: exactly 2 short sentences.",
             "next_steps: exactly 3 short strings tied to this essay.",
@@ -1935,11 +1943,13 @@ def _build_payload(
     rubric_version: int = 1,
     anchor_set_version: int = 1,
     latency_ms: int = 0,
+    descriptors: WritingDescriptorBundle | None = None,
+    benchmarks: WritingBenchmarkCardBundle | None = None,
 ) -> dict[str, Any]:
-    ta = round_to_ielts_band(grader.task_achievement.band)
-    cc = round_to_ielts_band(grader.coherence.band)
-    lr = round_to_ielts_band(grader.lexical.band)
-    gra = round_to_ielts_band(grader.grammar.band)
+    ta = round_criterion_band(grader.task_achievement.band)
+    cc = round_criterion_band(grader.coherence.band)
+    lr = round_criterion_band(grader.lexical.band)
+    gra = round_criterion_band(grader.grammar.band)
     overall_pre_penalty = calculate_overall_band(ta, cc, lr, gra)
 
     penalty = 0.0
@@ -2048,6 +2058,17 @@ def _build_payload(
         "overall_pre_penalty": overall_pre_penalty,
         "word_count_penalty": penalty,
     }
+    evaluation_run = build_pipeline_run_payload(
+        ta=ta,
+        cc=cc,
+        lr=lr,
+        gra=gra,
+        overall_pre_penalty=overall_pre_penalty,
+        final_band=overall_after_penalty,
+        word_count_penalty=penalty,
+        descriptors=descriptors,
+        benchmarks=benchmarks,
+    )
 
     return {
         "task_achievement_band": ta,
@@ -2072,6 +2093,7 @@ def _build_payload(
         "improved_profile_version": prompt_profile_version,
         "annotation_profile_version": prompt_profile_version,
         "latency_ms": latency_ms,
+        "evaluation_run": evaluation_run,
     }
 
 
@@ -2088,6 +2110,8 @@ def grade_essay_sync(
     prompts: WritingPromptBundle,
     rubric: WritingRubricBundle,
     anchors: WritingAnchorBundle,
+    descriptors: WritingDescriptorBundle | None = None,
+    benchmarks: WritingBenchmarkCardBundle | None = None,
 ) -> dict[str, Any]:
     task_type_value = (
         task.task_type.value if isinstance(task.task_type, WritingTaskType) else str(task.task_type)
@@ -2170,6 +2194,8 @@ def grade_essay_sync(
         rubric_version=rubric.version,
         anchor_set_version=anchors.version,
         latency_ms=elapsed_ms,
+        descriptors=descriptors,
+        benchmarks=benchmarks,
     )
 
     improved_text: str | None = None
@@ -2346,6 +2372,8 @@ async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> 
         prompts = await get_active_prompt_bundle(session, task.task_type)
         rubric = await get_active_rubric_bundle(session, task.task_type)
         anchors = await get_active_anchor_bundle(session, task.task_type)
+        descriptors = await get_active_descriptor_bundle(session, task.task_type)
+        benchmarks = await get_active_benchmark_card_bundle(session, task.task_type)
 
     try:
         payload = grade_essay_sync(
@@ -2360,6 +2388,8 @@ async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> 
             prompts=prompts,
             rubric=rubric,
             anchors=anchors,
+            descriptors=descriptors,
+            benchmarks=benchmarks,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Writing grading failed for submission %s", submission_id)
@@ -2429,6 +2459,40 @@ async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> 
             evaluation.latency_ms = payload.get("latency_ms", 0)
             evaluation.cache_hit = False
             evaluation.graded_at = graded_at
+
+        await session.flush()
+
+        evaluation_run_payload = payload.get("evaluation_run") or {}
+        run_result = await session.execute(
+            select(WritingEvaluationRun).where(WritingEvaluationRun.submission_id == submission_id)
+        )
+        evaluation_run = run_result.scalar_one_or_none()
+        if evaluation_run is None:
+            evaluation_run = WritingEvaluationRun(
+                submission_id=submission_id,
+                evaluation_id=evaluation.id,
+                pipeline_version=str(evaluation_run_payload.get("pipeline_version") or "blueprint_v1"),
+                mode=str(evaluation_run_payload.get("mode") or "full_diagnostic"),
+                initial_scores=evaluation_run_payload.get("initial_scores") or {},
+                selected_benchmarks=evaluation_run_payload.get("selected_benchmarks") or [],
+                calibration_result=evaluation_run_payload.get("calibration_result") or {},
+                audit_result=evaluation_run_payload.get("audit_result") or {},
+                confidence=str(evaluation_run_payload.get("confidence") or "Medium"),
+                possible_score_range=str(evaluation_run_payload.get("possible_score_range") or ""),
+                meta_learning_note=str(evaluation_run_payload.get("meta_learning_note") or ""),
+            )
+            session.add(evaluation_run)
+        else:
+            evaluation_run.evaluation_id = evaluation.id
+            evaluation_run.pipeline_version = str(evaluation_run_payload.get("pipeline_version") or "blueprint_v1")
+            evaluation_run.mode = str(evaluation_run_payload.get("mode") or "full_diagnostic")
+            evaluation_run.initial_scores = evaluation_run_payload.get("initial_scores") or {}
+            evaluation_run.selected_benchmarks = evaluation_run_payload.get("selected_benchmarks") or []
+            evaluation_run.calibration_result = evaluation_run_payload.get("calibration_result") or {}
+            evaluation_run.audit_result = evaluation_run_payload.get("audit_result") or {}
+            evaluation_run.confidence = str(evaluation_run_payload.get("confidence") or "Medium")
+            evaluation_run.possible_score_range = str(evaluation_run_payload.get("possible_score_range") or "")
+            evaluation_run.meta_learning_note = str(evaluation_run_payload.get("meta_learning_note") or "")
 
         submission_result = await session.execute(
             select(WritingSubmission).where(WritingSubmission.id == submission_id)

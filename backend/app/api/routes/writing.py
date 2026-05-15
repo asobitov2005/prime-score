@@ -20,7 +20,7 @@ from app.models.enums import (
     WritingTaskStatus,
     WritingTaskType,
 )
-from app.models.writing import WritingDraft, WritingEvaluation, WritingSubmission, WritingTask
+from app.models.writing import WritingDraft, WritingEvaluation, WritingEvaluationRun, WritingSubmission, WritingTask
 from app.schemas.common import DebugPrincipal
 from app.schemas.writing import (
     WritingCriterionFeedback,
@@ -941,6 +941,9 @@ async def get_submission_result(
     task = await session.get(WritingTask, submission.task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
+    evaluation_run = await session.scalar(
+        select(WritingEvaluationRun).where(WritingEvaluationRun.submission_id == submission.id)
+    )
 
     feedback = evaluation.feedback or {}
     roast_raw = evaluation.roast_feedback or {}
@@ -1054,6 +1057,13 @@ async def get_submission_result(
         sentence_fixes=sentence_fixes,
         revision_diff=revision_diff,
         roast=roast,
+        is_ai_estimate=True,
+        confidence=evaluation_run.confidence if evaluation_run else "Medium",
+        possible_score_range=evaluation_run.possible_score_range if evaluation_run else "",
+        selected_benchmarks=evaluation_run.selected_benchmarks if evaluation_run else [],
+        calibration_result=evaluation_run.calibration_result if evaluation_run else {},
+        audit_result=evaluation_run.audit_result if evaluation_run else {},
+        meta_learning_note=evaluation_run.meta_learning_note if evaluation_run else "",
         cache_hit=evaluation.cache_hit,
         model_version=evaluation.model_version,
         prompt_version=evaluation.prompt_version,

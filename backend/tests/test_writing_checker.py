@@ -22,6 +22,7 @@ from app.services.writing_checker import (
     _skip_groq_aux_call,
     _validate_annotations,
 )
+from app.services.writing_blueprint import BLUEPRINT_BENCHMARK_CARDS, round_criterion_band, select_benchmark_cards
 from app.services.writing_config import DEFAULT_PROMPT_ENTRIES
 
 
@@ -621,3 +622,27 @@ def test_build_payload_rewrites_generic_summary_and_backfills_vocab() -> None:
             "example_sentence": "Traffic congestion has become a pressing concern in many large cities.",
         }
     ]
+    assert payload["grammar_band"] == 5.0
+    assert payload["evaluation_run"]["confidence"]
+    assert "possible_score_range" in payload["evaluation_run"]
+
+
+def test_writing_criteria_are_whole_bands_only() -> None:
+    assert round_criterion_band(5.0) == 5.0
+    assert round_criterion_band(5.5) == 5.0
+    assert round_criterion_band(6.9) == 6.0
+    assert round_criterion_band(9.3) == 9.0
+
+
+def test_blueprint_benchmark_selection_returns_nearby_anchors() -> None:
+    cards = [card for card in BLUEPRINT_BENCHMARK_CARDS if card["task_type_scope"] == "task_2"]
+    selected = select_benchmark_cards(
+        cards,
+        initial_score=6.5,
+        weakness_profile={"weakest_criterion": "grammar"},
+    )
+
+    assert len(selected) >= 3
+    assert any(card["band"] < 6.5 for card in selected)
+    assert any(card["band"] == 6.5 for card in selected)
+    assert any(card["band"] > 6.5 for card in selected)

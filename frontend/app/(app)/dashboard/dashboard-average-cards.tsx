@@ -1,7 +1,6 @@
 "use client";
 
-import { BookOpenText, Headphones, PenSquare, TrendingUp, Mic } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { BookOpenText, Headphones, PenSquare, TrendingUp } from "lucide-react";
 import { getAverageBand, roundToIeltsBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
 import type { DashboardAnalytics } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -28,7 +27,6 @@ const sections = [
   { key: "reading", label: "Reading", icon: BookOpenText, iconColor: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/10", borderColor: "border-blue-500/20" },
   { key: "listening", label: "Listening", icon: Headphones, iconColor: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/10", borderColor: "border-emerald-500/20" },
   { key: "writing", label: "Writing", icon: PenSquare, iconColor: "text-violet-600 dark:text-violet-400", bg: "bg-violet-500/10", borderColor: "border-violet-500/20" },
-  { key: "speaking", label: "Speaking", icon: Mic, iconColor: "text-orange-600 dark:text-orange-400", bg: "bg-orange-500/10", borderColor: "border-orange-500/20" },
 ] as const;
 
 export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCardsProps) {
@@ -37,10 +35,8 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
   const averageReading = getAverageBand(analytics, "reading");
   const averageListening = getAverageBand(analytics, "listening");
   const averageWriting = getAverageBand(analytics, "writing");
-  // Speaking is currently mock as backend doesn't support it yet
-  const averageSpeaking = null;
 
-  const sectionBands = [averageReading, averageListening, averageWriting, averageSpeaking];
+  const sectionBands = [averageReading, averageListening, averageWriting];
   const validBands = sectionBands.filter((b): b is number => b !== null && b > 0);
   const overallBand = validBands.length > 0
     ? roundToIeltsBand(validBands.reduce((sum, b) => sum + b, 0) / validBands.length)
@@ -55,7 +51,6 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
     reading: averageReading,
     listening: averageListening,
     writing: averageWriting,
-    speaking: null,
   };
 
   const statusColorMap: Record<string, { bg: string; border: string; glow: string; text: string }> = {
@@ -74,7 +69,7 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
       <div className="flex flex-col sm:flex-row gap-5 lg:gap-6 items-stretch justify-center">
         {/* Left: Overall Band */}
         <div className={cn(
-          "flex flex-col items-center justify-center self-stretch min-h-[202px] rounded-3xl border border-border/70 p-3.5 min-w-[170px] shadow-sm relative overflow-hidden group transition-all duration-500 backdrop-blur-sm",
+          "flex flex-col items-center justify-center self-stretch min-h-[202px] rounded-3xl border border-border/70 p-3.5 min-w-[178px] shadow-sm relative overflow-hidden group transition-all duration-500 backdrop-blur-sm",
           currentStatusColors.bg,
           "ring-1 ring-inset ring-border/20"
         )}>
@@ -107,29 +102,24 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
           {sections.map((section) => {
             const Icon = section.icon;
             const band = bandValues[section.key];
-            const isSpeaking = section.key === "speaking";
             
             return (
               <div
                 key={section.key}
                 className={cn(
                   "flex h-full items-center gap-3 rounded-xl border p-2 transition-all duration-300 shadow-sm relative overflow-hidden min-h-[46px]",
-                  isSpeaking ? "bg-muted/30 border-muted/50 opacity-60 grayscale-[0.5]" : "bg-background/40 hover:bg-background/80 group",
+                  "bg-background/40 hover:bg-background/80 group",
                   section.borderColor
                 )}
               >
-                <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative z-10", isSpeaking ? "bg-slate-200 dark:bg-slate-800" : section.bg)}>
-                  <Icon className={cn("h-4 w-4", isSpeaking ? "text-slate-400 dark:text-slate-500" : section.iconColor)} />
+                <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative z-10", section.bg)}>
+                  <Icon className={cn("h-4 w-4", section.iconColor)} />
                 </div>
                 <div className="flex-1 min-w-0 flex items-center justify-between px-1 relative z-10">
                   <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70 truncate">{section.label}</p>
-                  {isSpeaking ? (
-                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-2 py-0.5 rounded-full">Soon</span>
-                  ) : (
-                    <p className="text-lg font-semibold tracking-tight text-foreground leading-none tabular-nums">
-                      {formatBand(band)}
-                    </p>
-                  )}
+                  <p className="text-lg font-semibold tracking-tight text-foreground leading-none tabular-nums">
+                    {formatBand(band)}
+                  </p>
                 </div>
               </div>
             );
@@ -137,7 +127,7 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
         </div>
       </div>
 
-      <StudyTimeCard analytics={analytics} className="h-auto min-h-[104px]" />
+      <StudyTimeCard analytics={analytics} className="h-auto min-h-[133px]" />
     </div>
   );
 }

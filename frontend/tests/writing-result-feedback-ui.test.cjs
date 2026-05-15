@@ -8,8 +8,9 @@ test("writing result keeps honest feedback without the roast toggle shell", () =
   const source = fs.readFileSync(filename, "utf8");
 
   assert.match(source, /function FeedbackPanel/);
-  assert.match(source, /<CardTitle className="text-lg">Feedback<\/CardTitle>/);
-  assert.match(source, /Honest take/);
+  assert.match(source, /<CardTitle className="text-lg">Roast feedback<\/CardTitle>/);
+  assert.match(source, /Savage mode/);
+  assert.match(source, /plain-English feedback/);
   assert.doesNotMatch(source, /Fun feedback/);
   assert.doesNotMatch(source, /Hide roast|Show roast/);
 });

@@ -11,6 +11,7 @@ import { DashboardAverageCards } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
 import { ActivitySummary } from "./activity-summary";
 import { StreakHeatmap } from "./streak-heatmap";
+import { PremiumFeatureGate } from "./premium-feature-gate";
 import { cn } from "@/lib/utils";
 import type { AttemptRow, DashboardAnalytics } from "@/lib/types";
 import { pickQuickTests } from "./quick-tests";
@@ -372,7 +373,7 @@ export default async function DashboardPage() {
       {/* 1. Welcome + Quick Action & Continue Test */}
       <div className="space-y-6">
         <div>
-          <WelcomeHeader />
+          <WelcomeHeader analytics={analytics} />
         </div>
 
 
@@ -498,279 +499,245 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 items-start">
-            <Card className="relative h-full overflow-hidden rounded-3xl border-border/50 bg-card/80 shadow-sm">
-              <div className={cn("absolute inset-0 bg-gradient-to-br", diagnosisAccent.wash)} />
-              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full border border-border/40 bg-background/35 blur-sm" />
-              <CardContent className="relative z-10 p-5 md:p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-2xl border border-primary/15 bg-primary/10 p-2.5 shadow-sm">
-                      <Brain className="h-5 w-5 text-primary" />
+            <PremiumFeatureGate
+              title="Weakness Diagnosis"
+              description="Unlock detailed weak-area analysis, mistake patterns, and targeted next actions."
+            >
+              <Card className="relative h-full overflow-hidden rounded-3xl border-border/50 bg-card/80 shadow-sm">
+                <div className={cn("absolute inset-0 bg-gradient-to-br", diagnosisAccent.wash)} />
+                <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full border border-border/40 bg-background/35 blur-sm" />
+                <CardContent className="relative z-10 p-5 md:p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl border border-primary/15 bg-primary/10 p-2.5 shadow-sm">
+                        <Brain className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+                          {weaknessDiagnosis.label}
+                        </p>
+                        <h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+                          Fix {weaknessDiagnosis.title} first
+                        </h3>
+                        <p className="mt-1 max-w-xl text-sm font-medium leading-6 text-muted-foreground">
+                          {weaknessDiagnosis.description}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                        {weaknessDiagnosis.label}
-                      </p>
-                      <h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
-                        Fix {weaknessDiagnosis.title} first
-                      </h3>
-                      <p className="mt-1 max-w-xl text-sm font-medium leading-6 text-muted-foreground">
-                        {weaknessDiagnosis.description}
-                      </p>
-                    </div>
+                    <Badge variant="outline" className={cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold", diagnosisAccent.ring)}>
+                      <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-full", diagnosisAccent.dot)} />
+                      {weaknessDiagnosis.status}
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className={cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold", diagnosisAccent.ring)}>
-                    <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-full", diagnosisAccent.dot)} />
-                    {weaknessDiagnosis.status}
-                  </Badge>
-                </div>
 
-                <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.72fr]">
-                  <div className="rounded-3xl border border-border/50 bg-background/55 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.72fr]">
+                    <div className="rounded-3xl border border-border/50 bg-background/55 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                            Weak areas
+                          </p>
+                          <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+                            Lower score means higher priority
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground">
+                          Latest first
+                        </span>
+                      </div>
+
+                      {weaknessDiagnosis.insights.length > 0 ? (
+                        <div className="space-y-3">
+                          {weaknessDiagnosis.insights.map((item, index) => (
+                            <div key={item.label} className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className={cn(
+                                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                                    index === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                                  )}>
+                                    {index + 1}
+                                  </span>
+                                  <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
+                                </div>
+                                <span className="text-sm font-semibold text-foreground">{item.value}</span>
+                              </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={cn(
+                                    "h-full rounded-full transition-[width]",
+                                    item.scorePercent < 50
+                                      ? "bg-red-500"
+                                      : item.scorePercent < 70
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500",
+                                  )}
+                                  style={{ width: `${item.scorePercent}%` }}
+                                />
+                              </div>
+                              <p className="text-[11px] font-medium text-muted-foreground">{item.detail}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-border/70 bg-card/50 p-4 text-sm font-medium text-muted-foreground">
+                          Complete one test to reveal your weakest question types.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col justify-between gap-3 rounded-3xl border border-border/50 bg-card/65 p-4">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-2xl bg-background/70 p-3">
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <span className="text-[9px] font-bold uppercase tracking-[0.12em]">
+                              {weaknessDiagnosis.primaryMetricLabel}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                            {weaknessDiagnosis.primaryMetric}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-background/70 p-3">
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Gauge className="h-3.5 w-3.5" />
+                            <span className="text-[9px] font-bold uppercase tracking-[0.12em]">
+                              {weaknessDiagnosis.secondaryMetricLabel}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+                            {weaknessDiagnosis.secondaryMetric}
+                          </p>
+                        </div>
+                      </div>
+
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                          Weak areas
+                          Next action
                         </p>
-                        <p className="mt-0.5 text-xs font-medium text-muted-foreground">
-                          Lower score means higher priority
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground">
-                        Latest first
-                      </span>
-                    </div>
-
-                    {weaknessDiagnosis.insights.length > 0 ? (
-                      <div className="space-y-3">
-                        {weaknessDiagnosis.insights.map((item, index) => (
-                          <div key={item.label} className="space-y-1.5">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className={cn(
-                                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                                  index === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                                )}>
-                                  {index + 1}
-                                </span>
-                                <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
-                              </div>
-                              <span className="text-sm font-semibold text-foreground">{item.value}</span>
+                        <div className="mt-2 space-y-2">
+                          {weaknessDiagnosis.focusItems.slice(0, 3).map((item) => (
+                            <div key={item} className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                              <span className={cn("h-1.5 w-1.5 rounded-full", diagnosisAccent.dot)} />
+                              {item}
                             </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full transition-[width]",
-                                  item.scorePercent < 50
-                                    ? "bg-red-500"
-                                    : item.scorePercent < 70
-                                      ? "bg-amber-500"
-                                      : "bg-emerald-500",
-                                )}
-                                style={{ width: `${item.scorePercent}%` }}
-                              />
-                            </div>
-                            <p className="text-[11px] font-medium text-muted-foreground">{item.detail}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-border/70 bg-card/50 p-4 text-sm font-medium text-muted-foreground">
-                        Complete one test to reveal your weakest question types.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col justify-between gap-3 rounded-3xl border border-border/50 bg-card/65 p-4">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-2xl bg-background/70 p-3">
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          <span className="text-[9px] font-bold uppercase tracking-[0.12em]">
-                            {weaknessDiagnosis.primaryMetricLabel}
-                          </span>
+                          ))}
                         </div>
-                        <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-                          {weaknessDiagnosis.primaryMetric}
-                        </p>
                       </div>
-                      <div className="rounded-2xl bg-background/70 p-3">
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <Gauge className="h-3.5 w-3.5" />
-                          <span className="text-[9px] font-bold uppercase tracking-[0.12em]">
-                            {weaknessDiagnosis.secondaryMetricLabel}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-                          {weaknessDiagnosis.secondaryMetric}
-                        </p>
-                      </div>
+
+                      <Button asChild size="sm" className="mt-1 w-full rounded-xl font-semibold shadow-md transition-transform active:scale-95">
+                        <Link href={weaknessDiagnosis.href}>
+                          {weaknessDiagnosis.cta} <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
                     </div>
-
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                        Next action
-                      </p>
-                      <div className="mt-2 space-y-2">
-                        {weaknessDiagnosis.focusItems.slice(0, 3).map((item) => (
-                          <div key={item} className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                            <span className={cn("h-1.5 w-1.5 rounded-full", diagnosisAccent.dot)} />
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <Button asChild size="sm" className="mt-1 w-full rounded-xl font-semibold shadow-md transition-transform active:scale-95">
-                      <Link href={weaknessDiagnosis.href}>
-                        {weaknessDiagnosis.cta} <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </PremiumFeatureGate>
 
-            {/* Section Suggestions */}
-            <div className="grid gap-4 md:grid-cols-3">
-              <Link href="/tests?type=reading" className="block">
-                <Card className="bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
-                  <div className="bg-blue-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
-                    <BookOpenText className="h-5 w-5 text-blue-600 dark:text-blue-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-blue-950 dark:text-blue-100 text-sm">Start Reading Test</h3>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/80 mt-0.5">Academic · 60 min</p>
-                  </div>
-                  <ArrowRight className="ml-auto h-5 w-5 text-blue-500/50 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-                </Card>
-              </Link>
+          </div>
+        </div>
+      </div>
 
-              <Link href="/tests?type=listening" className="block">
-                <Card className="bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
-                  <div className="bg-emerald-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
-                    <Headphones className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-emerald-950 dark:text-emerald-100 text-sm">Start Listening Test</h3>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/80 mt-0.5">Academic · 30 min</p>
-                  </div>
-                  <ArrowRight className="ml-auto h-5 w-5 text-emerald-500/50 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
-                </Card>
-              </Link>
+      <DashboardCharts analytics={analytics} />
 
-              <Link href="/writing" className="block">
-                <Card className="bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40 transition-colors shadow-sm flex items-center p-4 cursor-pointer group rounded-2xl">
-                  <div className="bg-violet-500/10 p-3 rounded-xl mr-3 group-hover:scale-110 transition-transform">
-                    <PenSquare className="h-5 w-5 text-violet-600 dark:text-violet-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-violet-950 dark:text-violet-100 text-sm">Start Writing Task</h3>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600/70 dark:text-violet-400/80 mt-0.5">AI Graded · Task 1 &amp; 2</p>
-                  </div>
-                  <ArrowRight className="ml-auto h-5 w-5 text-violet-500/50 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-1 transition-all" />
-                </Card>
-              </Link>
-              </div>
-              </div>
-              </div>
-
-              </div>
-
-              <DashboardCharts analytics={analytics} />
-
-              {/* 4 & 5. Recent Activity & Featured Tests */}
-              <section className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
-
-              {/* Left: Recent Activity */}
-              <div className="min-w-0 space-y-4">
-              <div className="flex items-center justify-between px-1">
-              <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
-              <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
+      <section className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
+        <div className="min-w-0 space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
+            <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
               <Link href="/history">View all <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
-              </Button>
-              </div>
+            </Button>
+          </div>
 
-              <Card className="border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">            <div className="divide-y divide-border/40">
-              {recentActivity.map((entry) =>
-                entry.kind === "attempt" ? (
-                  <div key={entry.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div className={cn(
-                        "h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner",
-                        entry.attempt.type === "reading" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      )}>
-                        {entry.attempt.type === "reading" ? <BookOpenText className="h-6 w-6" /> : <Headphones className="h-6 w-6" />}
+          <Card className="border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">
+            {recentActivity.length === 0 ? (
+              <div className="p-6 text-sm font-medium text-muted-foreground">
+                Complete a Reading, Listening, or Writing task to build your activity feed.
+              </div>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {recentActivity.map((entry) =>
+                  entry.kind === "attempt" ? (
+                    <div key={entry.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className={cn(
+                          "h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner",
+                          entry.attempt.type === "reading" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        )}>
+                          {entry.attempt.type === "reading" ? <BookOpenText className="h-6 w-6" /> : <Headphones className="h-6 w-6" />}
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.attempt.testTitle}>{entry.attempt.testTitle}</h4>
+                          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <span>{entry.attempt.date}</span>
+                            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                            <span className="text-foreground/70">{entry.attempt.mode}</span>
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.attempt.testTitle}>{entry.attempt.testTitle}</h4>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                          <span>{entry.attempt.date}</span>
-                          <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                          <span className="text-foreground/70">{entry.attempt.mode}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 sm:gap-5 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40 mt-2 sm:mt-0 sm:ml-auto">
-                      <div className="text-right">
-                        <p className="text-base font-semibold text-foreground">
-                          {entry.attempt.totalQuestions && entry.attempt.score !== "Pending"
-                            ? `${entry.attempt.score}/${entry.attempt.totalQuestions}`
-                            : entry.attempt.score}
-                        </p>
-                        <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Score</p>
-                      </div>
-                      <div className="text-right border-l border-border/50 pl-4">
-                        <p className="text-base font-semibold text-primary">{entry.attempt.band ?? "-"}</p>
-                        <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Band</p>
-                      </div>
-                      <Button asChild variant="outline" size="sm" className="rounded-xl h-8 px-3 text-xs font-bold border-border/60 shadow-sm hover:bg-muted ml-2">
-                        <Link href={`/attempts/${entry.attempt.id}/result`}>Review</Link>
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={entry.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                        <PenSquare className="h-6 w-6" />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.submission.task_title}>{entry.submission.task_title}</h4>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                          <span>{entry.submission.task_type === "task_1" ? "task 1" : "task 2"}</span>
-                          <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                          <span className="text-foreground/70">{entry.submission.submitted_at ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(entry.submission.submitted_at)) : "-"}</span>
-                        </p>
+                      <div className="flex items-center gap-4 sm:gap-5 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40 mt-2 sm:mt-0 sm:ml-auto">
+                        <div className="text-right">
+                          <p className="text-base font-semibold text-foreground">
+                            {entry.attempt.totalQuestions && entry.attempt.score !== "Pending"
+                              ? `${entry.attempt.score}/${entry.attempt.totalQuestions}`
+                              : entry.attempt.score}
+                          </p>
+                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Score</p>
+                        </div>
+                        <div className="text-right border-l border-border/50 pl-4">
+                          <p className="text-base font-semibold text-primary">{entry.attempt.band ?? "-"}</p>
+                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Band</p>
+                        </div>
+                        <Button asChild variant="outline" size="sm" className="rounded-xl h-8 px-3 text-xs font-bold border-border/60 shadow-sm hover:bg-muted ml-2">
+                          <Link href={`/attempts/${entry.attempt.id}/result`}>Review</Link>
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 sm:gap-5 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40 mt-2 sm:mt-0 sm:ml-auto">
-                      <div className="text-right">
-                        <p className="text-base font-semibold text-foreground">{entry.submission.word_count}</p>
-                        <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Words</p>
+                  ) : (
+                    <div key={entry.key} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/30 transition-colors">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                          <PenSquare className="h-6 w-6" />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.submission.task_title}>{entry.submission.task_title}</h4>
+                          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <span>{entry.submission.task_type === "task_1" ? "task 1" : "task 2"}</span>
+                            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                            <span className="text-foreground/70">{entry.submission.submitted_at ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(entry.submission.submitted_at)) : "-"}</span>
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right border-l border-border/50 pl-4">
-                        <p className="text-base font-semibold text-primary">
-                          {String(entry.submission.status).toLowerCase() === "completed" && entry.submission.overall_band !== null
-                            ? entry.submission.overall_band
-                            : String(entry.submission.status).toLowerCase() === "failed"
-                              ? "Failed"
-                              : "Grading"}
-                        </p>
-                        <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Result</p>
+                      <div className="flex items-center gap-4 sm:gap-5 border-t sm:border-t-0 pt-4 sm:pt-0 border-border/40 mt-2 sm:mt-0 sm:ml-auto">
+                        <div className="text-right">
+                          <p className="text-base font-semibold text-foreground">{entry.submission.word_count}</p>
+                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Words</p>
+                        </div>
+                        <div className="text-right border-l border-border/50 pl-4">
+                          <p className="text-base font-semibold text-primary">
+                            {String(entry.submission.status).toLowerCase() === "completed" && entry.submission.overall_band !== null
+                              ? entry.submission.overall_band
+                              : String(entry.submission.status).toLowerCase() === "failed"
+                                ? "Failed"
+                                : "Grading"}
+                          </p>
+                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Result</p>
+                        </div>
+                        <Button asChild variant="outline" size="sm" className="rounded-xl h-8 px-3 text-xs font-bold border-border/60 shadow-sm hover:bg-muted ml-2">
+                          <Link href={`/writing/submissions/${entry.submission.submission_id}/result`}>Review</Link>
+                        </Button>
                       </div>
-                      <Button asChild variant="outline" size="sm" className="rounded-xl h-8 px-3 text-xs font-bold border-border/60 shadow-sm hover:bg-muted ml-2">
-                        <Link href={`/writing/submissions/${entry.submission.submission_id}/result`}>Review</Link>
-                      </Button>
                     </div>
-                  </div>
-                )
-              )}
-            </div>
+                  )
+                )}
+              </div>
+            )}
           </Card>
         </div>
 
-        {/* Right: Featured / Quick Tests */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Quick Tests</h2>
@@ -780,37 +747,43 @@ export default async function DashboardPage() {
           </div>
 
           <div className="space-y-3">
-            {featuredTests.map(test => {
-              const isReading = test.type === "reading";
-              return (
-                <Link key={test.id} href="/tests" className="block">
-                  <Card className="p-4 border-border/40 shadow-sm hover:border-primary/30 transition-all hover:shadow-md cursor-pointer group rounded-2xl bg-card/30">
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
-                        isReading ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      )}>
-                        {isReading ? <BookOpenText className="h-5 w-5" /> : <Headphones className="h-5 w-5" />}
+            {featuredTests.length === 0 ? (
+              <Card className="p-5 border-border/40 shadow-sm rounded-2xl bg-card/30">
+                <p className="text-sm font-medium text-muted-foreground">No published quick tests are available right now.</p>
+              </Card>
+            ) : (
+              featuredTests.map(test => {
+                const isReading = test.type === "reading";
+                return (
+                  <Link key={test.id} href={`/tests/${test.slug || test.id}`} className="block">
+                    <Card className="p-4 border-border/40 shadow-sm hover:border-primary/30 transition-all hover:shadow-md cursor-pointer group rounded-2xl bg-card/30">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
+                          isReading ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        )}>
+                          {isReading ? <BookOpenText className="h-5 w-5" /> : <Headphones className="h-5 w-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className="font-bold text-[14px] text-foreground truncate">{test.title}</p>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            {test.source.replace("Official", "").trim()}
+                            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                            {test.estimatedMinutes}m
+                          </p>
+                        </div>
+                        <div className={cn(
+                          "h-9 w-9 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm",
+                          isReading ? "bg-blue-600 text-white dark:text-slate-950" : "bg-emerald-600 text-white dark:text-slate-950"
+                        )}>
+                          <Play className="h-4 w-4 fill-current ml-0.5" />
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <p className="font-bold text-[14px] text-foreground truncate">{test.title}</p>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                          {test.source.replace("Official", "").trim()}
-                          <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                          {test.estimatedMinutes}m
-                        </p>
-                      </div>
-                      <div className={cn(
-                        "h-9 w-9 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm",
-                        isReading ? "bg-blue-600 text-white dark:text-slate-950" : "bg-emerald-600 text-white dark:text-slate-950"
-                      )}>
-                        <Play className="h-4 w-4 fill-current ml-0.5" />
-                      </div>
-                    </div>
-                  </Card>
-                </Link>
-              );
-            })}
+                    </Card>
+                  </Link>
+                );
+              })
+            )}
           </div>
         </div>
       </section>

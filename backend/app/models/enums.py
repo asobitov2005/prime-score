@@ -174,6 +174,8 @@ class WritingConfigEntityType(StrEnum):
     PROFILE = "profile"
     RUBRIC = "rubric"
     ANCHOR_SET = "anchor_set"
+    DESCRIPTOR = "descriptor"
+    BENCHMARK_CARD = "benchmark_card"
 
 
 class WritingSubmissionStatus(StrEnum):

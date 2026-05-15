@@ -162,6 +162,15 @@ export interface WritingRevisionDiff {
   criterion: string;
 }
 
+export interface WritingSelectedBenchmark {
+  card_id: string;
+  title: string;
+  band: number | string;
+  use_when: string;
+  tolerance_lesson: string;
+  band_limiting_signs: string[];
+}
+
 export interface WritingSubmissionResult {
   submission_id: string;
   task_id: string;
@@ -196,6 +205,13 @@ export interface WritingSubmissionResult {
   sentence_fixes?: WritingSentenceFix[];
   revision_diff?: WritingRevisionDiff[];
   roast?: WritingRoastFeedback | null;
+  is_ai_estimate?: boolean;
+  confidence?: string;
+  possible_score_range?: string;
+  selected_benchmarks?: WritingSelectedBenchmark[];
+  calibration_result?: Record<string, unknown>;
+  audit_result?: Record<string, unknown>;
+  meta_learning_note?: string;
 }
 
 export interface WritingDraftListItem {
