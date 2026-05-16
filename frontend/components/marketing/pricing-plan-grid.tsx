@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SUBSCRIPTION_PATH, getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { RedeemCodePanel } from "@/components/subscription/redeem-code-panel";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
@@ -42,14 +43,14 @@ function resolveViewerState(isAuthenticated: boolean, isPremium: boolean): Viewe
   return isAuthenticated ? "member" : "guest";
 }
 
-function getStateCopy(state: ViewerState) {
+function getStateCopy(state: ViewerState, subscriptionHref: string) {
   if (state === "premium") {
     return {
       badge: "Premium active",
       title: "Premium access is already active.",
       description: "You already have full access. Come back here later if you want to extend your plan.",
-      href: "/dashboard",
-      action: "Open dashboard",
+      href: SUBSCRIPTION_PATH,
+      action: "Manage subscription",
       icon: PrimePremiumIcon,
     };
   }
@@ -59,8 +60,8 @@ function getStateCopy(state: ViewerState) {
       badge: "Signed in",
       title: "Your account is ready.",
       description: "Keep using free tests, or upgrade when you want premium sets and explanations.",
-      href: "/dashboard",
-      action: "Go to dashboard",
+      href: subscriptionHref,
+      action: "Go to subscription",
       icon: User,
     };
   }
@@ -69,17 +70,17 @@ function getStateCopy(state: ViewerState) {
     badge: "Start free",
     title: "Start with free tests, then upgrade when you need more.",
     description: "Login with Telegram to save progress, compare plans, and unlock premium practice.",
-    href: "/login",
+    href: subscriptionHref,
     action: "Login with Telegram",
     icon: User,
   };
 }
 
-function getPlanAction(state: ViewerState, isCurrentPlan: boolean): PlanAction {
+function getPlanAction(state: ViewerState, isCurrentPlan: boolean, subscriptionHref: string): PlanAction {
   if (state === "premium") {
     if (isCurrentPlan) {
       return {
-        href: "/subscription",
+        href: SUBSCRIPTION_PATH,
         label: "Current plan",
         note: "This plan currently matches your active premium access.",
         disabled: true,
@@ -87,7 +88,7 @@ function getPlanAction(state: ViewerState, isCurrentPlan: boolean): PlanAction {
     }
 
     return {
-      href: "/subscription",
+      href: SUBSCRIPTION_PATH,
       label: "Upgrade",
       note: "Choose another plan to extend your premium access.",
     };
@@ -95,14 +96,14 @@ function getPlanAction(state: ViewerState, isCurrentPlan: boolean): PlanAction {
 
   if (state === "member") {
     return {
-      href: "/dashboard",
+      href: subscriptionHref,
       label: "Upgrade now",
       note: "Upgrade flow continues inside your account.",
     };
   }
 
   return {
-    href: "/login",
+    href: subscriptionHref,
     label: "Login to upgrade",
     note: "Pricing unlocks after login so progress stays linked to your account.",
   };
@@ -284,7 +285,8 @@ export function PricingPlanGrid({
   }, []);
 
   const viewerState = mounted ? resolveViewerState(isAuthenticated, isPremium) : "guest";
-  const stateCopy = getStateCopy(viewerState);
+  const subscriptionHref = mounted ? getSubscriptionPageHref(isAuthenticated) : getSubscriptionPageHref(false);
+  const stateCopy = getStateCopy(viewerState, subscriptionHref);
 
   const baselinePlan = useMemo(
     () => [...plans].sort((left, right) => left.durationDays - right.durationDays)[0] ?? null,
@@ -334,7 +336,7 @@ export function PricingPlanGrid({
           {plans.map((plan, index) => {
             const isFeatured = plan.isFeatured;
             const isCurrentPlan = activePlanId === plan.id;
-            const action = getPlanAction(viewerState, isCurrentPlan);
+            const action = getPlanAction(viewerState, isCurrentPlan, subscriptionHref);
             const savings = calculateSavingsPercent(plan, baselinePlan);
             const savingsAmount = calculateSavingsAmount(plan, baselinePlan);
             const compareAtPrice = savingsAmount > 0 ? plan.numericPrice + savingsAmount : 0;
@@ -546,7 +548,7 @@ export function PricingPlanGrid({
         {plans.map((plan, index) => {
           const isFeatured = plan.isFeatured;
           const isCurrentPlan = activePlanId === plan.id;
-          const action = getPlanAction(viewerState, isCurrentPlan);
+          const action = getPlanAction(viewerState, isCurrentPlan, subscriptionHref);
           const savings = calculateSavingsPercent(plan, baselinePlan);
           const savingsAmount = calculateSavingsAmount(plan, baselinePlan);
           const compareAtPrice = savingsAmount > 0 ? plan.numericPrice + savingsAmount : 0;

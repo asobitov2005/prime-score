@@ -9,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useAuthStore } from "@/store/auth-store";
 import { createApiClient } from "@/lib/api/client";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { buildUserDisplayName, splitUserDisplayName } from "@/lib/user-name";
 import type { AuthSessionRead } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { name, phoneNumber, avatarUrl, updateName, updateAvatar, syncSession, isPremium, sessionId: currentSessionId, isAuthenticated, hasHydrated } = useAuthStore();
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(name);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -464,7 +466,7 @@ export default function SettingsPage() {
               </div>
               {!isPremium && (
                 <Button asChild size="sm" className="h-9 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-transform active:scale-95">
-                  <Link href="/subscription">Upgrade Plan</Link>
+                  <Link href={subscriptionHref}>Upgrade Plan</Link>
                 </Button>
               )}
             </CardContent>

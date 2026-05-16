@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Headphones, PenSquare, Clock, Trophy, X, Activity as ActivityIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { cn } from "@/lib/utils";
 import type { DashboardAnalytics } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
@@ -59,6 +60,8 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const router = useRouter();
   const isPremium = useAuthStore((state) => state.isPremium);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
   const readingTimeHours = formatHours(summary.studyTime.readingTimeSec / 3600);
   const listeningTimeHours = formatHours(summary.studyTime.listeningTimeSec / 3600);
   const writingTimeHours = formatHours((summary.studyTime.writingTimeSec ?? 0) / 3600);
@@ -137,7 +140,7 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
               if (isPremium) {
                 setSelectedSection(act.id);
               } else {
-                router.push("/subscription");
+                router.push(subscriptionHref);
               }
             }}
             className={cn(

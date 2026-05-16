@@ -17,6 +17,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState as IllustratedEmptyState } from "@/components/ui/empty-state";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import type { DashboardAnalytics, TestType } from "@/lib/types";
 import { roundToIeltsBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
 import { cn } from "@/lib/utils";
@@ -233,6 +234,8 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const isPremium = useAuthStore((state) => state.isPremium);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
 
   const overallQuery = useDashboardAnalytics(initialAnalytics, "all");
   const analysisQuery = useDashboardAnalytics(initialAnalytics, analysisFilter);
@@ -495,7 +498,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">Premium Feature</p>
               <p className="mt-1 text-sm font-bold text-foreground">Unlock question-type analysis</p>
               <Button asChild className="mt-4 h-9 rounded-xl px-4 text-xs font-black uppercase tracking-[0.18em]">
-                <Link href="/subscription">Upgrade Now</Link>
+                <Link href={subscriptionHref}>Upgrade Now</Link>
               </Button>
             </div>
           </div>
@@ -620,7 +623,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">Premium Feature</p>
               <p className="mt-1 text-sm font-bold text-foreground">Unlock question-type comparison</p>
               <Button asChild className="mt-4 h-9 rounded-xl px-4 text-xs font-black uppercase tracking-[0.18em]">
-                <Link href="/subscription">Upgrade Now</Link>
+                <Link href={subscriptionHref}>Upgrade Now</Link>
               </Button>
             </div>
           </div>

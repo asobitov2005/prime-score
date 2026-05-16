@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { Play, TimerReset, X, ArrowRight, Check, Gem, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import type { TestCardAttemptSummary, TestCatalogItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
@@ -22,6 +23,7 @@ interface StartTestModalProps {
 export function StartTestModal({ test, activeAttempt, completedAttempt }: StartTestModalProps) {
   const router = useRouter();
   const { isPremium, isAuthenticated } = useAuthStore();
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
   const isFullTest = !test.format || test.format === "full";
   const defaultSectionId = test.sections[0]?.id;
   const [open, setOpen] = useState(false);
@@ -196,7 +198,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
 
           <div className="space-y-3 pt-2">
             <Button asChild className="h-11 w-full rounded-xl bg-amber-500 font-bold text-white dark:text-slate-950 hover:bg-amber-600 hover:shadow-xl hover:shadow-amber-500/20 active:scale-95 transition-all">
-              <Link href="/pricing">
+              <Link href={subscriptionHref}>
                 <PrimePremiumIcon className="mr-1.5 h-3.5 w-3.5" />
                 Unlock Premium
               </Link>

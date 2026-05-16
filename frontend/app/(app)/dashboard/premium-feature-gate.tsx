@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { useAuthStore } from "@/store/auth-store";
 
 interface PremiumFeatureGateProps {
@@ -14,6 +15,8 @@ interface PremiumFeatureGateProps {
 
 export function PremiumFeatureGate({ title, description, children }: PremiumFeatureGateProps) {
   const isPremium = useAuthStore((state) => state.isPremium);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
 
   if (isPremium) {
     return <>{children}</>;
@@ -31,7 +34,7 @@ export function PremiumFeatureGate({ title, description, children }: PremiumFeat
           <p className="mt-2 max-w-md text-sm font-medium leading-6 text-muted-foreground">{description}</p>
         </div>
         <Button asChild className="rounded-xl px-5 text-xs font-black uppercase tracking-[0.16em]">
-          <Link href="/subscription">Upgrade Now</Link>
+          <Link href={subscriptionHref}>Upgrade Now</Link>
         </Button>
       </CardContent>
     </Card>
