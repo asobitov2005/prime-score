@@ -153,6 +153,14 @@ export function WritingExamClient({
   }, []);
 
   const handlePaneWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      target.closest("textarea, input, select, [contenteditable='true']")
+    ) {
+      return;
+    }
+
     const pane = event.currentTarget;
     const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
 
