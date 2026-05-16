@@ -11,5 +11,5 @@ test("desktop app shell uses a fixed desktop sidebar aligned to the centered con
     source,
     /<aside className=\{cn\(\s*"relative hidden lg:block w-\[17rem\] shrink-0"/
   );
-  assert.match(source, /left: "calc\(\(100vw - min\(100vw, 80rem\)\) \/ 2 \+ 2rem\)"/);
+  assert.match(source, /left: "calc\(\(100vw - min\(100vw, 82rem\)\) \/ 2 \+ 1\.5rem\)"/);
 });

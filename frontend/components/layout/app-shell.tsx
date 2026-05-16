@@ -21,7 +21,7 @@ interface AppShellProps {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/tests", label: "Practice Tests", icon: BookOpenText },
-  { href: "/ielts-mock-test-online", label: "IELTS Mock", icon: FileText },
+  { href: "/ielts-mock-test-online", label: "IELTS Mock", icon: FileText, soon: true },
   { href: "/writing", label: "Writing", icon: PenTool },
   { href: "/history", label: "History", icon: History },
   { href: "/leaderboard", label: "Leaderboard", icon: Medal },

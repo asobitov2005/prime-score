@@ -6,6 +6,7 @@ import { ArrowRight, Check, ChevronDown, ChevronRight, Clock3, FileText, Filter,
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { formatDateTime } from "@/lib/date-time";
 import type { WritingHistoryItem } from "@/lib/server-writing";
@@ -696,9 +697,16 @@ export function HistoryClient({
           )}
 
           {historyEntries.length === 0 && (
-            <div className="px-4 py-10 text-center">
-              <div className="text-sm font-bold text-foreground">No matching history found.</div>
-              <div className="mt-1 text-xs text-muted-foreground">Try another keyword or change the filter.</div>
+            <div className="p-4">
+              <EmptyState
+                icon="search"
+                title="No matching history found"
+                description="Try another keyword, change the filter, or complete a new practice task."
+                action={{ href: "/tests", label: "Start a test" }}
+                secondaryAction={{ href: "/writing", label: "Practice writing" }}
+                compact
+                className="border-0 bg-transparent shadow-none"
+              />
             </div>
           )}
         </div>

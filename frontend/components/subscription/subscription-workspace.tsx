@@ -7,6 +7,7 @@ import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { createApiClient, ApiError } from "@/lib/api/client";
 import { parseAnalyticsAmount, trackBeginCheckout, trackPurchase } from "@/lib/analytics";
 import type { PaymentRecordResponse } from "@/lib/api/types";
@@ -455,16 +456,24 @@ export function SubscriptionWorkspace({
               onCancel={() => void handleCancelPayment(activePayment.id)}
             />
           ) : (
-            <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              No active invoice right now. Choose a plan above to generate one.
-            </div>
+            <EmptyState
+              compact
+              icon="wallet"
+              title="No active invoice"
+              description="Choose a plan above to generate a payment invoice."
+              className="border-dashed bg-muted/15 shadow-none"
+            />
           )}
 
           <div className="space-y-3">
             {historyPayments.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                No recent archived invoices.
-              </div>
+              <EmptyState
+                compact
+                icon="clock3"
+                title="No payment history yet"
+                description="Archived invoices will appear here after you create or complete payments."
+                className="border-dashed bg-muted/15 shadow-none"
+              />
             ) : null}
 
             {historyPayments.map((payment) => (

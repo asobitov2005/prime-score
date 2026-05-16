@@ -10,7 +10,7 @@ test("subscription workspace keeps card copying only on the active invoice and h
   assert.match(source, /navigator\.clipboard\.writeText/);
   assert.match(source, /Copy card/);
   assert.match(source, /item\.status !== "completed" && item\.id !== activePayment\?\.id/);
-  assert.match(source, /No recent archived invoices\./);
+  assert.match(source, /No payment history yet/);
   assert.doesNotMatch(source, /onClick=\{\(\) => void handleCopyField\(payment\.id, "card", payment\.cardNumber \?\? "-"\)\}/);
   assert.doesNotMatch(source, /Active until \{payment\.grantedUntil \? formatDateTime\(payment\.grantedUntil\) : "-"\}/);
 });

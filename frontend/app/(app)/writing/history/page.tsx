@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowRight, Clock3, FileText, Loader2, PenSquare, Sparkles } from "lucide-react";
+import { ArrowRight, Clock3, FileText, Loader2, PenSquare } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import {
   getWritingDrafts,
@@ -201,22 +202,13 @@ export default async function WritingHistoryPage({ searchParams }: PageProps) {
       </div>
 
       {totalItems === 0 ? (
-        <Card className="rounded-3xl border-dashed border-border/60 bg-card/30">
-          <CardContent className="p-12 text-center space-y-4">
-            <div className="mx-auto h-14 w-14 rounded-2xl bg-violet-500/10 flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-violet-500" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">No essays yet</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Submit your first IELTS Writing essay to get instant AI feedback.
-              </p>
-            </div>
-            <Button asChild>
-              <Link href="/writing">Start writing</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon="pen"
+          title="No essays yet"
+          description="Submit your first IELTS Writing essay to get instant AI feedback."
+          action={{ href: "/writing", label: "Start writing" }}
+          className="border-dashed bg-card/30"
+        />
       ) : (
         <div className="space-y-3">
           {drafts.map((draft) => (

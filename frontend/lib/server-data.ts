@@ -1,6 +1,5 @@
-import { getTestById, getTestsByAccess, getTestsByType, mockTests } from "@/lib/mock-data";
 import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
-import { getTestSourceDetail, getTestSourceLabel, matchesTestSourceFilter } from "@/lib/test-source";
+import { getTestSourceDetail, getTestSourceLabel } from "@/lib/test-source";
 import type { AccessType, TestCatalogItem, TestType } from "@/lib/types";
 
 const baseUrl = getFrontendServerApiBaseUrl();
@@ -151,17 +150,7 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
     const items = await requestApi<BackendTestCatalogItem[]>(`/tests${search.size ? `?${search.toString()}` : ""}`);
     return items.map(mapCatalogItem);
   } catch {
-    if (query.type === "listening") {
-      return [];
-    }
-    let results = query.type ? getTestsByType(query.type) : getTestsByType();
-    if (query.access) {
-      results = results.filter((test) => test.accessType === query.access);
-    }
-    if (query.source) {
-      results = results.filter((test) => matchesTestSourceFilter(test.source, test.sourceDetail, query.source));
-    }
-    return results;
+    return [];
   }
 }
 
@@ -177,7 +166,7 @@ export async function getLandingFeaturedTests(): Promise<TestCatalogItem[]> {
     );
     return items.map(mapCatalogItem);
   } catch {
-    return mockTests.filter((test) => test.status === "published");
+    return [];
   }
 }
 
@@ -186,11 +175,7 @@ export async function getCatalogTestDetail(testId: string): Promise<TestCatalogI
     const item = await requestApi<BackendTestDetail>(`/tests/${testId}`);
     return mapTestDetail(item);
   } catch {
-    const fallback = getTestById(testId) ?? null;
-    if (fallback?.type === "listening") {
-      return null;
-    }
-    return fallback;
+    return null;
   }
 }
 
@@ -203,6 +188,6 @@ export async function getGuestTestSnapshot(testId: string): Promise<BackendTestD
 }
 
 export function getFallbackTestsByAccess(access?: AccessType): TestCatalogItem[] {
-  const tests = access ? getTestsByAccess(access) : getTestsByType();
-  return tests.filter((test) => test.type !== "listening");
+  void access;
+  return [];
 }

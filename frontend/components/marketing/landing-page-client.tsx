@@ -7,7 +7,8 @@ import { ArrowRight, BookOpenText, CheckCircle2, Headphones, Mic2, PenSquare, Sh
 import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
 import { Button } from "@/components/ui/button";
-import { mockTests, type ReviewItem } from "@/lib/mock-data";
+import { EmptyState } from "@/components/ui/empty-state";
+import type { ReviewItem } from "@/lib/mock-data";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
 
@@ -211,7 +212,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
   }, []);
 
   const getDisplayedTests = () => {
-    const sourceTests = initialTests.length > 0 ? initialTests : mockTests;
+    const sourceTests = initialTests;
     let filtered = sourceTests;
 
     if (activeTab !== "All") {
@@ -418,9 +419,13 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                       </Link>
                     );
                   }) : (
-                    <div className="p-6 text-center text-sm font-medium text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border/50">
-                      No tests found for {activeTab}.
-                    </div>
+                    <EmptyState
+                      compact
+                      icon="search"
+                      title={activeTab === "All" ? "No tests found" : `No ${activeTab.toLowerCase()} tests found`}
+                      description="Published IELTS tests will appear here as soon as they are available."
+                      className="border-dashed bg-muted/15 shadow-none"
+                    />
                   )}
                 </div>
               </div>

@@ -10,6 +10,6 @@ test("dashboard metric values avoid extra-bold number styling", () => {
   assert.match(dashboardPage, /text-2xl font-semibold tracking-tight text-foreground/);
   assert.doesNotMatch(dashboardPage, /text-2xl font-black tracking-tight text-foreground/);
 
-  assert.match(averages, /text-\[1\.75rem\] md:text-3xl font-semibold text-foreground tracking-tight/);
+  assert.match(averages, /text-5xl font-semibold tracking-tight leading-none/);
   assert.doesNotMatch(averages, /text-\[1\.75rem\] md:text-3xl font-black text-foreground tracking-tighter/);
 });

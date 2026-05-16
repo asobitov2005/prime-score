@@ -327,7 +327,7 @@ export function StudyTimeCard({ analytics, className }: StudyTimeCardProps) {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="mt-3 flex flex-col gap-1.5">
           <div className="flex items-end justify-between gap-3">
             <div className="flex items-end gap-1.5">
               <span className="text-[2rem] font-semibold tracking-tight text-foreground leading-none">{totalHours}</span>

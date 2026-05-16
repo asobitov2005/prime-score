@@ -9,9 +9,9 @@ test("pricing plan grid supports optional in-view reveal wrappers", () => {
 
   assert.match(source, /animateInView\?: boolean;/);
   assert.match(source, /animateInView = false,/);
-  assert.match(source, /const revealViewport = \{ once: true, amount: 0\.42 \} as const;/);
-  assert.match(source, /function getPricingRevealTransform\(index: number\)/);
-  assert.match(source, /initial=\{\{ opacity: 0, scale: 0\.9, \.\.\.revealFrom \}\}/);
-  assert.match(source, /whileInView=\{\{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 \}\}/);
+  assert.match(source, /function AnimatedItem\(/);
+  assert.match(source, /useInView\(\{ threshold: 0\.1 \}\)/);
+  assert.match(source, /inView \? "opacity-100 translate-y-0 translate-x-0 scale-100" : "opacity-0 translate-y-12 scale-\[0\.95\]"/);
+  assert.match(source, /style=\{\{ transitionDelay: `\$\{index \* 150\}ms` \}\}/);
   assert.ok(!source.includes("delay: index * 0.08"));
 });

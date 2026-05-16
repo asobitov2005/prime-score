@@ -6,6 +6,7 @@ import { ShieldCheck, User, Settings2, Pencil, Check, X, CreditCard, Monitor, Sm
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useAuthStore } from "@/store/auth-store";
 import { createApiClient } from "@/lib/api/client";
 import { buildUserDisplayName, splitUserDisplayName } from "@/lib/user-name";
@@ -384,8 +385,14 @@ export default function SettingsPage() {
                   <Loader2 className="h-6 w-6 text-primary animate-spin" />
                 </div>
               ) : sessions.length === 0 ? (
-                <div className="p-6 text-center">
-                  <p className="text-sm text-muted-foreground">No active sessions found.</p>
+                <div className="p-4">
+                  <EmptyState
+                    compact
+                    icon="monitor"
+                    title="No active sessions found"
+                    description="Your signed-in devices will appear here."
+                    className="border-dashed bg-muted/15 shadow-none"
+                  />
                 </div>
               ) : (
                 <div className="divide-y divide-border/40">

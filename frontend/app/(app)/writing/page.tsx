@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   getWritingDashboardSummary,
   getWritingHistory,
@@ -175,14 +176,13 @@ function PublishedTasksSection({
       </div>
 
       {tasks.length === 0 ? (
-        <Card className="rounded-2xl border-border/60 bg-card/70 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-          <CardContent className="px-5 py-8 text-center">
-            <p className="text-sm font-semibold text-foreground">No published prompts yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Admin published tasks for this filter will appear here.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon="pen"
+          title="No published prompts yet"
+          description="There are no live writing prompts for this filter. Try another task type or create your own custom writing task."
+          action={{ href: "/writing", label: "Open custom writing" }}
+          compact
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {tasks.map((task) => (

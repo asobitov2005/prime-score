@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, BookOpenText, Brain, Clock, Gauge, Headphone
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { DashboardCharts } from "@/components/charts/dashboard-charts";
 import { getCatalogTests } from "@/lib/server-data";
 import { getDashboardActivity, getDashboardAnalytics, getUserAttempts } from "@/lib/server-me";
@@ -643,8 +644,8 @@ export default async function DashboardPage() {
 
       <DashboardCharts analytics={analytics} />
 
-      <section className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
-        <div className="min-w-0 space-y-4">
+      <section className="grid items-stretch gap-8 lg:grid-cols-[1.5fr_1fr]">
+        <div className="flex min-w-0 flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
             <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
@@ -652,11 +653,16 @@ export default async function DashboardPage() {
             </Button>
           </div>
 
-          <Card className="border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">
+          <Card className="flex-1 border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">
             {recentActivity.length === 0 ? (
-              <div className="p-6 text-sm font-medium text-muted-foreground">
-                Complete a Reading, Listening, or Writing task to build your activity feed.
-              </div>
+              <EmptyState
+                icon="clock"
+                title="No activity yet"
+                description="Complete a Reading, Listening, or Writing task to build your activity feed."
+                action={{ href: "/tests", label: "Start practice" }}
+                compact
+                className="h-full rounded-3xl border-0 bg-transparent shadow-none"
+              />
             ) : (
               <div className="divide-y divide-border/40">
                 {recentActivity.map((entry) =>
@@ -670,7 +676,7 @@ export default async function DashboardPage() {
                           {entry.attempt.type === "reading" ? <BookOpenText className="h-6 w-6" /> : <Headphones className="h-6 w-6" />}
                         </div>
                         <div className="min-w-0 flex-1 space-y-1">
-                          <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.attempt.testTitle}>{entry.attempt.testTitle}</h4>
+                          <h4 className="max-w-full line-clamp-2 font-bold text-foreground text-[15px] sm:max-w-[170px] sm:line-clamp-1 lg:max-w-[210px]" title={entry.attempt.testTitle}>{entry.attempt.testTitle}</h4>
                           <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                             <span>{entry.attempt.date}</span>
                             <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
@@ -703,7 +709,7 @@ export default async function DashboardPage() {
                           <PenSquare className="h-6 w-6" />
                         </div>
                         <div className="min-w-0 flex-1 space-y-1">
-                          <h4 className="truncate font-bold text-foreground text-[15px]" title={entry.submission.task_title}>{entry.submission.task_title}</h4>
+                          <h4 className="max-w-full line-clamp-2 font-bold text-foreground text-[15px] sm:max-w-[170px] sm:line-clamp-1 lg:max-w-[210px]" title={entry.submission.task_title}>{entry.submission.task_title}</h4>
                           <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                             <span>{entry.submission.task_type === "task_1" ? "task 1" : "task 2"}</span>
                             <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
@@ -738,7 +744,7 @@ export default async function DashboardPage() {
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Quick Tests</h2>
             <Button variant="link" asChild className="text-primary font-bold px-0 h-auto">
@@ -746,17 +752,23 @@ export default async function DashboardPage() {
             </Button>
           </div>
 
-          <div className="space-y-3">
+          <Card className="flex-1 overflow-hidden rounded-3xl border-border/40 bg-card/30 shadow-sm">
             {featuredTests.length === 0 ? (
-              <Card className="p-5 border-border/40 shadow-sm rounded-2xl bg-card/30">
-                <p className="text-sm font-medium text-muted-foreground">No published quick tests are available right now.</p>
-              </Card>
+              <EmptyState
+                icon="book"
+                title="No quick tests available"
+                description="Published quick tests will appear here when they are available."
+                action={{ href: "/tests", label: "Browse all tests" }}
+                compact
+                className="h-full rounded-3xl border-0 bg-transparent shadow-none"
+              />
             ) : (
-              featuredTests.map(test => {
+              <div className="divide-y divide-border/40">
+                {featuredTests.map(test => {
                 const isReading = test.type === "reading";
                 return (
                   <Link key={test.id} href={`/tests/${test.slug || test.id}`} className="block">
-                    <Card className="p-4 border-border/40 shadow-sm hover:border-primary/30 transition-all hover:shadow-md cursor-pointer group rounded-2xl bg-card/30">
+                    <div className="p-5 transition-colors hover:bg-muted/30 group">
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
@@ -775,16 +787,17 @@ export default async function DashboardPage() {
                         <div className={cn(
                           "h-9 w-9 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm",
                           isReading ? "bg-blue-600 text-white dark:text-slate-950" : "bg-emerald-600 text-white dark:text-slate-950"
-                        )}>
-                          <Play className="h-4 w-4 fill-current ml-0.5" />
-                        </div>
-                      </div>
-                    </Card>
-                  </Link>
+	                        )}>
+	                        <Play className="h-4 w-4 fill-current ml-0.5" />
+	                      </div>
+	                    </div>
+	                    </div>
+	                  </Link>
                 );
-              })
+              })}
+              </div>
             )}
-          </div>
+          </Card>
         </div>
       </section>
 

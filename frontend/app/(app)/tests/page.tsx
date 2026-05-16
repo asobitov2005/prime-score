@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { BookOpen, Headphones, Layers, Eye, CheckCircle2, X } from "lucide-react";
+import { BookOpen, Headphones, Eye, CheckCircle2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { StartTestModal } from "@/components/start-test-modal";
 import { getCatalogTests } from "@/lib/server-data";
 import { getUserAttempts } from "@/lib/server-me";
@@ -238,18 +239,14 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
       {/* Test Grid area */}
       <div className="pt-4 pb-8 sm:pt-5">
         {tests.length === 0 ? (
-        <div className="text-center py-20 bg-card/20 rounded-[3rem] border border-dashed border-border/60">
-          <div className="mx-auto w-20 h-20 rounded-[2rem] bg-muted/30 flex items-center justify-center mb-6">
-             <Layers className="h-10 w-10 text-muted-foreground/40" />
-          </div>
-          <h3 className="text-xl font-bold text-foreground">No tests matching your filters</h3>
-          <p className="text-muted-foreground mt-2 max-w-xs mx-auto text-sm">
-            We couldn't find any {activeFormat.replace("_", " ")} {activeType} tests. Try selecting "All Tests".
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {tests.map((test) => {
+          <EmptyState
+            title="No tests matching your filters"
+            action={{ href: "/tests", label: "Show all tests" }}
+            className="bg-card/35 lg:h-[min(28rem,calc(100dvh-var(--app-shell-sticky-top,5rem)-15.75rem))]"
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {tests.map((test) => {
             const isFull = !test.format || test.format === "full";
             const latestAttempt = latestAttemptByTestId.get(test.id);
             const activeAttempt = latestAttempt?.status === "in_progress" ? latestAttempt : undefined;

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Medal, Minus, Trophy, TrendingUp, Loader2 } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { createApiClient } from "@/lib/api/client";
 import type { LeaderboardEntry, LeaderboardResponseData, TestType } from "@/lib/types";
@@ -245,14 +246,27 @@ export default function LeaderboardPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : query.isError ? (
-              <div className="p-12 text-center text-sm font-medium text-muted-foreground">
-                Unable to load live leaderboard right now.
+              <div className="p-4">
+                <EmptyState
+                  icon="medal"
+                  title="Leaderboard is unavailable"
+                  description="We could not load live ranking data right now. Try refreshing in a moment."
+                  compact
+                  className="border-0 bg-transparent shadow-none"
+                />
               </div>
             ) : top10.length > 0 ? (
               top10.map((entry) => <EntryRow key={`${entry.rank}-${entry.userId}`} entry={entry} />)
             ) : !currentUser ? (
-              <div className="p-12 text-center text-sm font-medium text-muted-foreground">
-                No ranking data available yet.
+              <div className="p-4">
+                <EmptyState
+                  icon="trophy"
+                  title="No ranking data yet"
+                  description="Complete scored tests to appear on the leaderboard."
+                  action={{ href: "/tests", label: "Start practice" }}
+                  compact
+                  className="border-0 bg-transparent shadow-none"
+                />
               </div>
             ) : null}
           </div>

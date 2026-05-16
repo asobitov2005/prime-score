@@ -4,10 +4,11 @@ import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useInView } from "@/hooks/use-in-view";
-import { ArrowRight, CheckCircle2, Gem, User, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, User, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { RedeemCodePanel } from "@/components/subscription/redeem-code-panel";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
@@ -297,11 +298,13 @@ export function PricingPlanGrid({
   const revealViewport = { once: true, amount: 0.42 } as const;
 
   const emptyState = (
-    <Card className="rounded-[2rem] border border-border/50 bg-card/80 shadow-sm">
-      <CardContent className="p-6 text-sm font-medium text-muted-foreground">
-        Premium plans are not configured yet.
-      </CardContent>
-    </Card>
+    <EmptyState
+      icon="gem"
+      title="Premium plans are not configured yet"
+      description="Plans will appear here as soon as they are available. If you need access now, contact support."
+      secondaryAction={{ href: "/dashboard", label: "Back to dashboard" }}
+      compact
+    />
   );
 
   if (mode === "subscription") {

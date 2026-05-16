@@ -11,4 +11,5 @@ test("tests page keeps vertical gap between sticky filters and test cards", () =
     source,
     /\{\/\*\s*Test Grid area\s*\*\/\}\s*<div className="[^"]*\bpt-4\b[^"]*"/
   );
+  assert.match(source, /className="bg-card\/35 lg:h-\[min\(28rem,calc\(100dvh-var\(--app-shell-sticky-top,5rem\)-15\.75rem\)\)\]"/);
 });

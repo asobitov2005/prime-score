@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmptyState as IllustratedEmptyState } from "@/components/ui/empty-state";
 import type { DashboardAnalytics, TestType } from "@/lib/types";
 import { roundToIeltsBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
 import { cn } from "@/lib/utils";
@@ -133,11 +134,15 @@ function getHeatmapCellClass(value: number | null | undefined): string {
   return "border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-400";
 }
 
-function EmptyState({ message }: { message: string }) {
+function ChartEmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex h-full min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 text-center text-sm font-medium text-muted-foreground">
-      {message}
-    </div>
+    <IllustratedEmptyState
+      compact
+      icon="trending"
+      title={title}
+      description={description}
+      className="h-full min-h-[220px] border-dashed bg-muted/15 shadow-none"
+    />
   );
 }
 
@@ -293,7 +298,10 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
         </CardHeader>
         <CardContent className="p-5 md:p-8">
           {progressSeries.length === 0 ? (
-            <EmptyState message="Complete scored Reading or Listening tests to unlock your progress graph." />
+            <ChartEmptyState
+              title="No progress graph yet"
+              description="Complete scored Reading, Listening, or Writing tests to unlock your progress graph."
+            />
           ) : (
             <div className="h-[360px] w-full relative">
                 <ResponsiveContainer width="100%" height="100%">
@@ -438,7 +446,10 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
             </div>
           ) : analysisAnalytics.questionTypeAnalysis.length === 0 ? (
             <div className="p-4 md:p-6">
-              <EmptyState message="Answer a few scored questions to unlock question-type analysis." />
+              <ChartEmptyState
+                title="No question analysis yet"
+                description="Answer a few scored questions to unlock question-type analysis."
+              />
             </div>
           ) : (
             <div className="divide-y divide-border/40">
@@ -538,7 +549,10 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
         {isComparisonOpen ? (
         <CardContent className={cn("space-y-4 p-4 md:p-6", !isPremium && "select-none blur-[3px] opacity-75")}>
           {comparisonTests.length === 0 ? (
-            <EmptyState message="Take at least two completed tests in the same module to compare changes across question types." />
+            <ChartEmptyState
+              title="No comparison yet"
+              description="Take at least two completed tests in the same module to compare changes across question types."
+            />
           ) : (
             <>
               <div className="rounded-3xl border border-primary/15 bg-gradient-to-br from-background via-primary/[0.03] to-background p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] md:p-4">

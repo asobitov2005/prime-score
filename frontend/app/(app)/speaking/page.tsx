@@ -1,6 +1,6 @@
-import { Mic2, Sparkles } from "lucide-react";
+import { Mic2 } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -18,18 +18,13 @@ export default function SpeakingPage() {
         </p>
       </div>
 
-      <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <CardTitle className="pt-4 text-xl font-semibold text-foreground">Coming Soon</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>This page is live so navigation stays consistent while Speaking is under development.</p>
-          <p>Tasks, prompts, timers, and evaluation flow will land here later.</p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon="mic"
+        title="We are working on it!"
+        description="Speaking practice is not available yet. We will enable prompts, timers, and evaluation when the full flow is ready."
+        action={{ href: "/tests", label: "Practice Reading or Listening" }}
+        secondaryAction={{ href: "/writing", label: "Practice Writing" }}
+      />
     </div>
   );
 }

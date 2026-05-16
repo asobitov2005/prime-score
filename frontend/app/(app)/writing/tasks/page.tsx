@@ -3,6 +3,7 @@ import { ArrowRight, Clock3, ImageIcon, PenSquare, Target } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   listWritingTasks,
   resolveWritingAssetUrl,
@@ -66,12 +67,12 @@ export default async function WritingTasksPage({ searchParams }: WritingTasksPag
       </Card>
 
       {data.items.length === 0 ? (
-        <Card className="rounded-3xl border-border/60 bg-card/70 shadow-sm">
-          <CardContent className="px-6 py-12 text-center">
-            <p className="text-sm font-semibold text-foreground">No tasks match these filters yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">Switch task type or use the custom topic form on the main writing page.</p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon="pen"
+          title="No tasks match these filters yet"
+          description="Switch task type or use the custom topic form on the main writing page."
+          action={{ href: "/writing", label: "Go to writing" }}
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {data.items.map((task) => (
