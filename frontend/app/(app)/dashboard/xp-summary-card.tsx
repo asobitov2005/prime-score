@@ -6,9 +6,20 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
+function getTotalProgressPercent(summary: XpSummary): number {
+  const nextLevelXp = summary.progress.nextLevelXp;
+
+  if (nextLevelXp > 0) {
+    return Math.max(0, Math.min((summary.totalXp / nextLevelXp) * 100, 100));
+  }
+
+  return Math.max(0, Math.min(summary.progress.progressPercent, 100));
+}
+
 export function XpSummaryCard({ summary }: { summary: XpSummary }) {
   const nextLevel = summary.level + 1;
-  const progressPercent = Math.max(0, Math.min(summary.progress.progressPercent, 100));
+  const xpNeededForNextLevel = Math.max(0, summary.progress.nextLevelXp - summary.totalXp);
+  const progressPercent = getTotalProgressPercent(summary);
 
   return (
     <section className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 p-[1px] shadow-2xl shadow-indigo-950/20">
@@ -64,7 +75,7 @@ export function XpSummaryCard({ summary }: { summary: XpSummary }) {
                 </div>
                 <div className="pb-1">
                   <p className="text-2xl font-semibold leading-none tracking-tight text-white md:text-3xl">
-                    {formatNumber(summary.progress.xpNeededForNextLevel)} XP
+                    {formatNumber(xpNeededForNextLevel)} XP
                   </p>
                   <p className="mt-1 text-sm font-semibold text-white/65">to reach Level {nextLevel}</p>
                 </div>
@@ -74,7 +85,7 @@ export function XpSummaryCard({ summary }: { summary: XpSummary }) {
             <div className="relative h-5 overflow-hidden rounded-full bg-indigo-950/28 shadow-inner">
               <div className="absolute inset-0 bg-white/10" />
               <div
-                className="relative h-full overflow-hidden rounded-full bg-[linear-gradient(90deg,#C4B5FD_0%,#8B5CF6_32%,#6366F1_62%,#38BDF8_100%)] shadow-[0_0_18px_rgba(129,140,248,0.58),0_0_30px_rgba(56,189,248,0.28)] transition-all duration-1000 ease-out after:absolute after:inset-x-1 after:top-1 after:h-1/3 after:rounded-full after:bg-white/40"
+                className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-violet-300 via-indigo-400 to-sky-300 shadow-[0_0_18px_rgba(129,140,248,0.58),0_0_30px_rgba(56,189,248,0.28)] transition-all duration-1000 ease-out after:absolute after:inset-x-1 after:top-1 after:h-1/3 after:rounded-full after:bg-white/40"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
