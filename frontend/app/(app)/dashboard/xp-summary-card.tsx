@@ -65,7 +65,7 @@ export function XpSummaryCard({ summary }: { summary: XpSummary }) {
                 </div>
               </div>
 
-              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:gap-6">
+              <div className="min-w-0">
                 <div className="min-w-0">
                   <p className="text-base font-semibold text-white/75">Current Level</p>
                   <h2 className="mt-1 text-4xl font-semibold tracking-tight md:text-5xl">
@@ -73,21 +73,23 @@ export function XpSummaryCard({ summary }: { summary: XpSummary }) {
                     <span className="ml-2 text-2xl font-semibold text-white/70">XP</span>
                   </h2>
                 </div>
-                <div className="pb-1">
-                  <p className="text-2xl font-semibold leading-none tracking-tight text-white md:text-3xl">
-                    {formatNumber(xpNeededForNextLevel)} XP
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-white/65">to reach Level {nextLevel}</p>
-                </div>
               </div>
             </div>
 
-            <div className="relative h-5 overflow-hidden rounded-full bg-indigo-950/28 shadow-inner">
-              <div className="absolute inset-0 bg-white/10" />
-              <div
-                className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-violet-300 via-indigo-400 to-sky-300 shadow-[0_0_18px_rgba(129,140,248,0.58),0_0_30px_rgba(56,189,248,0.28)] transition-all duration-1000 ease-out after:absolute after:inset-x-1 after:top-1 after:h-1/3 after:rounded-full after:bg-white/40"
-                style={{ width: `${progressPercent}%` }}
-              />
+            <div className="relative pt-0">
+              <div className="absolute -top-[4.35rem] right-0 text-right sm:-top-16">
+                <p className="text-xl font-semibold leading-none tracking-tight text-white md:text-2xl">
+                  {formatNumber(xpNeededForNextLevel)} XP
+                </p>
+                <p className="mt-0.5 text-sm font-semibold text-white/65">to reach Level {nextLevel}</p>
+              </div>
+              <div className="relative h-5 overflow-hidden rounded-full bg-indigo-950/28 shadow-inner">
+                <div className="absolute inset-0 bg-white/10" />
+                <div
+                  className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-violet-300 via-indigo-400 to-sky-300 shadow-[0_0_18px_rgba(129,140,248,0.58),0_0_30px_rgba(56,189,248,0.28)] transition-all duration-1000 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
             </div>
           </div>
 
