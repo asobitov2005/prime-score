@@ -22,6 +22,10 @@ class MeRedeemCodeRequest(BaseModel):
     code: str = Field(min_length=4, max_length=50)
 
 
+class MeGenerateGiftCodeRequest(BaseModel):
+    gift_days: int = Field(ge=1, le=365)
+
+
 class MeRedeemCodeResponse(BaseModel):
     message: str
     code: str
@@ -31,9 +35,43 @@ class MeRedeemCodeResponse(BaseModel):
     premium_until: datetime
 
 
+class MeGiftCodeSummaryItemRead(BaseModel):
+    gift_days: int
+    total_count: int = 0
+    generated_count: int = 0
+    available_count: int = 0
+
+
+class MeGiftCodeRead(BaseModel):
+    id: UUID
+    code: str
+    duration_days: int
+    status: str
+    expires_at: datetime | None = None
+    redeemed_at: datetime | None = None
+    created_at: datetime | None = None
+
+
+class MeGiftCodeSummaryRead(BaseModel):
+    items: list[MeGiftCodeSummaryItemRead] = Field(default_factory=list)
+    recent_codes: list[MeGiftCodeRead] = Field(default_factory=list)
+    total_available_count: int = 0
+    can_generate: bool = False
+
+
+class MeGenerateGiftCodeResponse(BaseModel):
+    message: str
+    gift_code: MeGiftCodeRead
+    summary: MeGiftCodeSummaryRead
+
+
 class MeProfileRead(DebugPrincipal):
     premium_until: datetime | None = None
     last_active_at: datetime | None = None
+    total_xp: int = 0
+    current_level: int = 1
+    current_streak: int = 0
+    best_streak: int = 0
 
 
 class MeStatsRead(BaseModel):
@@ -45,6 +83,10 @@ class MeStatsRead(BaseModel):
     listening_band: Decimal | None = None
     leaderboard_rank: int | None = None
     active_sessions: int = 0
+    total_xp: int = 0
+    current_level: int = 1
+    weekly_xp: int = 0
+    monthly_xp: int = 0
 
 
 class MeActivityPointRead(BaseModel):
@@ -216,3 +258,34 @@ class MeDashboardAnalyticsRead(BaseModel):
     personal_bests: MePersonalBestsRead = Field(default_factory=MePersonalBestsRead)
     speed_metrics: MeSpeedMetricsRead = Field(default_factory=MeSpeedMetricsRead)
     improvement_rate: MeImprovementRateRead = Field(default_factory=MeImprovementRateRead)
+
+
+class MeLevelProgressRead(BaseModel):
+    level: int = 1
+    level_floor_xp: int = 0
+    next_level_xp: int = 100
+    xp_into_level: int = 0
+    xp_needed_for_next_level: int = 100
+    progress_percent: float = 0.0
+
+
+class MeXpSummaryRead(BaseModel):
+    total_xp: int = 0
+    level: int = 1
+    current_streak: int = 0
+    best_streak: int = 0
+    weekly_xp: int = 0
+    monthly_xp: int = 0
+    progress: MeLevelProgressRead = Field(default_factory=MeLevelProgressRead)
+
+
+class MeXpTransactionRead(BaseModel):
+    id: UUID
+    type: str
+    source_type: str
+    source_id: str | None = None
+    xp_amount: int
+    message: str
+    flagged: bool = False
+    created_at: datetime
+    metadata: dict = Field(default_factory=dict)

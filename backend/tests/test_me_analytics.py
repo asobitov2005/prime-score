@@ -40,6 +40,9 @@ class _FakeSession:
     async def commit(self) -> None:
         self.commits += 1
 
+    async def refresh(self, _instance: object) -> None:
+        return None
+
 
 def test_effective_attempt_band_score_falls_back_for_full_attempts() -> None:
     attempt = SimpleNamespace(
@@ -53,7 +56,7 @@ def test_effective_attempt_band_score_falls_back_for_full_attempts() -> None:
     assert me_routes._effective_attempt_band_score(attempt) == Decimal("8.0")
 
 
-def test_effective_attempt_band_score_scales_section_attempts() -> None:
+def test_effective_attempt_band_score_does_not_scale_section_attempts() -> None:
     attempt = SimpleNamespace(
         band_score=None,
         raw_score=9,
@@ -62,7 +65,19 @@ def test_effective_attempt_band_score_scales_section_attempts() -> None:
         test_snapshot={"test_type": "reading", "scope": "section"},
     )
 
-    assert me_routes._effective_attempt_band_score(attempt) == Decimal("6.5")
+    assert me_routes._effective_attempt_band_score(attempt) == Decimal("3.5")
+
+
+def test_effective_attempt_band_score_ignores_stored_section_band() -> None:
+    attempt = SimpleNamespace(
+        band_score=Decimal("8.0"),
+        raw_score=9,
+        total_questions=10,
+        scope=None,
+        test_snapshot={"test_type": "reading", "scope": "section"},
+    )
+
+    assert me_routes._effective_attempt_band_score(attempt) == Decimal("3.5")
 
 
 def test_effective_attempt_band_score_returns_zero_for_low_scores() -> None:
@@ -112,7 +127,7 @@ def test_build_progress_series_averages_daily_full_and_section_attempts() -> Non
     series = me_routes._build_progress_series(attempts)
 
     assert len(series) == 1
-    assert series[0].reading == 7.25
+    assert series[0].reading == 5.75
     assert series[0].listening == 7.0
     assert series[0].writing is None
 
@@ -188,6 +203,7 @@ async def test_get_session_status_returns_current_user_session() -> None:
         last_name="User",
         username="prime_user",
         is_premium=True,
+        premium_until=datetime.now(UTC) + timedelta(days=7),
         show_on_leaderboard=True,
     )
     db = _FakeSession(_FakeExecuteResult(first_row=(session, user)))

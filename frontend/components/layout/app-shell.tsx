@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BookMarked, BookOpenText, ChevronDown, CreditCard, FileStack, FileText, Gauge, History, Medal, Menu, Newspaper, PenTool, PencilRuler, Podcast, X, Settings2 } from "lucide-react";
+import { BookMarked, BookOpenText, ChevronDown, CreditCard, FileStack, FileText, Flame, Gauge, History, Medal, Menu, Newspaper, PenTool, PencilRuler, Podcast, Sparkles, Trophy, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { createApiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -13,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { AppRouteLoadingFrame } from "@/components/layout/app-loading-placeholder";
 import { consumePendingPublicRedirect } from "@/lib/navigation-transition";
 import { SidebarPremiumCard } from "@/components/layout/sidebar-premium-card";
+import type { XpSummary } from "@/lib/types";
 
 interface AppShellProps {
   children: ReactNode;
@@ -37,6 +39,13 @@ const testSourceItems = [
   { href: "/tests?source=custom", label: "Exam Practice Tests", id: "custom", icon: PencilRuler },
 ] as const;
 
+function formatCompactNumber(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    notation: value >= 10000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -45,6 +54,7 @@ export function AppShell({ children }: AppShellProps) {
   const { isAuthenticated, hasHydrated } = useAuthStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isTestsSubmenuOpen, setIsTestsSubmenuOpen] = useState(false);
+  const [xpSummary, setXpSummary] = useState<XpSummary | null>(null);
   const isPublicTestsRoute = pathname === "/tests" || pathname.startsWith("/tests/");
   const activeSource = searchParams.get("source") ?? "";
 
@@ -68,6 +78,46 @@ export function AppShell({ children }: AppShellProps) {
     }
     setIsTestsSubmenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) {
+      setXpSummary(null);
+      return;
+    }
+
+    let ignore = false;
+    createApiClient()
+      .getXpSummary()
+      .then((summary) => {
+        if (!ignore) {
+          setXpSummary(summary);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setXpSummary({
+            totalXp: 0,
+            level: 1,
+            currentStreak: 0,
+            bestStreak: 0,
+            weeklyXp: 0,
+            monthlyXp: 0,
+            progress: {
+              level: 1,
+              levelFloorXp: 0,
+              nextLevelXp: 100,
+              xpIntoLevel: 0,
+              xpNeededForNextLevel: 100,
+              progressPercent: 0,
+            },
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [hasHydrated, isAuthenticated]);
 
   useEffect(() => {
     if (isMobileOpen) {
@@ -214,9 +264,56 @@ export function AppShell({ children }: AppShellProps) {
     </Card>
   );
 
+  const SidebarXpCard = () => {
+    if (!xpSummary) {
+      return null;
+    }
+
+    const progress = Math.max(0, Math.min(xpSummary.progress.progressPercent, 100));
+
+    return (
+      <Link
+        href="/leaderboard"
+        className="group block overflow-hidden rounded-xl border border-border/50 bg-card/70 p-3 shadow-sm transition-all hover:border-primary/30 hover:bg-card"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-sky-500" />
+              PrimeScore XP
+            </div>
+            <p className="mt-1 text-xl font-black tracking-tight text-foreground">
+              {formatCompactNumber(xpSummary.totalXp)}
+            </p>
+          </div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
+            <Trophy className="h-5 w-5" />
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold">
+          <div className="rounded-lg border border-border/50 bg-background/70 px-2.5 py-2">
+            <span className="text-muted-foreground">Level</span>
+            <span className="ml-1 text-foreground">{xpSummary.level}</span>
+          </div>
+          <div className="rounded-lg border border-border/50 bg-background/70 px-2.5 py-2">
+            <Flame className="mr-1 inline h-3.5 w-3.5 text-orange-500" />
+            <span className="text-foreground">{xpSummary.currentStreak}d</span>
+          </div>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-500 to-amber-400 transition-[width]"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </Link>
+    );
+  };
+
   const SidebarContent = () => (
     <div className="flex flex-col gap-4">
       <SidebarNavigation />
+      <SidebarXpCard />
       <div>
         <SidebarPremiumCard />
       </div>

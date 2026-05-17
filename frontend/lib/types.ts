@@ -315,25 +315,42 @@ export interface TestCardAttemptSummary {
 export interface LeaderboardEntry {
   rank: number;
   userId: string;
+  avatarUrl: string | null;
   name: string;
-  type: TestType | "combined";
-  percentile: number;
-  estimatedBand: string | null;
-  readingScore: string | null;
-  listeningScore: string | null;
-  attempts: number;
-  totalTime: string;
-  avgAccuracy: number | null;
-  lastActiveAt: string | null;
+  level: number;
+  xp: number;
+  currentStreak: number;
+  badge: string | null;
+  averageScore: number | null;
+  fullMockCompletions: number;
+  achievedAt: string | null;
   qualified: boolean;
   isCurrentUser?: boolean;
 }
 
 export interface LeaderboardResponseData {
-  type: TestType | "combined";
   period: LeaderboardPeriod;
   items: LeaderboardEntry[];
   currentUser: LeaderboardEntry | null;
+}
+
+export interface XpLevelProgress {
+  level: number;
+  levelFloorXp: number;
+  nextLevelXp: number;
+  xpIntoLevel: number;
+  xpNeededForNextLevel: number;
+  progressPercent: number;
+}
+
+export interface XpSummary {
+  totalXp: number;
+  level: number;
+  currentStreak: number;
+  bestStreak: number;
+  weeklyXp: number;
+  monthlyXp: number;
+  progress: XpLevelProgress;
 }
 
 export interface SubscriptionPlan {
@@ -379,6 +396,32 @@ export interface UserPaymentRecord {
   statusReason: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+export type UserGiftCodeStatus = "available" | "paused" | "redeemed" | "revoked" | "expired";
+
+export interface UserGiftCodeSummaryItem {
+  giftDays: number;
+  totalCount: number;
+  generatedCount: number;
+  availableCount: number;
+}
+
+export interface UserGiftCodeRecord {
+  id: string;
+  code: string;
+  durationDays: number;
+  status: UserGiftCodeStatus;
+  expiresAt: string | null;
+  redeemedAt: string | null;
+  createdAt: string | null;
+}
+
+export interface UserGiftCodeSummary {
+  items: UserGiftCodeSummaryItem[];
+  recentCodes: UserGiftCodeRecord[];
+  totalAvailableCount: number;
+  canGenerate: boolean;
 }
 
 export interface AttemptWorkspaceMeta {

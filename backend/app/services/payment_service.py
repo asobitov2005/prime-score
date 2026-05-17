@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import NotificationType
 from app.models.commerce import Payment, PaymentCard, PaymentSetting, Plan
 from app.models.user import User
+from app.services.gift_entitlements import grant_payment_gift_entitlement
 from app.services.notification_sender import create_and_send_notification
 
 DEFAULT_PAYMENT_SUPPORT_CONTACT = "@TheBugCreator"
@@ -192,6 +193,14 @@ async def complete_payment(
     payment.archived_at = now
     payment.granted_until = premium_until
     payment.status_reason = "Payment completed manually from admin panel."
+
+    await grant_payment_gift_entitlement(
+        session,
+        user=user,
+        payment=payment,
+        plan=plan,
+        now=now,
+    )
 
     await create_and_send_notification(
         session,

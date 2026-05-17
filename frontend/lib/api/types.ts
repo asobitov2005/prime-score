@@ -56,6 +56,10 @@ export interface RedeemBody {
   code: string;
 }
 
+export interface GenerateGiftCodeBody {
+  gift_days: number;
+}
+
 export interface RedeemResponse {
   message: string;
   code: string;
@@ -63,6 +67,36 @@ export interface RedeemResponse {
   duration_days: number;
   is_premium: boolean;
   premium_until: string;
+}
+
+export interface GiftCodeSummaryItemResponse {
+  gift_days: number;
+  total_count: number;
+  generated_count: number;
+  available_count: number;
+}
+
+export interface GiftCodeRecordResponse {
+  id: string;
+  code: string;
+  duration_days: number;
+  status: "available" | "paused" | "redeemed" | "revoked" | "expired";
+  expires_at?: string | null;
+  redeemed_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface GiftCodeSummaryResponse {
+  items: GiftCodeSummaryItemResponse[];
+  recent_codes: GiftCodeRecordResponse[];
+  total_available_count: number;
+  can_generate: boolean;
+}
+
+export interface GenerateGiftCodeResponse {
+  message: string;
+  gift_code: GiftCodeRecordResponse;
+  summary: GiftCodeSummaryResponse;
 }
 
 export interface CreatePaymentBody {
@@ -128,6 +162,27 @@ export interface MeProfileRead {
   telegram_id?: number | null;
   last_active_at?: string | null;
   created_at?: string | null;
+  total_xp?: number;
+  current_level?: number;
+  current_streak?: number;
+  best_streak?: number;
+}
+
+export interface XpSummaryResponse {
+  total_xp: number;
+  level: number;
+  current_streak: number;
+  best_streak: number;
+  weekly_xp: number;
+  monthly_xp: number;
+  progress: {
+    level: number;
+    level_floor_xp: number;
+    next_level_xp: number;
+    xp_into_level: number;
+    xp_needed_for_next_level: number;
+    progress_percent: number;
+  };
 }
 
 export interface AuthSessionRead {

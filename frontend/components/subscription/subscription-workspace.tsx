@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Clock3, Copy, Loader2, MessageCircle, RefreshCcw, Wallet } from "lucide-react";
 
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
+import { GiftCodeGeneratorCard } from "@/components/subscription/gift-code-generator-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,8 +12,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { createApiClient, ApiError } from "@/lib/api/client";
 import { parseAnalyticsAmount, trackBeginCheckout, trackPurchase } from "@/lib/analytics";
 import type { PaymentRecordResponse } from "@/lib/api/types";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import type { MarketingPlan } from "@/lib/server-plans";
-import type { UserPaymentRecord } from "@/lib/types";
+import type { UserGiftCodeSummary, UserPaymentRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -274,9 +276,11 @@ function ActiveInvoiceCard({
 export function SubscriptionWorkspace({
   plans,
   initialPayments,
+  initialGiftSummary,
 }: {
   plans: MarketingPlan[];
   initialPayments: UserPaymentRecord[];
+  initialGiftSummary: UserGiftCodeSummary;
 }) {
   const api = useMemo(() => createApiClient(), []);
   const syncSession = useAuthStore((state) => state.syncSession);
@@ -401,7 +405,11 @@ export function SubscriptionWorkspace({
       return;
     }
     try {
-      await navigator.clipboard.writeText(value);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        await copyTextToClipboard(value);
+      }
       const key = copyFieldKey(paymentId, field);
       setCopiedField(key);
       if (copyResetTimeoutRef.current !== null) {
@@ -411,12 +419,14 @@ export function SubscriptionWorkspace({
         setCopiedField((current) => (current === key ? null : current));
       }, 1800);
     } catch {
-      setError("Clipboard copy failed.");
+      setError("Clipboard copy failed. Copy the value manually.");
     }
   }
 
   return (
     <div className="space-y-4">
+      <GiftCodeGeneratorCard initialSummary={initialGiftSummary} />
+
       <PricingPlanGrid
         plans={plans}
         mode="subscription"

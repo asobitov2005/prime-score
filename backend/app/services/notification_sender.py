@@ -179,6 +179,7 @@ async def check_expired_premiums(session: AsyncSession) -> int:
     count = 0
     for user in result.all():
         user.is_premium = False
+        user.premium_until = None
         await create_and_send_notification(
             session,
             user_id=user.id,

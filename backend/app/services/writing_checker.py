@@ -38,6 +38,7 @@ from app.services.writing_config import (
     render_json_repair_prompt,
 )
 from app.services.writing_roast import generate_roast
+from app.services.xp import award_xp_for_writing_submission
 from app.services.writing_rubric import (
     calculate_overall_band,
     round_to_ielts_band,
@@ -2501,4 +2502,7 @@ async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> 
         if submission is not None:
             submission.status = WritingSubmissionStatus.COMPLETED
             submission.error_message = None
+            task = await session.get(WritingTask, submission.task_id)
+            if task is not None:
+                await award_xp_for_writing_submission(session, submission, evaluation, task)
         await session.commit()

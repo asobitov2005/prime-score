@@ -26,6 +26,10 @@ from app.schemas.me import (
     MeBandProgressPointRead,
     MeDashboardAnalyticsRead,
     MeErrorDistributionItemRead,
+    MeGenerateGiftCodeRequest,
+    MeGenerateGiftCodeResponse,
+    MeGiftCodeRead,
+    MeGiftCodeSummaryRead,
     MeImprovementRateRead,
     MePerformanceStudyTimeRead,
     MePerformanceTestCountBucketRead,
@@ -44,6 +48,9 @@ from app.schemas.me import (
     MeStatsRead,
     MeWeeklyActivityPointRead,
     MeWritingCriteriaRead,
+    MeXpSummaryRead,
+    MeXpTransactionRead,
+    MeLevelProgressRead,
 )
 from app.schemas.payments import (
     MePaymentCancelResponse,
@@ -52,6 +59,11 @@ from app.schemas.payments import (
     MePaymentRead,
 )
 from app.services.attempt_repo import iter_user_attempts_from_db
+from app.services.gift_entitlements import (
+    ensure_manual_premium_entitlement_for_user,
+    generate_user_gift_code,
+    get_user_gift_code_summary,
+)
 from app.services.notification_sender import create_and_send_notification
 from app.services.object_storage import upload_user_avatar_image
 from app.services.payment_service import (
@@ -60,9 +72,21 @@ from app.services.payment_service import (
     create_plan_payment,
     expire_stale_payments,
 )
-from app.services.runtime_store import _band_for_raw_score, iter_user_attempts
+from app.services.premium_access import reconcile_user_premium_status
+from app.services.runtime_store import band_for_raw_score, iter_user_attempts
 from app.services.scoring import mc_multiple_question_weight
+from app.services.telegram_profile_sync import sync_user_telegram_profile
 from app.services.user_names import normalize_user_name_parts
+from app.services.xp import (
+    PERIOD_ALL_TIME,
+    PERIOD_MONTHLY,
+    PERIOD_WEEKLY,
+    badge_for_user,
+    leaderboard_rows,
+    level_bounds,
+    list_user_xp_transactions,
+    get_user_period_xp,
+)
 
 router = APIRouter()
 MAX_AVATAR_IMAGE_BYTES = 5 * 1024 * 1024
@@ -413,6 +437,7 @@ def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
         phone=principal.phone,
         role=principal.role,
         is_premium=principal.is_premium,
+        premium_until=principal.premium_until,
         show_on_leaderboard=principal.show_on_leaderboard,
         telegram_id=principal.telegram_id,
         avatar_url=principal.avatar_url,
@@ -434,6 +459,81 @@ def _profile_from_user(user: User) -> MeProfileRead:
         avatar_url=user.avatar_url,
         last_active_at=user.last_active_at,
         created_at=user.created_at,
+        total_xp=int(user.total_xp or 0),
+        current_level=int(user.current_level or 1),
+        current_streak=int(user.current_streak or 0),
+        best_streak=int(user.best_streak or 0),
+    )
+
+
+def _build_level_progress(total_xp: int, level: int) -> MeLevelProgressRead:
+    floor_xp, next_level_xp = level_bounds(level)
+    xp_into_level = max(0, total_xp - floor_xp)
+    level_span = max(1, next_level_xp - floor_xp)
+    remaining = max(0, next_level_xp - total_xp)
+    return MeLevelProgressRead(
+        level=level,
+        level_floor_xp=floor_xp,
+        next_level_xp=next_level_xp,
+        xp_into_level=xp_into_level,
+        xp_needed_for_next_level=remaining,
+        progress_percent=round((xp_into_level / level_span) * 100, 1),
+    )
+
+
+async def _user_xp_summary(session: AsyncSession, user: User) -> MeXpSummaryRead:
+    total_xp = int(user.total_xp or 0)
+    level = int(user.current_level or 1)
+    weekly_xp = await get_user_period_xp(session, user_id=user.id, period_type=PERIOD_WEEKLY)
+    monthly_xp = await get_user_period_xp(session, user_id=user.id, period_type=PERIOD_MONTHLY)
+    return MeXpSummaryRead(
+        total_xp=total_xp,
+        level=level,
+        current_streak=int(user.current_streak or 0),
+        best_streak=int(user.best_streak or 0),
+        weekly_xp=weekly_xp,
+        monthly_xp=monthly_xp,
+        progress=_build_level_progress(total_xp, level),
+    )
+
+
+async def _leaderboard_rank_for_user(session: AsyncSession, *, user_id: UUID) -> int | None:
+    rank = None
+    rows = await leaderboard_rows(session, period_type=PERIOD_ALL_TIME)
+    ordered_rows = sorted(
+        rows,
+        key=lambda item: (
+            int(item[0].xp_total or 0),
+            int(item[1].current_streak or 0),
+            float(item[0].average_score or 0.0),
+            int(item[0].full_mock_completions or 0),
+            -(
+                item[0].achieved_at.timestamp()
+                if item[0].achieved_at is not None
+                else float("inf")
+            ),
+        ),
+        reverse=True,
+    )
+    for index, (_, row_user) in enumerate(ordered_rows, start=1):
+        if row_user.id == user_id:
+            rank = index
+            break
+    return rank
+
+
+def _serialize_xp_transaction(row) -> MeXpTransactionRead:
+    metadata = dict(row.metadata_json or {})
+    return MeXpTransactionRead(
+        id=row.id,
+        type=row.transaction_type,
+        source_type=row.source_type,
+        source_id=row.source_id,
+        xp_amount=int(row.xp_amount or 0),
+        message=str(metadata.get("message") or f"{int(row.xp_amount or 0):+d} XP"),
+        flagged=bool(metadata.get("flagged")),
+        created_at=row.created_at,
+        metadata=metadata,
     )
 
 
@@ -474,9 +574,31 @@ def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
     )
 
 
+def _serialize_me_gift_code_summary(payload: dict[str, object]) -> MeGiftCodeSummaryRead:
+    items = payload.get("items", [])
+    recent_codes = payload.get("recent_codes", [])
+    return MeGiftCodeSummaryRead(
+        items=list(items),
+        recent_codes=[MeGiftCodeRead(**item) for item in recent_codes if isinstance(item, dict)],
+        total_available_count=int(payload.get("total_available_count", 0) or 0),
+        can_generate=bool(payload.get("can_generate", False)),
+    )
+
+
 @router.get("", response_model=MeProfileRead)
-async def get_me(current_user: DebugPrincipal = Depends(get_current_user)) -> MeProfileRead:
-    return _profile_from_principal(current_user)
+async def get_me(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MeProfileRead:
+    user = await session.get(User, current_user.id)
+    if user is None:
+        return _profile_from_principal(current_user)
+
+    await reconcile_user_premium_status(session, user=user)
+    await sync_user_telegram_profile(user)
+    await session.commit()
+    await session.refresh(user)
+    return _profile_from_user(user)
 
 
 @router.patch("", response_model=MeProfileRead)
@@ -490,6 +612,8 @@ async def update_me(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
 
+    await reconcile_user_premium_status(session, user=user)
+
     if "first_name" in updates or "last_name" in updates:
         normalized_first, normalized_last = normalize_user_name_parts(
             updates.get("first_name", user.first_name),
@@ -497,6 +621,10 @@ async def update_me(
         )
         updates["first_name"] = normalized_first
         updates["last_name"] = normalized_last
+        user.name_is_custom = True
+
+    if "username" in updates:
+        user.username_is_custom = True
 
     for field_name, value in updates.items():
         setattr(user, field_name, value)
@@ -529,6 +657,8 @@ async def upload_my_avatar(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
 
+    await reconcile_user_premium_status(session, user=user)
+
     payload = await _read_avatar_upload(file)
     try:
         user.avatar_url = upload_user_avatar_image(
@@ -536,6 +666,7 @@ async def upload_my_avatar(
             filename=file.filename or "avatar-image",
             content_type=file.content_type or "application/octet-stream",
         )
+        user.avatar_is_custom = True
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
@@ -553,10 +684,68 @@ async def delete_my_avatar(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
 
+    await reconcile_user_premium_status(session, user=user)
+
     user.avatar_url = None
+    user.avatar_is_custom = True
     await session.commit()
     await session.refresh(user)
     return _profile_from_user(user)
+
+
+@router.get("/gift-codes", response_model=MeGiftCodeSummaryRead)
+async def list_my_gift_codes(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MeGiftCodeSummaryRead:
+    user = await session.get(User, current_user.id)
+    if user is not None:
+        await ensure_manual_premium_entitlement_for_user(session, user=user)
+        await session.commit()
+    summary = await get_user_gift_code_summary(session, user_id=current_user.id)
+    return _serialize_me_gift_code_summary(summary)
+
+
+@router.post("/gift-codes/generate", response_model=MeGenerateGiftCodeResponse)
+async def generate_my_gift_code(
+    payload: MeGenerateGiftCodeRequest,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MeGenerateGiftCodeResponse:
+    user = await session.get(User, current_user.id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
+
+    try:
+        gift_code = await generate_user_gift_code(
+            session,
+            user=user,
+            gift_days=payload.gift_days,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    await session.commit()
+    summary = await get_user_gift_code_summary(session, user_id=user.id)
+    duration_days = 0
+    for item in summary.get("recent_codes", []):
+        if isinstance(item, dict) and item.get("id") == gift_code.id:
+            duration_days = int(item.get("duration_days", 0) or 0)
+            break
+
+    return MeGenerateGiftCodeResponse(
+        message=f"Gift code generated for {payload.gift_days} premium days.",
+        gift_code=MeGiftCodeRead(
+            id=gift_code.id,
+            code=gift_code.code,
+            duration_days=duration_days or payload.gift_days,
+            status="available",
+            expires_at=gift_code.expires_at,
+            redeemed_at=gift_code.redeemed_at,
+            created_at=gift_code.created_at,
+        ),
+        summary=_serialize_me_gift_code_summary(summary),
+    )
 
 
 @router.post("/redeem-code", response_model=MeRedeemCodeResponse)
@@ -603,20 +792,8 @@ async def redeem_code(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
 
-    active_code_redemption = await session.scalar(
-        select(GiftCodeRedemption)
-        .where(
-            GiftCodeRedemption.user_id == user.id,
-            GiftCodeRedemption.premium_until > now,
-        )
-        .order_by(GiftCodeRedemption.premium_until.desc())
-    )
-    if active_code_redemption is not None:
-        active_until = active_code_redemption.premium_until.strftime("%d %b %Y")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"You already have an active redeem-code premium until {active_until}. Use the next code after it expires.",
-        )
+    if gift_code.purchaser_user_id == user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot redeem your own gift code.")
 
     has_active_premium = bool(user.is_premium and user.premium_until and user.premium_until > now)
     if gift_code.target_user_type == "premium" and not has_active_premium:
@@ -791,32 +968,25 @@ def _filter_attempts_by_type(attempts, test_type: TestType | None):
 
 
 def _attempt_scope_value(attempt) -> str:
-    scope = attempt.test_snapshot.get("scope") if isinstance(attempt.test_snapshot, dict) else None
+    snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
+    scope = snapshot.get("scope")
     if scope is None:
         scope = getattr(attempt, "scope", None)
     return str(getattr(scope, "value", scope) or "")
 
 
 def _effective_attempt_band_score(attempt) -> Decimal | float | None:
-    if attempt.band_score is not None:
+    snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
+    test_type = TestType(str(snapshot.get("test_type", TestType.reading)))
+    if attempt.band_score is not None and (
+        _attempt_scope_value(attempt) == TestScope.full.value
+        or test_type == TestType.writing
+    ):
         return attempt.band_score
     if attempt.raw_score is None:
         return None
 
-    snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
-    total_questions = int(
-        getattr(attempt, "total_questions", None)
-        or getattr(attempt, "max_score", None)
-        or snapshot.get("total_questions")
-        or 40
-    )
-    raw_score = int(attempt.raw_score)
-    if _attempt_scope_value(attempt) != TestScope.full.value and total_questions > 0:
-        raw_score = round((raw_score / total_questions) * 40)
-    raw_score = max(0, min(40, raw_score))
-
-    test_type = TestType(str(snapshot.get("test_type", TestType.reading)))
-    return _band_for_raw_score(test_type, raw_score) or Decimal("0.0")
+    return band_for_raw_score(test_type, int(attempt.raw_score))
 
 
 async def _load_writing_attempts(current_user: DebugPrincipal, session: AsyncSession):
@@ -885,31 +1055,67 @@ async def get_stats(
     session: AsyncSession = Depends(get_db_session),
 ) -> MeStatsRead:
     attempts = await _load_attempts(current_user, session)
+    user = await session.get(User, current_user.id)
     completed = [attempt for attempt in attempts if attempt.status == AttemptStatus.completed]
-    banded = [attempt.band_score for attempt in completed if attempt.band_score is not None]
-    reading_bands = [
-        attempt.band_score
+    banded = [
+        band
         for attempt in completed
-        if attempt.band_score is not None and attempt.test_snapshot.get("test_type") == TestType.reading
+        if (band := _effective_attempt_band_score(attempt)) is not None
+    ]
+    reading_bands = [
+        band
+        for attempt in completed
+        if attempt.test_snapshot.get("test_type") == TestType.reading
+        and (band := _effective_attempt_band_score(attempt)) is not None
     ]
     listening_bands = [
-        attempt.band_score
+        band
         for attempt in completed
-        if attempt.band_score is not None and attempt.test_snapshot.get("test_type") == TestType.listening
+        if attempt.test_snapshot.get("test_type") == TestType.listening
+        and (band := _effective_attempt_band_score(attempt)) is not None
     ]
     average_band = (
         sum(banded, start=banded[0].__class__("0")) / len(banded)
         if banded
         else None
     )
+    weekly_xp = await get_user_period_xp(session, user_id=current_user.id, period_type=PERIOD_WEEKLY)
+    monthly_xp = await get_user_period_xp(session, user_id=current_user.id, period_type=PERIOD_MONTHLY)
+    leaderboard_rank = await _leaderboard_rank_for_user(session, user_id=current_user.id)
     return MeStatsRead(
         attempts_total=len(attempts),
+        current_streak=int((user.current_streak if user else current_user.model_dump().get("current_streak")) or 0),
         average_band=average_band,
         reading_band=max(reading_bands) if reading_bands else None,
         listening_band=max(listening_bands) if listening_bands else None,
-        leaderboard_rank=3 if current_user.show_on_leaderboard else None,
+        leaderboard_rank=leaderboard_rank if current_user.show_on_leaderboard else None,
         active_sessions=2,
+        total_xp=int(user.total_xp or 0) if user is not None else 0,
+        current_level=int(user.current_level or 1) if user is not None else 1,
+        weekly_xp=weekly_xp,
+        monthly_xp=monthly_xp,
     )
+
+
+@router.get("/xp-summary", response_model=MeXpSummaryRead)
+async def get_xp_summary(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MeXpSummaryRead:
+    user = await session.get(User, current_user.id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
+    return await _user_xp_summary(session, user)
+
+
+@router.get("/xp-transactions", response_model=list[MeXpTransactionRead])
+async def get_xp_transactions(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+    limit: int = Query(default=30, ge=1, le=100),
+) -> list[MeXpTransactionRead]:
+    rows = await list_user_xp_transactions(session, user_id=current_user.id, limit=limit)
+    return [_serialize_xp_transaction(row) for row in rows]
 
 
 @router.get("/activity", response_model=list[MeActivityPointRead])
@@ -1027,7 +1233,11 @@ def _build_accuracy_trend(attempts) -> list[MeAccuracyTrendPointRead]:
         items.append(MeAccuracyTrendPointRead(
             date=occurred.strftime("%d %b"),
             accuracy=accuracy,
-            band=float(attempt.band_score) if attempt.band_score is not None else None,
+            band=(
+                float(band_score)
+                if (band_score := _effective_attempt_band_score(attempt)) is not None
+                else None
+            ),
             test_type=attempt.test_snapshot.get("test_type"),
         ))
     return items
@@ -1056,7 +1266,7 @@ def _build_weekly_activity(attempts) -> list[MeWeeklyActivityPointRead]:
 def _build_score_distribution(attempts) -> MeScoreDistributionRead:
     dist = MeScoreDistributionRead()
     for attempt in attempts:
-        band = attempt.band_score
+        band = _effective_attempt_band_score(attempt)
         if band is None:
             continue
         b = float(band)
@@ -1074,7 +1284,11 @@ def _build_score_distribution(attempts) -> MeScoreDistributionRead:
 
 
 def _build_personal_bests(all_attempts, completed_attempts) -> MePersonalBestsRead:
-    bands = [float(a.band_score) for a in completed_attempts if a.band_score is not None]
+    bands = [
+        float(band)
+        for attempt in completed_attempts
+        if (band := _effective_attempt_band_score(attempt)) is not None
+    ]
     accuracies = [
         round((int(a.raw_score) / max(1, int(getattr(a, "total_questions", 0) or 1))) * 100, 1)
         for a in completed_attempts if a.raw_score is not None
@@ -1157,7 +1371,7 @@ def _build_speed_metrics(completed_attempts) -> MeSpeedMetricsRead:
 
 def _build_improvement_rate(completed_attempts) -> MeImprovementRateRead:
     banded = sorted(
-        [a for a in completed_attempts if a.band_score is not None],
+        [a for a in completed_attempts if _effective_attempt_band_score(a) is not None],
         key=lambda a: a.completed_at or a.started_at,
     )
     if len(banded) < 2:
@@ -1168,11 +1382,11 @@ def _build_improvement_rate(completed_attempts) -> MeImprovementRateRead:
     prev_end = max(0, len(banded) - 5)
     prev_5 = banded[prev_start:prev_end] if prev_end > prev_start else []
 
-    last_avg = sum(float(a.band_score) for a in last_5) / len(last_5)
+    last_avg = sum(float(_effective_attempt_band_score(a) or 0) for a in last_5) / len(last_5)
     if not prev_5:
         return MeImprovementRateRead(last_5_avg_band=round(last_avg, 2))
 
-    prev_avg = sum(float(a.band_score) for a in prev_5) / len(prev_5)
+    prev_avg = sum(float(_effective_attempt_band_score(a) or 0) for a in prev_5) / len(prev_5)
     delta = round(last_avg - prev_avg, 2)
     pct = round((delta / prev_avg) * 100, 1) if prev_avg > 0 else 0.0
 

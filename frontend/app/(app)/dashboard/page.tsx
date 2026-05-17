@@ -6,13 +6,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DashboardCharts } from "@/components/charts/dashboard-charts";
 import { getCatalogTests } from "@/lib/server-data";
-import { getDashboardActivity, getDashboardAnalytics, getUserAttempts } from "@/lib/server-me";
+import { getDashboardActivity, getDashboardAnalytics, getUserAttempts, getXpSummary } from "@/lib/server-me";
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
 import { DashboardAverageCards } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
 import { ActivitySummary } from "./activity-summary";
 import { StreakHeatmap } from "./streak-heatmap";
 import { PremiumFeatureGate } from "./premium-feature-gate";
+import { XpSummaryCard } from "./xp-summary-card";
 import { cn } from "@/lib/utils";
 import type { AttemptRow, DashboardAnalytics } from "@/lib/types";
 import { pickQuickTests } from "./quick-tests";
@@ -268,12 +269,13 @@ function buildWeaknessDiagnosis(
 }
 
 export default async function DashboardPage() {
-  const [attempts, analytics, writingHistory, catalogTests, activity] = await Promise.all([
+  const [attempts, analytics, writingHistory, catalogTests, activity, xpSummary] = await Promise.all([
     getUserAttempts(),
     getDashboardAnalytics(),
     getWritingHistory().catch(() => ({ items: [], total: 0 })),
     getCatalogTests().catch(() => []),
     getDashboardActivity(),
+    getXpSummary(),
   ]);
   const recentAttempts = attempts.filter((attempt) => attempt.status === "completed" || attempt.status === "submitted");
   const recentActivity: RecentActivityItem[] = [
@@ -376,6 +378,8 @@ export default async function DashboardPage() {
         <div>
           <WelcomeHeader analytics={analytics} />
         </div>
+
+        <XpSummaryCard summary={xpSummary} />
 
 
         {/* Top Row: Recommended and Scores aligned in height */}

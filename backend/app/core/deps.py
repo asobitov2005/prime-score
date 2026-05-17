@@ -14,6 +14,7 @@ from app.models.user import Session as UserSession
 from app.models.user import User
 from app.schemas.common import AdminPrincipal, DebugPrincipal
 from app.services.admin_auth import build_admin_principal, get_admin_by_id
+from app.services.premium_access import reconcile_user_premium_status
 
 
 def _parse_bool(value: str | None, default: bool = False) -> bool:
@@ -73,6 +74,8 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User account is not available.",
             )
+
+        await reconcile_user_premium_status(session, user=user)
 
         return DebugPrincipal(
             id=user.id,

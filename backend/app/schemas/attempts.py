@@ -123,6 +123,10 @@ class AttemptResultRead(BaseModel):
     question_type_breakdown: list[AttemptBreakdownItemRead] = []
     diagram_groups: list["AttemptDiagramGroupRead"] = []
     events: list[AttemptEventRead] = []
+    xp_awarded_total: int = 0
+    xp_breakdown: dict = Field(default_factory=dict)
+    xp_level_after: int | None = None
+    xp_current_streak: int | None = None
 
 
 class AttemptDiagramGroupRead(BaseModel):

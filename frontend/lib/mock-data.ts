@@ -682,17 +682,17 @@ export const mockAttempts: AttemptRow[] = [
 ];
 
 export const mockLeaderboard: LeaderboardEntry[] = [
-  { rank: 1, userId: "lb-1", name: "Ali T.", type: "combined", percentile: 98, estimatedBand: "8.5", readingScore: "34.0/40", listeningScore: "36.0/40", attempts: 45, totalTime: "28h 15m", avgAccuracy: 87, lastActiveAt: "2026-05-01T10:00:00Z", qualified: true },
-  { rank: 2, userId: "lb-2", name: "Maria K.", type: "combined", percentile: 95, estimatedBand: "8.0", readingScore: "32.0/40", listeningScore: "35.0/40", attempts: 38, totalTime: "24h 00m", avgAccuracy: 84, lastActiveAt: "2026-04-30T10:00:00Z", qualified: true },
-  { rank: 3, userId: "lb-3", name: "John D.", type: "combined", percentile: 92, estimatedBand: "8.0", readingScore: "31.0/40", listeningScore: "34.0/40", attempts: 52, totalTime: "32h 45m", avgAccuracy: 82, lastActiveAt: "2026-04-29T10:00:00Z", qualified: true },
-  { rank: 4, userId: "lb-4", name: "Sarah L.", type: "combined", percentile: 88, estimatedBand: "7.5", readingScore: "30.0/40", listeningScore: "32.0/40", attempts: 31, totalTime: "19h 30m", avgAccuracy: 78, lastActiveAt: "2026-04-28T10:00:00Z", qualified: true },
-  { rank: 5, userId: "lb-5", name: "Michael R.", type: "combined", percentile: 84, estimatedBand: "7.5", readingScore: "29.0/40", listeningScore: "31.0/40", attempts: 28, totalTime: "17h 20m", avgAccuracy: 75, lastActiveAt: "2026-04-27T10:00:00Z", qualified: true },
-  { rank: 6, userId: "lb-6", name: "Elena V.", type: "combined", percentile: 78, estimatedBand: "7.0", readingScore: "28.0/40", listeningScore: "30.0/40", attempts: 40, totalTime: "25h 10m", avgAccuracy: 73, lastActiveAt: "2026-04-26T10:00:00Z", qualified: true },
-  { rank: 7, userId: "lb-7", name: "Ahmad M.", type: "combined", percentile: 70, estimatedBand: "6.5", readingScore: "27.0/40", listeningScore: "28.0/40", attempts: 19, totalTime: "12h 05m", avgAccuracy: 69, lastActiveAt: "2026-04-25T10:00:00Z", qualified: true },
-  { rank: 8, userId: "lb-8", name: "Jessica W.", type: "combined", percentile: 64, estimatedBand: "6.5", readingScore: "26.0/40", listeningScore: "27.0/40", attempts: 22, totalTime: "14h 40m", avgAccuracy: 66, lastActiveAt: "2026-04-24T10:00:00Z", qualified: true },
-  { rank: 9, userId: "lb-9", name: "David Chen", type: "combined", percentile: 57, estimatedBand: "6.0", readingScore: "24.0/40", listeningScore: "26.0/40", attempts: 35, totalTime: "22h 15m", avgAccuracy: 62, lastActiveAt: "2026-04-23T10:00:00Z", qualified: true },
-  { rank: 10, userId: "lb-10", name: "Fatima S.", type: "combined", percentile: 49, estimatedBand: "5.5", readingScore: "22.0/40", listeningScore: "24.0/40", attempts: 27, totalTime: "16h 50m", avgAccuracy: 58, lastActiveAt: "2026-04-22T10:00:00Z", qualified: true },
-  { rank: 42, userId: "lb-you", name: "You", type: "combined", percentile: 31, estimatedBand: "5.0", readingScore: "18.0/40", listeningScore: "21.0/40", attempts: 23, totalTime: "14h 32m", avgAccuracy: 47, lastActiveAt: "2026-05-01T10:00:00Z", qualified: true, isCurrentUser: true }
+  { rank: 1, userId: "lb-1", avatarUrl: null, name: "Ali T.", level: 19, xp: 18420, currentStreak: 21, badge: "Mock Master", averageScore: 8.2, fullMockCompletions: 12, achievedAt: "2026-05-01T10:00:00Z", qualified: true },
+  { rank: 2, userId: "lb-2", avatarUrl: null, name: "Maria K.", level: 18, xp: 17280, currentStreak: 16, badge: "Rising Expert", averageScore: 7.9, fullMockCompletions: 9, achievedAt: "2026-04-30T10:00:00Z", qualified: true },
+  { rank: 3, userId: "lb-3", avatarUrl: null, name: "John D.", level: 17, xp: 16040, currentStreak: 14, badge: "Rising Expert", averageScore: 7.7, fullMockCompletions: 8, achievedAt: "2026-04-29T10:00:00Z", qualified: true },
+  { rank: 4, userId: "lb-4", avatarUrl: null, name: "Sarah L.", level: 16, xp: 14950, currentStreak: 11, badge: "Consistency Builder", averageScore: 7.4, fullMockCompletions: 6, achievedAt: "2026-04-28T10:00:00Z", qualified: true },
+  { rank: 5, userId: "lb-5", avatarUrl: null, name: "Michael R.", level: 15, xp: 14020, currentStreak: 9, badge: "Elite Learner", averageScore: 7.2, fullMockCompletions: 5, achievedAt: "2026-04-27T10:00:00Z", qualified: true },
+  { rank: 6, userId: "lb-6", avatarUrl: null, name: "Elena V.", level: 14, xp: 13100, currentStreak: 8, badge: "Consistency Builder", averageScore: 7.0, fullMockCompletions: 4, achievedAt: "2026-04-26T10:00:00Z", qualified: true },
+  { rank: 7, userId: "lb-7", avatarUrl: null, name: "Ahmad M.", level: 13, xp: 12050, currentStreak: 7, badge: "Consistency Builder", averageScore: 6.8, fullMockCompletions: 3, achievedAt: "2026-04-25T10:00:00Z", qualified: true },
+  { rank: 8, userId: "lb-8", avatarUrl: null, name: "Jessica W.", level: 12, xp: 11120, currentStreak: 6, badge: null, averageScore: 6.6, fullMockCompletions: 2, achievedAt: "2026-04-24T10:00:00Z", qualified: true },
+  { rank: 9, userId: "lb-9", avatarUrl: null, name: "David Chen", level: 11, xp: 10280, currentStreak: 5, badge: null, averageScore: 6.3, fullMockCompletions: 2, achievedAt: "2026-04-23T10:00:00Z", qualified: true },
+  { rank: 10, userId: "lb-10", avatarUrl: null, name: "Fatima S.", level: 10, xp: 9450, currentStreak: 4, badge: "Rising Expert", averageScore: 6.0, fullMockCompletions: 1, achievedAt: "2026-04-22T10:00:00Z", qualified: true },
+  { rank: 42, userId: "lb-you", avatarUrl: null, name: "You", level: 8, xp: 6250, currentStreak: 3, badge: null, averageScore: 5.8, fullMockCompletions: 1, achievedAt: "2026-05-01T10:00:00Z", qualified: true, isCurrentUser: true }
 ];
 
 export const mockProgressSeries = [
@@ -762,17 +762,15 @@ export function getAttemptsByType(type?: string): AttemptRow[] {
 }
 
 export function getLeaderboardByType(type?: string): LeaderboardResponseData {
-  const selectedType = (type as TestType | "combined" | undefined) ?? "combined";
   const items = mockLeaderboard
     .filter((entry) => !entry.isCurrentUser)
-    .map((entry) => ({ ...entry, type: selectedType }));
+    .map((entry) => ({ ...entry }));
   const currentUserBase = mockLeaderboard.find((entry) => entry.isCurrentUser) ?? null;
 
   return {
-    type: selectedType,
     period: "all_time",
     items,
-    currentUser: currentUserBase ? { ...currentUserBase, type: selectedType } : null,
+    currentUser: currentUserBase ? { ...currentUserBase } : null,
   };
 }
 

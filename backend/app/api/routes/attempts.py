@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -35,7 +34,7 @@ from app.schemas.tests import TestSnapshotRead
 from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, save_progress_in_db, submit_attempt_in_db
 from app.services.object_storage import normalize_storage_asset_path
 from app.services.scoring import mc_multiple_question_weight
-from app.services.runtime_store import _band_for_raw_score, get_attempt, save_answer, save_progress, submit_attempt
+from app.services.runtime_store import band_for_raw_score, get_attempt, save_answer, save_progress, submit_attempt
 from app.services.test_content_repo import build_test_snapshot_from_db
 
 router = APIRouter()
@@ -83,22 +82,18 @@ def _effective_band_score(
     band_score,
     total_questions: int | None,
 ):
-    if band_score is not None:
+    test_type = TestType(str(snapshot.get("test_type", TestType.reading)))
+    scope = str(snapshot.get("scope") or "")
+    if band_score is not None and (scope == TestScope.full.value or test_type == TestType.writing):
         return band_score
     if raw_score is None:
         return None
 
-    scope = str(snapshot.get("scope") or "")
-    scaled_raw_score = int(raw_score)
-    safe_total_questions = int(total_questions or snapshot.get("total_questions") or 40)
-    if scope != TestScope.full.value and safe_total_questions > 0:
-        scaled_raw_score = round((scaled_raw_score / safe_total_questions) * 40)
-    scaled_raw_score = max(0, min(40, scaled_raw_score))
-
-    return _band_for_raw_score(
-        TestType(str(snapshot.get("test_type", TestType.reading))),
-        scaled_raw_score,
-    ) or Decimal("0.0")
+    _ = total_questions
+    return band_for_raw_score(
+        test_type,
+        int(raw_score),
+    )
 
 
 def _normalize_attempt_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
@@ -632,6 +627,18 @@ async def get_result(
                 created_at=event.created_at,
             ) for event in events
         ],
+        xp_awarded_total=int(attempt.metadata.get("xp_awarded_total", 0) or 0),
+        xp_breakdown=dict(attempt.metadata.get("xp_breakdown") or {}),
+        xp_level_after=(
+            int(attempt.metadata.get("xp_level_after"))
+            if attempt.metadata.get("xp_level_after") is not None
+            else None
+        ),
+        xp_current_streak=(
+            int(attempt.metadata.get("xp_current_streak"))
+            if attempt.metadata.get("xp_current_streak") is not None
+            else None
+        ),
     )
 
 

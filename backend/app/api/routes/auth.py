@@ -28,6 +28,8 @@ from app.schemas.common import DebugPrincipal, MessageResponse
 from app.services.code_store import get_code_store
 from app.services.notification_sender import create_and_send_notification
 from app.services.object_storage import upload_user_avatar_image
+from app.services.premium_access import reconcile_user_premium_status
+from app.services.telegram_profile_sync import sync_user_telegram_profile
 from app.services.user_cleanup import purge_user_data
 from app.services.user_names import resolve_login_name_parts
 from sqlalchemy import select
@@ -61,9 +63,12 @@ def _upsert_user_from_login(
 
     user.telegram_id = telegram_id
     user.phone = phone
-    if username is not None or user.username is None:
+    if not user.name_is_custom:
+        user.first_name = first_name
+        user.last_name = last_name
+    if not user.username_is_custom:
         user.username = username
-    if avatar_url is not None and not user.avatar_url:
+    if not user.avatar_is_custom:
         user.avatar_url = avatar_url
     user.telegram_contact_updated_at = now
     return user
@@ -98,6 +103,46 @@ async def _fetch_telegram_avatar_url(telegram_id: int) -> str | None:
         )
     except Exception:
         return None
+    finally:
+        try:
+            await bot.session.close()
+        except Exception:
+            pass
+
+
+async def _resolve_telegram_avatar_url(
+    telegram_id: int,
+    *,
+    fallback: str | None = None,
+) -> str | None:
+    settings = get_settings()
+    if not settings.telegram_bot_token or settings.telegram_bot_token == "change-me":
+        return fallback
+
+    bot = Bot(token=settings.telegram_bot_token)
+    try:
+        photos = await bot.get_user_profile_photos(telegram_id, limit=1)
+        if not photos.photos:
+            return None
+
+        photo = photos.photos[0][-1]
+        file = await bot.get_file(photo.file_id)
+        if not file.file_path:
+            return fallback
+
+        buffer = BytesIO()
+        await bot.download_file(file.file_path, destination=buffer)
+        payload = buffer.getvalue()
+        if not payload:
+            return fallback
+
+        return upload_user_avatar_image(
+            content=payload,
+            filename=f"telegram-{telegram_id}.jpg",
+            content_type="image/jpeg",
+        )
+    except Exception:
+        return fallback
     finally:
         try:
             await bot.session.close()
@@ -239,8 +284,10 @@ async def verify_code(
     elif db_user is None:
         is_new_user = True
 
-    if not avatar_url and (db_user is None or not db_user.avatar_url):
-        avatar_url = await _fetch_telegram_avatar_url(telegram_id)
+    avatar_url = await _resolve_telegram_avatar_url(
+        telegram_id,
+        fallback=avatar_url if avatar_url is not None else (db_user.avatar_url if db_user is not None else None),
+    )
 
     db_user = _upsert_user_from_login(
         db_user,
@@ -260,6 +307,8 @@ async def verify_code(
     except Exception as exc:
         await db.rollback()
         raise HTTPException(status_code=500, detail="Ma'lumotlarni saqlashda xatolik.") from exc
+
+    await reconcile_user_premium_status(db, user=db_user)
 
     await store.mark_used(str(payload.code))
 
@@ -426,6 +475,8 @@ async def get_session_status(
         raise HTTPException(status_code=404, detail="Session not found.")
 
     session, user = row
+    await reconcile_user_premium_status(db, user=user)
+    await sync_user_telegram_profile(user)
     session.last_used_at = datetime.now(UTC)
     await db.commit()
     principal = DebugPrincipal(

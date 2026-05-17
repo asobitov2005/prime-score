@@ -23,6 +23,7 @@ from app.services.runtime_store import AttemptRuntime, _band_for_raw_score
 from app.services.scoring import score_answer
 from app.services.snapshots import freeze_test_snapshot
 from app.services.test_content_repo import build_test_snapshot_from_db
+from app.services.xp import award_xp_for_attempt
 
 
 def _principal_phone(principal: DebugPrincipal) -> str:
@@ -696,12 +697,21 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
                     created_at=now,
                 )
             )
+    xp_result = await award_xp_for_attempt(session, attempt)
+    metadata["xp_awarded_total"] = xp_result.total_awarded
+    metadata["xp_breakdown"] = xp_result.breakdown
+    metadata["xp_level_after"] = xp_result.level_after
+    metadata["xp_current_streak"] = xp_result.current_streak
     attempt.attempt_metadata = metadata
     session.add(
         AttemptEvent(
             attempt_id=attempt_id,
             event_type="attempt_submitted",
-            payload={"raw_score": raw_score, "band_score": float(band_score) if band_score is not None else None},
+            payload={
+                "raw_score": raw_score,
+                "band_score": float(band_score) if band_score is not None else None,
+                "xp_awarded_total": xp_result.total_awarded,
+            },
             created_at=now,
         )
     )

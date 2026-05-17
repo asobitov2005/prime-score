@@ -6,12 +6,16 @@ import type {
   MeProfileUpdateBody,
   AuthSessionStatusResponse,
   RedeemResponse,
+  GenerateGiftCodeBody,
+  GenerateGiftCodeResponse,
+  GiftCodeSummaryResponse,
   CreatePaymentBody,
   CreatePaymentResponse,
   CancelPaymentResponse,
   PaymentRecordResponse,
   AuthVerifyCodeBody,
   LeaderboardQuery,
+  XpSummaryResponse,
   RedeemBody,
   SaveAnswerBody,
   StartAttemptBody,
@@ -21,7 +25,7 @@ import type {
 import { FRONTEND_API_TIMEOUT_MS, getFrontendClientApiBaseUrl, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 import { getAttemptsByType, getTestById, getTestsByAccess, getTestsByType } from "@/lib/mock-data";
 import { useAuthStore } from "@/store/auth-store";
-import type { AccessType, AttemptRow, DashboardActivityPoint, LeaderboardEntry, LeaderboardResponseData, SubscriptionPlan, TestCatalogItem, TestType } from "@/lib/types";
+import type { AccessType, AttemptRow, DashboardActivityPoint, LeaderboardEntry, LeaderboardResponseData, SubscriptionPlan, TestCatalogItem, TestType, XpSummary } from "@/lib/types";
 import {
   isUserAuthFailureStatus,
   performClientUserAuthedFetch,
@@ -54,21 +58,19 @@ interface NotificationItem {
 type BackendLeaderboardEntry = {
   rank: number;
   user_id: string;
+  avatar_url?: string | null;
   display_name: string;
-  test_type: TestType | "combined";
-  percentile: number;
-  estimated_band_score?: number | null;
-  reading_score?: number | null;
-  listening_score?: number | null;
-  total_tests_attempted: number;
-  avg_accuracy?: number | null;
-  total_time_sec: number;
-  last_active_at?: string | null;
+  level: number;
+  xp: number;
+  current_streak: number;
+  badge?: string | null;
+  average_score?: number | null;
+  full_mock_completions: number;
+  achieved_at?: string | null;
   is_current_user?: boolean;
 };
 
 type BackendLeaderboardResponse = {
-  test_type: TestType | "combined";
   period: "week" | "month" | "all_time";
   items: BackendLeaderboardEntry[];
   current_user?: BackendLeaderboardEntry | null;
@@ -83,31 +85,40 @@ type BackendMeActivityPoint = {
   writing_time_sec?: number | null;
 };
 
-function formatLeaderboardDuration(totalSeconds: number | null | undefined): string {
-  const safeSeconds = Math.max(0, Math.floor(totalSeconds ?? 0));
-  const hours = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
-}
-
 function mapBackendLeaderboardEntry(entry: BackendLeaderboardEntry): LeaderboardEntry {
   return {
     rank: entry.rank,
     userId: entry.user_id,
+    avatarUrl: entry.avatar_url ?? null,
     name: entry.display_name,
-    type: entry.test_type,
-    percentile: entry.percentile,
-    estimatedBand: entry.estimated_band_score !== null && entry.estimated_band_score !== undefined
-      ? entry.estimated_band_score.toFixed(1)
-      : null,
-    readingScore: entry.reading_score !== null && entry.reading_score !== undefined ? `${entry.reading_score.toFixed(1)}/40` : null,
-    listeningScore: entry.listening_score !== null && entry.listening_score !== undefined ? `${entry.listening_score.toFixed(1)}/40` : null,
-    attempts: entry.total_tests_attempted,
-    totalTime: formatLeaderboardDuration(entry.total_time_sec),
-    avgAccuracy: entry.avg_accuracy ?? null,
-    lastActiveAt: entry.last_active_at ?? null,
+    level: entry.level,
+    xp: entry.xp,
+    currentStreak: entry.current_streak,
+    badge: entry.badge ?? null,
+    averageScore: entry.average_score ?? null,
+    fullMockCompletions: entry.full_mock_completions,
+    achievedAt: entry.achieved_at ?? null,
     qualified: true,
     isCurrentUser: entry.is_current_user ?? false,
+  };
+}
+
+function mapXpSummary(payload: XpSummaryResponse): XpSummary {
+  return {
+    totalXp: payload.total_xp,
+    level: payload.level,
+    currentStreak: payload.current_streak,
+    bestStreak: payload.best_streak,
+    weeklyXp: payload.weekly_xp,
+    monthlyXp: payload.monthly_xp,
+    progress: {
+      level: payload.progress.level,
+      levelFloorXp: payload.progress.level_floor_xp,
+      nextLevelXp: payload.progress.next_level_xp,
+      xpIntoLevel: payload.progress.xp_into_level,
+      xpNeededForNextLevel: payload.progress.xp_needed_for_next_level,
+      progressPercent: payload.progress.progress_percent,
+    },
   };
 }
 
@@ -286,6 +297,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
       });
     },
     deleteMyAvatar: () => request<MeProfileRead>("/me/avatar", { method: "DELETE" }),
+    getXpSummary: () => request<XpSummaryResponse>("/me/xp-summary", { method: "GET" }).then(mapXpSummary),
     listNotifications: () => request<NotificationItem[]>("/me/notifications", { method: "GET" }),
     markAllNotificationsRead: () => request<{ message: string }>("/me/notifications/read-all", { method: "PATCH" }),
     listTests: (query: TestListQuery = {}) => request<{ data: TestCatalogItem[] }>("/tests", { method: "GET" }).catch(() => ({
@@ -340,6 +352,11 @@ export function createApiClient(config: ApiClientConfig = {}) {
       headers,
       body: JSON.stringify(body)
     }),
+    listGiftCodes: () => request<GiftCodeSummaryResponse>("/me/gift-codes", { method: "GET" }),
+    generateGiftCode: (body: GenerateGiftCodeBody) => request<GenerateGiftCodeResponse>("/me/gift-codes/generate", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
     listPayments: () => request<PaymentRecordResponse[]>("/me/payments", { method: "GET" }),
     createPayment: (body: CreatePaymentBody) => request<CreatePaymentResponse>("/me/payments", {
       method: "POST",
@@ -351,10 +368,9 @@ export function createApiClient(config: ApiClientConfig = {}) {
     }),
     getLeaderboard: (query: LeaderboardQuery = {}) =>
       request<BackendLeaderboardResponse>(
-        `/leaderboard?type=${encodeURIComponent(query.type ?? "combined")}&period=${encodeURIComponent(query.period ?? "all_time")}`
+        `/leaderboard?period=${encodeURIComponent(query.period ?? "all_time")}`
       )
         .then<LeaderboardResponseData>((payload) => ({
-          type: payload.test_type,
           period: payload.period,
           items: payload.items.map(mapBackendLeaderboardEntry),
           currentUser: payload.current_user ? mapBackendLeaderboardEntry(payload.current_user) : null,

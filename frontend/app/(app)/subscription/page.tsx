@@ -3,6 +3,7 @@ import { RedeemCodePanel } from "@/components/subscription/redeem-code-panel";
 import { SubscriptionHeroStatus } from "@/components/subscription/subscription-hero-status";
 import { SubscriptionWorkspace } from "@/components/subscription/subscription-workspace";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { getMyGiftCodeSummary } from "@/lib/server-gift-codes";
 import { getMyPayments } from "@/lib/server-payments";
 import { getPublicPlans } from "@/lib/server-plans";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function SubscriptionPage() {
-  const [plans, payments] = await Promise.all([getPublicPlans(), getMyPayments()]);
+  const [plans, payments, giftSummary] = await Promise.all([getPublicPlans(), getMyPayments(), getMyGiftCodeSummary()]);
 
   return (
     <div className="-mt-1 space-y-3 animate-in fade-in duration-500 md:-mt-2">
@@ -44,7 +45,7 @@ export default async function SubscriptionPage() {
         </CardHeader>
       </Card>
 
-      <SubscriptionWorkspace plans={plans} initialPayments={payments} />
+      <SubscriptionWorkspace plans={plans} initialPayments={payments} initialGiftSummary={giftSummary} />
     </div>
   );
 }

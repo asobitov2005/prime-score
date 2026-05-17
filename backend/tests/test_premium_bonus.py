@@ -7,12 +7,25 @@ from uuid import UUID
 import pytest
 
 from app.core.enums import AttemptStatus as CoreAttemptStatus
+from app.models.commerce import GiftCodeEntitlement, Plan
 from app.models.enums import AttemptMode as ModelAttemptMode
 from app.models.enums import AttemptScope as ModelAttemptScope
 from app.models.enums import AttemptStatus as ModelAttemptStatus
 from app.models.enums import TestType as ModelTestType
 from app.models.user import User
 from app.services.attempt_repo import _should_grant_premium_bonus, submit_attempt_in_db
+from app.services.gift_entitlements import (
+    FriendGiftOffer,
+    generate_user_gift_code,
+    get_friend_gift_offer_for_plan,
+    grant_payment_gift_entitlement,
+)
+from app.services.plan_catalog import (
+    PUBLIC_30_DAY_PLAN,
+    PUBLIC_PLAN_DEFINITIONS,
+    get_public_plan_definition_for_granted_days,
+)
+from app.services.premium_access import reconcile_user_premium_status
 from app.services.premium_bonus import grant_premium_bonus
 
 
@@ -48,6 +61,40 @@ class _SubmitAttemptSession(_FakeSession):
 
     async def refresh(self, item) -> None:
         _ = item
+
+
+class _GiftEntitlementSession:
+    def __init__(self, *, entitlement: GiftCodeEntitlement | None = None, gift_plan=None) -> None:
+        self.entitlement = entitlement
+        self.gift_plan = gift_plan
+        self.added: list[object] = []
+        self.flushes = 0
+
+    async def scalar(self, _query):
+        return self.entitlement
+
+    async def get(self, _model, _item_id):
+        return self.gift_plan
+
+    def add(self, item: object) -> None:
+        self.added.append(item)
+
+    async def flush(self) -> None:
+        self.flushes += 1
+
+
+class _PremiumAccessSession(_FakeSession):
+    def __init__(self, user: User) -> None:
+        super().__init__(user)
+        self.commits = 0
+        self.refreshes = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def refresh(self, item) -> None:
+        _ = item
+        self.refreshes += 1
 
 
 def _build_submit_attempt() -> tuple[SimpleNamespace, SimpleNamespace, list[SimpleNamespace], dict[str, dict[str, object]]]:
@@ -146,6 +193,92 @@ async def test_grant_premium_bonus_extends_active_premium(monkeypatch) -> None:
     assert session.added == []
 
 
+@pytest.mark.asyncio
+async def test_reconcile_user_premium_status_removes_expired_premium() -> None:
+    now = datetime(2026, 5, 17, 12, 0, tzinfo=UTC)
+    user = User(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        telegram_id=123456789,
+        phone="+998901234567",
+        first_name="Prime",
+        is_premium=True,
+        premium_until=now - timedelta(minutes=5),
+    )
+    session = _PremiumAccessSession(user)
+
+    changed = await reconcile_user_premium_status(session, user=user, now=now)
+
+    assert changed is True
+    assert user.is_premium is False
+    assert user.premium_until is None
+    assert session.commits == 1
+    assert session.refreshes == 1
+
+
+@pytest.mark.asyncio
+async def test_reconcile_user_premium_status_restores_future_premium_flag() -> None:
+    now = datetime(2026, 5, 17, 12, 0, tzinfo=UTC)
+    user = User(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        telegram_id=123456789,
+        phone="+998901234567",
+        first_name="Prime",
+        is_premium=False,
+        premium_until=now + timedelta(days=2),
+    )
+    session = _PremiumAccessSession(user)
+
+    changed = await reconcile_user_premium_status(session, user=user, now=now)
+
+    assert changed is True
+    assert user.is_premium is True
+    assert user.premium_until == now + timedelta(days=2)
+    assert session.commits == 1
+    assert session.refreshes == 1
+
+
+def test_public_premium_plans_map_to_expected_friend_gifts() -> None:
+    month_1 = PUBLIC_30_DAY_PLAN
+    month_2 = next(item for item in PUBLIC_PLAN_DEFINITIONS if item.duration_days == 60)
+    month_3 = next(item for item in PUBLIC_PLAN_DEFINITIONS if item.duration_days == 90)
+
+    assert month_1.friend_gift_days == 3
+    assert month_1.friend_gift_count == 1
+
+    assert month_2.friend_gift_days == 7
+    assert month_2.friend_gift_count == 1
+
+    assert month_3.friend_gift_days == 14
+    assert month_3.friend_gift_count == 1
+
+
+def test_granted_premium_days_resolve_to_expected_friend_gift_plan() -> None:
+    month_1 = get_public_plan_definition_for_granted_days(30)
+    month_2 = get_public_plan_definition_for_granted_days(60)
+    month_3 = get_public_plan_definition_for_granted_days(90)
+
+    assert month_1 is not None
+    assert month_1.friend_gift_days == 3
+
+    assert month_2 is not None
+    assert month_2.friend_gift_days == 7
+
+    assert month_3 is not None
+    assert month_3.friend_gift_days == 14
+
+
+def test_friend_gift_offer_for_public_plan_uses_expected_mapping() -> None:
+    month_1 = Plan(id=PUBLIC_30_DAY_PLAN.id, catalog="public", name="1 Month", duration_days=30, price_amount=59000)
+    month_2_definition = next(item for item in PUBLIC_PLAN_DEFINITIONS if item.duration_days == 60)
+    month_2 = Plan(id=month_2_definition.id, catalog="public", name="2 Months", duration_days=60, price_amount=79000)
+    month_3_definition = next(item for item in PUBLIC_PLAN_DEFINITIONS if item.duration_days == 90)
+    month_3 = Plan(id=month_3_definition.id, catalog="public", name="3 Months", duration_days=90, price_amount=109000)
+
+    assert get_friend_gift_offer_for_plan(month_1) == FriendGiftOffer(gift_days=3, gift_count=1)
+    assert get_friend_gift_offer_for_plan(month_2) == FriendGiftOffer(gift_days=7, gift_count=1)
+    assert get_friend_gift_offer_for_plan(month_3) == FriendGiftOffer(gift_days=14, gift_count=1)
+
+
 def test_should_grant_premium_bonus_only_for_full_reading_and_listening() -> None:
     full_reading = SimpleNamespace(scope=ModelAttemptScope.FULL, test_type=ModelTestType.READING, status=ModelAttemptStatus.IN_PROGRESS)
     section_reading = SimpleNamespace(scope=ModelAttemptScope.SECTION, test_type=ModelTestType.READING, status=ModelAttemptStatus.IN_PROGRESS)
@@ -231,3 +364,89 @@ async def test_submit_attempt_does_not_grant_bonus_for_blank_submit(monkeypatch)
     assert "premium_bonus_granted" not in attempt.attempt_metadata
     assert user.is_premium is False
     assert bonus_calls == []
+
+
+@pytest.mark.asyncio
+async def test_grant_payment_gift_entitlement_creates_entitlement_for_supported_plan(monkeypatch) -> None:
+    async def _fake_ensure_default_plans(_session):
+        return []
+
+    monkeypatch.setattr("app.services.gift_entitlements.ensure_default_plans", _fake_ensure_default_plans)
+
+    now = datetime(2026, 5, 17, 10, 0, tzinfo=UTC)
+    user = User(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        telegram_id=123456789,
+        phone="+998901234567",
+        first_name="Prime",
+    )
+    payment = SimpleNamespace(id=UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"))
+    plan = SimpleNamespace(id=UUID("00000000-0000-0000-0000-000000000260"), catalog="public")
+    session = _GiftEntitlementSession()
+
+    entitlement = await grant_payment_gift_entitlement(
+        session,
+        user=user,
+        payment=payment,
+        plan=plan,
+        now=now,
+    )
+
+    assert entitlement is not None
+    assert entitlement.user_id == user.id
+    assert entitlement.source_payment_id == payment.id
+    assert entitlement.gift_days == 7
+    assert entitlement.total_codes == 1
+    assert entitlement.generated_codes == 0
+    assert str(entitlement.gift_plan_id) == "00000000-0000-0000-0000-000000000007"
+    assert session.flushes == 1
+    assert session.added == [entitlement]
+
+
+@pytest.mark.asyncio
+async def test_generate_user_gift_code_consumes_available_entitlement(monkeypatch) -> None:
+    async def _fake_ensure_default_plans(_session):
+        return []
+
+    async def _fake_build_unique_gift_code(_session):
+        return "PRIME-FRIEND-ABCD-EFGH"
+
+    monkeypatch.setattr("app.services.gift_entitlements.ensure_default_plans", _fake_ensure_default_plans)
+    monkeypatch.setattr("app.services.gift_entitlements.build_unique_gift_code", _fake_build_unique_gift_code)
+
+    now = datetime(2026, 5, 17, 11, 30, tzinfo=UTC)
+    user = User(
+        id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        telegram_id=123456789,
+        phone="+998901234567",
+        first_name="Prime",
+    )
+    entitlement = GiftCodeEntitlement(
+        id=UUID("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+        user_id=user.id,
+        source_payment_id=UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+        source_plan_id=UUID("00000000-0000-0000-0000-000000000260"),
+        gift_plan_id=UUID("00000000-0000-0000-0000-000000000007"),
+        gift_days=7,
+        total_codes=1,
+        generated_codes=0,
+    )
+    gift_plan = SimpleNamespace(id=UUID("00000000-0000-0000-0000-000000000007"))
+    session = _GiftEntitlementSession(entitlement=entitlement, gift_plan=gift_plan)
+
+    gift_code = await generate_user_gift_code(
+        session,
+        user=user,
+        gift_days=7,
+        now=now,
+    )
+
+    assert gift_code.code == "PRIME-FRIEND-ABCD-EFGH"
+    assert gift_code.purchaser_user_id == user.id
+    assert gift_code.plan_id == gift_plan.id
+    assert gift_code.status == "pending"
+    assert gift_code.expires_at == now + timedelta(days=3)
+    assert entitlement.generated_codes == 1
+    assert entitlement.last_generated_at == now
+    assert session.flushes == 1
+    assert session.added == [gift_code]

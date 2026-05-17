@@ -20,6 +20,8 @@ from app.models.enums import (
     WritingTaskStatus,
     WritingTaskType,
 )
+from app.models.gamification import XPTransaction
+from app.models.user import User
 from app.models.writing import WritingDraft, WritingEvaluation, WritingEvaluationRun, WritingSubmission, WritingTask
 from app.schemas.common import DebugPrincipal
 from app.schemas.writing import (
@@ -89,6 +91,39 @@ async def _ensure_writing_submission_allowed(
             detail="Daily Writing check limit reached. Upgrade your plan or try again after the daily reset.",
         )
     return limit_status
+
+
+def _writing_xp_breakdown(rows: list[XPTransaction]) -> dict:
+    breakdown = {
+        "activity_xp": 0,
+        "score_bonus": 0,
+        "accuracy_bonus": 0,
+        "improvement_bonus": 0,
+        "streak_bonus": 0,
+        "repeat_multiplier": 1,
+        "cap_applied": False,
+        "total": 0,
+    }
+    for row in rows:
+        amount = int(row.xp_amount or 0)
+        tx_type = str(row.transaction_type)
+        if tx_type == "TEST_COMPLETION":
+            breakdown["activity_xp"] += amount
+        elif tx_type == "SCORE_BONUS":
+            breakdown["score_bonus"] += amount
+        elif tx_type == "ACCURACY_BONUS":
+            breakdown["accuracy_bonus"] += amount
+        elif tx_type == "IMPROVEMENT_BONUS":
+            breakdown["improvement_bonus"] += amount
+        elif tx_type in {"STREAK_DAILY", "STREAK_MILESTONE"}:
+            breakdown["streak_bonus"] += amount
+        metadata = row.metadata_json or {}
+        if metadata.get("repeat_multiplier") is not None:
+            breakdown["repeat_multiplier"] = metadata.get("repeat_multiplier")
+        if metadata.get("cap_applied"):
+            breakdown["cap_applied"] = True
+        breakdown["total"] += amount
+    return breakdown
 
 
 async def _dispatch_writing_retry(submission_id: UUID) -> str | None:
@@ -1068,6 +1103,19 @@ async def get_submission_result(
         session=session,
         user_id=current_user.id,
     )
+    xp_rows = list(
+        (
+            await session.scalars(
+                select(XPTransaction).where(
+                    XPTransaction.user_id == current_user.id,
+                    XPTransaction.source_type == "writing_submission",
+                    XPTransaction.source_id == str(submission.id),
+                )
+            )
+        ).all()
+    )
+    xp_breakdown = _writing_xp_breakdown(xp_rows)
+    user = await session.get(User, current_user.id)
 
     return WritingEvaluationRead(
         submission_id=submission.id,
@@ -1119,6 +1167,10 @@ async def get_submission_result(
         roast_profile_version=evaluation.roast_profile_version,
         improved_profile_version=evaluation.improved_profile_version,
         annotation_profile_version=evaluation.annotation_profile_version,
+        xp_awarded_total=int(xp_breakdown.get("total", 0) or 0),
+        xp_breakdown=xp_breakdown,
+        xp_level_after=int(user.current_level or 1) if user is not None else None,
+        xp_current_streak=int(user.current_streak or 0) if user is not None else None,
     )
 
 

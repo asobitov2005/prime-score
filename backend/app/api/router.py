@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     admin,
     admin_ai,
+    admin_xp,
     admin_speaking,
     admin_writing_config,
     admin_writing,
@@ -31,6 +32,7 @@ api_router.include_router(leaderboard.router, prefix="/leaderboard", tags=["lead
 api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(admin_ai.router, prefix="/admin", tags=["admin-ai"])
+api_router.include_router(admin_xp.router, prefix="/admin", tags=["admin-xp"])
 api_router.include_router(admin_speaking.router, prefix="/admin/speaking", tags=["admin-speaking"])
 api_router.include_router(writing.router, prefix="/writing", tags=["writing"])
 api_router.include_router(admin_writing.router, prefix="/admin/writing", tags=["admin-writing"])

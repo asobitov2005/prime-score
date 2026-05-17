@@ -28,6 +28,8 @@ class DefaultPlanDefinition:
     is_featured: bool = False
     currency: str = "UZS"
     payment_paused: bool = True
+    friend_gift_days: int = 0
+    friend_gift_count: int = 0
 
 
 PUBLIC_30_DAY_PLAN = DefaultPlanDefinition(
@@ -46,6 +48,8 @@ PUBLIC_30_DAY_PLAN = DefaultPlanDefinition(
         "5 Writing checks per day",
         "Gift 3 premium days to a friend",
     ),
+    friend_gift_days=3,
+    friend_gift_count=1,
 )
 
 PUBLIC_PLAN_DEFINITIONS: tuple[DefaultPlanDefinition, ...] = (
@@ -67,6 +71,8 @@ PUBLIC_PLAN_DEFINITIONS: tuple[DefaultPlanDefinition, ...] = (
             "Gift 7 premium days to a friend",
         ),
         is_featured=True,
+        friend_gift_days=7,
+        friend_gift_count=1,
     ),
     DefaultPlanDefinition(
         id=UUID("00000000-0000-0000-0000-000000000090"),
@@ -84,6 +90,8 @@ PUBLIC_PLAN_DEFINITIONS: tuple[DefaultPlanDefinition, ...] = (
             "Unlimited Writing Checks (Fair Usage Policy applies)",
             "Gift 14 premium days to a friend",
         ),
+        friend_gift_days=14,
+        friend_gift_count=1,
     ),
 )
 
@@ -115,8 +123,8 @@ GIFT_CODE_PLAN_DEFINITIONS: tuple[DefaultPlanDefinition, ...] = (
     DefaultPlanDefinition(
         id=UUID("00000000-0000-0000-0000-000000000015"),
         catalog="gift",
-        name="15 Days",
-        duration_days=15,
+        name="14 Days",
+        duration_days=14,
         price=Decimal("39000"),
         display_order=40,
     ),
@@ -214,3 +222,25 @@ async def list_plans(
 
 def is_gift_code_plan_id(plan_id: UUID) -> bool:
     return plan_id in GIFT_CODE_PLAN_IDS
+
+
+def get_default_plan_definition(plan_id: UUID) -> DefaultPlanDefinition | None:
+    return _ALL_DEFINITIONS_BY_ID.get(plan_id)
+
+
+def get_gift_code_plan_definition_by_days(duration_days: int) -> DefaultPlanDefinition | None:
+    for definition in GIFT_CODE_PLAN_DEFINITIONS:
+        if definition.duration_days == duration_days:
+            return definition
+    return None
+
+
+def get_public_plan_definition_for_granted_days(duration_days: int) -> DefaultPlanDefinition | None:
+    eligible = [
+        definition
+        for definition in PUBLIC_PLAN_DEFINITIONS
+        if definition.friend_gift_days > 0 and definition.friend_gift_count > 0 and duration_days >= definition.duration_days
+    ]
+    if not eligible:
+        return None
+    return max(eligible, key=lambda definition: definition.duration_days)

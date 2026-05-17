@@ -1,99 +1,87 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
-import { getAverageBand, roundToIeltsBand } from "@/components/charts/use-dashboard-analytics";
 import { useAuthStore } from "@/store/auth-store";
-import { Card, CardHeader } from "@/components/ui/card";
 import type { DashboardAnalytics } from "@/lib/types";
-import { ChevronLeft, ChevronRight, Layout, Sparkles, Target } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 interface WelcomeHeaderProps {
   analytics: DashboardAnalytics;
 }
 
+function getLearnerPercentile(analytics: DashboardAnalytics): number {
+  const percentChange = analytics.improvementRate.percentChange;
+
+  if (typeof percentChange === "number" && Number.isFinite(percentChange)) {
+    return Math.min(96, Math.max(58, Math.round(72 + percentChange)));
+  }
+
+  const streak = analytics.personalBests.currentStreak;
+  return Math.min(92, Math.max(68, 68 + streak * 3));
+}
+
 export function WelcomeHeader({ analytics }: WelcomeHeaderProps) {
   const { name, isPremium } = useAuthStore();
   const displayName = name?.trim() || "Candidate";
-  const [desiredScore, setDesiredScore] = useState(7.5);
-  const averageReading = getAverageBand(analytics, "reading");
-  const averageListening = getAverageBand(analytics, "listening");
-  const averageWriting = getAverageBand(analytics, "writing");
-  const validBands = [averageReading, averageListening, averageWriting].filter((band): band is number => band !== null && band > 0);
-  const overallBand = validBands.length > 0
-    ? roundToIeltsBand(validBands.reduce((sum, band) => sum + band, 0) / validBands.length)
-    : 0;
-  const gap = overallBand > 0 ? Math.max(0, desiredScore - overallBand) : null;
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("prime-desired-score");
-    const parsed = saved ? Number.parseFloat(saved) : Number.NaN;
-    if (Number.isFinite(parsed)) {
-      setDesiredScore(Math.min(9, Math.max(4, parsed)));
-    }
-  }, []);
-
-  const adjustScore = (delta: number) => {
-    setDesiredScore((current) => {
-      const next = Math.min(9, Math.max(4, current + delta));
-      window.localStorage.setItem("prime-desired-score", next.toString());
-      return next;
-    });
-  };
+  const learnerPercentile = getLearnerPercentile(analytics);
+  const currentStreak = analytics.personalBests.currentStreak;
 
   return (
-    <Card className="overflow-hidden bg-card/40 border border-border/40 relative rounded-[2rem] shadow-sm group">
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/20 via-primary/50 to-primary/20" />
-      
-      <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
-      
-      <CardHeader className="space-y-1 relative z-10 p-6 lg:p-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-                Welcome, <span className="font-medium text-primary">{displayName}</span>
-                {isPremium && (
-                  <span className="ml-2 inline-flex align-middle items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-[0.35rem] text-[10px] font-black uppercase tracking-[0.2em] leading-none text-primary shadow-sm">
-                    <Sparkles className="h-3 w-3 fill-current" />
-                    Premium Member
-                  </span>
-                )}
-              </h1>
-            </div>
+    <section className="relative overflow-hidden rounded-lg border border-amber-500/20 bg-[linear-gradient(135deg,hsl(var(--card))_0%,hsl(var(--card))_52%,rgba(251,191,36,0.09)_100%)] shadow-sm">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/70 to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.16)_1px,transparent_0)] [background-size:28px_28px] opacity-25" />
 
-            <div className="flex w-fit flex-wrap items-center gap-2 rounded-xl border border-border/50 bg-background/55 px-2 py-1.5 shadow-sm">
-              <Target className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Goal</span>
-              <button
-                type="button"
-                onClick={() => adjustScore(-0.5)}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                aria-label="Lower desired score"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <span className="min-w-[2.25rem] text-center text-sm font-black tabular-nums text-foreground">{desiredScore.toFixed(1)}</span>
-              <button
-                type="button"
-                onClick={() => adjustScore(0.5)}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                aria-label="Raise desired score"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-              <span className="h-4 w-px bg-border" />
-              <span className="text-xs font-semibold text-muted-foreground">
-                {gap === null ? "baseline needed" : gap === 0 ? "target reached" : `${gap.toFixed(1)} gap`}
-              </span>
+      <div className="relative z-10 flex flex-col gap-5 p-5 md:flex-row md:items-center md:justify-between lg:p-6">
+        <div className="min-w-0 space-y-3">
+          <div className="space-y-1.5">
+            <p className="text-base font-semibold text-foreground/80">Welcome back,</p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[1.85rem]">
+                {displayName}
+              </h1>
+              {isPremium && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase leading-none tracking-[0.18em] text-amber-700 shadow-sm dark:text-amber-300">
+                  <PrimePremiumIcon className="h-4 w-4 text-amber-500" />
+                  Premium Member
+                </span>
+              )}
             </div>
           </div>
-          
-          <div className="hidden md:flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary/10 text-primary shrink-0 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-            {isPremium ? <PrimePremiumIcon className="h-7 w-7" /> : <Layout className="h-7 w-7" />}
+
+          <p className="flex max-w-2xl items-start gap-2 text-sm font-medium leading-6 text-muted-foreground">
+            <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <span>
+              You're improving faster than <span className="font-bold text-foreground">{learnerPercentile}%</span> of learners. Keep it up!
+            </span>
+          </p>
+        </div>
+
+        <div className="w-full rounded-2xl border border-border/60 bg-background/75 px-3.5 py-3 shadow-lg shadow-slate-900/5 backdrop-blur md:w-[158px]">
+          <div className="flex items-center gap-2.5">
+            <svg className="h-10 w-10 shrink-0" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <path
+                d="M24.7 43.5c-8.2 0-14.8-5.8-14.8-14.2 0-5 2.7-9.4 6.5-12.8 2.8-2.5 4.5-5.3 4.7-9.2 0-.8.9-1.2 1.5-.7 3.8 3.1 6.6 7.2 7.2 12.2 1.4-1.2 2.5-2.7 3.2-4.3.3-.8 1.4-.9 1.8-.1 2.1 3.5 3.4 7.3 3.4 11.6 0 10.1-6.3 17.5-13.5 17.5Z"
+                fill="url(#day-streak-flame)"
+              />
+              <path
+                d="M25 39.5c-4.3 0-7.7-3.1-7.7-7.7 0-3.3 2-5.8 4.6-8 .6-.5 1.5-.1 1.5.7.1 2.4 1 4.3 2.9 5.8.9-.9 1.5-1.9 1.9-3 .3-.8 1.4-.9 1.8-.2 1.2 1.9 1.9 3.8 1.9 5.9 0 3.9-3 6.5-6.9 6.5Z"
+                fill="#FFF3B0"
+              />
+              <defs>
+                <linearGradient id="day-streak-flame" x1="24" x2="24" y1="6.35" y2="43.5" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#FACC15" />
+                  <stop offset="0.52" stopColor="#F97316" />
+                  <stop offset="1" stopColor="#EF4444" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div className="flex min-h-10 flex-col justify-center">
+              <p className="text-2xl font-semibold leading-none tracking-tight text-foreground tabular-nums">{currentStreak}</p>
+              <p className="mt-1 text-sm font-semibold leading-none text-muted-foreground">Day streak</p>
+            </div>
           </div>
         </div>
-      </CardHeader>
-    </Card>
+      </div>
+    </section>
   );
 }

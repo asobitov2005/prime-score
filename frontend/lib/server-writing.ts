@@ -212,6 +212,10 @@ export interface WritingSubmissionResult {
   calibration_result?: Record<string, unknown>;
   audit_result?: Record<string, unknown>;
   meta_learning_note?: string;
+  xp_awarded_total?: number;
+  xp_breakdown?: Record<string, unknown>;
+  xp_level_after?: number | null;
+  xp_current_streak?: number | null;
 }
 
 export interface WritingDraftListItem {

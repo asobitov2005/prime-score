@@ -132,6 +132,7 @@ from app.services.admin_auth import (
 from app.services.attempt_repo import iter_user_attempts_from_db
 from app.services.notification_sender import edit_telegram_message, send_telegram_message_with_id
 from app.services.code_store import get_code_store
+from app.services.gift_entitlements import grant_manual_premium_entitlement
 from app.services.plan_catalog import (
     list_plans as list_catalog_plans,
 )
@@ -2261,11 +2262,18 @@ async def bulk_grant_premium(
             if user is not None:
                 user.is_premium = True
                 user.premium_until = until
-                body = f"You've been gifted {payload.days} days of Premium! Valid until {until.strftime('%d.%m.%Y')}."
+                await grant_manual_premium_entitlement(
+                    session,
+                    user=user,
+                    granted_days=max(1, payload.days),
+                    premium_until=until,
+                    now=now,
+                )
+                body = f"{payload.days} days of Premium activated. Valid until {until.strftime('%d.%m.%Y')}."
                 await create_and_send_notification(
                     session,
                     user_id=uid,
-                    type=NotificationType.gift_received,
+                    type=NotificationType.payment_success,
                     title="Premium activated!",
                     body=body,
                     telegram_text=f"🎉 <b>Premium activated!</b>\n\n{body}",
@@ -2364,6 +2372,15 @@ async def create_user(
     session.add(user)
 
     try:
+        await session.flush()
+        if premium_until is not None:
+            await grant_manual_premium_entitlement(
+                session,
+                user=user,
+                granted_days=max(1, payload.premium_days or 1),
+                premium_until=premium_until,
+                now=now,
+            )
         await session.commit()
         await session.refresh(user)
     except Exception as exc:

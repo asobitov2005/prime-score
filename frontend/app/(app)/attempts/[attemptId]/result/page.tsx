@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Minus, XCircle } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Flame, Minus, Sparkles, Trophy, XCircle } from "lucide-react";
 import { HistoryRetakeButton } from "@/app/(app)/history/retake-button";
 import { AnswersOverviewCard } from "./answers-overview-card";
 import { ResultBackGuard } from "./result-back-guard";
@@ -102,6 +102,10 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
           estimatedScore={estimatedScore}
           percentile={percentile}
           leaderboardRank={leaderboardRank}
+          awardedTotal={result.xp_awarded_total ?? 0}
+          breakdown={result.xp_breakdown ?? {}}
+          levelAfter={result.xp_level_after ?? null}
+          currentStreak={result.xp_current_streak ?? null}
         />
       </div>
 
@@ -194,6 +198,23 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
     </div>
   );
 }
+
+function formatXpAmount(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : 0;
+}
+
+function formatXpLabel(key: string): string {
+  const labels: Record<string, string> = {
+    activity_xp: "Activity XP",
+    score_bonus: "Score bonus",
+    accuracy_bonus: "Accuracy bonus",
+    improvement_bonus: "Improvement bonus",
+    streak_bonus: "Streak bonus",
+  };
+  return labels[key] ?? key.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 
 function formatTestFormat(value: string | null | undefined): string {
   if (!value || value === "full") {
@@ -511,6 +532,10 @@ function PerformanceOverviewCard({
   estimatedScore,
   percentile,
   leaderboardRank,
+  awardedTotal,
+  breakdown,
+  levelAfter,
+  currentStreak,
 }: {
   correctCount: number;
   incorrectCount: number;
@@ -519,6 +544,10 @@ function PerformanceOverviewCard({
   estimatedScore: string;
   percentile: string;
   leaderboardRank: number | null;
+  awardedTotal: number;
+  breakdown: Record<string, unknown>;
+  levelAfter: number | null;
+  currentStreak: number | null;
 }) {
   const items = [
     {
@@ -555,6 +584,12 @@ function PerformanceOverviewCard({
     },
   ] as const;
 
+  const breakdownItems = ["activity_xp", "score_bonus", "accuracy_bonus", "improvement_bonus", "streak_bonus"]
+    .map((key) => ({ key, label: formatXpLabel(key), value: formatXpAmount(breakdown[key]) }))
+    .filter((item) => item.value > 0);
+  const repeatMultiplier = typeof breakdown.repeat_multiplier === "number" ? breakdown.repeat_multiplier : null;
+  const capApplied = Boolean(breakdown.cap_applied);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -562,7 +597,7 @@ function PerformanceOverviewCard({
           Performance Overview
         </CardDescription>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 space-y-3">
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           {items.map((item) => {
             const Icon = item.icon;
@@ -581,7 +616,8 @@ function PerformanceOverviewCard({
             );
           })}
         </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
+        
+        <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-sky-500/15 bg-sky-500/[0.06] px-4 py-3 text-center shadow-sm">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               Estimated Score
@@ -608,6 +644,63 @@ function PerformanceOverviewCard({
             <p className="mt-1 text-xl font-semibold tracking-tight text-foreground">
               {leaderboardRank ? `#${leaderboardRank}` : "Hidden"}
             </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent px-4 py-4 shadow-sm">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black tracking-tight text-foreground">
+                  +{awardedTotal.toLocaleString("en-US")}
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                  XP Earned
+                </span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {breakdownItems.length > 0 ? breakdownItems.map((item) => (
+                  <div key={item.key} className="flex items-center gap-1 rounded-md border border-amber-500/20 bg-background/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground shadow-sm">
+                    <span>{item.label}</span>
+                    <span className="font-bold text-foreground">+{item.value}</span>
+                  </div>
+                )) : (
+                  <div className="flex items-center gap-1 rounded-md border border-border/40 bg-background/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
+                    No eligible XP
+                  </div>
+                )}
+                {repeatMultiplier !== null && repeatMultiplier < 1 ? (
+                  <div className="flex items-center gap-1 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 shadow-sm dark:text-amber-300">
+                    Repeat multiplier {Math.round(repeatMultiplier * 100)}%
+                  </div>
+                ) : null}
+                {capApplied ? (
+                  <div className="flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700 shadow-sm dark:text-sky-300">
+                    Daily cap applied
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex w-full items-center gap-2 rounded-xl border border-border/50 bg-background/50 px-3 py-2 shadow-sm sm:w-auto">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">Level</span>
+                <span className="text-sm font-bold text-foreground leading-tight mt-0.5">{levelAfter ?? "1"}</span>
+              </div>
+            </div>
+            <div className="flex w-full items-center gap-2 rounded-xl border border-border/50 bg-background/50 px-3 py-2 shadow-sm sm:w-auto">
+              <Flame className="h-4 w-4 text-orange-500" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">Streak</span>
+                <span className="text-sm font-bold text-foreground leading-tight mt-0.5">{currentStreak ?? 0}</span>
+              </div>
+            </div>
           </div>
         </div>
       </CardContent>

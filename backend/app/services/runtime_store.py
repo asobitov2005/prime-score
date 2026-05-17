@@ -159,6 +159,11 @@ def _band_for_raw_score(test_type: TestType, raw_score: int) -> Decimal | None:
     return None
 
 
+def band_for_raw_score(test_type: TestType, raw_score: int) -> Decimal:
+    normalized_raw_score = max(0, min(40, int(raw_score)))
+    return _band_for_raw_score(test_type, normalized_raw_score) or Decimal("0.0")
+
+
 def _serialize(value: object) -> object:
     if isinstance(value, dict):
         return {str(key): _serialize(item) for key, item in value.items()}

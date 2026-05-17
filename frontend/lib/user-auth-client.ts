@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/auth-store";
 export const USER_SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
 
 export function isUserAuthFailureStatus(status: number): boolean {
-  return status === 401 || status === 403;
+  return status === 401;
 }
 
 export function isUserAuthExcludedPath(path: string): boolean {

@@ -334,6 +334,10 @@ class WritingEvaluationRead(BaseModel):
     roast_profile_version: int | None = None
     improved_profile_version: int | None = None
     annotation_profile_version: int | None = None
+    xp_awarded_total: int = 0
+    xp_breakdown: dict = Field(default_factory=dict)
+    xp_level_after: int | None = None
+    xp_current_streak: int | None = None
 
 
 class WritingHistoryItem(BaseModel):

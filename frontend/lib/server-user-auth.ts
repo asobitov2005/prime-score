@@ -66,7 +66,7 @@ async function getServerAccessToken(): Promise<string | null> {
 }
 
 function isUserAuthFailureStatus(status: number): boolean {
-  return status === 401 || status === 403;
+  return status === 401;
 }
 
 export async function requestServerUserApi<T>(path: string, init?: RequestInit): Promise<T> {

@@ -48,7 +48,7 @@ const highlights = [
 export function SiteShell({ children }: SiteShellProps) {
   // This shell owns the authenticated navigation frame for the user-facing app.
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const { isAuthenticated, name, phoneNumber, avatarUrl, sessionId, refreshToken, clearSession, syncSession, hasHydrated, welcomeBonusDays, dismissWelcomeBonus } = useAuthStore();
+  const { isAuthenticated, name, phoneNumber, avatarUrl, sessionId, refreshToken, clearSession, syncSession, hasHydrated, welcomeBonusDays, dismissWelcomeBonus, isPremium, premiumUntil } = useAuthStore();
   const [showWelcomeBonusModal, setShowWelcomeBonusModal] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMockTestsOpen, setIsMockTestsOpen] = useState(false);
@@ -179,15 +179,15 @@ export function SiteShell({ children }: SiteShellProps) {
   }, [clearSession, hasHydrated, isAuthenticated, refreshToken]);
 
   useEffect(() => {
-    if (!isAuthenticated || !sessionId) {
+    if (!hasHydrated || !isAuthenticated || !sessionId) {
       return;
     }
 
     let cancelled = false;
     const api = createApiClient();
-
-    void api.getSessionStatus(sessionId)
-      .then((response) => {
+    const syncSessionStatus = async () => {
+      try {
+        const response = await api.getSessionStatus(sessionId);
         if (cancelled) {
           return;
         }
@@ -201,20 +201,38 @@ export function SiteShell({ children }: SiteShellProps) {
           premiumUntil: response.user.premium_until ?? null,
           createdAt: response.user.created_at ?? null,
         });
-      })
-      .catch((error) => {
+      } catch (error) {
         if (cancelled) {
           return;
         }
-        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        if (error instanceof ApiError && error.status === 401) {
           clearSession();
         }
-      });
+      }
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        void syncSessionStatus();
+      }
+    };
+
+    void syncSessionStatus();
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void syncSessionStatus();
+      }
+    }, 60_000);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.clearInterval(intervalId);
     };
-  }, [clearSession, isAuthenticated, sessionId, syncSession]);
+  }, [clearSession, hasHydrated, isAuthenticated, sessionId, syncSession]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {

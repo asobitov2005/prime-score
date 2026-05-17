@@ -53,6 +53,19 @@ class GiftCode(UUIDMixin, TimestampMixin, Base):
     redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class GiftCodeEntitlement(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "gift_code_entitlements"
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    source_payment_id: Mapped[UUID] = mapped_column(ForeignKey("payments.id", ondelete="CASCADE"), unique=True, index=True)
+    source_plan_id: Mapped[UUID | None] = mapped_column(ForeignKey("plans.id"), nullable=True)
+    gift_plan_id: Mapped[UUID | None] = mapped_column(ForeignKey("plans.id"), nullable=True)
+    gift_days: Mapped[int] = mapped_column(Integer)
+    total_codes: Mapped[int] = mapped_column(Integer, default=1)
+    generated_codes: Mapped[int] = mapped_column(Integer, default=0)
+    last_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class GiftCodeRedemption(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "gift_code_redemptions"
 

@@ -169,6 +169,10 @@ export type BackendAttemptResult = {
     diagram_image_url: string;
   }>;
   events?: BackendAttemptEvent[];
+  xp_awarded_total?: number;
+  xp_breakdown?: Record<string, unknown>;
+  xp_level_after?: number | null;
+  xp_current_streak?: number | null;
 };
 
 export type BackendAttemptReview = {

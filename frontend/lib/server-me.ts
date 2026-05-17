@@ -11,7 +11,8 @@ import type {
   DashboardQuestionTypeComparison,
   DashboardQuestionTypeComparisonItem,
   DashboardStat,
-  TestType
+  TestType,
+  XpSummary
 } from "@/lib/types";
 
 type BackendMeStats = {
@@ -21,6 +22,27 @@ type BackendMeStats = {
   listening_band?: number | null;
   leaderboard_rank?: number | null;
   active_sessions: number;
+  total_xp?: number;
+  current_level?: number;
+  weekly_xp?: number;
+  monthly_xp?: number;
+};
+
+type BackendXpSummary = {
+  total_xp: number;
+  level: number;
+  current_streak: number;
+  best_streak: number;
+  weekly_xp: number;
+  monthly_xp: number;
+  progress: {
+    level: number;
+    level_floor_xp: number;
+    next_level_xp: number;
+    xp_into_level: number;
+    xp_needed_for_next_level: number;
+    progress_percent: number;
+  };
 };
 
 type BackendMeActivityPoint = {
@@ -372,6 +394,45 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
       { label: "Best Reading", value: "N/A", detail: "Reading band will appear after scoring." },
       { label: "Sessions", value: "0", detail: "No active user session data is available." }
     ];
+  }
+}
+
+export async function getXpSummary(): Promise<XpSummary> {
+  try {
+    const summary = await requestBackend<BackendXpSummary>("/me/xp-summary");
+    return {
+      totalXp: summary.total_xp,
+      level: summary.level,
+      currentStreak: summary.current_streak,
+      bestStreak: summary.best_streak,
+      weeklyXp: summary.weekly_xp,
+      monthlyXp: summary.monthly_xp,
+      progress: {
+        level: summary.progress.level,
+        levelFloorXp: summary.progress.level_floor_xp,
+        nextLevelXp: summary.progress.next_level_xp,
+        xpIntoLevel: summary.progress.xp_into_level,
+        xpNeededForNextLevel: summary.progress.xp_needed_for_next_level,
+        progressPercent: summary.progress.progress_percent,
+      },
+    };
+  } catch {
+    return {
+      totalXp: 0,
+      level: 1,
+      currentStreak: 0,
+      bestStreak: 0,
+      weeklyXp: 0,
+      monthlyXp: 0,
+      progress: {
+        level: 1,
+        levelFloorXp: 0,
+        nextLevelXp: 100,
+        xpIntoLevel: 0,
+        xpNeededForNextLevel: 100,
+        progressPercent: 0,
+      },
+    };
   }
 }
 
