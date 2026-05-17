@@ -37,6 +37,7 @@ from app.schemas.writing import (
     WritingHistoryResponse,
     WritingInlineAnnotation,
     WritingChecklistItem,
+    WritingLimitRead,
     WritingRevisionDiff,
     WritingRoastFeedback,
     WritingScoreBooster,
@@ -52,9 +53,42 @@ from app.schemas.writing import (
 )
 from app.services.object_storage import upload_test_diagram_image
 from app.services.ai_config import resolve_ai_use_case_config
+from app.services.writing_limits import WritingLimitStatus, resolve_writing_limit_status
 
 
 router = APIRouter()
+
+
+def _serialize_limit_status(limit_status: WritingLimitStatus) -> WritingLimitRead:
+    return WritingLimitRead(
+        is_premium=limit_status.is_premium,
+        premium_until=limit_status.premium_until,
+        daily_limit=limit_status.daily_limit,
+        used_today=limit_status.used_today,
+        remaining_today=limit_status.remaining_today,
+        can_submit=limit_status.can_submit,
+        reset_at=limit_status.reset_at,
+        plan_name=limit_status.plan_name,
+    )
+
+
+async def _ensure_writing_submission_allowed(
+    *,
+    session: AsyncSession,
+    current_user: DebugPrincipal,
+) -> WritingLimitStatus:
+    limit_status = await resolve_writing_limit_status(session, principal=current_user)
+    if not limit_status.is_premium:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Premium is required to check IELTS Writing. Upgrade to unlock Writing feedback.",
+        )
+    if not limit_status.can_submit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Daily Writing check limit reached. Upgrade your plan or try again after the daily reset.",
+        )
+    return limit_status
 
 
 async def _dispatch_writing_retry(submission_id: UUID) -> str | None:
@@ -602,8 +636,9 @@ def _build_custom_task(
 async def upload_image(
     file: UploadFile = File(...),
     current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ) -> WritingUploadImageResponse:
-    _ = current_user
+    await _ensure_writing_submission_allowed(session=session, current_user=current_user)
     content_type = (file.content_type or "").lower()
     if not content_type.startswith("image/"):
         raise HTTPException(
@@ -636,6 +671,15 @@ async def upload_image(
         ) from exc
 
     return WritingUploadImageResponse(url=url)
+
+
+@router.get("/limits", response_model=WritingLimitRead)
+async def get_writing_limits(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> WritingLimitRead:
+    limit_status = await resolve_writing_limit_status(session, principal=current_user)
+    return _serialize_limit_status(limit_status)
 
 
 @router.get("/tasks", response_model=WritingTaskListResponse)
@@ -820,6 +864,8 @@ async def submit_writing(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> WritingSubmissionRead:
+    await _ensure_writing_submission_allowed(session=session, current_user=current_user)
+
     task: WritingTask | None
     if payload.task_id is not None:
         task = await session.get(WritingTask, payload.task_id)

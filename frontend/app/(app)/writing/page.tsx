@@ -4,6 +4,7 @@ import {
   BarChart3,
   Clock3,
   ImageIcon,
+  Infinity,
   PenSquare,
   Sparkles,
   Target,
@@ -17,12 +18,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   getWritingDashboardSummary,
   getWritingHistory,
+  getWritingLimits,
   listWritingTasks,
   resolveWritingAssetUrl,
   QUESTION_SUBTYPES_TASK1,
   QUESTION_SUBTYPES_TASK2,
   type WritingDashboardSummary,
   type WritingHistoryItem,
+  type WritingLimitStatus,
   type WritingQuestionSubtype,
   type WritingTaskListItem,
   type WritingTaskType,
@@ -30,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CustomTaskCard } from "./custom-task-card";
 import { WritingQuestionFilters } from "./writing-question-filters";
+import { WritingLimitButton, WritingLimitLink } from "./writing-limit-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +47,12 @@ interface WritingPageProps {
 export default async function WritingPage({ searchParams }: WritingPageProps) {
   const activeTaskType = searchParams?.task_type === "task_2" ? "task_2" : "task_1";
   const activeSubtype = normalizeSubtype(searchParams?.question_subtype, activeTaskType);
-  const [summary, history, taskList, allTaskList] = await Promise.all([
+  const [summary, history, taskList, allTaskList, limitStatus] = await Promise.all([
     getWritingDashboardSummary().catch(() => null as WritingDashboardSummary | null),
     getWritingHistory().catch(() => ({ items: [] as WritingHistoryItem[], total: 0 })),
     listWritingTasks({ task_type: activeTaskType, question_subtype: activeSubtype, page_size: 100 }).catch(() => ({ items: [] as WritingTaskListItem[], total: 0 })),
     listWritingTasks({ task_type: activeTaskType, page_size: 100 }).catch(() => ({ items: [] as WritingTaskListItem[], total: 0 })),
+    getWritingLimits().catch(() => null as WritingLimitStatus | null),
   ]);
 
   const publishedTasks = taskList.items;
@@ -72,12 +77,10 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
                 ))}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button asChild size="sm" className="h-9 rounded-xl">
-                  <Link href={`/exam-preview/writing?task_type=${activeTaskType}`}>
+                <WritingLimitButton limitStatus={limitStatus} href={`/exam-preview/writing?task_type=${activeTaskType}`} size="sm" className="h-9 rounded-xl">
                     Check my essay
                     <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
+                </WritingLimitButton>
                 <Button asChild size="sm" variant="outline" className="h-9 rounded-xl">
                   <Link href="#published-prompts">Pick a prompt</Link>
                 </Button>
@@ -119,17 +122,18 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
 
         <WritingQuestionFilters activeTaskType={activeTaskType} counts={subtypeCounts} totalCount={allSubtypeCount} />
 
-        <SummaryCard summary={summary} history={history.items} activeTaskType={activeTaskType} />
+        <SummaryCard summary={summary} history={history.items} activeTaskType={activeTaskType} limitStatus={limitStatus} />
       </div>
 
       <div className="space-y-4">
-        <CustomTaskCard activeTaskType={activeTaskType} />
+        <CustomTaskCard activeTaskType={activeTaskType} limitStatus={limitStatus} />
       </div>
 
       <PublishedTasksSection
         activeTaskType={activeTaskType}
         activeSubtype={activeSubtype}
         tasks={publishedTasks}
+        limitStatus={limitStatus}
       />
     </div>
   );
@@ -153,10 +157,12 @@ function PublishedTasksSection({
   activeTaskType,
   activeSubtype,
   tasks,
+  limitStatus,
 }: {
   activeTaskType: WritingTaskType;
   activeSubtype?: WritingQuestionSubtype;
   tasks: WritingTaskListItem[];
+  limitStatus: WritingLimitStatus | null;
 }) {
   const taskLabel = activeTaskType === "task_1" ? "Task 1" : "Task 2";
   const subtypeLabel = [...QUESTION_SUBTYPES_TASK1, ...QUESTION_SUBTYPES_TASK2]
@@ -186,7 +192,7 @@ function PublishedTasksSection({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {tasks.map((task) => (
-            <PublishedTaskCard key={task.id} task={task} />
+            <PublishedTaskCard key={task.id} task={task} limitStatus={limitStatus} />
           ))}
         </div>
       )}
@@ -194,7 +200,7 @@ function PublishedTasksSection({
   );
 }
 
-function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
+function PublishedTaskCard({ task, limitStatus }: { task: WritingTaskListItem; limitStatus: WritingLimitStatus | null }) {
   const stripped = stripHtml(task.description ?? "").slice(0, 120);
   const imgSrc = task.task_type === "task_1" ? resolveWritingAssetUrl(task.image_url) : null;
   const minutes = Math.round((task.time_limit_seconds ?? 0) / 60);
@@ -202,7 +208,7 @@ function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
   const skills = expectedSkills(task.question_subtype, task.task_type);
 
   return (
-    <Link href={`/exam-preview/writing?taskId=${task.id}`} className="group block">
+    <WritingLimitLink limitStatus={limitStatus} href={`/exam-preview/writing?taskId=${task.id}`} className="group block text-left">
       <Card className="flex h-full flex-col overflow-hidden rounded-2xl border-border/60 bg-card/75 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
         {imgSrc ? (
           <div className="relative h-40 w-full overflow-hidden bg-white p-2 dark:bg-slate-950">
@@ -262,7 +268,7 @@ function PublishedTaskCard({ task }: { task: WritingTaskListItem }) {
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </WritingLimitLink>
   );
 }
 
@@ -289,10 +295,12 @@ function SummaryCard({
   summary,
   history,
   activeTaskType,
+  limitStatus,
 }: {
   summary: WritingDashboardSummary | null;
   history: WritingHistoryItem[];
   activeTaskType: WritingTaskType;
+  limitStatus: WritingLimitStatus | null;
 }) {
   const taskItems = history.filter((item) => item.task_type === activeTaskType);
   const gradedTaskItems = taskItems.filter((item) => {
@@ -380,34 +388,101 @@ function SummaryCard({
           </Link>
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 pt-4">
-        {tiles.map((tile) => {
-          const Icon = tile.icon;
-          return (
-            <div
-              key={tile.label}
-              className={cn(
-                "flex min-h-[78px] items-center justify-center rounded-xl border px-3 py-3 shadow-sm shadow-black/5 dark:shadow-none",
-                tile.surface
-              )}
-            >
-              <div className="flex items-center justify-center gap-3">
-                <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", tile.iconWrap)}>
-                  <Icon className={cn("h-4.5 w-4.5", tile.tone)} />
-                </div>
-                <div className="min-w-0 space-y-0.5">
-                  <p className="text-xl font-semibold leading-none tracking-tight text-foreground">{tile.value}</p>
-                  <p className="text-[10px] font-medium uppercase leading-none tracking-[0.16em] text-muted-foreground">
-                    {tile.label}
-                  </p>
+      <CardContent className="space-y-3 pt-4">
+        <WritingLimitStrip limitStatus={limitStatus} />
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {tiles.map((tile) => {
+            const Icon = tile.icon;
+            return (
+              <div
+                key={tile.label}
+                className={cn(
+                  "flex min-h-[78px] items-center justify-center rounded-xl border px-3 py-3 shadow-sm shadow-black/5 dark:shadow-none",
+                  tile.surface
+                )}
+              >
+                <div className="flex items-center justify-center gap-3">
+                  <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", tile.iconWrap)}>
+                    <Icon className={cn("h-4.5 w-4.5", tile.tone)} />
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-xl font-semibold leading-none tracking-tight text-foreground">{tile.value}</p>
+                    <p className="text-[10px] font-medium uppercase leading-none tracking-[0.16em] text-muted-foreground">
+                      {tile.label}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );
+}
+
+function WritingLimitStrip({ limitStatus }: { limitStatus: WritingLimitStatus | null }) {
+  const resetLabel = limitStatus ? formatResetTime(limitStatus.reset_at) : null;
+  const isUnlimited = limitStatus?.daily_limit === null;
+  const usagePercent = limitStatus && limitStatus.daily_limit && limitStatus.daily_limit > 0
+    ? Math.min(100, Math.round((limitStatus.used_today / limitStatus.daily_limit) * 100))
+    : 0;
+  const stateLabel = !limitStatus
+    ? "Checking limit"
+    : !limitStatus.is_premium
+      ? "Premium required"
+      : isUnlimited
+        ? "Unlimited checks"
+        : limitStatus.can_submit
+          ? `${limitStatus.remaining_today}/${limitStatus.daily_limit} left today`
+          : "Daily limit reached";
+
+  return (
+    <div className={cn(
+      "overflow-hidden rounded-xl border px-4 py-3",
+      limitStatus?.can_submit
+        ? "border-emerald-200/70 bg-emerald-50/70 dark:border-emerald-500/20 dark:bg-emerald-500/10"
+        : "border-amber-200/80 bg-amber-50/75 dark:border-amber-500/25 dark:bg-amber-500/10"
+    )}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+            limitStatus?.can_submit ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+          )}>
+            {isUnlimited ? <Infinity className="h-4.5 w-4.5" /> : <PenSquare className="h-4.5 w-4.5" />}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">Writing checks</p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {limitStatus?.plan_name ? `${limitStatus.plan_name} - ` : ""}{stateLabel}
+              {resetLabel && !isUnlimited ? ` - resets ${resetLabel}` : ""}
+            </p>
+          </div>
+        </div>
+        {limitStatus && limitStatus.daily_limit !== null ? (
+          <div className="min-w-[130px] text-right">
+            <p className="text-sm font-bold tabular-nums text-foreground">{limitStatus.used_today}/{limitStatus.daily_limit}</p>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background/70">
+              <div className={cn("h-full rounded-full", limitStatus.can_submit ? "bg-emerald-500" : "bg-amber-500")} style={{ width: `${usagePercent}%` }} />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function formatResetTime(value: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tashkent",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "tomorrow";
+  }
 }
 
 function formatBand(value: number | string | null | undefined, fallback = "—"): string {

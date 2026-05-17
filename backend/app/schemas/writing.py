@@ -362,3 +362,14 @@ class WritingDashboardSummary(BaseModel):
     last_submitted_at: datetime | None = None
     task_1_average: float | None = None
     task_2_average: float | None = None
+
+
+class WritingLimitRead(BaseModel):
+    is_premium: bool
+    premium_until: datetime | None = None
+    daily_limit: int | None = None
+    used_today: int
+    remaining_today: int | None = None
+    can_submit: bool
+    reset_at: datetime
+    plan_name: str | None = None

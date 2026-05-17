@@ -259,6 +259,17 @@ export interface WritingDashboardSummary {
   task_2_average?: number | null;
 }
 
+export interface WritingLimitStatus {
+  is_premium: boolean;
+  premium_until?: string | null;
+  daily_limit: number | null;
+  used_today: number;
+  remaining_today: number | null;
+  can_submit: boolean;
+  reset_at: string;
+  plan_name?: string | null;
+}
+
 async function requestPublicWritingApi<T>(path: string): Promise<T> {
   const baseUrl = getFrontendServerApiBaseUrl();
   const controller = new AbortController();
@@ -316,6 +327,10 @@ export async function getWritingHistory(): Promise<WritingHistoryResponse> {
 
 export async function getWritingDashboardSummary(): Promise<WritingDashboardSummary> {
   return requestServerUserApi<WritingDashboardSummary>(`/writing/dashboard-summary`);
+}
+
+export async function getWritingLimits(): Promise<WritingLimitStatus> {
+  return requestServerUserApi<WritingLimitStatus>(`/writing/limits`);
 }
 
 export async function getWritingDrafts(): Promise<WritingDraftListResponse> {

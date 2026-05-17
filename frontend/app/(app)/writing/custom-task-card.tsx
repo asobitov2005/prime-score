@@ -12,8 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { emitNavigationStart } from "@/lib/navigation-transition";
 import { cn } from "@/lib/utils";
-import type { WritingTaskType } from "@/lib/server-writing";
+import type { WritingLimitStatus, WritingTaskType } from "@/lib/server-writing";
 import { createCustomTaskDraftKey, getCustomTaskConfig, getCustomTaskWorkspaceHref } from "./custom-task-config";
+import { WritingLimitTrigger } from "./writing-limit-gate";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -36,7 +37,7 @@ function getImageFromFileList(files: FileList | File[]): File | null {
   return Array.from(files).find((file) => file.type.startsWith("image/")) ?? null;
 }
 
-export function CustomTaskCard({ activeTaskType }: { activeTaskType: WritingTaskType }) {
+export function CustomTaskCard({ activeTaskType, limitStatus }: { activeTaskType: WritingTaskType; limitStatus: WritingLimitStatus | null }) {
   const [open, setOpen] = useState(false);
 
   const card = (
@@ -64,9 +65,9 @@ export function CustomTaskCard({ activeTaskType }: { activeTaskType: WritingTask
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="group block w-full text-left">
+      <WritingLimitTrigger limitStatus={limitStatus} onAllowedClick={() => setOpen(true)} className="group block w-full text-left">
         {card}
-      </button>
+      </WritingLimitTrigger>
       <CustomTaskDialog taskType={activeTaskType} open={open} onOpenChange={setOpen} />
     </>
   );

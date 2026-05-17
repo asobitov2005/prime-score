@@ -11,6 +11,7 @@ import type {
   WritingSubmissionRecord,
   WritingSubmissionResult,
   WritingTaskDetail,
+  WritingLimitStatus,
 } from "@/lib/server-writing";
 
 export interface WritingDraftRead {
@@ -92,6 +93,10 @@ export function pollWritingSubmission(submissionId: string): Promise<WritingSubm
 
 export function fetchWritingSubmissionResult(submissionId: string): Promise<WritingSubmissionResult> {
   return clientFetch<WritingSubmissionResult>(`/writing/submissions/${submissionId}/result`);
+}
+
+export function fetchWritingLimits(): Promise<WritingLimitStatus> {
+  return clientFetch<WritingLimitStatus>(`/writing/limits`);
 }
 
 export function retryWritingSubmission(submissionId: string): Promise<WritingSubmissionRecord> {

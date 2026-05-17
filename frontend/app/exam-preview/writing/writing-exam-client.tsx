@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type WheelEvent as ReactWheelEvent } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Expand, FileText, ImageIcon, Loader2, Moon, SendHorizontal, Shrink, SunMedium, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ExamPreviewAccessGate } from "@/components/exam/exam-preview-access-gate";
 import { Input } from "@/components/ui/input";
+import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 import { Textarea } from "@/components/ui/textarea";
 import {
   deleteWritingDraftClient,
+  fetchWritingLimits,
   getStoredDesiredScore,
   getWritingDraftClient,
   saveWritingDraftClient,
@@ -18,6 +21,8 @@ import {
   uploadWritingImage,
 } from "@/lib/client-writing";
 import { emitNavigationStart } from "@/lib/navigation-transition";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
+import type { WritingLimitStatus } from "@/lib/server-writing";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -124,6 +129,9 @@ export function WritingExamClient({
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasAcknowledgedTimeUp, setHasAcknowledgedTimeUp] = useState(false);
+  const [limitStatus, setLimitStatus] = useState<WritingLimitStatus | null>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const essayRef = useRef<HTMLTextAreaElement>(null);
   const lastSavedRef = useRef<number>(0);
   const latestDraftRef = useRef<DraftPayload | null>(null);
@@ -132,6 +140,32 @@ export function WritingExamClient({
   const hasHydratedAuth = useAuthStore((state) => state.hasHydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const candidateName = hasHydratedAuth ? (storedCandidateName || "Guest Candidate") : "Guest Candidate";
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedAuth || !isAuthenticated) return;
+    let cancelled = false;
+    fetchWritingLimits()
+      .then((status) => {
+        if (!cancelled) setLimitStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setLimitStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasHydratedAuth, isAuthenticated]);
+
+  useEffect(() => {
+    if (limitStatus && !limitStatus.can_submit) {
+      setShowPremiumModal(true);
+    }
+  }, [limitStatus]);
 
   const updateTheme = useCallback((nextTheme: "light" | "dark") => {
     setTheme(nextTheme);
@@ -382,6 +416,10 @@ export function WritingExamClient({
 
   const handleSubmit = useCallback(async () => {
     if (!isStarted || !canSubmit || isSubmitting) return;
+    if (limitStatus && !limitStatus.can_submit) {
+      setShowPremiumModal(true);
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError(null);
@@ -418,10 +456,15 @@ export function WritingExamClient({
       emitNavigationStart(href);
       router.push(href);
     } catch (error) {
+      const statusCode = typeof error === "object" && error !== null && "status" in error ? Number((error as { status?: number }).status) : null;
+      if (statusCode === 402 || statusCode === 429) {
+        void fetchWritingLimits().then(setLimitStatus).catch(() => undefined);
+        setShowPremiumModal(true);
+      }
       setSubmitError(error instanceof Error ? error.message : "Failed to submit essay.");
       setIsSubmitting(false);
     }
-  }, [canSubmit, draftImageDataUrl, elapsed, essay, imageFile, isStarted, isSubmitting, resolvedTaskType, router, storageKey, task, topic]);
+  }, [canSubmit, draftImageDataUrl, elapsed, essay, imageFile, isStarted, isSubmitting, limitStatus, resolvedTaskType, router, storageKey, task, topic]);
 
   if (hasHydratedAuth && !isAuthenticated) {
     return <ExamPreviewAccessGate kind="writing" backHref="/writing" />;
@@ -491,6 +534,7 @@ export function WritingExamClient({
             >
               {isFullscreen ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
             </Button>
+            <WritingLimitPill limitStatus={limitStatus} />
             <Button
               type="button"
               onClick={() => void handleSubmit()}
@@ -544,6 +588,21 @@ export function WritingExamClient({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {mounted && showPremiumModal ? createPortal(
+        <PremiumUpgradeModal
+          title={limitStatus?.is_premium ? "Daily Writing limit reached" : "Premium Writing"}
+          description={
+            limitStatus?.is_premium
+              ? `You used ${limitStatus.used_today}/${limitStatus.daily_limit ?? 0} Writing checks today. Upgrade your plan to raise the limit, or come back after the daily reset.`
+              : "IELTS Writing feedback is available for Premium members. Upgrade to unlock Writing checks and detailed sentence-level feedback."
+          }
+          actionLabel={limitStatus?.is_premium ? "Upgrade plan" : "Upgrade to Premium"}
+          subscriptionHref={subscriptionHref}
+          onClose={() => setShowPremiumModal(false)}
+        />,
+        document.body,
       ) : null}
 
       <main className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[minmax(320px,43%)_minmax(0,57%)]">
@@ -608,6 +667,28 @@ export function WritingExamClient({
         </section>
       </main>
     </div>
+  );
+}
+
+function WritingLimitPill({ limitStatus }: { limitStatus: WritingLimitStatus | null }) {
+  if (!limitStatus) {
+    return null;
+  }
+  const label = limitStatus.daily_limit === null
+    ? "Writing: unlimited"
+    : `Writing: ${Math.max(0, limitStatus.remaining_today ?? 0)}/${limitStatus.daily_limit} left`;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex h-9 items-center rounded-xl border px-3 text-[11px] font-semibold uppercase tracking-[0.12em]",
+        limitStatus.can_submit
+          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      )}
+    >
+      {limitStatus.is_premium ? label : "Premium Writing"}
+    </span>
   );
 }
 
