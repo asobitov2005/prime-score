@@ -37,6 +37,16 @@ class ExplanationStats:
     failed_sections: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class SectionJob:
+    test_id: UUID
+    test_title: str
+    test_status: str
+    section_id: UUID
+    section_title: str
+    question_count: int
+
+
 def _plain(value: Any) -> str:
     return str(value or "").strip()
 
@@ -101,6 +111,12 @@ def _strip_json_fence(text: str) -> str:
 
 def _parse_json(text: str) -> dict[str, Any]:
     return json.loads(_strip_json_fence(text))
+
+
+def _json_error_context(text: str, exc: json.JSONDecodeError) -> str:
+    start = max(0, exc.pos - 120)
+    end = min(len(text), exc.pos + 120)
+    return text[start:end].replace("\n", "\\n")
 
 
 def _response_schema() -> dict[str, Any]:
@@ -204,6 +220,7 @@ def _build_prompt(payload: dict[str, Any]) -> str:
         "- Mark possibly_wrong only when the accepted answer clearly contradicts the passage/options.\n"
         "- If possibly_wrong, include suggested_answers and issue. Do not be vague.\n"
         "- Keep explanations easy for IELTS learners, not academic.\n"
+        "- Escape quotes and line breaks correctly so the response is valid JSON.\n"
         "Return JSON only with this shape:\n"
         '{"questions":[{"id":"uuid","explanation":"...","quote":"...","highlighted_answer":"...",'
         '"answer_status":"valid","suggested_answers":[],"issue":"","confidence":0.0}]}\n\n'
@@ -237,6 +254,45 @@ def _index_questions(section: TestSection) -> dict[str, Question]:
         for group in section.question_groups
         for question in group.questions
     }
+
+
+async def _generate_section_data(
+    *,
+    config: ResolvedAiUseCaseConfig,
+    prompt: str,
+    attempts: int = 3,
+) -> dict[str, Any]:
+    last_error = ""
+    for attempt in range(1, attempts + 1):
+        retry_note = ""
+        if last_error:
+            retry_note = (
+                "\n\nPrevious response was invalid JSON. Return valid JSON only, "
+                "with every quote inside string values escaped. "
+                f"Parser error: {last_error}"
+            )
+        response_text = await asyncio.to_thread(
+            generate_text_sync,
+            config=config,
+            prompt=f"{prompt}{retry_note}",
+            system_instruction=(
+                "You are a careful IELTS Reading answer key auditor. "
+                "Be concise, evidence-based, and return strict JSON only."
+            ),
+            temperature=0,
+            top_p=1,
+            max_output_tokens=8192,
+            response_mime_type="application/json",
+            response_schema=_response_schema(),
+            operation="reading_explanation_backfill",
+        )
+        try:
+            return _parse_json(response_text)
+        except json.JSONDecodeError as exc:
+            last_error = f"{exc.msg} at char {exc.pos}; context={_json_error_context(response_text, exc)}"
+            if attempt == attempts:
+                raise RuntimeError(f"AI returned invalid JSON after {attempts} attempts: {last_error}") from exc
+    raise RuntimeError("AI returned invalid JSON.")
 
 
 def _answer_status(question: Question, item: dict[str, Any]) -> tuple[str, list[str], str]:
@@ -275,6 +331,43 @@ async def _load_tests(session: AsyncSession, limit: int | None) -> list[Test]:
     return list((await session.scalars(query)).unique().all())
 
 
+async def _collect_section_jobs(session: AsyncSession, limit: int | None) -> tuple[int, list[SectionJob]]:
+    tests = await _load_tests(session, limit)
+    jobs: list[SectionJob] = []
+    for test in tests:
+        for section in sorted(test.sections, key=lambda item: item.position):
+            jobs.append(
+                SectionJob(
+                    test_id=test.id,
+                    test_title=str(test.title),
+                    test_status=str(test.status.value),
+                    section_id=section.id,
+                    section_title=str(section.title),
+                    question_count=sum(len(group.questions) for group in section.question_groups),
+                )
+            )
+    return len(tests), jobs
+
+
+async def _load_section(session: AsyncSession, test_id: UUID, section_id: UUID) -> tuple[Test, TestSection]:
+    query = (
+        select(Test)
+        .where(Test.id == test_id)
+        .options(
+            selectinload(Test.sections)
+            .selectinload(TestSection.question_groups)
+            .selectinload(QuestionGroup.questions)
+            .selectinload(Question.answer_variants),
+            selectinload(Test.sections).selectinload(TestSection.question_groups),
+        )
+    )
+    test = (await session.scalars(query)).unique().one()
+    for section in test.sections:
+        if section.id == section_id:
+            return test, section
+    raise RuntimeError(f"Section {section_id} not found for test {test_id}.")
+
+
 async def _process_section(
     session: AsyncSession,
     *,
@@ -295,22 +388,10 @@ async def _process_section(
 
     payload = _section_payload(test, section)
     prompt = _build_prompt(payload)
-    response_text = await asyncio.to_thread(
-        generate_text_sync,
+    data = await _generate_section_data(
         config=config,
         prompt=prompt,
-        system_instruction=(
-            "You are a careful IELTS Reading answer key auditor. "
-            "Be concise, evidence-based, and return strict JSON only."
-        ),
-        temperature=0,
-        top_p=1,
-        max_output_tokens=8192,
-        response_mime_type="application/json",
-        response_schema=_response_schema(),
-        operation="reading_explanation_backfill",
     )
-    data = _parse_json(response_text)
     output_items = data.get("questions") or []
     if not isinstance(output_items, list):
         raise RuntimeError("AI response has no questions array.")
@@ -389,38 +470,33 @@ async def run(args: argparse.Namespace) -> int:
     suspicious: list[dict[str, Any]] = []
 
     async with session_maker() as session:
-        tests = await _load_tests(session, args.limit)
-        stats.tests_seen = len(tests)
-        for test in tests:
-            ordered_sections = sorted(test.sections, key=lambda item: item.position)
-            for section in ordered_sections:
-                test_id = str(test.id)
-                test_title = str(test.title)
-                test_status = str(test.status.value)
-                section_id = str(section.id)
-                section_title = str(section.title)
-                stats.sections_seen += 1
-                stats.questions_seen += sum(len(group.questions) for group in section.question_groups)
-                try:
-                    updated, section_suspicious = await _process_section(
-                        session,
-                        config=config,
-                        test=test,
-                        section=section,
-                        overwrite=args.overwrite,
-                        dry_run=args.dry_run,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    stats.failed_sections += 1
-                    print(f"FAILED section test={test_id} section={section_id}: {exc}")
-                    await session.rollback()
-                    continue
-                stats.questions_updated += updated
-                suspicious.extend(section_suspicious)
-                print(
-                    f"processed test='{test_title}' status={test_status} "
-                    f"section='{section_title}' updated={updated} suspicious={len(section_suspicious)}"
+        stats.tests_seen, jobs = await _collect_section_jobs(session, args.limit)
+
+    for job in jobs:
+        stats.sections_seen += 1
+        stats.questions_seen += job.question_count
+        async with session_maker() as session:
+            try:
+                test, section = await _load_section(session, job.test_id, job.section_id)
+                updated, section_suspicious = await _process_section(
+                    session,
+                    config=config,
+                    test=test,
+                    section=section,
+                    overwrite=args.overwrite,
+                    dry_run=args.dry_run,
                 )
+            except Exception as exc:  # noqa: BLE001
+                stats.failed_sections += 1
+                print(f"FAILED section test={job.test_id} section={job.section_id}: {exc}")
+                await session.rollback()
+                continue
+            stats.questions_updated += updated
+            suspicious.extend(section_suspicious)
+            print(
+                f"processed test='{job.test_title}' status={job.test_status} "
+                f"section='{job.section_title}' updated={updated} suspicious={len(section_suspicious)}"
+            )
 
     stats.suspicious_answers = len(suspicious)
     report = {
