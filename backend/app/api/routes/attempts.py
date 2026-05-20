@@ -11,6 +11,7 @@ from app.core.deps import get_current_user
 from app.core.enums import TestMode, TestScope, TestType
 from app.db.session import get_db_session
 from app.models.attempt import AttemptEvent
+from app.models.test import Question
 from app.schemas.common import DebugPrincipal, MessageResponse
 from app.schemas.attempts import (
     AttemptAnswerRequest,
@@ -651,6 +652,25 @@ async def get_review(
     attempt = await _require_attempt_owner(attempt_id, current_user, session)
     diagram_groups = _extract_diagram_groups(attempt.test_snapshot)
     question_labels = _extract_question_labels(attempt.test_snapshot)
+    scoring_items = list(attempt.scoring_items)
+    latest_explanations: dict[str, dict[str, object]] = {}
+    question_ids = []
+    for item in scoring_items:
+        try:
+            question_ids.append(UUID(str(item["question_id"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if question_ids:
+        questions = (
+            await session.scalars(select(Question).where(Question.id.in_(question_ids)))
+        ).all()
+        latest_explanations = {
+            str(question.id): {
+                "explanation": question.explanation or "",
+                "explanation_reference": question.explanation_reference or {},
+            }
+            for question in questions
+        }
     items = [
         AttemptReviewItemRead(
             question_id=item["question_id"],
@@ -664,10 +684,16 @@ async def get_review(
             answer_value=item["answer_value"],
             is_correct=item["is_correct"],
             correct_answers=list(item["correct_answers"]),
-            explanation=item.get("explanation") if current_user.is_premium else None,
-            explanation_reference=item.get("explanation_reference") if current_user.is_premium else None,
+            explanation=(
+                latest_explanations.get(str(item["question_id"]), {}).get("explanation")
+                or item.get("explanation")
+            ) if current_user.is_premium else None,
+            explanation_reference=(
+                latest_explanations.get(str(item["question_id"]), {}).get("explanation_reference")
+                or item.get("explanation_reference")
+            ) if current_user.is_premium else None,
         )
-        for item in attempt.scoring_items
+        for item in scoring_items
     ]
     return AttemptReviewRead(
         attempt_id=attempt.attempt_id,

@@ -202,7 +202,15 @@ export type BackendAttemptReview = {
     is_correct?: boolean | null;
     correct_answers: string[];
     explanation?: string | null;
-    explanation_reference?: { quote?: string } | null;
+    explanation_reference?: {
+      quote?: string;
+      highlighted_answer?: string;
+      answer_status?: string;
+      suggested_answers?: string[];
+      issue?: string;
+      confidence?: number | null;
+      quote_verified?: boolean;
+    } | null;
   }>;
 };
 

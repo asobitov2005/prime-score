@@ -144,7 +144,15 @@ export interface ReadingExamPreviewData {
     options?: string[];
     questionType?: string;
     explanation?: string | null;
-    explanationReference?: { quote?: string } | null;
+    explanationReference?: {
+      quote?: string;
+      highlighted_answer?: string;
+      answer_status?: "valid" | "possibly_wrong" | "uncertain" | string;
+      suggested_answers?: string[];
+      issue?: string;
+      confidence?: number | null;
+      quote_verified?: boolean;
+    } | null;
   }>;
 }
 
@@ -3271,29 +3279,47 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     );
   }
 
-  function renderReviewExplanation(reviewItem: NonNullable<typeof reviewItems[string]>) {
+  function renderReviewExplanation(reviewItem: NonNullable<typeof reviewItems[string]>, questionNumber: number) {
     if (!reviewItem.explanation) {
       return null;
     }
+    const reference = reviewItem.explanationReference ?? {};
+    const highlightedAnswer = reference.highlighted_answer?.trim();
+    const hasQuote = Boolean(reference.quote?.trim());
+    const hasAnswerIssue = reference.answer_status && reference.answer_status !== "valid";
 
     return (
       <div 
-        className="mt-2 group relative z-10"
-        onMouseEnter={() => setExplanationHighlightQuote(reviewItem.explanationReference?.quote ?? null)}
+        className="mt-2 rounded-2xl border border-orange-200/70 bg-orange-50/80 p-3 text-sm shadow-sm shadow-orange-950/5 dark:border-orange-400/20 dark:bg-orange-500/10 dark:shadow-black/20"
+        onMouseEnter={() => setExplanationHighlightQuote(reference.quote ?? null)}
         onMouseLeave={() => setExplanationHighlightQuote(null)}
       >
-        <div className="inline-flex items-center gap-1.5 cursor-help rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-700 transition-colors hover:bg-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:hover:bg-orange-900/50">
-          <Lightbulb className="h-3.5 w-3.5" />
-          <span>Explanation</span>
-        </div>
-        <div className="absolute left-0 top-full mt-2 hidden w-64 md:w-80 rounded-xl border border-border/50 bg-popover p-3 text-sm text-popover-foreground shadow-xl group-hover:block animate-in fade-in zoom-in-95 z-50">
-          <p className="leading-relaxed">{reviewItem.explanation}</p>
-          {reviewItem.explanationReference?.quote ? (
-            <div className="mt-2 rounded bg-muted/50 p-2 text-xs italic text-muted-foreground border-l-2 border-orange-400">
-              "{reviewItem.explanationReference.quote}"
-            </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-6 items-center rounded-full bg-orange-600 px-2 text-[11px] font-black text-white dark:bg-orange-400 dark:text-slate-950">
+            Q{questionNumber}
+          </span>
+          {highlightedAnswer ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300/80 bg-white/80 px-2 py-1 text-xs font-bold text-orange-800 dark:border-orange-400/25 dark:bg-slate-950/40 dark:text-orange-200">
+              <Highlighter className="h-3.5 w-3.5" />
+              {highlightedAnswer}
+            </span>
           ) : null}
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
+            <Lightbulb className="h-3.5 w-3.5" />
+            Explanation
+          </span>
         </div>
+        <p className="mt-2 leading-relaxed text-foreground">{reviewItem.explanation}</p>
+        {hasQuote ? (
+          <div className="mt-2 rounded-xl border-l-2 border-orange-400 bg-background/70 p-2 text-xs italic text-muted-foreground dark:bg-slate-950/40">
+            "{reference.quote}"
+          </div>
+        ) : null}
+        {hasAnswerIssue ? (
+          <div className="mt-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-2 text-xs font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-200">
+            Answer key check: {reference.issue || "This answer needs manual review."}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -3371,7 +3397,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
         </div>
       );
     }
@@ -3434,7 +3460,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
         </div>
       );
     }
@@ -3514,7 +3540,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
         </div>
       );
     }
@@ -3584,7 +3610,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 {formattedReviewCorrectAnswer}
               </p>
             ) : null}
-            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
           </div>
         );
       }
@@ -3640,6 +3666,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
               isInlineMatching ? "right-2 h-3.5 w-3.5" : "right-3 h-4 w-4"
             )} />
+            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+              <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
           </div>
         </div>
       );
@@ -3682,7 +3714,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
         </div>
       );
     }
@@ -3728,7 +3760,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 Correct answer: {formattedReviewCorrectAnswer}
               </p>
             ) : null}
-            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
           </div>
         );
       }
@@ -3754,7 +3786,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
         </div>
       );
     }
@@ -3781,7 +3813,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
         </div>
       );
     }
@@ -3807,7 +3839,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               Correct answer: {formattedReviewCorrectAnswer}
             </p>
           ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem) : null}
+          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
         </div>
     );
   }

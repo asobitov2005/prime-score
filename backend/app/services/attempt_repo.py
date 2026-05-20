@@ -133,6 +133,7 @@ async def _db_answer_key(session: AsyncSession, question_ids: list[UUID]) -> dic
         str(question.id): {
             "accepted_answers": [answer.value for answer in question.answer_variants],
             "explanation": question.explanation or "",
+            "explanation_reference": question.explanation_reference or {},
         }
         for question in questions
     }
