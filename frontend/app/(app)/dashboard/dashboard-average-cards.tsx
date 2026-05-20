@@ -115,7 +115,7 @@ function MiniBandTrendChart({ points: trendPoints }: { points: { label: string; 
         return (
           <g key={tick}>
             <line x1={leftPad} x2={width - rightPad} y1={y} y2={y} stroke="rgba(148,163,184,0.18)" strokeWidth="1" />
-            <text x={0} y={y + 4} className="fill-slate-600 text-[13px] font-semibold">{tick.toFixed(1)}</text>
+            <text x={0} y={y + 4} className="fill-muted-foreground text-[13px] font-semibold">{tick.toFixed(1)}</text>
           </g>
         );
       })}
@@ -144,7 +144,7 @@ function MiniBandTrendChart({ points: trendPoints }: { points: { label: string; 
       {chartPoints.map((point, index) => {
         const x = leftPad + (index / (chartPoints.length - 1)) * plotWidth;
         return (
-          <text key={point.label} x={x} y={height - 2} textAnchor="middle" className="fill-slate-600 text-[12px] font-semibold">
+          <text key={point.label} x={x} y={height - 2} textAnchor="middle" className="fill-muted-foreground text-[12px] font-semibold">
             {point.label}
           </text>
         );
@@ -168,8 +168,8 @@ export function OverallBandKpiCard({ initialAnalytics }: DashboardAverageCardsPr
   const dashOffset = gaugeLength * (1 - progress);
 
   return (
-    <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-white p-3 shadow-xl shadow-orange-950/8">
-      <div className="absolute -right-16 -top-20 h-44 w-44 rounded-full bg-orange-200/35 blur-3xl" />
+    <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-card p-3 shadow-xl shadow-orange-950/8 dark:border-orange-500/20 dark:bg-slate-950/80 dark:shadow-black/30">
+      <div className="absolute -right-16 -top-20 h-44 w-44 rounded-full bg-orange-200/35 blur-3xl dark:bg-orange-500/15" />
       <div className="relative">
         <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[104px_minmax(0,1fr)]">
           <div className="flex flex-col items-center">
@@ -218,7 +218,7 @@ export function OverallBandKpiCard({ initialAnalytics }: DashboardAverageCardsPr
                 ) : (
                   <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
                 )}
-                <span className={cn("text-xs font-semibold", delta !== null && delta < 0 ? "text-rose-600" : "text-emerald-600")}>
+                <span className={cn("text-xs font-semibold", delta !== null && delta < 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400")}>
                   {delta !== null ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)} pts` : "No trend yet"}
                 </span>
               </div>

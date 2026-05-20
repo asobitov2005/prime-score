@@ -53,14 +53,14 @@ export function AchievementGrid({ achievements, equippedAchievementId, onEquip }
           <div key={group.category} className="space-y-3">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold tracking-tight text-slate-950">{categoryLabels[group.category]}</h2>
+                <h2 className="text-xl font-semibold tracking-tight text-foreground">{categoryLabels[group.category]}</h2>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => scrollRow(group.category, "left")}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition hover:text-slate-950 hover:shadow-md active:scale-95"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-card text-muted-foreground shadow-sm transition hover:text-foreground hover:shadow-md active:scale-95 dark:bg-slate-950/80"
                   aria-label={`Scroll ${categoryLabels[group.category]} left`}
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -68,7 +68,7 @@ export function AchievementGrid({ achievements, equippedAchievementId, onEquip }
                 <button
                   type="button"
                   onClick={() => scrollRow(group.category, "right")}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm transition hover:text-slate-950 hover:shadow-md active:scale-95"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-card text-muted-foreground shadow-sm transition hover:text-foreground hover:shadow-md active:scale-95 dark:bg-slate-950/80"
                   aria-label={`Scroll ${categoryLabels[group.category]} right`}
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -95,12 +95,12 @@ export function AchievementGrid({ achievements, equippedAchievementId, onEquip }
           </div>
         ))
       ) : (
-        <div className="flex min-h-[260px] flex-col items-center justify-center rounded-3xl bg-white p-8 text-center shadow-sm">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+        <div className="flex min-h-[260px] flex-col items-center justify-center rounded-3xl border border-border/60 bg-card p-8 text-center shadow-sm dark:bg-slate-950/80">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
             <SearchX className="h-5 w-5" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-slate-950">No badges yet</h2>
-          <p className="mt-2 max-w-md text-sm font-medium leading-6 text-slate-500">
+          <h2 className="mt-4 text-lg font-semibold text-foreground">No badges yet</h2>
+          <p className="mt-2 max-w-md text-sm font-medium leading-6 text-muted-foreground">
             Achievements will appear here when badge data is available.
           </p>
         </div>

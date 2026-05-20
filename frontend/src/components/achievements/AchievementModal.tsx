@@ -18,47 +18,47 @@ const rarityMeta: Record<AchievementRarity, {
 }> = {
   common: {
     label: "Common",
-    ambientGlow: "from-slate-200/50 via-slate-100/20 to-transparent",
-    badgeBg: "bg-slate-100/80 backdrop-blur-sm",
-    badgeText: "text-slate-700",
-    badgeBorder: "border-slate-200/60",
-    imageGlow: "bg-slate-400/20",
-    buttonClass: "bg-slate-900 text-white hover:bg-slate-800",
+    ambientGlow: "from-slate-200/50 via-slate-100/20 to-transparent dark:from-slate-700/35 dark:via-slate-800/10",
+    badgeBg: "bg-slate-100/80 backdrop-blur-sm dark:bg-slate-800/70",
+    badgeText: "text-slate-700 dark:text-slate-200",
+    badgeBorder: "border-slate-200/60 dark:border-slate-700/70",
+    imageGlow: "bg-slate-400/20 dark:bg-slate-400/15",
+    buttonClass: "bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200",
   },
   rare: {
     label: "Rare",
-    ambientGlow: "from-blue-200/50 via-blue-100/20 to-transparent",
-    badgeBg: "bg-blue-50/80 backdrop-blur-sm",
-    badgeText: "text-blue-700",
-    badgeBorder: "border-blue-200/60",
-    imageGlow: "bg-blue-400/30",
+    ambientGlow: "from-blue-200/50 via-blue-100/20 to-transparent dark:from-blue-500/25 dark:via-blue-900/10",
+    badgeBg: "bg-blue-50/80 backdrop-blur-sm dark:bg-blue-500/10",
+    badgeText: "text-blue-700 dark:text-blue-300",
+    badgeBorder: "border-blue-200/60 dark:border-blue-400/25",
+    imageGlow: "bg-blue-400/30 dark:bg-blue-400/20",
     buttonClass: "bg-blue-600 text-white hover:bg-blue-700",
   },
   epic: {
     label: "Epic",
-    ambientGlow: "from-purple-200/60 via-purple-100/20 to-transparent",
-    badgeBg: "bg-purple-50/80 backdrop-blur-sm",
-    badgeText: "text-purple-700",
-    badgeBorder: "border-purple-200/60",
-    imageGlow: "bg-purple-400/40",
+    ambientGlow: "from-purple-200/60 via-purple-100/20 to-transparent dark:from-purple-500/25 dark:via-purple-900/10",
+    badgeBg: "bg-purple-50/80 backdrop-blur-sm dark:bg-purple-500/10",
+    badgeText: "text-purple-700 dark:text-purple-300",
+    badgeBorder: "border-purple-200/60 dark:border-purple-400/25",
+    imageGlow: "bg-purple-400/40 dark:bg-purple-400/20",
     buttonClass: "bg-purple-600 text-white hover:bg-purple-700",
   },
   legendary: {
     label: "Legendary",
-    ambientGlow: "from-amber-200/60 via-amber-100/20 to-transparent",
-    badgeBg: "bg-amber-50/80 backdrop-blur-sm",
-    badgeText: "text-amber-700",
-    badgeBorder: "border-amber-200/60",
-    imageGlow: "bg-amber-400/40",
+    ambientGlow: "from-amber-200/60 via-amber-100/20 to-transparent dark:from-amber-500/25 dark:via-amber-900/10",
+    badgeBg: "bg-amber-50/80 backdrop-blur-sm dark:bg-amber-500/10",
+    badgeText: "text-amber-700 dark:text-amber-300",
+    badgeBorder: "border-amber-200/60 dark:border-amber-400/25",
+    imageGlow: "bg-amber-400/40 dark:bg-amber-400/20",
     buttonClass: "bg-amber-500 text-white hover:bg-amber-600",
   },
   mythic: {
     label: "Mythic",
-    ambientGlow: "from-violet-300/60 via-fuchsia-200/20 to-transparent",
-    badgeBg: "bg-gradient-to-r from-violet-50/80 to-fuchsia-50/80 backdrop-blur-sm",
-    badgeText: "text-violet-800",
-    badgeBorder: "border-violet-200/60",
-    imageGlow: "bg-violet-400/40",
+    ambientGlow: "from-violet-300/60 via-fuchsia-200/20 to-transparent dark:from-violet-500/30 dark:via-fuchsia-500/10",
+    badgeBg: "bg-gradient-to-r from-violet-50/80 to-fuchsia-50/80 backdrop-blur-sm dark:from-violet-500/10 dark:to-fuchsia-500/10",
+    badgeText: "text-violet-800 dark:text-violet-200",
+    badgeBorder: "border-violet-200/60 dark:border-violet-400/25",
+    imageGlow: "bg-violet-400/40 dark:bg-violet-400/20",
     buttonClass: "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700",
   },
 };
@@ -176,13 +176,13 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
       />
 
       {/* Modal Container: Max height constrained for smaller screens */}
-      <div className="relative z-10 flex w-full max-h-[85vh] flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl animate-in slide-in-from-bottom-full duration-500 ease-out sm:max-w-[420px] sm:rounded-[2rem] sm:slide-in-from-bottom-0 sm:zoom-in-95 ring-1 ring-slate-900/5">
+      <div className="relative z-10 flex w-full max-h-[85vh] flex-col overflow-hidden rounded-t-[2rem] bg-card text-foreground shadow-2xl animate-in slide-in-from-bottom-full duration-500 ease-out sm:max-w-[420px] sm:rounded-[2rem] sm:slide-in-from-bottom-0 sm:zoom-in-95 ring-1 ring-slate-900/5 dark:bg-slate-950 dark:ring-white/10">
         
         {/* Close button */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100/50 text-slate-500 backdrop-blur-md transition-all hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 sm:right-4 sm:top-4"
+          className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-muted/70 text-muted-foreground backdrop-blur-md transition-all hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 sm:right-4 sm:top-4"
           aria-label="Close"
         >
           <X className="h-4 w-4" />
@@ -215,8 +215,8 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
                 {(achievement.rarity === "mythic" || achievement.rarity === "legendary") && <Sparkles className="h-3 w-3" />}
                 {meta.label}
               </div>
-              <h2 className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">{achievement.title}</h2>
-              <p className="mt-1.5 max-w-[280px] text-[13px] font-medium leading-relaxed text-slate-500">
+              <h2 className="text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">{achievement.title}</h2>
+              <p className="mt-1.5 max-w-[280px] text-[13px] font-medium leading-relaxed text-muted-foreground">
                 {achievement.description}
               </p>
             </div>
@@ -225,10 +225,10 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
           {/* Details Section */}
           <div className="space-y-3 px-5 pb-5">
             {/* Status & Progress Card */}
-            <div className="rounded-2xl border border-slate-200/60 bg-slate-50/50 p-3.5 shadow-sm sm:p-4">
+            <div className="rounded-2xl border border-border/60 bg-muted/40 p-3.5 shadow-sm sm:p-4 dark:bg-white/[0.03]">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</span>
-                <div className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Status</span>
+                <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
                   {isUnlocked ? (
                     <>
                       <BadgeCheck className="h-4 w-4 text-emerald-500" />
@@ -236,26 +236,26 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
                     </>
                   ) : (
                     <>
-                      <Lock className="h-4 w-4 text-slate-400" />
-                      <span className="text-slate-600">Locked</span>
+                      <Lock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Locked</span>
                     </>
                   )}
                 </div>
               </div>
               
               {isUnlocked && achievement.unlockedAt && (
-                 <div className="mt-1 text-right text-[11px] font-medium text-slate-500">
+                 <div className="mt-1 text-right text-[11px] font-medium text-muted-foreground">
                     Earned {formatDate(achievement.unlockedAt)}
                  </div>
               )}
 
               {!isUnlocked && progressText ? (
-                <div className="mt-3 border-t border-slate-200/50 pt-3">
+                <div className="mt-3 border-t border-border/50 pt-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Progress</span>
-                    <span className="text-[13px] font-bold text-slate-900">{progressText}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Progress</span>
+                    <span className="text-[13px] font-bold text-foreground">{progressText}</span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 shadow-inner">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted shadow-inner">
                     <div 
                       className={cn(
                         "h-full rounded-full bg-gradient-to-r transition-all duration-1000 ease-out",
@@ -272,23 +272,23 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
 
             {/* Requirements & Reward Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col justify-center rounded-2xl border border-slate-200/60 bg-slate-50/50 p-3.5 shadow-sm sm:p-4">
-                 <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Requirement</span>
+              <div className="flex flex-col justify-center rounded-2xl border border-border/60 bg-muted/40 p-3.5 shadow-sm sm:p-4 dark:bg-white/[0.03]">
+                 <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Requirement</span>
                  <div className="space-y-1">
                    {requirementItems(achievement).map((item, i) => (
-                     <p key={i} className="line-clamp-2 text-[13px] font-semibold leading-snug text-slate-800">
+                     <p key={i} className="line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">
                        {item}
                      </p>
                    ))}
                  </div>
               </div>
-              <div className="flex flex-col justify-center rounded-2xl border border-slate-200/60 bg-slate-50/50 p-3.5 shadow-sm sm:p-4">
-                 <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Reward</span>
+              <div className="flex flex-col justify-center rounded-2xl border border-border/60 bg-muted/40 p-3.5 shadow-sm sm:p-4 dark:bg-white/[0.03]">
+                 <span className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reward</span>
                  <div className="flex items-center gap-1.5">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-600 shadow-sm">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-600 shadow-sm dark:bg-amber-500/15 dark:text-amber-300">
                       <Trophy className="h-3 w-3" />
                     </span>
-                    <span className="text-[13px] font-bold text-slate-900">+{formatNumber(achievement.xpReward ?? 0)} XP</span>
+                    <span className="text-[13px] font-bold text-foreground">+{formatNumber(achievement.xpReward ?? 0)} XP</span>
                  </div>
               </div>
             </div>
@@ -296,7 +296,7 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
         </div>
 
         {/* Sticky Footer for Action Button */}
-        <div className="shrink-0 border-t border-slate-100 bg-white/90 p-4 backdrop-blur-md sm:px-5 sm:py-4">
+        <div className="shrink-0 border-t border-border/60 bg-card/90 p-4 backdrop-blur-md sm:px-5 sm:py-4 dark:bg-slate-950/90">
           {isUnlocked ? (
             <button
               type="button"
@@ -305,7 +305,7 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
               className={cn(
                 "flex w-full h-11 items-center justify-center rounded-xl text-[14px] font-bold shadow-md transition-all active:scale-[0.98]",
                 isEquipped 
-                  ? "cursor-default bg-emerald-50 text-emerald-600 border border-emerald-200/60" 
+                  ? "cursor-default bg-emerald-50 text-emerald-600 border border-emerald-200/60 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-400/25" 
                   : meta.buttonClass
               )}
             >
@@ -315,7 +315,7 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
             <Link 
               href={continueHref(achievement)} 
               onClick={onClose} 
-              className="flex w-full h-11 items-center justify-center rounded-xl bg-slate-900 text-[14px] font-bold text-white shadow-md transition-all hover:bg-slate-800 active:scale-[0.98]"
+              className="flex w-full h-11 items-center justify-center rounded-xl bg-slate-900 text-[14px] font-bold text-white shadow-md transition-all hover:bg-slate-800 active:scale-[0.98] dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
             >
               Continue Progress
             </Link>

@@ -10,28 +10,28 @@ import { cn } from "@/lib/utils";
 const rarityStyles: Record<AchievementRarity, { label: string; glow: string; text: string }> = {
   common: {
     label: "Common",
-    glow: "shadow-slate-200/80",
-    text: "text-amber-700",
+    glow: "shadow-slate-200/80 dark:shadow-black/30",
+    text: "text-amber-700 dark:text-amber-300",
   },
   rare: {
     label: "Rare",
-    glow: "shadow-blue-100/80",
-    text: "text-slate-500",
+    glow: "shadow-blue-100/80 dark:shadow-blue-950/20",
+    text: "text-blue-700 dark:text-blue-300",
   },
   epic: {
     label: "Epic",
-    glow: "shadow-purple-100/90",
-    text: "text-yellow-600",
+    glow: "shadow-purple-100/90 dark:shadow-purple-950/20",
+    text: "text-yellow-600 dark:text-yellow-300",
   },
   legendary: {
     label: "Legendary",
-    glow: "shadow-amber-100/90",
-    text: "text-cyan-700",
+    glow: "shadow-amber-100/90 dark:shadow-amber-950/20",
+    text: "text-cyan-700 dark:text-cyan-300",
   },
   mythic: {
     label: "Mythic",
-    glow: "shadow-violet-100/90",
-    text: "text-violet-700",
+    glow: "shadow-violet-100/90 dark:shadow-violet-950/20",
+    text: "text-violet-700 dark:text-violet-300",
   },
 };
 
@@ -95,9 +95,9 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
           onClick={() => setIsModalOpen(true)}
           onKeyDown={handleCardKeyDown}
           className={cn(
-            "group relative flex min-h-[210px] cursor-pointer flex-col overflow-hidden rounded-2xl bg-white p-3 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40",
+            "group relative flex min-h-[210px] cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
             rarity.glow,
-            isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90",
+            isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90 dark:bg-emerald-950/25 dark:shadow-emerald-950/20",
           )}
         >
           <div className="flex flex-1 items-center gap-2.5">
@@ -115,15 +115,15 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
               <p className={cn("whitespace-nowrap text-base font-semibold leading-tight tracking-tight", rarity.text)}>
                 {achievement.streakDays} Day Streak
               </p>
-              <h2 className="mt-1 whitespace-nowrap text-[15px] font-semibold leading-tight text-slate-950">{achievement.title}</h2>
-              <p className="mt-1 whitespace-nowrap text-xs font-medium leading-5 text-slate-500">Keep a {achievement.streakDays}-day streak</p>
+              <h2 className="mt-1 whitespace-nowrap text-[15px] font-semibold leading-tight text-foreground">{achievement.title}</h2>
+              <p className="mt-1 whitespace-nowrap text-xs font-medium leading-5 text-muted-foreground">Keep a {achievement.streakDays}-day streak</p>
             </div>
           </div>
 
           <div className="mt-auto pt-2">
             <div className="flex min-h-8 items-center">
               {isUnlocked ? (
-                <div className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                <div className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300">
                   <BadgeCheck className="h-3.5 w-3.5" />
                   Unlocked
                 </div>
@@ -131,11 +131,11 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
 
               {isInProgress && achievement.progress ? (
                 <div className="w-full space-y-1.5">
-                  <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+                  <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
                     <span>{achievement.progress.label}</span>
                     <span>{Math.round(progress)}%</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100 shadow-inner">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted shadow-inner">
                     <div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-400" style={{ width: `${progress}%` }} />
                   </div>
                 </div>
@@ -143,13 +143,13 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
 
               {achievement.status === "locked" ? (
                 <div className="flex w-full min-w-0 items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                     <Lock className="h-3.5 w-3.5" />
                     Locked
                   </span>
                   {remainingStreakDays !== null ? (
-                    <span className="text-right text-xs font-semibold text-slate-500">
-                      <span className="text-slate-950">{formatNumber(remainingStreakDays)} days</span> to go
+                    <span className="text-right text-xs font-semibold text-muted-foreground">
+                      <span className="text-foreground">{formatNumber(remainingStreakDays)} days</span> to go
                     </span>
                   ) : null}
                 </div>
@@ -176,9 +176,9 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
         onClick={() => setIsModalOpen(true)}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "group relative flex min-h-[210px] cursor-pointer flex-col overflow-hidden rounded-2xl bg-white p-2.5 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40",
+          "group relative flex min-h-[210px] cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-2.5 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
           rarity.glow,
-          isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90",
+          isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90 dark:bg-emerald-950/25 dark:shadow-emerald-950/20",
         )}
       >
         {achievement.category === "level" && achievement.unlockLevel ? (
@@ -188,7 +188,7 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
         ) : null}
 
         {achievement.rarity === "mythic" ? (
-          <div className="absolute inset-x-8 top-5 h-24 rounded-full bg-gradient-to-r from-violet-200/50 to-amber-200/50 blur-2xl" />
+          <div className="absolute inset-x-8 top-5 h-24 rounded-full bg-gradient-to-r from-violet-200/50 to-amber-200/50 blur-2xl dark:from-violet-500/20 dark:to-amber-500/15" />
         ) : null}
 
         <div className="relative flex justify-center pt-1">
@@ -207,14 +207,14 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
 
         <div className="mt-1 flex flex-1 flex-col">
           <div className="space-y-1 text-center">
-            <h2 className="text-[15px] font-semibold tracking-tight text-slate-950">{achievement.title}</h2>
-            <p className="line-clamp-2 text-xs font-medium leading-5 text-slate-500">{achievement.description}</p>
+            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">{achievement.title}</h2>
+            <p className="line-clamp-2 text-xs font-medium leading-5 text-muted-foreground">{achievement.description}</p>
           </div>
 
           <div className="mt-auto pt-1">
             <div className="flex min-h-8 items-center">
               {isUnlocked ? (
-                <div className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                <div className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300">
                   <BadgeCheck className="h-3.5 w-3.5" />
                   Unlocked
                 </div>
@@ -222,11 +222,11 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
 
               {isInProgress && achievement.progress ? (
                 <div className="w-full space-y-1.5">
-                  <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+                  <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
                     <span>{achievement.progress.label}</span>
                     <span>{Math.round(progress)}%</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100 shadow-inner">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted shadow-inner">
                     <div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-400" style={{ width: `${progress}%` }} />
                   </div>
                 </div>
@@ -234,13 +234,13 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
 
               {achievement.status === "locked" ? (
                 <div className="flex w-full min-w-0 items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                     <Lock className="h-3.5 w-3.5" />
                     Locked
                   </span>
                   {remainingXp !== null ? (
-                    <span className="text-right text-xs font-semibold text-slate-500">
-                      <span className="text-slate-950">{formatNumber(remainingXp)} XP</span> to go
+                    <span className="text-right text-xs font-semibold text-muted-foreground">
+                      <span className="text-foreground">{formatNumber(remainingXp)} XP</span> to go
                     </span>
                   ) : null}
                 </div>

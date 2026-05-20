@@ -273,9 +273,9 @@ function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummar
   const topLabel = summary.topPercent ? `Top ${summary.topPercent}%` : "Not ranked yet";
 
   return (
-    <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-white p-4 text-slate-950 shadow-xl shadow-orange-950/8">
-      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-orange-200/35 blur-2xl" />
-      <div className="absolute -bottom-12 -left-10 h-28 w-28 rounded-full bg-amber-200/25 blur-2xl" />
+    <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-card p-4 text-foreground shadow-xl shadow-orange-950/8 dark:border-orange-500/20 dark:bg-slate-950/80 dark:shadow-black/30">
+      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-orange-200/35 blur-2xl dark:bg-orange-500/15" />
+      <div className="absolute -bottom-12 -left-10 h-28 w-28 rounded-full bg-amber-200/25 blur-2xl dark:bg-amber-500/10" />
 
       <div className="relative flex min-h-[142px] flex-col justify-between gap-4">
         <div className="flex items-start justify-between gap-3">
@@ -283,7 +283,7 @@ function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummar
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Your Rank (This Week)</p>
             <div className="mt-2">
               <p className="text-4xl font-semibold leading-none tracking-tight text-orange-600">{rankLabel}</p>
-              <span className="mt-2 inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700">
+              <span className="mt-2 inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
                 {topLabel}
               </span>
             </div>
@@ -292,7 +292,7 @@ function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummar
 
         <Link
           href="/leaderboard"
-          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-orange-200/70 bg-orange-50/70 px-3 text-xs font-semibold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100/70"
+          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-orange-200/70 bg-orange-50/70 px-3 text-xs font-semibold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100/70 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:border-orange-400/40 dark:hover:bg-orange-500/15"
         >
           View Leaderboard
           <ArrowRight className="h-3.5 w-3.5" />
