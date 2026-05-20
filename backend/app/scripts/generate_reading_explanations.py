@@ -24,7 +24,11 @@ from app.db.session import get_session_maker
 
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
-GENERATOR_VERSION = "2026-05-21.2"
+GENERATOR_VERSION = "2026-05-21.3"
+SUPPORTED_TEST_TYPES = {
+    "reading": ModelTestType.READING,
+    "listening": ModelTestType.LISTENING,
+}
 
 
 @dataclass(slots=True)
@@ -40,6 +44,7 @@ class ExplanationStats:
 @dataclass(frozen=True, slots=True)
 class SectionJob:
     test_id: UUID
+    test_type: str
     test_title: str
     test_status: str
     section_id: UUID
@@ -61,6 +66,36 @@ def _extract_paragraph_text(item: Any) -> str:
     return _plain(item)
 
 
+def _flatten_transcript(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [_plain(value)] if _plain(value) else []
+    if isinstance(value, list):
+        lines: list[str] = []
+        for item in value:
+            lines.extend(_flatten_transcript(item))
+        return lines
+    if not isinstance(value, dict):
+        return []
+
+    for key in ("segments", "items", "lines", "turns", "paragraphs"):
+        nested = value.get(key)
+        if isinstance(nested, list):
+            lines = _flatten_transcript(nested)
+            if lines:
+                return lines
+
+    text = _plain(value.get("text") or value.get("transcript") or value.get("content"))
+    if not text:
+        return []
+    speaker = _plain(value.get("speaker") or value.get("label"))
+    return [f"{speaker}: {text}" if speaker else text]
+
+
+def _transcript_text(section: TestSection) -> str:
+    lines = _flatten_transcript(section.transcript)
+    return "\n".join(line for line in lines if line)
+
+
 def _section_passage(section: TestSection) -> str:
     paragraphs = section.content.get("paragraphs") if isinstance(section.content, dict) else None
     if isinstance(paragraphs, list) and paragraphs:
@@ -74,7 +109,7 @@ def _section_passage(section: TestSection) -> str:
             lines.append(f"{prefix}{text}")
         if lines:
             return "\n\n".join(lines)
-    return _plain((section.content or {}).get("body") or section.intro)
+    return _plain((section.content or {}).get("body") or _transcript_text(section) or section.intro)
 
 
 def _all_section_text(section: TestSection) -> str:
@@ -86,6 +121,7 @@ def _all_section_text(section: TestSection) -> str:
     paragraphs = (section.content or {}).get("paragraphs")
     if isinstance(paragraphs, list):
         chunks.extend(_extract_paragraph_text(item) for item in paragraphs)
+    chunks.append(_transcript_text(section))
     return "\n\n".join(chunk for chunk in chunks if chunk)
 
 
@@ -208,21 +244,22 @@ def _section_payload_for_groups(
     return {
         "test_id": str(test.id),
         "test_title": test.title,
+        "test_type": str(test.type.value),
         "test_status": str(test.status.value),
         "section_id": str(section.id),
         "section_title": section.title,
-        "passage": _section_passage(section),
+        "source_text": _section_passage(section),
         "groups": groups,
     }
 
 
 def _build_prompt(payload: dict[str, Any]) -> str:
     return (
-        "Create concise IELTS Reading answer explanations and audit the answer key.\n"
+        "Create concise IELTS Reading/Listening answer explanations and audit the answer key.\n"
         "Rules:\n"
-        "- Use ONLY the passage/question/options provided.\n"
+        "- Use ONLY the source_text/question/options provided.\n"
         "- For each question, explain why the accepted answer is correct in 1-2 simple sentences.\n"
-        "- quote must be an exact short evidence phrase/sentence copied from the passage when possible.\n"
+        "- quote must be an exact short evidence phrase/sentence copied from source_text when possible.\n"
         "- highlighted_answer must be the current accepted answer or the best option label/value.\n"
         "- answer_status must be one of: valid, possibly_wrong, uncertain.\n"
         "- Mark possibly_wrong only when the accepted answer clearly contradicts the passage/options.\n"
@@ -280,7 +317,7 @@ async def _generate_section_data(
             config=config,
             prompt=f"{prompt}{retry_note}",
             system_instruction=(
-                "You are a careful IELTS Reading answer key auditor. "
+                "You are a careful IELTS Reading and Listening answer key auditor. "
                 "Be concise, evidence-based, and return strict JSON only."
             ),
             temperature=0,
@@ -317,10 +354,25 @@ def _answer_status(question: Question, item: dict[str, Any]) -> tuple[str, list[
     return status, suggested, issue
 
 
-async def _load_tests(session: AsyncSession, limit: int | None) -> list[Test]:
+def _parse_test_types(value: str) -> set[ModelTestType]:
+    keys = [item.strip().lower() for item in value.split(",") if item.strip()]
+    if not keys:
+        return {ModelTestType.READING, ModelTestType.LISTENING}
+    unknown = sorted(key for key in keys if key not in SUPPORTED_TEST_TYPES)
+    if unknown:
+        raise ValueError(f"Unsupported test type(s): {', '.join(unknown)}")
+    return {SUPPORTED_TEST_TYPES[key] for key in keys}
+
+
+async def _load_tests(
+    session: AsyncSession,
+    *,
+    limit: int | None,
+    test_types: set[ModelTestType],
+) -> list[Test]:
     query = (
         select(Test)
-        .where(Test.type == ModelTestType.READING)
+        .where(Test.type.in_(test_types))
         .options(
             selectinload(Test.sections)
             .selectinload(TestSection.question_groups)
@@ -335,14 +387,20 @@ async def _load_tests(session: AsyncSession, limit: int | None) -> list[Test]:
     return list((await session.scalars(query)).unique().all())
 
 
-async def _collect_section_jobs(session: AsyncSession, limit: int | None) -> tuple[int, list[SectionJob]]:
-    tests = await _load_tests(session, limit)
+async def _collect_section_jobs(
+    session: AsyncSession,
+    *,
+    limit: int | None,
+    test_types: set[ModelTestType],
+) -> tuple[int, list[SectionJob]]:
+    tests = await _load_tests(session, limit=limit, test_types=test_types)
     jobs: list[SectionJob] = []
     for test in tests:
         for section in sorted(test.sections, key=lambda item: item.position):
             jobs.append(
                 SectionJob(
                     test_id=test.id,
+                    test_type=str(test.type.value),
                     test_title=str(test.title),
                     test_status=str(test.status.value),
                     section_id=section.id,
@@ -492,41 +550,57 @@ async def run(args: argparse.Namespace) -> int:
     session_maker = get_session_maker()
     stats = ExplanationStats()
     suspicious: list[dict[str, Any]] = []
+    test_types = _parse_test_types(args.types)
+    semaphore = asyncio.Semaphore(max(1, args.concurrency))
 
     async with session_maker() as session:
-        stats.tests_seen, jobs = await _collect_section_jobs(session, args.limit)
+        stats.tests_seen, jobs = await _collect_section_jobs(session, limit=args.limit, test_types=test_types)
 
-    for job in jobs:
-        stats.sections_seen += 1
-        stats.questions_seen += job.question_count
-        async with session_maker() as session:
-            try:
-                test, section = await _load_section(session, job.test_id, job.section_id)
-                updated, section_suspicious = await _process_section(
-                    session,
-                    config=config,
-                    test=test,
-                    section=section,
-                    overwrite=args.overwrite,
-                    dry_run=args.dry_run,
-                )
-            except Exception as exc:  # noqa: BLE001
-                stats.failed_sections += 1
-                print(f"FAILED section test={job.test_id} section={job.section_id}: {exc}")
-                await session.rollback()
-                continue
-            stats.questions_updated += updated
-            suspicious.extend(section_suspicious)
-            print(
-                f"processed test='{job.test_title}' status={job.test_status} "
-                f"section='{job.section_title}' updated={updated} suspicious={len(section_suspicious)}"
-            )
+    stats.sections_seen = len(jobs)
+    stats.questions_seen = sum(job.question_count for job in jobs)
+
+    async def process_job(job: SectionJob) -> tuple[SectionJob, int, list[dict[str, Any]], str | None]:
+        async with semaphore:
+            async with session_maker() as session:
+                try:
+                    test, section = await _load_section(session, job.test_id, job.section_id)
+                    updated, section_suspicious = await _process_section(
+                        session,
+                        config=config,
+                        test=test,
+                        section=section,
+                        overwrite=args.overwrite,
+                        dry_run=args.dry_run,
+                    )
+                    return job, updated, section_suspicious, None
+                except Exception as exc:  # noqa: BLE001
+                    await session.rollback()
+                    return job, 0, [], str(exc)
+
+    tasks = [asyncio.create_task(process_job(job)) for job in jobs]
+    for task in asyncio.as_completed(tasks):
+        job, updated, section_suspicious, error = await task
+        if error:
+            stats.failed_sections += 1
+            print(f"FAILED section test={job.test_id} section={job.section_id}: {error}")
+            continue
+        stats.questions_updated += updated
+        suspicious.extend(section_suspicious)
+        print(
+            f"processed type={job.test_type} test='{job.test_title}' status={job.test_status} "
+            f"section='{job.section_title}' updated={updated} suspicious={len(section_suspicious)}"
+        )
+
+    if not tasks:
+        print("No matching sections found.")
 
     stats.suspicious_answers = len(suspicious)
     report = {
         "generated_at": datetime.now(UTC).isoformat(),
         "generator_version": GENERATOR_VERSION,
         "model": args.model,
+        "types": sorted(item.value for item in test_types),
+        "concurrency": args.concurrency,
         "dry_run": args.dry_run,
         "stats": asdict(stats),
         "suspicious_answers": suspicious,
@@ -541,11 +615,17 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate IELTS Reading answer explanations with Gemini.")
+    parser = argparse.ArgumentParser(description="Generate IELTS Reading/Listening answer explanations with Gemini.")
     parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--types",
+        default="reading,listening",
+        help="Comma-separated test types to process: reading,listening.",
+    )
+    parser.add_argument("--concurrency", type=int, default=4, help="Parallel section workers.")
     parser.add_argument("--overwrite", action="store_true", help="Regenerate explanations even when a question already has one.")
     parser.add_argument("--dry-run", action="store_true", help="Call AI and validate output without writing DB changes.")
-    parser.add_argument("--limit", type=int, default=None, help="Limit number of reading tests for smoke runs.")
+    parser.add_argument("--limit", type=int, default=None, help="Limit number of tests for smoke runs.")
     parser.add_argument("--report", default="/tmp/reading_explanation_report.json")
     return parser.parse_args()
 
