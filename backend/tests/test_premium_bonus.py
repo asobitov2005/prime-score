@@ -314,10 +314,14 @@ async def test_submit_attempt_grants_bonus_once_for_real_work(monkeypatch) -> No
         user.premium_until = (now or datetime.now(UTC)) + timedelta(days=days)
         return user.premium_until
 
+    async def _fake_award_xp_for_attempt(_session, _attempt):
+        return SimpleNamespace(total_awarded=0, breakdown={}, level_after=1, current_streak=0)
+
     monkeypatch.setattr("app.services.attempt_repo._load_answers", _fake_load_answers)
     monkeypatch.setattr("app.services.attempt_repo._db_answer_key", _fake_db_answer_key)
     monkeypatch.setattr("app.services.attempt_repo.score_answer", _fake_score_answer)
     monkeypatch.setattr("app.services.attempt_repo.grant_premium_bonus", _fake_grant_premium_bonus)
+    monkeypatch.setattr("app.services.attempt_repo.award_xp_for_attempt", _fake_award_xp_for_attempt)
 
     submitted = await submit_attempt_in_db(session, attempt_id=attempt.id)
     assert submitted.status == CoreAttemptStatus.completed
@@ -354,10 +358,14 @@ async def test_submit_attempt_does_not_grant_bonus_for_blank_submit(monkeypatch)
         bonus_calls.append((2, "Test bonus activated", "You completed a full Reading or Listening test. Your +2 premium days are active."))
         return datetime.now(UTC)
 
+    async def _fake_award_xp_for_attempt(_session, _attempt):
+        return SimpleNamespace(total_awarded=0, breakdown={}, level_after=1, current_streak=0)
+
     monkeypatch.setattr("app.services.attempt_repo._load_answers", _fake_load_answers)
     monkeypatch.setattr("app.services.attempt_repo._db_answer_key", _fake_db_answer_key)
     monkeypatch.setattr("app.services.attempt_repo.score_answer", _fake_score_answer)
     monkeypatch.setattr("app.services.attempt_repo.grant_premium_bonus", _fake_grant_premium_bonus)
+    monkeypatch.setattr("app.services.attempt_repo.award_xp_for_attempt", _fake_award_xp_for_attempt)
 
     submitted = await submit_attempt_in_db(session, attempt_id=attempt.id)
     assert submitted.status == CoreAttemptStatus.completed

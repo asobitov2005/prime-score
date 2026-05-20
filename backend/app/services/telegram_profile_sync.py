@@ -69,8 +69,9 @@ async def sync_user_telegram_profile(
     if not settings.telegram_bot_token or settings.telegram_bot_token == "change-me":
         return False
 
-    bot = Bot(token=settings.telegram_bot_token)
+    bot: Bot | None = None
     try:
+        bot = Bot(token=settings.telegram_bot_token)
         chat = await bot.get_chat(user.telegram_id)
         first_name, last_name = normalize_user_name_parts(
             getattr(chat, "first_name", None),
@@ -93,7 +94,8 @@ async def sync_user_telegram_profile(
     except Exception:
         return False
     finally:
-        try:
-            await bot.session.close()
-        except Exception:
-            pass
+        if bot is not None:
+            try:
+                await bot.session.close()
+            except Exception:
+                pass

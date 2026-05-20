@@ -603,6 +603,8 @@ async def get_me(
 
     await reconcile_user_premium_status(session, user=user)
     await sync_user_telegram_profile(user)
+    if current_user.avatar_url and not user.avatar_is_custom:
+        user.avatar_url = current_user.avatar_url
     await session.commit()
     await session.refresh(user)
     return _profile_from_user(user)

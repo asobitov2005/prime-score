@@ -148,6 +148,7 @@ async def ensure_debug_user(session: AsyncSession, principal: DebugPrincipal) ->
             first_name=principal.first_name,
             last_name=principal.last_name,
             username=principal.username,
+            avatar_url=principal.avatar_url,
             telegram_contact_updated_at=datetime.now(timezone.utc),
             is_premium=principal.is_premium,
             show_on_leaderboard=principal.show_on_leaderboard,
@@ -159,6 +160,8 @@ async def ensure_debug_user(session: AsyncSession, principal: DebugPrincipal) ->
         user.last_name = principal.last_name
         user.phone = _principal_phone(principal)
         user.username = principal.username
+        if not user.avatar_is_custom:
+            user.avatar_url = principal.avatar_url
         user.telegram_contact_updated_at = datetime.now(timezone.utc)
         user.is_premium = principal.is_premium
         user.show_on_leaderboard = principal.show_on_leaderboard
