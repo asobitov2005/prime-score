@@ -183,6 +183,9 @@ async def resolve_ai_use_case_config(
 
 
 def build_google_client(config: ResolvedAiUseCaseConfig) -> genai.Client:
+    timeout = (config.settings_json or {}).get("http_timeout_ms")
+    if timeout:
+        return genai.Client(api_key=config.api_key, http_options={"timeout": int(timeout)})
     return genai.Client(api_key=config.api_key)
 
 

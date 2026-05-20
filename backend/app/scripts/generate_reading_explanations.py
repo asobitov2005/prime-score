@@ -24,7 +24,7 @@ from app.db.session import get_session_maker
 
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
-GENERATOR_VERSION = "2026-05-21.1"
+GENERATOR_VERSION = "2026-05-21.2"
 
 
 @dataclass(slots=True)
@@ -178,8 +178,16 @@ def _question_payload(question: Question, group: QuestionGroup) -> dict[str, Any
 
 
 def _section_payload(test: Test, section: TestSection) -> dict[str, Any]:
+    return _section_payload_for_groups(test, section, list(section.question_groups))
+
+
+def _section_payload_for_groups(
+    test: Test,
+    section: TestSection,
+    selected_groups: list[QuestionGroup],
+) -> dict[str, Any]:
     groups = []
-    for group in sorted(section.question_groups, key=lambda item: (item.question_start, item.question_end)):
+    for group in sorted(selected_groups, key=lambda item: (item.question_start, item.question_end)):
         questions = [
             _question_payload(question, group)
             for question in sorted(group.questions, key=lambda item: item.number)
@@ -242,18 +250,14 @@ def _build_config(model: str) -> ResolvedAiUseCaseConfig:
         base_url=None,
         model_id=model,
         model_record_id=None,
-        settings_json={},
+        settings_json={"http_timeout_ms": 90_000},
         context_window=None,
         source="env_script",
     )
 
 
-def _index_questions(section: TestSection) -> dict[str, Question]:
-    return {
-        str(question.id): question
-        for group in section.question_groups
-        for question in group.questions
-    }
+def _index_group_questions(group: QuestionGroup) -> dict[str, Question]:
+    return {str(question.id): question for question in group.questions}
 
 
 async def _generate_section_data(
@@ -377,64 +381,88 @@ async def _process_section(
     overwrite: bool,
     dry_run: bool,
 ) -> tuple[int, list[dict[str, Any]]]:
-    questions_by_id = _index_questions(section)
-    target_questions = [
-        question
-        for question in questions_by_id.values()
-        if overwrite or not _plain(question.explanation)
-    ]
-    if not target_questions:
-        return 0, []
-
-    payload = _section_payload(test, section)
-    prompt = _build_prompt(payload)
-    data = await _generate_section_data(
-        config=config,
-        prompt=prompt,
-    )
-    output_items = data.get("questions") or []
-    if not isinstance(output_items, list):
-        raise RuntimeError("AI response has no questions array.")
-
     updated = 0
     suspicious: list[dict[str, Any]] = []
     now = datetime.now(UTC).isoformat()
-    for item in output_items:
-        if not isinstance(item, dict):
-            continue
-        question_id = _plain(item.get("id"))
-        question = questions_by_id.get(question_id)
-        if question is None:
-            continue
-        if not overwrite and _plain(question.explanation):
+
+    for group in sorted(section.question_groups, key=lambda item: (item.question_start, item.question_end)):
+        questions_by_id = _index_group_questions(group)
+        target_questions = [
+            question
+            for question in questions_by_id.values()
+            if overwrite or not _plain(question.explanation)
+        ]
+        if not target_questions:
             continue
 
-        explanation = _plain(item.get("explanation"))
-        quote = _plain(item.get("quote"))
-        highlighted_answer = _plain(item.get("highlighted_answer"))
-        if not explanation:
-            continue
-        quote_is_valid = _quote_exists(section, quote)
-        status, suggested_answers, issue = _answer_status(question, item)
-        confidence = item.get("confidence")
-        try:
-            confidence_value = max(0.0, min(float(confidence), 1.0))
-        except (TypeError, ValueError):
-            confidence_value = None
+        payload = _section_payload_for_groups(test, section, [group])
+        prompt = _build_prompt(payload)
+        data = await _generate_section_data(config=config, prompt=prompt)
+        output_items = data.get("questions") or []
+        if not isinstance(output_items, list):
+            raise RuntimeError("AI response has no questions array.")
 
-        accepted_answers = [answer.value for answer in question.answer_variants]
-        reference = {
-            "quote": quote if quote_is_valid else "",
-            "highlighted_answer": highlighted_answer or (accepted_answers[0] if accepted_answers else ""),
-            "answer_status": status,
-            "suggested_answers": suggested_answers,
-            "issue": issue,
-            "confidence": confidence_value,
-            "quote_verified": quote_is_valid,
-            "generated_by": config.model_id,
-            "generated_at": now,
-        }
-        if status != "valid" or not quote_is_valid:
+        for item in output_items:
+            if not isinstance(item, dict):
+                continue
+            question_id = _plain(item.get("id"))
+            question = questions_by_id.get(question_id)
+            if question is None:
+                continue
+            if not overwrite and _plain(question.explanation):
+                continue
+
+            explanation = _plain(item.get("explanation"))
+            quote = _plain(item.get("quote"))
+            highlighted_answer = _plain(item.get("highlighted_answer"))
+            if not explanation:
+                continue
+            quote_is_valid = _quote_exists(section, quote)
+            status, suggested_answers, issue = _answer_status(question, item)
+            confidence = item.get("confidence")
+            try:
+                confidence_value = max(0.0, min(float(confidence), 1.0))
+            except (TypeError, ValueError):
+                confidence_value = None
+
+            accepted_answers = [answer.value for answer in question.answer_variants]
+            reference = {
+                "quote": quote if quote_is_valid else "",
+                "highlighted_answer": highlighted_answer or (accepted_answers[0] if accepted_answers else ""),
+                "answer_status": status,
+                "suggested_answers": suggested_answers,
+                "issue": issue,
+                "confidence": confidence_value,
+                "quote_verified": quote_is_valid,
+                "generated_by": config.model_id,
+                "generated_at": now,
+            }
+            if status != "valid" or not quote_is_valid:
+                suspicious.append(
+                    {
+                        "test_id": str(test.id),
+                        "test_title": test.title,
+                        "test_status": str(test.status.value),
+                        "section_id": str(section.id),
+                        "section_title": section.title,
+                        "question_id": str(question.id),
+                        "question_number": question.number,
+                        "current_answers": accepted_answers,
+                        "answer_status": status,
+                        "suggested_answers": suggested_answers,
+                        "issue": issue
+                        or ("Evidence quote was not found exactly in passage." if not quote_is_valid else ""),
+                        "quote": quote,
+                    }
+                )
+            if not dry_run:
+                question.explanation = explanation
+                question.explanation_reference = reference
+            updated += 1
+
+        output_ids = {_plain(item.get("id")) for item in output_items if isinstance(item, dict)}
+        missing = [question.number for question in target_questions if str(question.id) not in output_ids]
+        if missing:
             suspicious.append(
                 {
                     "test_id": str(test.id),
@@ -442,19 +470,15 @@ async def _process_section(
                     "test_status": str(test.status.value),
                     "section_id": str(section.id),
                     "section_title": section.title,
-                    "question_id": str(question.id),
-                    "question_number": question.number,
-                    "current_answers": accepted_answers,
-                    "answer_status": status,
-                    "suggested_answers": suggested_answers,
-                    "issue": issue or ("Evidence quote was not found exactly in passage." if not quote_is_valid else ""),
-                    "quote": quote,
+                    "question_id": "",
+                    "question_number": None,
+                    "current_answers": [],
+                    "answer_status": "uncertain",
+                    "suggested_answers": [],
+                    "issue": f"AI response omitted questions: {missing}",
+                    "quote": "",
                 }
             )
-        if not dry_run:
-            question.explanation = explanation
-            question.explanation_reference = reference
-        updated += 1
 
     if updated and not dry_run:
         await session.commit()
