@@ -102,6 +102,47 @@ def _parse_json(text: str) -> dict[str, Any]:
     return json.loads(_strip_json_fence(text))
 
 
+def _response_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "explanation": {"type": "string"},
+                        "quote": {"type": "string"},
+                        "highlighted_answer": {"type": "string"},
+                        "answer_status": {
+                            "type": "string",
+                            "enum": ["valid", "possibly_wrong", "uncertain"],
+                        },
+                        "suggested_answers": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "issue": {"type": "string"},
+                        "confidence": {"type": "number"},
+                    },
+                    "required": [
+                        "id",
+                        "explanation",
+                        "quote",
+                        "highlighted_answer",
+                        "answer_status",
+                        "suggested_answers",
+                        "issue",
+                        "confidence",
+                    ],
+                },
+            }
+        },
+        "required": ["questions"],
+    }
+
+
 def _question_payload(question: Question, group: QuestionGroup) -> dict[str, Any]:
     answers = [
         answer.value
@@ -265,6 +306,7 @@ async def _process_section(
         top_p=1,
         max_output_tokens=8192,
         response_mime_type="application/json",
+        response_schema=_response_schema(),
         operation="reading_explanation_backfill",
     )
     data = _parse_json(response_text)
@@ -351,6 +393,11 @@ async def run(args: argparse.Namespace) -> int:
         for test in tests:
             ordered_sections = sorted(test.sections, key=lambda item: item.position)
             for section in ordered_sections:
+                test_id = str(test.id)
+                test_title = str(test.title)
+                test_status = str(test.status.value)
+                section_id = str(section.id)
+                section_title = str(section.title)
                 stats.sections_seen += 1
                 stats.questions_seen += sum(len(group.questions) for group in section.question_groups)
                 try:
@@ -364,14 +411,14 @@ async def run(args: argparse.Namespace) -> int:
                     )
                 except Exception as exc:  # noqa: BLE001
                     stats.failed_sections += 1
+                    print(f"FAILED section test={test_id} section={section_id}: {exc}")
                     await session.rollback()
-                    print(f"FAILED section test={test.id} section={section.id}: {exc}")
                     continue
                 stats.questions_updated += updated
                 suspicious.extend(section_suspicious)
                 print(
-                    f"processed test='{test.title}' status={test.status.value} "
-                    f"section='{section.title}' updated={updated} suspicious={len(section_suspicious)}"
+                    f"processed test='{test_title}' status={test_status} "
+                    f"section='{section_title}' updated={updated} suspicious={len(section_suspicious)}"
                 )
 
     stats.suspicious_answers = len(suspicious)
