@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -579,6 +580,9 @@ async def _process_section(
 
 
 async def run(args: argparse.Namespace) -> int:
+    loop = asyncio.get_running_loop()
+    executor = ThreadPoolExecutor(max_workers=max(4, args.concurrency + 8))
+    loop.set_default_executor(executor)
     config = _build_config(args.model)
     session_maker = get_session_maker()
     stats = ExplanationStats()
@@ -644,6 +648,7 @@ async def run(args: argparse.Namespace) -> int:
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"report={report_path}")
     print(json.dumps(report["stats"], ensure_ascii=False))
+    executor.shutdown(wait=False, cancel_futures=False)
     return 0 if stats.failed_sections == 0 else 1
 
 
