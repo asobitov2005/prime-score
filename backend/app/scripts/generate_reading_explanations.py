@@ -24,6 +24,7 @@ from app.db.session import get_session_maker
 
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
+GENERATOR_VERSION = "2026-05-21.1"
 
 
 @dataclass(slots=True)
@@ -424,6 +425,7 @@ async def run(args: argparse.Namespace) -> int:
     stats.suspicious_answers = len(suspicious)
     report = {
         "generated_at": datetime.now(UTC).isoformat(),
+        "generator_version": GENERATOR_VERSION,
         "model": args.model,
         "dry_run": args.dry_run,
         "stats": asdict(stats),
