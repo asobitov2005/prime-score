@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BookMarked, BookOpenText, ChevronDown, CreditCard, FileStack, FileText, Flame, Gauge, History, Medal, Menu, Newspaper, PenTool, PencilRuler, Podcast, Sparkles, Trophy, X, Settings2 } from "lucide-react";
+import { Award, BookMarked, BookOpenText, ChevronDown, CreditCard, FileStack, FileText, Flame, Gauge, History, Medal, Menu, Newspaper, PenTool, PencilRuler, Podcast, Sparkles, Trophy, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createApiClient } from "@/lib/api/client";
@@ -12,6 +12,7 @@ import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "next/navigation";
 import { AppRouteLoadingFrame } from "@/components/layout/app-loading-placeholder";
+import { trackNavigationClick, trackUiInteraction } from "@/lib/analytics";
 import { consumePendingPublicRedirect } from "@/lib/navigation-transition";
 import { SidebarPremiumCard } from "@/components/layout/sidebar-premium-card";
 import type { XpSummary } from "@/lib/types";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/writing", label: "Writing", icon: PenTool },
   { href: "/history", label: "History", icon: History },
   { href: "/leaderboard", label: "Leaderboard", icon: Medal },
+  { href: "/achievements", label: "Achievements", icon: Award },
   { href: "/subscription", label: "Subscription", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings2 },
   { href: "/speaking", label: "Speaking", icon: Podcast, soon: true },
@@ -102,6 +104,7 @@ export function AppShell({ children }: AppShellProps) {
             bestStreak: 0,
             weeklyXp: 0,
             monthlyXp: 0,
+            latestXpGain: null,
             progress: {
               level: 1,
               levelFloorXp: 0,
@@ -164,6 +167,12 @@ export function AppShell({ children }: AppShellProps) {
                   <Link
                     href={item.href}
                     onClick={() => {
+                      trackNavigationClick({
+                        label: item.label,
+                        href: item.href,
+                        location: "app_sidebar",
+                        authState: isAuthenticated ? "authenticated" : "guest",
+                      });
                       if (item.href === "/tests") {
                         setIsTestsSubmenuOpen(true);
                       }
@@ -202,6 +211,11 @@ export function AppShell({ children }: AppShellProps) {
                     type="button"
                     onClick={(event) => {
                       event.preventDefault();
+                      trackUiInteraction({
+                        action: "tests_submenu_toggle",
+                        component: "app_sidebar",
+                        value: !isTestsSubmenuOpen,
+                      });
                       setIsTestsSubmenuOpen((current) => !current);
                     }}
                     className={cn(
@@ -234,6 +248,14 @@ export function AppShell({ children }: AppShellProps) {
                         <Link
                           key={sourceItem.id}
                           href={sourceItem.href}
+                          onClick={() => {
+                            trackNavigationClick({
+                              label: sourceItem.label,
+                              href: sourceItem.href,
+                              location: "app_sidebar_test_sources",
+                              authState: isAuthenticated ? "authenticated" : "guest",
+                            });
+                          }}
                           className={cn(
                             "relative flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition-all before:absolute before:-left-3 before:top-1/2 before:h-px before:w-2 before:-translate-y-1/2 before:rounded-full before:bg-slate-300 dark:before:bg-slate-600",
                             isSourceActive
@@ -313,7 +335,6 @@ export function AppShell({ children }: AppShellProps) {
   const SidebarContent = () => (
     <div className="flex flex-col gap-4">
       <SidebarNavigation />
-      <SidebarXpCard />
       <div>
         <SidebarPremiumCard />
       </div>
@@ -321,12 +342,18 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   return (
-    <div className="flex-1 w-full max-w-[82rem] mx-auto px-4 md:px-6 lg:px-8 pt-3 pb-6 md:pt-4 md:pb-8 flex flex-col lg:flex-row gap-2 md:gap-2 items-start relative">
+    <div className="flex-1 w-full max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-6 md:pt-4 md:pb-8 flex flex-col lg:flex-row gap-5 md:gap-6 items-start relative">
       {/* Mobile Sidebar Toggle Button - Floating because header is global */}
       <Button
         variant="outline"
         size="icon"
-        onClick={() => setIsMobileOpen(true)}
+        onClick={() => {
+          trackUiInteraction({
+            action: "mobile_sidebar_open",
+            component: "app_shell",
+          });
+          setIsMobileOpen(true);
+        }}
         className="lg:hidden fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-primary text-background shadow-xl border-none hover:bg-primary/90 active:scale-95"
         aria-label="Open Menu"
       >
@@ -341,10 +368,10 @@ export function AppShell({ children }: AppShellProps) {
       )}
 
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-72 bg-background border-r border-border/50 shadow-2xl p-5 flex flex-col gap-5 lg:hidden transition-transform duration-300 ease-out",
+        "fixed inset-y-0 left-0 z-50 w-[17.5rem] bg-background p-5 shadow-2xl flex flex-col gap-5 lg:hidden transition-transform duration-300 ease-out",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="flex items-center justify-between pb-2 border-b border-border/30">
+        <div className="flex items-center justify-between pb-2">
           <p className="font-bold text-base text-foreground">Menu</p>
           <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(false)} className="h-8 w-8 rounded-full hover:bg-muted/50 -mr-2">
             <X className="h-4 w-4" />
@@ -356,37 +383,28 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <aside className={cn(
-        "relative hidden lg:block w-[17rem] shrink-0",
+        "hidden lg:block w-[17.5rem] shrink-0 sticky",
         sidebar === "collapsed" ? "lg:hidden" : "lg:block"
-      )}>
-        <div
-          className="fixed z-30 pointer-events-auto"
-          style={{
-            top: "calc(var(--app-shell-sticky-top, 5rem) + 0.5rem)",
-            left: "calc((100vw - min(100vw, 82rem)) / 2 + 1.5rem)",
-            width: "17rem",
-          }}
-        >
+      )}
+      style={{ 
+        top: "calc(var(--app-shell-sticky-top, 4.5rem) + 1rem)",
+        height: "calc(100dvh - var(--app-shell-sticky-top, 4.5rem) - 2rem)"
+      }}>
+        <div className="flex flex-col gap-4 h-full">
           <div
-            className="flex flex-col gap-4"
-            style={{ maxHeight: "calc(100dvh - var(--app-shell-sticky-top, 5rem) - 1.5rem)" }}
+            data-lenis-prevent
+            className={cn(
+              "flex-1 min-h-0 overscroll-contain pr-2 scroll-smooth flex flex-col gap-4",
+              isTestsSubmenuOpen ? "overflow-y-auto sidebar-scrollbar" : "overflow-y-auto no-scrollbar"
+            )}
+            style={{
+              scrollbarGutter: "stable"
+            }}
           >
-            <div
-              data-lenis-prevent
-              className={cn(
-                "min-h-0 overscroll-contain pr-2 scroll-smooth",
-                isTestsSubmenuOpen ? "overflow-y-auto sidebar-scrollbar" : "overflow-y-hidden"
-              )}
-              style={{
-                scrollbarGutter: "stable",
-                maxHeight: "calc(100dvh - var(--app-shell-sticky-top, 5rem) - 11.5rem)"
-              }}
-            >
-              <SidebarNavigation />
-            </div>
-            <div className="shrink-0 pr-4">
-              <SidebarPremiumCard />
-            </div>
+            <SidebarNavigation />
+          </div>
+          <div className="shrink-0 pr-4">
+            <SidebarPremiumCard />
           </div>
         </div>
       </aside>

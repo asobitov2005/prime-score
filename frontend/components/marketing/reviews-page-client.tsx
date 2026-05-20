@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useAuthStore } from "@/store/auth-store";
 import type { ReviewItem } from "@/lib/mock-data";
+import { trackCtaClick, trackReviewSubmit } from "@/lib/analytics";
 import { listPublicReviews, submitPublicReview } from "@/lib/reviews";
 
 interface ReviewsPageClientProps {
@@ -44,6 +45,11 @@ export function ReviewsPageClient({ initialReviews }: ReviewsPageClientProps) {
             isPremium,
           },
         );
+        trackReviewSubmit({
+          band,
+          isPremium,
+          textLength: feedback.trim().length,
+        });
         setIsSubmitted(true);
         setFeedback("");
         setBand("");
@@ -127,7 +133,20 @@ export function ReviewsPageClient({ initialReviews }: ReviewsPageClientProps) {
                       You need to be logged in to leave a review.
                     </p>
                     <Button asChild className="w-full font-bold rounded-xl shadow-md transition-transform active:scale-95">
-                      <Link href="/login">Login to continue</Link>
+                      <Link
+                        href="/login"
+                        onClick={() => {
+                          trackCtaClick({
+                            ctaName: "login_to_review",
+                            ctaLabel: "Login to continue",
+                            ctaLocation: "reviews_page",
+                            destination: "/login",
+                            authState: "guest",
+                          });
+                        }}
+                      >
+                        Login to continue
+                      </Link>
                     </Button>
                   </div>
                 ) : isSubmitted ? (

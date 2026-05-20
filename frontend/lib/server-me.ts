@@ -35,6 +35,7 @@ type BackendXpSummary = {
   best_streak: number;
   weekly_xp: number;
   monthly_xp: number;
+  latest_xp_gain?: number | null;
   progress: {
     level: number;
     level_floor_xp: number;
@@ -206,6 +207,22 @@ type BackendImprovementRate = {
   delta?: number | null;
   percent_change?: number | null;
 };
+
+type BackendLeaderboardEntry = {
+  rank: number;
+  user_id: string;
+  xp: number;
+};
+
+type BackendLeaderboardResponse = {
+  items: BackendLeaderboardEntry[];
+  current_user?: BackendLeaderboardEntry | null;
+};
+
+export interface LeaderboardPreviewSummary {
+  rank: number | null;
+  topPercent: number | null;
+}
 
 async function requestBackend<T>(path: string): Promise<T> {
   return requestServerUserApi<T>(path);
@@ -407,6 +424,7 @@ export async function getXpSummary(): Promise<XpSummary> {
       bestStreak: summary.best_streak,
       weeklyXp: summary.weekly_xp,
       monthlyXp: summary.monthly_xp,
+      latestXpGain: summary.latest_xp_gain ?? null,
       progress: {
         level: summary.progress.level,
         levelFloorXp: summary.progress.level_floor_xp,
@@ -424,6 +442,7 @@ export async function getXpSummary(): Promise<XpSummary> {
       bestStreak: 0,
       weeklyXp: 0,
       monthlyXp: 0,
+      latestXpGain: null,
       progress: {
         level: 1,
         levelFloorXp: 0,
@@ -447,6 +466,25 @@ export async function getLeaderboardRank(type: "combined" | TestType = "combined
     return typeof rank === "number" && rank > 0 ? rank : null;
   } catch {
     return null;
+  }
+}
+
+export async function getWeeklyLeaderboardPreview(): Promise<LeaderboardPreviewSummary> {
+  try {
+    const payload = await requestBackend<BackendLeaderboardResponse>("/leaderboard?period=week");
+    const rank = payload.current_user?.rank ?? null;
+    if (typeof rank !== "number" || rank <= 0) {
+      return { rank: null, topPercent: null };
+    }
+
+    const leaderboardSize = Math.max(payload.items.length, rank);
+    const topPercent = leaderboardSize > 0
+      ? Math.max(1, Math.min(100, Math.ceil((rank / leaderboardSize) * 100)))
+      : null;
+
+    return { rank, topPercent };
+  } catch {
+    return { rank: null, topPercent: null };
   }
 }
 

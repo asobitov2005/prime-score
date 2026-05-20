@@ -10,7 +10,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { createApiClient, ApiError } from "@/lib/api/client";
-import { parseAnalyticsAmount, trackBeginCheckout, trackPurchase } from "@/lib/analytics";
+import {
+  parseAnalyticsAmount,
+  trackBeginCheckout,
+  trackPaymentCanceled,
+  trackPaymentCopy,
+  trackPaymentMatched,
+  trackPaymentProofClick,
+  trackPlanSelect,
+  trackPurchase,
+} from "@/lib/analytics";
 import type { PaymentRecordResponse } from "@/lib/api/types";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { MarketingPlan } from "@/lib/server-plans";
@@ -258,7 +267,17 @@ function ActiveInvoiceCard({
           </div>
           <div className="space-y-3">
             <Button type="button" asChild className="w-full">
-              <a href={telegramUrl(supportContact)} target="_blank" rel="noreferrer">
+              <a
+                href={telegramUrl(supportContact)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => {
+                  trackPaymentProofClick({
+                    paymentId: payment.id,
+                    supportContact,
+                  });
+                }}
+              >
                 <MessageCircle className="h-4 w-4" />
                 Send screenshot
               </a>
@@ -308,6 +327,17 @@ export function SubscriptionWorkspace({
     if (emitEvents) {
       for (const payment of nextPayments) {
         const previousStatus = previousStatuses[payment.id];
+        if (previousStatus && previousStatus !== payment.status && payment.status === "matched") {
+          trackPaymentMatched({
+            paymentId: payment.id,
+            invoiceCode: payment.invoiceCode,
+            planId: payment.planId,
+            planName: payment.planName,
+            durationDays: payment.durationDays,
+            value: parseAnalyticsAmount(payment.amount),
+            currency: payment.currency,
+          });
+        }
         if (previousStatus && previousStatus !== payment.status && payment.status === "completed") {
           trackPurchase({
             paymentId: payment.id,
@@ -360,6 +390,15 @@ export function SubscriptionWorkspace({
   async function handleChoosePlan(plan: MarketingPlan) {
     setBusyPlanId(plan.id);
     setError(null);
+    trackPlanSelect({
+      planId: plan.id,
+      planName: plan.title,
+      durationDays: plan.durationDays,
+      value: plan.numericPrice,
+      currency: plan.currency,
+      location: "subscription_workspace",
+      authState: "authenticated",
+    });
     try {
       const payload = await api.createPayment({ plan_id: plan.id });
       const payment = mapPaymentRecord(payload.payment);
@@ -390,6 +429,14 @@ export function SubscriptionWorkspace({
     try {
       const payload = await api.cancelPayment(paymentId);
       const canceled = mapPaymentRecord(payload.payment);
+      trackPaymentCanceled({
+        paymentId: canceled.id,
+        invoiceCode: canceled.invoiceCode,
+        planId: canceled.planId,
+        planName: canceled.planName,
+        value: parseAnalyticsAmount(canceled.amount),
+        currency: canceled.currency,
+      });
       paymentStatusRef.current = {
         ...paymentStatusRef.current,
         [canceled.id]: canceled.status,
@@ -411,6 +458,7 @@ export function SubscriptionWorkspace({
         await copyTextToClipboard(value);
       }
       const key = copyFieldKey(paymentId, field);
+      trackPaymentCopy({ paymentId, field });
       setCopiedField(key);
       if (copyResetTimeoutRef.current !== null) {
         window.clearTimeout(copyResetTimeoutRef.current);

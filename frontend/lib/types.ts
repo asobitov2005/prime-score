@@ -350,6 +350,7 @@ export interface XpSummary {
   bestStreak: number;
   weeklyXp: number;
   monthlyXp: number;
+  latestXpGain: number | null;
   progress: XpLevelProgress;
 }
 

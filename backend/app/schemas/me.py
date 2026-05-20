@@ -276,6 +276,7 @@ class MeXpSummaryRead(BaseModel):
     best_streak: int = 0
     weekly_xp: int = 0
     monthly_xp: int = 0
+    latest_xp_gain: int | None = None
     progress: MeLevelProgressRead = Field(default_factory=MeLevelProgressRead)
 
 

@@ -486,6 +486,12 @@ async def _user_xp_summary(session: AsyncSession, user: User) -> MeXpSummaryRead
     level = int(user.current_level or 1)
     weekly_xp = await get_user_period_xp(session, user_id=user.id, period_type=PERIOD_WEEKLY)
     monthly_xp = await get_user_period_xp(session, user_id=user.id, period_type=PERIOD_MONTHLY)
+    latest_transactions = await list_user_xp_transactions(session, user_id=user.id, limit=20)
+    latest_positive_transaction = next(
+        (transaction for transaction in latest_transactions if int(transaction.xp_amount or 0) > 0),
+        None,
+    )
+    latest_xp_gain = int(latest_positive_transaction.xp_amount or 0) if latest_positive_transaction else None
     return MeXpSummaryRead(
         total_xp=total_xp,
         level=level,
@@ -493,6 +499,7 @@ async def _user_xp_summary(session: AsyncSession, user: User) -> MeXpSummaryRead
         best_streak=int(user.best_streak or 0),
         weekly_xp=weekly_xp,
         monthly_xp=monthly_xp,
+        latest_xp_gain=latest_xp_gain,
         progress=_build_level_progress(total_xp, level),
     )
 

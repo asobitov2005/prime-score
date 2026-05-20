@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { trackWritingStart } from "@/lib/analytics";
 import { emitNavigationStart } from "@/lib/navigation-transition";
 import { cn } from "@/lib/utils";
 import type { WritingLimitStatus, WritingTaskType } from "@/lib/server-writing";
@@ -186,6 +187,11 @@ function CustomTaskDialog({
     } catch {}
 
     const href = getCustomTaskWorkspaceHref(taskType, draftKey);
+    trackWritingStart({
+      taskType,
+      source: "custom_prompt",
+      hasImage: Boolean(config.requiresImage && imageDataUrl),
+    });
     emitNavigationStart(href);
     router.push(href);
   }, [canContinue, config.requiresImage, imageDataUrl, isStarting, prompt, router, taskType]);

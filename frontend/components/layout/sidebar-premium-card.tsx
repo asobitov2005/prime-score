@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { trackCtaClick } from "@/lib/analytics";
 import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 import { useAuthStore } from "@/store/auth-store";
@@ -64,7 +65,19 @@ export function SidebarPremiumCard() {
               ? "h-10 w-full rounded-2xl border border-primary/20 bg-background/90 px-4 font-medium text-foreground shadow-sm transition-all duration-200 hover:border-primary/35 hover:bg-background dark:border-white/10 dark:bg-white/8 dark:text-white dark:hover:bg-white/12"
               : "h-10 w-full rounded-2xl border border-primary/20 bg-background/90 px-4 font-medium text-foreground shadow-sm transition-all duration-200 hover:border-primary/35 hover:bg-background dark:border-white/10 dark:bg-white/8 dark:text-white dark:hover:bg-white/12"}
           >
-            <Link href={subscriptionHref} className="flex w-full items-center justify-center gap-2 text-center">
+            <Link
+              href={subscriptionHref}
+              onClick={() => {
+                trackCtaClick({
+                  ctaName: isPremium ? "manage_subscription" : "upgrade_now",
+                  ctaLabel: isPremium ? "Manage Subscription" : "Upgrade now",
+                  ctaLocation: "sidebar_premium_card",
+                  destination: subscriptionHref,
+                  authState: isAuthenticated ? "authenticated" : "guest",
+                });
+              }}
+              className="flex w-full items-center justify-center gap-2 text-center"
+            >
               <span>{isPremium ? "Manage Subscription" : "Upgrade now"}</span>
               <ArrowRight className="h-4 w-4" />
             </Link>

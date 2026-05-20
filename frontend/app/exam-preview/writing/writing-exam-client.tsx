@@ -11,6 +11,7 @@ import { ExamPreviewAccessGate } from "@/components/exam/exam-preview-access-gat
 import { Input } from "@/components/ui/input";
 import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 import { Textarea } from "@/components/ui/textarea";
+import { trackUiInteraction, trackWritingStart, trackWritingSubmit } from "@/lib/analytics";
 import {
   deleteWritingDraftClient,
   fetchWritingLimits,
@@ -136,6 +137,7 @@ export function WritingExamClient({
   const lastSavedRef = useRef<number>(0);
   const latestDraftRef = useRef<DraftPayload | null>(null);
   const draftPersistedRef = useRef(false);
+  const startTrackedRef = useRef(false);
   const storedCandidateName = useAuthStore((state) => state.name);
   const hasHydratedAuth = useAuthStore((state) => state.hasHydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -145,6 +147,19 @@ export function WritingExamClient({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!hasHydratedAuth || !isAuthenticated || startTrackedRef.current) {
+      return;
+    }
+    startTrackedRef.current = true;
+    trackWritingStart({
+      taskType: resolvedTaskType,
+      source: task ? "task_library" : "custom_prompt",
+      taskId: task?.id,
+      hasImage: Boolean(task?.image_url || draftImageDataUrl || imageFile),
+    });
+  }, [draftImageDataUrl, hasHydratedAuth, imageFile, isAuthenticated, resolvedTaskType, task]);
 
   useEffect(() => {
     if (!hasHydratedAuth || !isAuthenticated) return;
@@ -180,8 +195,16 @@ export function WritingExamClient({
     try {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen();
+        trackUiInteraction({
+          action: "fullscreen_enter",
+          component: "writing_exam_workspace",
+        });
       } else {
         await document.exitFullscreen();
+        trackUiInteraction({
+          action: "fullscreen_exit",
+          component: "writing_exam_workspace",
+        });
       }
     } catch {}
   }, []);
@@ -446,6 +469,15 @@ export function WritingExamClient({
         time_spent_seconds: elapsed,
         desired_score: getStoredDesiredScore(),
       });
+      trackWritingSubmit({
+        taskType: resolvedTaskType,
+        source: task ? "task_library" : "custom_prompt",
+        submissionId: result.id,
+        taskId: task?.id,
+        wordCount,
+        timeSpentSeconds: elapsed,
+        hasImage: Boolean(task?.image_url || imageUrl || draftImageDataUrl || imageFile),
+      });
 
       try {
         window.localStorage.removeItem(storageKey);
@@ -464,7 +496,7 @@ export function WritingExamClient({
       setSubmitError(error instanceof Error ? error.message : "Failed to submit essay.");
       setIsSubmitting(false);
     }
-  }, [canSubmit, draftImageDataUrl, elapsed, essay, imageFile, isStarted, isSubmitting, limitStatus, resolvedTaskType, router, storageKey, task, topic]);
+  }, [canSubmit, draftImageDataUrl, elapsed, essay, imageFile, isStarted, isSubmitting, limitStatus, resolvedTaskType, router, storageKey, task, topic, wordCount]);
 
   if (hasHydratedAuth && !isAuthenticated) {
     return <ExamPreviewAccessGate kind="writing" backHref="/writing" />;
@@ -520,7 +552,15 @@ export function WritingExamClient({
               size="icon"
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
               className="h-9 w-9 rounded-lg border-border/70 bg-background p-0"
-              onClick={() => updateTheme(theme === "dark" ? "light" : "dark")}
+              onClick={() => {
+                const nextTheme = theme === "dark" ? "light" : "dark";
+                updateTheme(nextTheme);
+                trackUiInteraction({
+                  action: "writing_theme_change",
+                  component: "writing_exam_workspace",
+                  value: nextTheme,
+                });
+              }}
             >
               {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

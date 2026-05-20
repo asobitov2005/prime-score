@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { trackWritingSubmit } from "@/lib/analytics";
 import { getStoredDesiredScore, submitWritingSubmission, uploadWritingImage } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 
@@ -112,6 +113,14 @@ export function CustomWritingPanel({ initialTaskType = null }: { initialTaskType
         essay_text: essay,
         time_spent_seconds: 0,
         desired_score: getStoredDesiredScore(),
+      });
+      trackWritingSubmit({
+        taskType,
+        source: "finished_answer",
+        submissionId: result.id,
+        wordCount,
+        timeSpentSeconds: 0,
+        hasImage: Boolean(imageUrl),
       });
 
       try {

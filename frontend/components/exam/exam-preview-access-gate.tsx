@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Gem, LogIn } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { trackCtaClick, trackNavigationClick } from "@/lib/analytics";
 import { useAuthStore } from "@/store/auth-store";
 
 interface ExamPreviewAccessGateProps {
@@ -38,14 +39,37 @@ export function ExamPreviewAccessGate({ kind, backHref }: ExamPreviewAccessGateP
 
             <div className="space-y-2">
               <Button asChild className="h-11 w-full rounded-xl font-semibold">
-                <Link href="/login">
+                <Link
+                  href="/login"
+                  onClick={() => {
+                    trackCtaClick({
+                      ctaName: "exam_preview_login",
+                      ctaLabel: isGuest ? "Login with Telegram" : "Login again",
+                      ctaLocation: `${kind}_exam_preview_gate`,
+                      destination: "/login",
+                      authState: isGuest ? "guest" : "authenticated",
+                    });
+                  }}
+                >
                   <LogIn className="mr-2 h-4 w-4" />
                   {isGuest ? "Login with Telegram" : "Login again"}
                 </Link>
               </Button>
 
               <Button asChild variant="ghost" className="h-10 w-full rounded-xl text-slate-300 hover:text-white">
-                <Link href={backHref}>Go back</Link>
+                <Link
+                  href={backHref}
+                  onClick={() => {
+                    trackNavigationClick({
+                      label: "Go back",
+                      href: backHref,
+                      location: `${kind}_exam_preview_gate`,
+                      authState: isGuest ? "guest" : "authenticated",
+                    });
+                  }}
+                >
+                  Go back
+                </Link>
               </Button>
             </div>
           </div>

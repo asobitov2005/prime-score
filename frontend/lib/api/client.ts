@@ -15,6 +15,7 @@ import type {
   PaymentRecordResponse,
   AuthVerifyCodeBody,
   LeaderboardQuery,
+  LeaderboardUserProfileResponse,
   XpSummaryResponse,
   RedeemBody,
   SaveAnswerBody,
@@ -111,6 +112,7 @@ function mapXpSummary(payload: XpSummaryResponse): XpSummary {
     bestStreak: payload.best_streak,
     weeklyXp: payload.weekly_xp,
     monthlyXp: payload.monthly_xp,
+    latestXpGain: payload.latest_xp_gain ?? null,
     progress: {
       level: payload.progress.level,
       levelFloorXp: payload.progress.level_floor_xp,
@@ -375,6 +377,8 @@ export function createApiClient(config: ApiClientConfig = {}) {
           items: payload.items.map(mapBackendLeaderboardEntry),
           currentUser: payload.current_user ? mapBackendLeaderboardEntry(payload.current_user) : null,
         })),
+    getLeaderboardUserProfile: (userId: string) =>
+      request<LeaderboardUserProfileResponse>(`/leaderboard/users/${encodeURIComponent(userId)}`, { method: "GET" }),
     getTestCatalog: (type?: string, access?: AccessType) => {
       const tests = type ? getTestsByType(type) : getTestsByType();
       return access ? tests.filter((test) => test.accessType === access) : tests;

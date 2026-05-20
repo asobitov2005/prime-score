@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SUBSCRIPTION_PATH, getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { RedeemCodePanel } from "@/components/subscription/redeem-code-panel";
+import { trackPlanSelect } from "@/lib/analytics";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
@@ -505,7 +506,20 @@ export function PricingPlanGrid({
                           !isFeatured && "border-border/60 bg-muted/20 hover:bg-muted/40",
                         )}
                       >
-                        <Link href={action.href}>
+                        <Link
+                          href={action.href}
+                          onClick={() => {
+                            trackPlanSelect({
+                              planId: plan.id,
+                              planName: plan.title,
+                              durationDays: plan.durationDays,
+                              value: plan.numericPrice,
+                              currency: plan.currency,
+                              location: mode === "subscription" ? "subscription_plan_grid" : "pricing_plan_grid",
+                              authState: viewerState === "guest" ? "guest" : "authenticated",
+                            });
+                          }}
+                        >
                           {action.label}
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Link>
@@ -677,7 +691,20 @@ export function PricingPlanGrid({
                         !isFeatured && "border-border/60 bg-muted/20 hover:bg-muted/40",
                       )}
                     >
-                      <Link href={action.href}>
+                      <Link
+                        href={action.href}
+                        onClick={() => {
+                          trackPlanSelect({
+                            planId: plan.id,
+                            planName: plan.title,
+                            durationDays: plan.durationDays,
+                            value: plan.numericPrice,
+                            currency: plan.currency,
+                            location: "pricing_plan_grid",
+                            authState: viewerState === "guest" ? "guest" : "authenticated",
+                          });
+                        }}
+                      >
                         {action.label}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Link>

@@ -17,6 +17,7 @@ import { NavigationTransitionOverlay } from "@/components/layout/navigation-tran
 import { emitNavigationStart, setPendingPublicRedirect } from "@/lib/navigation-transition";
 import { refreshClientUserAccessToken } from "@/lib/user-auth-client";
 import { listenNotificationRefresh } from "@/lib/notification-events";
+import { trackCtaClick, trackLogout, trackNavigationClick, trackUiInteraction } from "@/lib/analytics";
 
 interface SiteShellProps {
   children: ReactNode;
@@ -64,6 +65,7 @@ export function SiteShell({ children }: SiteShellProps) {
     || currentPath.startsWith("/attempts")
     || currentPath.startsWith("/history")
     || currentPath.startsWith("/leaderboard")
+    || currentPath.startsWith("/achievements")
     || currentPath.startsWith("/subscription")
     || currentPath.startsWith("/settings")
     || currentPath.startsWith("/writing")
@@ -109,6 +111,11 @@ export function SiteShell({ children }: SiteShellProps) {
       localStorage.setItem("prime-theme", newTheme);
       document.documentElement.classList.add(newTheme);
       document.documentElement.classList.remove(prev);
+      trackUiInteraction({
+        action: "theme_toggle",
+        component: "site_shell",
+        value: newTheme,
+      });
       return newTheme;
     });
   };
@@ -117,6 +124,7 @@ export function SiteShell({ children }: SiteShellProps) {
     const api = createApiClient();
     setPendingPublicRedirect("/");
     emitNavigationStart("/");
+    trackLogout({ method: "site_shell" });
     void api.logout({ sessionId, refreshToken }).catch(() => undefined);
     clearSession();
     setIsMenuOpen(false);
@@ -366,7 +374,7 @@ export function SiteShell({ children }: SiteShellProps) {
       <header 
         className="sticky top-0 z-50 border-b border-primary/10 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] flex items-center shrink-0 h-14 md:h-16"
       >
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2 group focus-visible:outline-none rounded-xl">
             <div className="relative flex items-center justify-center h-9 md:h-10 transition-transform duration-300 group-hover:scale-105">
               <img src={theme === "light" ? "/logo-light.svg" : "/logo.svg"} alt="PrimeScore" className="relative z-10 h-full w-auto object-contain drop-shadow-sm" />
@@ -406,7 +414,15 @@ export function SiteShell({ children }: SiteShellProps) {
               )}>
                 <Link 
                   href="/tests?type=reading" 
-                  onClick={() => setIsMockTestsOpen(false)}
+                  onClick={() => {
+                    trackNavigationClick({
+                      label: "Reading",
+                      href: "/tests?type=reading",
+                      location: "practice_tests_dropdown",
+                      authState: isAuthenticated ? "authenticated" : "guest",
+                    });
+                    setIsMockTestsOpen(false);
+                  }}
                   className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
                   <div className="w-10 h-10 shrink-0 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
@@ -419,7 +435,15 @@ export function SiteShell({ children }: SiteShellProps) {
                 </Link>
                 <Link 
                   href="/tests?type=listening" 
-                  onClick={() => setIsMockTestsOpen(false)}
+                  onClick={() => {
+                    trackNavigationClick({
+                      label: "Listening",
+                      href: "/tests?type=listening",
+                      location: "practice_tests_dropdown",
+                      authState: isAuthenticated ? "authenticated" : "guest",
+                    });
+                    setIsMockTestsOpen(false);
+                  }}
                   className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
                   <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
@@ -432,7 +456,15 @@ export function SiteShell({ children }: SiteShellProps) {
                 </Link>
                 <Link
                   href="/writing"
-                  onClick={() => setIsMockTestsOpen(false)}
+                  onClick={() => {
+                    trackNavigationClick({
+                      label: "Writing",
+                      href: "/writing",
+                      location: "practice_tests_dropdown",
+                      authState: isAuthenticated ? "authenticated" : "guest",
+                    });
+                    setIsMockTestsOpen(false);
+                  }}
                   className="flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
                   <div className="w-10 h-10 shrink-0 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
@@ -445,7 +477,15 @@ export function SiteShell({ children }: SiteShellProps) {
                 </Link>
                 <Link
                   href="/ielts-speaking-mock-online"
-                  onClick={() => setIsMockTestsOpen(false)}
+                  onClick={() => {
+                    trackNavigationClick({
+                      label: "Speaking",
+                      href: "/ielts-speaking-mock-online",
+                      location: "practice_tests_dropdown",
+                      authState: isAuthenticated ? "authenticated" : "guest",
+                    });
+                    setIsMockTestsOpen(false);
+                  }}
                   className="flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
                 >
                   <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
@@ -623,7 +663,20 @@ export function SiteShell({ children }: SiteShellProps) {
               </div>
             ) : (
               <Button asChild size="lg" className="hidden md:inline-flex rounded-xl h-11 px-8 text-sm font-medium shadow-lg shadow-primary/20 hover:shadow-xl transition-all hover:-translate-y-0.5 bg-primary text-background border-none">
-                <Link href="/login">Login</Link>
+                <Link
+                  href="/login"
+                  onClick={() => {
+                    trackCtaClick({
+                      ctaName: "header_login",
+                      ctaLabel: "Login",
+                      ctaLocation: "desktop_header",
+                      destination: "/login",
+                      authState: "guest",
+                    });
+                  }}
+                >
+                  Login
+                </Link>
               </Button>
             )}
           </div>
@@ -643,7 +696,15 @@ export function SiteShell({ children }: SiteShellProps) {
               <p className="px-3 pt-1 pb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Practice</p>
               <Link
                 href="/ielts-reading-mock-online"
-                onClick={() => setIsMobileNavOpen(false)}
+                onClick={() => {
+                  trackNavigationClick({
+                    label: "Reading",
+                    href: "/ielts-reading-mock-online",
+                    location: "mobile_nav",
+                    authState: isAuthenticated ? "authenticated" : "guest",
+                  });
+                  setIsMobileNavOpen(false);
+                }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
               >
                 <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
@@ -653,7 +714,15 @@ export function SiteShell({ children }: SiteShellProps) {
               </Link>
               <Link
                 href="/ielts-listening-mock-online"
-                onClick={() => setIsMobileNavOpen(false)}
+                onClick={() => {
+                  trackNavigationClick({
+                    label: "Listening",
+                    href: "/ielts-listening-mock-online",
+                    location: "mobile_nav",
+                    authState: isAuthenticated ? "authenticated" : "guest",
+                  });
+                  setIsMobileNavOpen(false);
+                }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
               >
                 <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
@@ -663,7 +732,15 @@ export function SiteShell({ children }: SiteShellProps) {
               </Link>
               <Link
                 href="/writing"
-                onClick={() => setIsMobileNavOpen(false)}
+                onClick={() => {
+                  trackNavigationClick({
+                    label: "Writing",
+                    href: "/writing",
+                    location: "mobile_nav",
+                    authState: isAuthenticated ? "authenticated" : "guest",
+                  });
+                  setIsMobileNavOpen(false);
+                }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
               >
                 <div className="w-9 h-9 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
@@ -673,7 +750,15 @@ export function SiteShell({ children }: SiteShellProps) {
               </Link>
               <Link
                 href="/ielts-speaking-mock-online"
-                onClick={() => setIsMobileNavOpen(false)}
+                onClick={() => {
+                  trackNavigationClick({
+                    label: "Speaking",
+                    href: "/ielts-speaking-mock-online",
+                    location: "mobile_nav",
+                    authState: isAuthenticated ? "authenticated" : "guest",
+                  });
+                  setIsMobileNavOpen(false);
+                }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
               >
                 <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
@@ -745,7 +830,16 @@ export function SiteShell({ children }: SiteShellProps) {
               ) : mounted && hasHydrated ? (
                 <Link
                   href="/login"
-                  onClick={() => setIsMobileNavOpen(false)}
+                  onClick={() => {
+                    trackCtaClick({
+                      ctaName: "mobile_login",
+                      ctaLabel: "Login",
+                      ctaLocation: "mobile_nav",
+                      destination: "/login",
+                      authState: "guest",
+                    });
+                    setIsMobileNavOpen(false);
+                  }}
                   className="mt-1 flex items-center justify-center px-3 h-11 rounded-xl bg-primary text-background text-sm font-medium shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
                 >
                   Login
@@ -775,6 +869,13 @@ function NavLink({ href, label, active }: { href: string; label: string; active?
   return (
     <Link
       href={href}
+      onClick={() => {
+        trackNavigationClick({
+          label,
+          href,
+          location: "header_nav",
+        });
+      }}
       className={cn(
         "rounded-lg px-3 py-1.5 text-[14px] font-semibold transition-all hover:bg-muted/30 active:scale-95",
         active ? "text-primary bg-primary/5" : "text-muted-foreground/80 hover:text-foreground"

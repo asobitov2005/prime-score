@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { trackWritingStart, trackWritingSubmit } from "@/lib/analytics";
 import { getStoredDesiredScore, submitWritingSubmission } from "@/lib/client-writing";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +45,20 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const lastSavedRef = useRef<number>(0);
+  const startTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (startTrackedRef.current) {
+      return;
+    }
+    startTrackedRef.current = true;
+    trackWritingStart({
+      taskType: task.task_type,
+      source: "task_library",
+      taskId: task.id,
+      hasImage: Boolean(task.image_url),
+    });
+  }, [task.id, task.image_url, task.task_type]);
 
   // Hydrate draft
   useEffect(() => {
@@ -106,6 +121,15 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
         time_spent_seconds: elapsed,
         desired_score: getStoredDesiredScore(),
       });
+      trackWritingSubmit({
+        taskType: task.task_type,
+        source: "task_library",
+        submissionId: result.id,
+        taskId: task.id,
+        wordCount,
+        timeSpentSeconds: elapsed,
+        hasImage: Boolean(task.image_url),
+      });
       try {
         window.localStorage.removeItem(storageKey);
       } catch {}
@@ -115,7 +139,7 @@ export function WritingTaskWorkspace({ task }: { task: WorkspaceTask }) {
       setSubmitError(message);
       setIsSubmitting(false);
     }
-  }, [elapsed, essay, isSubmitting, router, storageKey, task.id]);
+  }, [elapsed, essay, isSubmitting, router, storageKey, task.id, task.image_url, task.task_type, wordCount]);
 
   const timeUp = secondsRemaining === 0;
 

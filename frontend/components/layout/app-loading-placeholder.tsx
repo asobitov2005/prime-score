@@ -464,10 +464,10 @@ export function AppRouteLoadingFrame({
   sidebar = "open",
 }: RouteLoadingFrameProps) {
   return (
-    <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col items-start gap-5 px-4 pb-6 pt-3 md:gap-6 md:px-6 md:pb-8 md:pt-4 lg:flex-row lg:px-8">
+    <div className="relative flex w-full flex-1 flex-col items-start gap-5 px-4 pb-6 pt-3 md:gap-6 md:px-6 md:pb-8 md:pt-4 lg:flex-row lg:px-4">
       <aside
         className={cn(
-          "sticky top-[calc(var(--app-shell-sticky-top,5rem)+0.5rem)] hidden w-[17rem] shrink-0 transition-all duration-300 lg:block",
+          "sticky top-[calc(var(--app-shell-sticky-top,5rem)+0.5rem)] hidden w-[16rem] shrink-0 transition-all duration-300 lg:block",
           sidebar === "collapsed" ? "lg:hidden" : "lg:block"
         )}
       >

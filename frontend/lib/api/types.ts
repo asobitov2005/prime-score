@@ -45,6 +45,39 @@ export interface LeaderboardQuery {
   period?: LeaderboardPeriod;
 }
 
+export interface LeaderboardUserProfileResponse {
+  user_id: string;
+  avatar_url?: string | null;
+  display_name: string;
+  level: number;
+  total_xp: number;
+  rank: number;
+  is_online: boolean;
+  is_premium: boolean;
+  current_streak: number;
+  equipped_badge?: {
+    title: string;
+    rarity: string;
+    tagline: string;
+    image?: string | null;
+  } | null;
+  active_titles: string[];
+  stats: {
+    longest_streak: number;
+    highest_band?: number | null;
+    total_mock_tests: number;
+    total_study_hours: number;
+    accuracy?: number | null;
+    achievements_unlocked: number;
+  };
+  achievements: Array<{
+    id: string;
+    title: string;
+    rarity: string;
+    image?: string | null;
+  }>;
+}
+
 export interface SubscribeBody {
   planId: string;
   paymentMethod: "payme" | "click" | "uzum";
@@ -175,6 +208,7 @@ export interface XpSummaryResponse {
   best_streak: number;
   weekly_xp: number;
   monthly_xp: number;
+  latest_xp_gain?: number | null;
   progress: {
     level: number;
     level_floor_xp: number;

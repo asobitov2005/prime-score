@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from math import floor, sqrt
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attempt import Attempt
@@ -91,6 +91,20 @@ class XPAwardResult:
     best_streak: int
 
 
+@dataclass(slots=True)
+class LeaderboardSnapshot:
+    user_id: UUID
+    period_type: str
+    period_start: date
+    xp_total: int = 0
+    score_events: int = 0
+    score_total: float = 0.0
+    average_score: float | None = None
+    full_mock_completions: int = 0
+    achieved_at: datetime | None = None
+    metadata_json: dict[str, object] = field(default_factory=dict)
+
+
 def calculate_level(total_xp: int) -> int:
     safe_xp = max(0, total_xp)
     return floor(sqrt(safe_xp / 100)) + 1
@@ -104,16 +118,22 @@ def level_bounds(level: int) -> tuple[int, int]:
 
 
 def badge_for_user(*, level: int, current_streak: int, full_mock_completions: int) -> str | None:
+    if level >= 30:
+        return "Prime Legend"
+    if level >= 20:
+        return "Platinum Master"
     if current_streak >= 30:
         return "30 Day Streak"
     if full_mock_completions >= 10:
         return "Mock Master"
     if level >= 15:
-        return "Elite Learner"
+        return "Gold Achiever"
     if level >= 10:
-        return "Rising Expert"
+        return "Silver Scholar"
     if current_streak >= 7:
         return "Consistency Builder"
+    if level >= 5:
+        return "Bronze Learner"
     return None
 
 
@@ -365,6 +385,26 @@ def _period_start(period_type: str, occurred_at: datetime) -> date:
     if period_type == PERIOD_MONTHLY:
         return occurred_date.replace(day=1)
     return ALL_TIME_PERIOD_START
+
+
+def _period_end(period_type: str, period_start: date) -> date | None:
+    if period_type == PERIOD_WEEKLY:
+        return period_start + timedelta(days=7)
+    if period_type == PERIOD_MONTHLY:
+        next_month = period_start.replace(day=28) + timedelta(days=4)
+        return next_month.replace(day=1)
+    return None
+
+
+def _period_datetime_bounds(period_type: str, occurred_at: datetime) -> tuple[date, datetime | None, datetime | None]:
+    period_start = _period_start(period_type, occurred_at)
+    if period_type == PERIOD_ALL_TIME:
+        return period_start, None, None
+
+    period_end = _period_end(period_type, period_start)
+    start_at = datetime.combine(period_start, time.min, tzinfo=UTC)
+    end_at = datetime.combine(period_end, time.min, tzinfo=UTC) if period_end is not None else None
+    return period_start, start_at, end_at
 
 
 async def _get_or_create_streak(session: AsyncSession, user_id: UUID) -> Streak:
@@ -1193,7 +1233,33 @@ async def list_user_xp_transactions(
 
 async def get_user_period_xp(session: AsyncSession, *, user_id: UUID, period_type: str, occurred_at: datetime | None = None) -> int:
     occurred_at = occurred_at or datetime.now(UTC)
-    period_start = _period_start(period_type, occurred_at)
+    period_start, start_at, end_at = _period_datetime_bounds(period_type, occurred_at)
+    if period_type == PERIOD_ALL_TIME:
+        total_xp = (
+            await session.execute(
+                select(User.total_xp).where(User.id == user_id, User.deleted_at.is_(None))
+            )
+        ).scalar_one_or_none()
+        if total_xp is not None:
+            return max(0, int(total_xp or 0))
+
+    filters = [
+        XPTransaction.user_id == user_id,
+        XPTransaction.counts_toward_leaderboard.is_(True),
+    ]
+    if start_at is not None:
+        filters.append(XPTransaction.created_at >= start_at)
+    if end_at is not None:
+        filters.append(XPTransaction.created_at < end_at)
+
+    live_total = (
+        await session.execute(
+            select(func.coalesce(func.sum(XPTransaction.xp_amount), 0)).where(*filters)
+        )
+    ).scalar_one()
+    if int(live_total or 0) > 0:
+        return max(0, int(live_total or 0))
+
     row = (
         await session.execute(
             select(LeaderboardEntry.xp_total).where(
@@ -1203,7 +1269,130 @@ async def get_user_period_xp(session: AsyncSession, *, user_id: UUID, period_typ
             )
         )
     ).scalar_one_or_none()
-    return int(row or 0)
+    if row is not None:
+        return int(row or 0)
+    return max(0, int(live_total or 0))
+
+
+async def _leaderboard_rows_from_transactions(
+    session: AsyncSession,
+    *,
+    period_type: str,
+    occurred_at: datetime,
+) -> list[tuple[LeaderboardSnapshot, User]]:
+    period_start, start_at, end_at = _period_datetime_bounds(period_type, occurred_at)
+    filters = [
+        XPTransaction.counts_toward_leaderboard.is_(True),
+        User.deleted_at.is_(None),
+    ]
+    if start_at is not None:
+        filters.append(XPTransaction.created_at >= start_at)
+    if end_at is not None:
+        filters.append(XPTransaction.created_at < end_at)
+
+    rows = (
+        await session.execute(
+            select(XPTransaction, User)
+            .join(User, User.id == XPTransaction.user_id)
+            .where(*filters)
+            .order_by(XPTransaction.created_at.asc())
+        )
+    ).all()
+
+    snapshots: dict[UUID, tuple[LeaderboardSnapshot, User]] = {}
+    for transaction, user in rows:
+        snapshot, _ = snapshots.setdefault(
+            user.id,
+            (
+                LeaderboardSnapshot(
+                    user_id=user.id,
+                    period_type=period_type,
+                    period_start=period_start,
+                ),
+                user,
+            ),
+        )
+        xp_amount = int(transaction.xp_amount or 0)
+        snapshot.xp_total += xp_amount
+        snapshot.achieved_at = transaction.created_at
+
+        metadata = transaction.metadata_json or {}
+        score_value = metadata.get("score_value")
+        if score_value is not None and metadata.get("track_score"):
+            snapshot.score_events += 1
+            snapshot.score_total += float(score_value)
+            snapshot.average_score = round(snapshot.score_total / snapshot.score_events, 2)
+        if metadata.get("full_mock_completed"):
+            snapshot.full_mock_completions += 1
+        snapshot.metadata_json = {
+            **snapshot.metadata_json,
+            "last_transaction_type": metadata.get("transaction_type"),
+        }
+
+    result: list[tuple[LeaderboardSnapshot, User]] = []
+    for snapshot, user in snapshots.values():
+        snapshot.xp_total = max(0, int(snapshot.xp_total or 0))
+        if snapshot.xp_total > 0:
+            result.append((snapshot, user))
+    return result
+
+
+async def _all_time_leaderboard_rows_from_users(
+    session: AsyncSession,
+) -> list[tuple[LeaderboardSnapshot, User]]:
+    users = (
+        await session.scalars(
+            select(User)
+            .where(User.deleted_at.is_(None), User.total_xp > 0)
+            .order_by(User.total_xp.desc())
+        )
+    ).all()
+    if not users:
+        return []
+
+    transaction_rows = (
+        await session.execute(
+            select(XPTransaction, User)
+            .join(User, User.id == XPTransaction.user_id)
+            .where(
+                XPTransaction.counts_toward_leaderboard.is_(True),
+                User.deleted_at.is_(None),
+                User.total_xp > 0,
+            )
+            .order_by(XPTransaction.created_at.asc())
+        )
+    ).all()
+
+    snapshots: dict[UUID, LeaderboardSnapshot] = {
+        user.id: LeaderboardSnapshot(
+            user_id=user.id,
+            period_type=PERIOD_ALL_TIME,
+            period_start=ALL_TIME_PERIOD_START,
+            xp_total=max(0, int(user.total_xp or 0)),
+        )
+        for user in users
+    }
+    users_by_id = {user.id: user for user in users}
+
+    for transaction, user in transaction_rows:
+        snapshot = snapshots.get(user.id)
+        if snapshot is None:
+            continue
+        snapshot.achieved_at = transaction.created_at
+        metadata = transaction.metadata_json or {}
+        score_value = metadata.get("score_value")
+        if score_value is not None and metadata.get("track_score"):
+            snapshot.score_events += 1
+            snapshot.score_total += float(score_value)
+            snapshot.average_score = round(snapshot.score_total / snapshot.score_events, 2)
+        if metadata.get("full_mock_completed"):
+            snapshot.full_mock_completions += 1
+        snapshot.metadata_json = {
+            **snapshot.metadata_json,
+            "last_transaction_type": metadata.get("transaction_type"),
+        }
+
+    return [(snapshot, users_by_id[user_id]) for user_id, snapshot in snapshots.items()]
 
 
 async def leaderboard_rows(
@@ -1211,8 +1400,13 @@ async def leaderboard_rows(
     *,
     period_type: str,
     occurred_at: datetime | None = None,
-) -> list[tuple[LeaderboardEntry, User]]:
+) -> list[tuple[LeaderboardEntry | LeaderboardSnapshot, User]]:
     occurred_at = occurred_at or datetime.now(UTC)
+    if period_type == PERIOD_ALL_TIME:
+        live_all_time_rows = await _all_time_leaderboard_rows_from_users(session)
+        if live_all_time_rows:
+            return live_all_time_rows
+
     period_start = _period_start(period_type, occurred_at)
     rows = (
         await session.execute(
@@ -1225,4 +1419,7 @@ async def leaderboard_rows(
             )
         )
     ).all()
+    live_rows = await _leaderboard_rows_from_transactions(session, period_type=period_type, occurred_at=occurred_at)
+    if live_rows:
+        return live_rows
     return list(rows)

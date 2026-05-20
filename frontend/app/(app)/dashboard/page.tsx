@@ -6,9 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DashboardCharts } from "@/components/charts/dashboard-charts";
 import { getCatalogTests } from "@/lib/server-data";
-import { getDashboardActivity, getDashboardAnalytics, getUserAttempts, getXpSummary } from "@/lib/server-me";
+import { getDashboardActivity, getDashboardAnalytics, getUserAttempts, getWeeklyLeaderboardPreview, getXpSummary, type LeaderboardPreviewSummary } from "@/lib/server-me";
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
-import { DashboardAverageCards } from "./dashboard-average-cards";
+import { DashboardAverageCards, OverallBandKpiCard } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
 import { ActivitySummary } from "./activity-summary";
 import { StreakHeatmap } from "./streak-heatmap";
@@ -268,14 +268,49 @@ function buildWeaknessDiagnosis(
   };
 }
 
+function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummary }) {
+  const rankLabel = summary.rank ? `#${summary.rank}` : "—";
+  const topLabel = summary.topPercent ? `Top ${summary.topPercent}%` : "Not ranked yet";
+
+  return (
+    <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-white p-4 text-slate-950 shadow-xl shadow-orange-950/8">
+      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-orange-200/35 blur-2xl" />
+      <div className="absolute -bottom-12 -left-10 h-28 w-28 rounded-full bg-amber-200/25 blur-2xl" />
+
+      <div className="relative flex min-h-[142px] flex-col justify-between gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Your Rank (This Week)</p>
+            <div className="mt-2">
+              <p className="text-4xl font-semibold leading-none tracking-tight text-orange-600">{rankLabel}</p>
+              <span className="mt-2 inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                {topLabel}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <Link
+          href="/leaderboard"
+          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-orange-200/70 bg-orange-50/70 px-3 text-xs font-semibold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100/70"
+        >
+          View Leaderboard
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 export default async function DashboardPage() {
-  const [attempts, analytics, writingHistory, catalogTests, activity, xpSummary] = await Promise.all([
+  const [attempts, analytics, writingHistory, catalogTests, activity, xpSummary, leaderboardPreview] = await Promise.all([
     getUserAttempts(),
     getDashboardAnalytics(),
     getWritingHistory().catch(() => ({ items: [], total: 0 })),
     getCatalogTests().catch(() => []),
     getDashboardActivity(),
     getXpSummary(),
+    getWeeklyLeaderboardPreview(),
   ]);
   const recentAttempts = attempts.filter((attempt) => attempt.status === "completed" || attempt.status === "submitted");
   const recentActivity: RecentActivityItem[] = [
@@ -379,7 +414,11 @@ export default async function DashboardPage() {
           <WelcomeHeader analytics={analytics} />
         </div>
 
-        <XpSummaryCard summary={xpSummary} />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_340px_210px] xl:items-stretch">
+          <XpSummaryCard summary={xpSummary} />
+          <OverallBandKpiCard initialAnalytics={analytics} />
+          <LeaderboardPreviewCard summary={leaderboardPreview} />
+        </div>
 
 
         {/* Top Row: Recommended and Scores aligned in height */}
