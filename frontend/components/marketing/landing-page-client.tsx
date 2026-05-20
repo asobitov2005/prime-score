@@ -3,7 +3,7 @@
 import Link from "next/link";
 import React, { useEffect, useRef, useState, type ReactNode } from "react";
 import { useInView } from "@/hooks/use-in-view";
-import { ArrowRight, BookOpenText, CheckCircle2, Headphones, Mic2, PenSquare, ShieldCheck, Zap } from "lucide-react";
+import { ArrowRight, BookOpenText, CheckCircle2, Headphones, Mic2, PenSquare, ShieldCheck, Zap, Sparkles } from "lucide-react";
 import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
 import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
 import { Button } from "@/components/ui/button";
@@ -150,6 +150,7 @@ type LandingFeaturedTest = {
   questionCount: number;
   estimatedMinutes: number;
   isPremiumLocked: boolean;
+  createdAt: string;
 };
 
 function ScrollReveal({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
@@ -369,19 +370,25 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                     const badgeBg = test.isPremiumLocked ? "bg-orange-100 dark:bg-orange-900/40" : "bg-emerald-100 dark:bg-emerald-900/40";
                     const badgeText = test.isPremiumLocked ? "text-[#c25010] dark:text-orange-400" : "text-[#059669] dark:text-emerald-400";
                     const badgeLabel = test.isPremiumLocked ? "Pro" : "Free";
+                    const isNew = test.createdAt ? (new Date().getTime() - new Date(test.createdAt).getTime()) < 7 * 24 * 60 * 60 * 1000 : false;
 
                     return (
                       <Link
                         key={test.id}
                         href={`/tests/${test.slug}`}
                         className={cn(
-                          "group flex items-center justify-between gap-4 p-3 md:p-4 rounded-2xl border transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer",
+                          "group relative overflow-hidden flex items-center justify-between gap-4 p-3 md:p-4 rounded-2xl border transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer",
                           cardBg,
                           cardBorder,
                         )}
                       >
+                        {isNew && (
+                          <div className="absolute left-[-30px] top-[15px] z-10 w-[120px] -rotate-45 bg-gradient-to-r from-[#FF0055] to-[#FF3377] py-0.5 text-center text-[9px] font-bold uppercase tracking-[0.2em] text-white shadow-sm border-y border-white/20">
+                            New
+                          </div>
+                        )}
                         <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                          <div className={cn("flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300", iconBgColor, iconColor)}>
+                          <div className={cn("flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 relative z-10", iconBgColor, iconColor)}>
                             {isReading ? (
                               <BookOpenText className="h-5 w-5 md:h-6 md:w-6" />
                             ) : isListening ? (
@@ -390,8 +397,10 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                               <span className="font-serif font-semibold text-base md:text-lg">W</span>
                             )}
                           </div>
-                          <div className="space-y-1 min-w-0">
-                            <p className="font-semibold text-[14px] md:text-[15px] text-foreground leading-tight truncate">{test.title}</p>
+                          <div className="space-y-1 min-w-0 relative z-10">
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-[14px] md:text-[15px] text-foreground leading-tight truncate">{test.title}</p>
+                            </div>
                             <div className="flex flex-wrap items-center gap-1.5 text-[11px] md:text-[12px] font-medium text-muted-foreground/80">
                               <span className="uppercase tracking-wider font-medium">{test.source.replace("Official", "").trim()}</span>
                               <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />

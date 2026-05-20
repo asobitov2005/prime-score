@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Headphones, Eye, CheckCircle2, X } from "lucide-react";
+import { BookOpen, Headphones, Eye, CheckCircle2, X, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -252,6 +252,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
             const activeAttempt = latestAttempt?.status === "in_progress" ? latestAttempt : undefined;
             const completedAttempt = latestAttempt && isCompletedAttempt(latestAttempt) ? latestAttempt : undefined;
             const isCompleted = Boolean(completedAttempt);
+            const isNew = test.createdAt ? (new Date().getTime() - new Date(test.createdAt).getTime()) < 7 * 24 * 60 * 60 * 1000 : false;
             const completedScoreText = formatCompletedScore(completedAttempt, test.questionCount, isFull);
             const isExamPreviewTest = test.id === "reading-cam18-t1";
             const isCambridge = isCambridgeTest(test.source, test.sourceDetail);
@@ -259,9 +260,14 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
             return (
               <Card key={test.id} className="group relative overflow-hidden rounded-2xl border-primary/20 bg-card/50 hover:bg-card hover:border-primary/30 transition-all duration-300 flex flex-col shadow-sm">
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/40" />
-                <CardHeader className="p-5 pb-2 flex-1">
+                {isNew && (
+                  <div className="absolute left-[-35px] top-[22px] z-20 w-[140px] -rotate-45 bg-gradient-to-r from-[#FF0055] to-[#FF3377] py-1 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-md border-y border-white/20">
+                    New
+                  </div>
+                )}
+                <CardHeader className="p-5 pb-2 flex-1 pt-8">
                    <div className="flex items-center justify-between mb-4">
-                     <div className="flex gap-2">
+                     <div className="flex flex-wrap gap-2">
                         {isExamPreviewTest && (
                           <div className="bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20 flex items-center gap-1">
                             <Eye className="h-2.5 w-2.5" />
