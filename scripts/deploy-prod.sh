@@ -108,9 +108,69 @@ rollback() {
 
 trap rollback ERR
 
+run_database_migrations() {
+  local backend_image="${REGISTRY:-ghcr.io}/${REPO_OWNER:-asobitov2005}/prime-score-backend:${IMAGE_TAG}"
+  local postgres_container
+  local network_name
+
+  postgres_container="$(docker-compose -f "$COMPOSE_FILE" ps -q postgres)"
+  if [ -z "$postgres_container" ]; then
+    echo "[deploy] postgres container is required before migrations"
+    return 1
+  fi
+
+  network_name="$(
+    docker inspect -f '{{ range $name, $_ := .NetworkSettings.Networks }}{{ if eq $name "prime-score_prime_score_net" }}{{ $name }}{{ end }}{{ end }}' "$postgres_container"
+  )"
+  if [ -z "$network_name" ]; then
+    network_name="$(
+      docker inspect -f '{{ range $name, $_ := .NetworkSettings.Networks }}{{ if eq $name "prime_score_prime_score_net" }}{{ $name }}{{ end }}{{ end }}' "$postgres_container"
+    )"
+  fi
+  if [ -z "$network_name" ]; then
+    network_name="$(docker network ls --format '{{.Name}}' | grep -E '(^|_)prime_score_net$' | head -n 1)"
+  fi
+  if [ -z "$network_name" ]; then
+    echo "[deploy] could not resolve compose network for migrations"
+    return 1
+  fi
+
+  set -a
+  if [ -f .env ]; then
+    # shellcheck disable=SC1091
+    . ./.env
+  fi
+  set +a
+
+  local postgres_user="${POSTGRES_USER:-postgres}"
+  local postgres_db="${POSTGRES_DB:-primescore}"
+  : "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+  : "${REDIS_PASSWORD:?set REDIS_PASSWORD}"
+  : "${JWT_SECRET:?set JWT_SECRET}"
+  : "${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}"
+  : "${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN}"
+  : "${MINIO_ROOT_USER:?set MINIO_ROOT_USER}"
+  : "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}"
+
+  docker run --rm \
+    --network "$network_name" \
+    --env-file .env \
+    -e DATABASE_URL="postgresql+asyncpg://${postgres_user}:${POSTGRES_PASSWORD}@postgres:5432/${postgres_db}" \
+    -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
+    -e JWT_SECRET="$JWT_SECRET" \
+    -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET" \
+    -e TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
+    -e MINIO_ENDPOINT="minio:9000" \
+    -e MINIO_ACCESS_KEY="$MINIO_ROOT_USER" \
+    -e MINIO_SECRET_KEY="$MINIO_ROOT_PASSWORD" \
+    -e MINIO_SECURE="false" \
+    "$backend_image" \
+    alembic upgrade head
+}
+
 if has_service api || has_service worker || has_service beat || has_service bot; then
   echo "[deploy] Running database migrations"
-  docker-compose -f "$COMPOSE_FILE" run --rm --no-deps api alembic upgrade head
+  run_database_migrations
 fi
 
 if [ "${#APP_LIST[@]}" -gt 0 ]; then
