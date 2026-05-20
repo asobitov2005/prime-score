@@ -258,6 +258,36 @@ def _section_payload_for_groups(
     }
 
 
+def _section_payload_for_group_questions(
+    test: Test,
+    section: TestSection,
+    group: QuestionGroup,
+    questions: list[Question],
+) -> dict[str, Any]:
+    return {
+        "test_id": str(test.id),
+        "test_title": test.title,
+        "test_type": str(test.type.value),
+        "test_status": str(test.status.value),
+        "section_id": str(section.id),
+        "section_title": section.title,
+        "source_text": _section_passage(section),
+        "groups": [
+            {
+                "title": group.title,
+                "instructions": group.instructions or "",
+                "type": str(group.question_type.value),
+                "question_range": [group.question_start, group.question_end],
+                "shared_options": list(group.shared_options or []),
+                "question_block": _plain((group.shared_content or {}).get("question_block")),
+                "answer_block": _plain((group.shared_content or {}).get("answer_block")),
+                "secondary_block": _plain((group.shared_content or {}).get("secondary_block")),
+                "questions": [_question_payload(question, group) for question in questions],
+            }
+        ],
+    }
+
+
 def _build_prompt(payload: dict[str, Any]) -> str:
     return (
         "Create concise IELTS Reading/Listening answer explanations and audit the answer key.\n"
@@ -446,6 +476,7 @@ async def _process_section(
     test: Test,
     section: TestSection,
     overwrite: bool,
+    only_missing_generated: bool,
     dry_run: bool,
 ) -> tuple[int, list[dict[str, Any]]]:
     now = datetime.now(UTC).isoformat()
@@ -454,26 +485,30 @@ async def _process_section(
 
     for group in sorted(section.question_groups, key=lambda item: (item.question_start, item.question_end)):
         questions_by_id = _index_group_questions(group)
-        target_questions = [
-            question
-            for question in questions_by_id.values()
-            if overwrite or not _plain(question.explanation)
-        ]
+        target_questions = []
+        for question in questions_by_id.values():
+            has_generated = _plain((question.explanation_reference or {}).get("generated_by"))
+            if only_missing_generated:
+                should_process = has_generated != config.model_id
+            else:
+                should_process = overwrite or not _plain(question.explanation)
+            if should_process:
+                target_questions.append(question)
         if not target_questions:
             continue
 
-        group_jobs.append(
-            {
-                "payload": _section_payload_for_groups(test, section, [group]),
-                "questions": {
-                    str(question.id): {
-                        "number": question.number,
-                        "accepted_answers": [answer.value for answer in question.answer_variants],
-                    }
-                    for question in target_questions
-                },
-            }
-        )
+        for question in target_questions:
+            group_jobs.append(
+                {
+                    "payload": _section_payload_for_group_questions(test, section, group, [question]),
+                    "questions": {
+                        str(question.id): {
+                            "number": question.number,
+                            "accepted_answers": [answer.value for answer in question.answer_variants],
+                        }
+                    },
+                }
+            )
 
     # Release the DB connection before slow AI calls so high API concurrency does not exhaust Postgres pools.
     await session.close()
@@ -607,6 +642,7 @@ async def run(args: argparse.Namespace) -> int:
                         test=test,
                         section=section,
                         overwrite=args.overwrite,
+                        only_missing_generated=args.only_missing_generated,
                         dry_run=args.dry_run,
                     )
                     return job, updated, section_suspicious, None
@@ -662,6 +698,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--concurrency", type=int, default=4, help="Parallel section workers.")
     parser.add_argument("--overwrite", action="store_true", help="Regenerate explanations even when a question already has one.")
+    parser.add_argument(
+        "--only-missing-generated",
+        action="store_true",
+        help="Regenerate only questions that do not have this generator/model marker.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Call AI and validate output without writing DB changes.")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of tests for smoke runs.")
     parser.add_argument("--report", default="/tmp/reading_explanation_report.json")
