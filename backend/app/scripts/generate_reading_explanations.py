@@ -126,10 +126,14 @@ def _all_section_text(section: TestSection) -> str:
 
 
 def _quote_exists(section: TestSection, quote: str) -> bool:
+    return _quote_exists_text(_all_section_text(section), quote)
+
+
+def _quote_exists_text(source_text: str, quote: str) -> bool:
     normalized_quote = re.sub(r"\s+", " ", quote).strip().casefold()
     if not normalized_quote:
         return False
-    normalized_section = re.sub(r"\s+", " ", _all_section_text(section)).casefold()
+    normalized_section = re.sub(r"\s+", " ", source_text).casefold()
     return normalized_quote in normalized_section
 
 
@@ -337,6 +341,10 @@ async def _generate_section_data(
 
 
 def _answer_status(question: Question, item: dict[str, Any]) -> tuple[str, list[str], str]:
+    return _answer_status_for_answers([answer.value for answer in question.answer_variants], item)
+
+
+def _answer_status_for_answers(accepted_answers: list[str], item: dict[str, Any]) -> tuple[str, list[str], str]:
     raw_status = _plain(item.get("answer_status")).lower()
     status = raw_status if raw_status in {"valid", "possibly_wrong", "uncertain"} else "uncertain"
     suggested = [
@@ -345,7 +353,7 @@ def _answer_status(question: Question, item: dict[str, Any]) -> tuple[str, list[
         if _plain(answer)
     ]
     issue = _plain(item.get("issue"))
-    accepted = {_normalize_answer(answer.value) for answer in question.answer_variants if _plain(answer.value)}
+    accepted = {_normalize_answer(answer) for answer in accepted_answers if _plain(answer)}
     if status == "valid" and suggested:
         suggested_norm = {_normalize_answer(answer) for answer in suggested}
         if accepted and suggested_norm and not suggested_norm.intersection(accepted):
@@ -439,9 +447,9 @@ async def _process_section(
     overwrite: bool,
     dry_run: bool,
 ) -> tuple[int, list[dict[str, Any]]]:
-    updated = 0
-    suspicious: list[dict[str, Any]] = []
     now = datetime.now(UTC).isoformat()
+    source_text = _all_section_text(section)
+    group_jobs: list[dict[str, Any]] = []
 
     for group in sorted(section.question_groups, key=lambda item: (item.question_start, item.question_end)):
         questions_by_id = _index_group_questions(group)
@@ -453,9 +461,27 @@ async def _process_section(
         if not target_questions:
             continue
 
-        payload = _section_payload_for_groups(test, section, [group])
-        prompt = _build_prompt(payload)
-        data = await _generate_section_data(config=config, prompt=prompt)
+        group_jobs.append(
+            {
+                "payload": _section_payload_for_groups(test, section, [group]),
+                "questions": {
+                    str(question.id): {
+                        "number": question.number,
+                        "accepted_answers": [answer.value for answer in question.answer_variants],
+                    }
+                    for question in target_questions
+                },
+            }
+        )
+
+    # Release the DB connection before slow AI calls so high API concurrency does not exhaust Postgres pools.
+    await session.close()
+
+    updates: list[dict[str, Any]] = []
+    suspicious: list[dict[str, Any]] = []
+    for group_job in group_jobs:
+        questions_by_id = group_job["questions"]
+        data = await _generate_section_data(config=config, prompt=_build_prompt(group_job["payload"]))
         output_items = data.get("questions") or []
         if not isinstance(output_items, list):
             raise RuntimeError("AI response has no questions array.")
@@ -464,10 +490,8 @@ async def _process_section(
             if not isinstance(item, dict):
                 continue
             question_id = _plain(item.get("id"))
-            question = questions_by_id.get(question_id)
-            if question is None:
-                continue
-            if not overwrite and _plain(question.explanation):
+            question_data = questions_by_id.get(question_id)
+            if question_data is None:
                 continue
 
             explanation = _plain(item.get("explanation"))
@@ -475,15 +499,15 @@ async def _process_section(
             highlighted_answer = _plain(item.get("highlighted_answer"))
             if not explanation:
                 continue
-            quote_is_valid = _quote_exists(section, quote)
-            status, suggested_answers, issue = _answer_status(question, item)
+            quote_is_valid = _quote_exists_text(source_text, quote)
+            accepted_answers = list(question_data["accepted_answers"])
+            status, suggested_answers, issue = _answer_status_for_answers(accepted_answers, item)
             confidence = item.get("confidence")
             try:
                 confidence_value = max(0.0, min(float(confidence), 1.0))
             except (TypeError, ValueError):
                 confidence_value = None
 
-            accepted_answers = [answer.value for answer in question.answer_variants]
             reference = {
                 "quote": quote if quote_is_valid else "",
                 "highlighted_answer": highlighted_answer or (accepted_answers[0] if accepted_answers else ""),
@@ -503,8 +527,8 @@ async def _process_section(
                         "test_status": str(test.status.value),
                         "section_id": str(section.id),
                         "section_title": section.title,
-                        "question_id": str(question.id),
-                        "question_number": question.number,
+                        "question_id": question_id,
+                        "question_number": question_data["number"],
                         "current_answers": accepted_answers,
                         "answer_status": status,
                         "suggested_answers": suggested_answers,
@@ -513,13 +537,16 @@ async def _process_section(
                         "quote": quote,
                     }
                 )
-            if not dry_run:
-                question.explanation = explanation
-                question.explanation_reference = reference
-            updated += 1
+            updates.append(
+                {
+                    "question_id": question_id,
+                    "explanation": explanation,
+                    "explanation_reference": reference,
+                }
+            )
 
         output_ids = {_plain(item.get("id")) for item in output_items if isinstance(item, dict)}
-        missing = [question.number for question in target_questions if str(question.id) not in output_ids]
+        missing = [data["number"] for question_id, data in questions_by_id.items() if question_id not in output_ids]
         if missing:
             suspicious.append(
                 {
@@ -538,11 +565,17 @@ async def _process_section(
                 }
             )
 
-    if updated and not dry_run:
-        await session.commit()
-    elif dry_run:
-        await session.rollback()
-    return updated, suspicious
+    if updates and not dry_run:
+        session_maker = get_session_maker()
+        async with session_maker() as write_session:
+            for update in updates:
+                question = await write_session.get(Question, UUID(str(update["question_id"])))
+                if question is None:
+                    continue
+                question.explanation = str(update["explanation"])
+                question.explanation_reference = dict(update["explanation_reference"])
+            await write_session.commit()
+    return len(updates), suspicious
 
 
 async def run(args: argparse.Namespace) -> int:
