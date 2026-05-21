@@ -33,6 +33,7 @@ celery_app.conf.update(
         "primescore.score_attempt": {"queue": "default"},
         "primescore.refresh_leaderboard": {"queue": "default"},
         "primescore.aggregate_analytics_daily": {"queue": "heavy"},
+        "primescore.check_premium_expiring": {"queue": "default"},
         "primescore.send_telegram_notification": {"queue": "notifications"},
         "primescore.process_audio_upload": {"queue": "heavy"},
         "primescore.cleanup_abandoned_attempts": {"queue": "default"},
@@ -53,6 +54,10 @@ celery_app.conf.update(
         "cleanup-abandoned-attempts-nightly": {
             "task": "primescore.cleanup_abandoned_attempts",
             "schedule": 60 * 60 * 24,
+        },
+        "check-premium-status-every-five-minutes": {
+            "task": "primescore.check_premium_expiring",
+            "schedule": 5 * 60,
         },
         "expire-stale-invoices": {
             "task": "primescore.expire_stale_invoices",

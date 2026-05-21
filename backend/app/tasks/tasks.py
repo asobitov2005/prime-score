@@ -4,7 +4,7 @@ import argparse
 from celery import Task
 from typing import Any
 
-from app.db.session import reset_session_state
+from app.db.session import get_session_maker, reset_session_state
 from app.services.admin_ai_agent import run_admin_ai_job
 from app.tasks.celery_app import celery_app
 
@@ -36,7 +36,24 @@ def aggregate_analytics_daily() -> dict[str, Any]:
 
 @celery_app.task(name="primescore.check_premium_expiring")
 def check_premium_expiring() -> dict[str, Any]:
-    return {"status": "ok"}
+    """Deactivate expired premium access and notify users close to expiry."""
+    import asyncio
+
+    from app.services.notification_sender import check_expired_premiums, check_expiring_premiums
+
+    async def _run() -> tuple[int, int]:
+        session_maker = get_session_maker()
+        async with session_maker() as session:
+            expired_count = await check_expired_premiums(session)
+            expiring_count = await check_expiring_premiums(session)
+            return expired_count, expiring_count
+
+    reset_session_state()
+    try:
+        expired_count, expiring_count = asyncio.run(_run())
+    finally:
+        reset_session_state()
+    return {"status": "ok", "expired": expired_count, "expiring": expiring_count}
 
 
 @celery_app.task(name="primescore.send_telegram_notification")
@@ -157,7 +174,6 @@ def generate_test_explanations_task(
 def expire_stale_invoices() -> dict[str, Any]:
     """Expire pending payment invoices past their 10-minute TTL."""
     import asyncio
-    from app.db.session import get_session_maker, reset_session_state
     from app.services.payment_service import expire_stale_payments
 
     async def _run() -> int:
