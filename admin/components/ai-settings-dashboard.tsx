@@ -411,34 +411,43 @@ export function AiSettingsDashboard() {
     const activeProvider = providers.find((item) => item.id === providerId) ?? providers[0];
     const models = activeProvider ? modelsByProvider[activeProvider.provider] ?? [] : [];
     const modelId = binding.providerModelId ?? models[0]?.id ?? "";
+    const activeModel = models.find((model) => model.id === modelId);
     return (
-      <div key={binding.useCase} className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1.2fr,1fr,1fr,auto] md:items-end">
-        <div>
-          <p className="text-sm font-semibold">{label.title}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{label.description}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {binding.useCase} · Source: {binding.resolvedSource}
-          </p>
+      <div key={binding.useCase} className="rounded-xl border border-border bg-background/45 p-4 shadow-sm transition-colors hover:border-border/80">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-foreground">{label.title}</p>
+              <Badge tone="neutral" className="font-mono text-[10px]">{binding.useCase}</Badge>
+            </div>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">{label.description}</p>
+          </div>
+          <div className="min-w-0 rounded-lg border border-border bg-card px-3 py-2 text-xs">
+            <p className="font-medium text-muted-foreground">Current</p>
+            <p className="mt-1 truncate font-semibold text-foreground">{activeModel?.displayName ?? binding.modelDisplayName ?? "No model selected"}</p>
+            <p className="mt-0.5 truncate text-muted-foreground">{activeProvider?.label ?? binding.providerLabel ?? "No provider"} · {binding.resolvedSource}</p>
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label>Provider</Label>
-          <Select value={providerId} onChange={(event) => {
-            const nextProvider = providers.find((item) => item.id === event.target.value);
-            const nextModel = nextProvider ? (modelsByProvider[nextProvider.provider] ?? [])[0] : null;
-            if (nextProvider && nextModel) {
-              void handleUseCaseChange(binding.useCase, nextProvider.id, nextModel.id);
-            }
-          }}>
-            {providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </Select>
+        <div className="mt-4 grid gap-3 border-t border-border pt-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Provider</Label>
+            <Select value={providerId} onChange={(event) => {
+              const nextProvider = providers.find((item) => item.id === event.target.value);
+              const nextModel = nextProvider ? (modelsByProvider[nextProvider.provider] ?? [])[0] : null;
+              if (nextProvider && nextModel) {
+                void handleUseCaseChange(binding.useCase, nextProvider.id, nextModel.id);
+              }
+            }}>
+              {providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Model</Label>
+            <Select value={modelId} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value)}>
+              {models.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
+            </Select>
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label>Model</Label>
-          <Select value={modelId} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value)}>
-            {models.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
-          </Select>
-        </div>
-        <Button variant="outline" disabled={busyKey === `usecase-${binding.useCase}`}>Live</Button>
       </div>
     );
   }
@@ -521,8 +530,13 @@ export function AiSettingsDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Writing Model Bindings</CardTitle>
-          <CardDescription>Writing runtime chooses provider and model from these bindings before it uses the active prompt profile.</CardDescription>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <CardTitle>Writing Model Bindings</CardTitle>
+              <CardDescription>Choose the exact AI model used by each writing runtime step.</CardDescription>
+            </div>
+            <Badge tone="info">{writingUseCases.length} active roles</Badge>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {writingUseCases.map(renderUseCaseBinding)}
@@ -536,7 +550,7 @@ export function AiSettingsDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Other Model Bindings</CardTitle>
-            <CardDescription>Non-writing AI runtime bindings. The removed admin chat binding is intentionally hidden.</CardDescription>
+            <CardDescription>Non-writing runtime bindings. Admin chat is hidden because the workspace chat was removed.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {otherUseCases.map(renderUseCaseBinding)}
