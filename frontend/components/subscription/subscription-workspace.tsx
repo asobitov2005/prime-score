@@ -207,12 +207,12 @@ function ActiveInvoiceCard({
   const supportContact = payment.supportContact || "@TheBugCreator";
 
   return (
-    <Card className="overflow-hidden rounded-[1.4rem] border-primary/20 bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.12),transparent_24%),linear-gradient(180deg,#111a2d_0%,#0b1220_100%)] shadow-[0_28px_70px_rgba(2,6,23,0.28)]">
+    <Card className="overflow-hidden rounded-[1.4rem] border-primary/20 bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.16),transparent_24%),linear-gradient(180deg,hsl(var(--card))_0%,hsl(var(--background))_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.08)] dark:bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.12),transparent_24%),linear-gradient(180deg,#111a2d_0%,#0b1220_100%)] dark:shadow-[0_28px_70px_rgba(2,6,23,0.28)]">
       <CardContent className="grid gap-5 p-4 md:p-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={statusTone(payment.status)}>{payment.status}</Badge>
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
               {payment.planName}
             </span>
           </div>
@@ -243,16 +243,16 @@ function ActiveInvoiceCard({
             />
           </div>
 
-          <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm font-medium text-amber-100">
+          <div className="rounded-2xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-100">
             Transfer the shown amount to the card, then send the receipt screenshot to {supportContact} on Telegram.
           </div>
         </div>
 
-        <div className="flex h-full flex-col justify-between gap-4 rounded-[1.25rem] border border-white/8 bg-white/8 p-4 backdrop-blur-sm">
-          <div className="space-y-3 text-sm text-slate-300">
+        <div className="flex h-full flex-col justify-between gap-4 rounded-[1.25rem] border border-border/60 bg-background/75 p-4 backdrop-blur-sm dark:border-white/8 dark:bg-white/8">
+          <div className="space-y-3 text-sm text-muted-foreground dark:text-slate-300">
             <div className="flex items-center gap-2">
               <Clock3 className={cn("h-4 w-4", isExpired ? "text-red-500" : "text-primary")} />
-              <span className={cn("font-medium", isExpired && "text-red-400")}>
+              <span className={cn("font-medium text-foreground dark:text-slate-200", isExpired && "text-red-600 dark:text-red-400")}>
                 {isExpired ? "Invoice expired" : `Valid for ${countdown}`}
               </span>
             </div>
@@ -282,7 +282,7 @@ function ActiveInvoiceCard({
                 Send screenshot
               </a>
             </Button>
-            <Button type="button" variant="outline" className="w-full border-white/10 bg-black/30 text-white hover:bg-white/10 hover:text-white" onClick={onCancel} disabled={isExpired}>
+            <Button type="button" variant="outline" className="w-full border-border/70 bg-background text-foreground hover:bg-muted dark:border-white/10 dark:bg-black/30 dark:text-white dark:hover:bg-white/10 dark:hover:text-white" onClick={onCancel} disabled={isExpired}>
               Cancel invoice
             </Button>
           </div>
