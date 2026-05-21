@@ -64,6 +64,7 @@ export interface TestCatalogItem {
   isPremiumLocked: boolean;
   description: string;
   tags: string[];
+  createdAt: string;
   sections: TestSectionSummary[];
 }
 

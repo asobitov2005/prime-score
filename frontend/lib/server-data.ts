@@ -20,6 +20,7 @@ type BackendTestCatalogItem = {
   total_questions: number;
   version: number;
   section_count: number;
+  created_at: string;
 };
 
 type BackendTestDetail = BackendTestCatalogItem & {
@@ -113,6 +114,7 @@ function mapCatalogItem(item: BackendTestCatalogItem): TestCatalogItem {
     isPremiumLocked: item.access_type === "premium",
     description: item.description ?? "Structured IELTS test detail.",
     tags: [item.test_type, item.access_type, getTestSourceLabel(item.source)],
+    createdAt: item.created_at,
     sections: buildPlaceholderSections(item.section_count)
   };
 }

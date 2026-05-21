@@ -476,6 +476,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 60,
     isPremiumLocked: false,
+    createdAt: "2024-05-10T00:00:00Z",
     description:
       "Academic Reading with a clean article-science topic mix, strict IELTS timing, and review-friendly structure.",
     tags: ["3 passages", "Practice", "Public"],
@@ -498,6 +499,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 32,
     isPremiumLocked: true,
+    createdAt: "2024-05-10T00:00:00Z",
     description:
       "A full Listening test with four parts, sticky audio control, and review-time transcript seek placeholders.",
     tags: ["4 parts", "Exam", "Premium"],
@@ -521,6 +523,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 60,
     isPremiumLocked: true,
+    createdAt: "2024-05-10T00:00:00Z",
     description:
       "A draft reading set with test-level unique content, answer variants, and snapshot-ready versioning.",
     tags: ["Draft", "Premium", "Custom"],
@@ -543,6 +546,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 30,
     isPremiumLocked: false,
+    createdAt: "2024-05-10T00:00:00Z",
     description:
       "Authentic Cambridge Official listening practice to gauge your real exam readiness.",
     tags: ["4 parts", "Practice", "Cambridge Official"],
@@ -566,6 +570,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 60,
     isPremiumLocked: false,
+    createdAt: "2024-05-10T00:00:00Z",
     description: "Another official Cambridge reading set.",
     tags: ["Official", "Reading"],
     sections: [{ id: "p1", number: 1, title: "Passage 1", questionCount: 13, teaser: "..." }]
@@ -583,6 +588,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 30,
     isPremiumLocked: true,
+    createdAt: "2024-05-10T00:00:00Z",
     description: "Premium official Cambridge listening set.",
     tags: ["Official", "Listening"],
     sections: [{ id: "s1", number: 1, title: "Part 1", questionCount: 10, teaser: "..." }]
@@ -600,6 +606,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 60,
     isPremiumLocked: true,
+    createdAt: "2024-05-10T00:00:00Z",
     description: "Premium official Cambridge reading set.",
     tags: ["Official", "Reading"],
     sections: [{ id: "p1", number: 1, title: "Passage 1", questionCount: 13, teaser: "..." }]
@@ -617,6 +624,7 @@ export const mockTests: TestCatalogItem[] = [
     questionCount: 40,
     estimatedMinutes: 30,
     isPremiumLocked: false,
+    createdAt: "2024-05-10T00:00:00Z",
     description: "Public official Cambridge listening set.",
     tags: ["Official", "Listening"],
     sections: [{ id: "s1", number: 1, title: "Part 1", questionCount: 10, teaser: "..." }]
