@@ -35,6 +35,40 @@ const PROMPT_KEYS: WritingPromptKey[] = [
   "vocabulary_upgrade_policy",
 ];
 
+const WRITING_USE_CASES: AiUseCase[] = [
+  "writing_grader",
+  "writing_improver",
+  "writing_roast",
+  "writing_image_summary",
+];
+
+const USE_CASE_LABELS: Record<AiUseCase, { title: string; description: string }> = {
+  admin_chat: {
+    title: "Admin chat",
+    description: "Legacy admin workspace chat binding.",
+  },
+  writing_grader: {
+    title: "Writing grader",
+    description: "Main IELTS band scoring, feedback, criterion scores, and annotations.",
+  },
+  writing_improver: {
+    title: "Writing improved version",
+    description: "Rewrites the essay into a stronger version after grading.",
+  },
+  writing_roast: {
+    title: "Writing roast feedback",
+    description: "Direct, natural-language roast feedback for writing results.",
+  },
+  writing_image_summary: {
+    title: "Writing Task 1 image summary",
+    description: "Vision model used to read/summarize Task 1 chart or image prompts.",
+  },
+  audio_transcription: {
+    title: "Audio transcription",
+    description: "Listening audio transcript generation.",
+  },
+};
+
 const PROMPT_LABELS: Record<WritingPromptKey, { title: string; description: string; rows: number }> = {
   grader_system: {
     title: "Grader system prompt",
@@ -161,6 +195,18 @@ export function AiSettingsDashboard() {
     const entriesByKey = new Map((selectedProfile?.entries ?? []).map((entry) => [entry.key, entry]));
     return PROMPT_KEYS.map((key) => entriesByKey.get(key) ?? { key, body: "", format: "text" as const });
   }, [selectedProfile]);
+
+  const writingUseCases = useMemo(
+    () => WRITING_USE_CASES
+      .map((useCase) => useCases.find((binding) => binding.useCase === useCase))
+      .filter((binding): binding is AdminAiUseCaseBinding => Boolean(binding)),
+    [useCases],
+  );
+
+  const otherUseCases = useMemo(
+    () => useCases.filter((binding) => !WRITING_USE_CASES.includes(binding.useCase) && binding.useCase !== "admin_chat"),
+    [useCases],
+  );
 
   useEffect(() => {
     if (notice == null) return undefined;
@@ -358,6 +404,45 @@ export function AiSettingsDashboard() {
     }
   }
 
+  function renderUseCaseBinding(binding: AdminAiUseCaseBinding) {
+    const label = USE_CASE_LABELS[binding.useCase];
+    const provider = providers.find((item) => item.id === binding.providerConfigId) ?? providers.find((item) => item.provider === binding.provider);
+    const providerId = provider?.id ?? binding.providerConfigId ?? providers[0]?.id ?? "";
+    const activeProvider = providers.find((item) => item.id === providerId) ?? providers[0];
+    const models = activeProvider ? modelsByProvider[activeProvider.provider] ?? [] : [];
+    const modelId = binding.providerModelId ?? models[0]?.id ?? "";
+    return (
+      <div key={binding.useCase} className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1.2fr,1fr,1fr,auto] md:items-end">
+        <div>
+          <p className="text-sm font-semibold">{label.title}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{label.description}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {binding.useCase} · Source: {binding.resolvedSource}
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label>Provider</Label>
+          <Select value={providerId} onChange={(event) => {
+            const nextProvider = providers.find((item) => item.id === event.target.value);
+            const nextModel = nextProvider ? (modelsByProvider[nextProvider.provider] ?? [])[0] : null;
+            if (nextProvider && nextModel) {
+              void handleUseCaseChange(binding.useCase, nextProvider.id, nextModel.id);
+            }
+          }}>
+            {providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <Select value={modelId} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value)}>
+            {models.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
+          </Select>
+        </div>
+        <Button variant="outline" disabled={busyKey === `usecase-${binding.useCase}`}>Live</Button>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="space-y-4"><div className="h-12 rounded-xl bg-muted animate-pulse" /><div className="h-80 rounded-xl bg-muted animate-pulse" /></div>;
   }
@@ -436,46 +521,28 @@ export function AiSettingsDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Use-case Bindings</CardTitle>
-          <CardDescription>Each runtime resolves provider, model, and key from here at execution time.</CardDescription>
+          <CardTitle>Writing Model Bindings</CardTitle>
+          <CardDescription>Writing runtime chooses provider and model from these bindings before it uses the active prompt profile.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {useCases.map((binding) => {
-            const provider = providers.find((item) => item.id === binding.providerConfigId) ?? providers.find((item) => item.provider === binding.provider);
-            const providerId = provider?.id ?? binding.providerConfigId ?? providers[0]?.id ?? "";
-            const activeProvider = providers.find((item) => item.id === providerId) ?? providers[0];
-            const models = activeProvider ? modelsByProvider[activeProvider.provider] ?? [] : [];
-            const modelId = binding.providerModelId ?? models[0]?.id ?? "";
-            return (
-              <div key={binding.useCase} className="grid gap-3 rounded-lg border border-border p-4 md:grid-cols-[1.2fr,1fr,1fr,auto] md:items-end">
-                <div>
-                  <p className="text-sm font-semibold">{binding.useCase}</p>
-                  <p className="text-xs text-muted-foreground">Source: {binding.resolvedSource}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Provider</Label>
-                  <Select value={providerId} onChange={(event) => {
-                    const nextProvider = providers.find((item) => item.id === event.target.value);
-                    const nextModel = nextProvider ? (modelsByProvider[nextProvider.provider] ?? [])[0] : null;
-                    if (nextProvider && nextModel) {
-                      void handleUseCaseChange(binding.useCase, nextProvider.id, nextModel.id);
-                    }
-                  }}>
-                    {providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Model</Label>
-                  <Select value={modelId} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value)}>
-                    {models.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
-                  </Select>
-                </div>
-                <Button variant="outline" disabled={busyKey === `usecase-${binding.useCase}`}>Live</Button>
-              </div>
-            );
-          })}
+          {writingUseCases.map(renderUseCaseBinding)}
+          {writingUseCases.length === 0 ? (
+            <Notice tone="warning" title="Writing bindings are missing" description="Sync or seed AI settings so writing grader, improver, roast, and image-summary bindings can be configured." />
+          ) : null}
         </CardContent>
       </Card>
+
+      {otherUseCases.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Other Model Bindings</CardTitle>
+            <CardDescription>Non-writing AI runtime bindings. The removed admin chat binding is intentionally hidden.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {otherUseCases.map(renderUseCaseBinding)}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
         <Card>
