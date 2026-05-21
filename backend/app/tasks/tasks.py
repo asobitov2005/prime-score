@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from celery import Task
 from typing import Any
 
@@ -104,6 +105,52 @@ def generate_writing_task_image_summary_task(self: Task[Any, Any], task_id: str)
 
     asyncio.run(refresh_task_image_summary(UUID(task_id)))
     return {"task_id": task_id, "status": "completed"}
+
+
+@celery_app.task(
+    name="primescore.generate_test_explanations",
+    bind=True,
+    acks_late=True,
+    max_retries=1,
+    default_retry_delay=60,
+)
+def generate_test_explanations_task(
+    self: Task[Any, Any],
+    test_id: str,
+    test_type: str,
+    *,
+    concurrency: int = 32,
+) -> dict[str, Any]:
+    """Generate answer explanations for a newly published reading/listening test."""
+    import asyncio
+
+    from app.scripts.generate_reading_explanations import DEFAULT_MODEL, run
+
+    args = argparse.Namespace(
+        model=DEFAULT_MODEL,
+        types=test_type,
+        concurrency=concurrency,
+        test_id=test_id,
+        overwrite=False,
+        only_missing_generated=True,
+        dry_run=False,
+        limit=None,
+        report=f"/tmp/test_explanations_{test_id}.json",
+    )
+
+    reset_session_state()
+    try:
+        exit_code = asyncio.run(run(args))
+    except Exception as exc:  # noqa: BLE001
+        if self.request.retries >= int(self.max_retries or 0):
+            raise
+        raise self.retry(exc=exc, countdown=int(self.default_retry_delay or 60))
+    finally:
+        reset_session_state()
+
+    if exit_code != 0:
+        raise RuntimeError(f"Explanation generation failed for test {test_id} with exit code {exit_code}.")
+    return {"test_id": test_id, "test_type": test_type, "status": "completed"}
 
 
 @celery_app.task(name="primescore.expire_stale_invoices")

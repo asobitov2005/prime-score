@@ -166,6 +166,7 @@ from app.services.test_content_repo import (
     save_test_draft_to_db,
 )
 from app.services.user_cleanup import purge_user_data
+from app.tasks.tasks import generate_test_explanations_task
 
 
 class BulkStatusRequest(BaseModel):
@@ -357,6 +358,20 @@ ADMIN_OTP_SUCCESS_MESSAGE = "🎉 Successfully logged in!"
 ADMIN_OTP_EXPIRED_MESSAGE = "❌ Admin code expired."
 ADMIN_OTP_EXPIRY_SWEEP_INTERVAL_SECONDS = 10
 _admin_otp_expiry_sweeper_task: asyncio.Task | None = None
+
+
+def _test_type_value(value: object) -> str:
+    return str(getattr(value, "value", value) or "").lower()
+
+
+def _enqueue_test_explanations(test_id: UUID, test_type: object) -> None:
+    type_value = _test_type_value(test_type)
+    if type_value not in {"reading", "listening"}:
+        return
+    try:
+        generate_test_explanations_task.delay(str(test_id), type_value)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to enqueue explanation generation for test %s: %s", test_id, exc)
 
 
 def _format_percent(numerator: int | float, denominator: int | float) -> str:
@@ -1438,12 +1453,17 @@ async def bulk_publish_tests(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status must be 'published', 'draft', or 'archived'.")
     try:
         model_status = ModelTestStatus(payload.status)
+        published_tests: list[tuple[UUID, object]] = []
         for test_id in payload.ids:
             test = await session.get(Test, test_id)
             if test is not None:
                 test.status = model_status
                 test.review_status = "approved" if payload.status == "published" else "needs_review"
+                if model_status == ModelTestStatus.PUBLISHED:
+                    published_tests.append((test.id, test.type))
         await session.commit()
+        for published_test_id, published_test_type in published_tests:
+            _enqueue_test_explanations(published_test_id, published_test_type)
         return MessageResponse(message=f"{len(payload.ids)} ta test {payload.status} qilindi.")
     except Exception as exc:
         try:
@@ -1600,6 +1620,7 @@ async def quick_fix_test(
 
     if saved is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
+    _enqueue_test_explanations(test_id, saved.get("type"))
     return AdminTestRead(**saved)
 
 

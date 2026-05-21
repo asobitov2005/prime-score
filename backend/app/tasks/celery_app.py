@@ -39,6 +39,7 @@ celery_app.conf.update(
         "primescore.expire_stale_invoices": {"queue": "default"},
         "primescore.evaluate_writing_submission": {"queue": "writing"},
         "primescore.generate_writing_task_image_summary": {"queue": "writing"},
+        "primescore.generate_test_explanations": {"queue": "heavy"},
     },
     beat_schedule={
         "refresh-leaderboard-hourly": {

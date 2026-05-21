@@ -408,6 +408,7 @@ async def _load_tests(
     *,
     limit: int | None,
     test_types: set[ModelTestType],
+    test_id: UUID | None = None,
 ) -> list[Test]:
     query = (
         select(Test)
@@ -421,6 +422,8 @@ async def _load_tests(
         )
         .order_by(Test.created_at.asc())
     )
+    if test_id is not None:
+        query = query.where(Test.id == test_id)
     if limit:
         query = query.limit(limit)
     return list((await session.scalars(query)).unique().all())
@@ -431,8 +434,9 @@ async def _collect_section_jobs(
     *,
     limit: int | None,
     test_types: set[ModelTestType],
+    test_id: UUID | None = None,
 ) -> tuple[int, list[SectionJob]]:
-    tests = await _load_tests(session, limit=limit, test_types=test_types)
+    tests = await _load_tests(session, limit=limit, test_types=test_types, test_id=test_id)
     jobs: list[SectionJob] = []
     for test in tests:
         for section in sorted(test.sections, key=lambda item: item.position):
@@ -623,10 +627,16 @@ async def run(args: argparse.Namespace) -> int:
     stats = ExplanationStats()
     suspicious: list[dict[str, Any]] = []
     test_types = _parse_test_types(args.types)
+    test_id = UUID(args.test_id) if args.test_id else None
     semaphore = asyncio.Semaphore(max(1, args.concurrency))
 
     async with session_maker() as session:
-        stats.tests_seen, jobs = await _collect_section_jobs(session, limit=args.limit, test_types=test_types)
+        stats.tests_seen, jobs = await _collect_section_jobs(
+            session,
+            limit=args.limit,
+            test_types=test_types,
+            test_id=test_id,
+        )
 
     stats.sections_seen = len(jobs)
     stats.questions_seen = sum(job.question_count for job in jobs)
@@ -673,6 +683,7 @@ async def run(args: argparse.Namespace) -> int:
         "generator_version": GENERATOR_VERSION,
         "model": args.model,
         "types": sorted(item.value for item in test_types),
+        "test_id": str(test_id) if test_id else None,
         "concurrency": args.concurrency,
         "dry_run": args.dry_run,
         "stats": asdict(stats),
@@ -697,6 +708,7 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated test types to process: reading,listening.",
     )
     parser.add_argument("--concurrency", type=int, default=4, help="Parallel section workers.")
+    parser.add_argument("--test-id", default=None, help="Optional single test id to process.")
     parser.add_argument("--overwrite", action="store_true", help="Regenerate explanations even when a question already has one.")
     parser.add_argument(
         "--only-missing-generated",
