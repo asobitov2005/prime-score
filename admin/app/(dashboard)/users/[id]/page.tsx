@@ -21,6 +21,8 @@ type UserDetail = {
   is_premium: boolean;
   premium_until: string | null;
   show_on_leaderboard: boolean;
+  bot_contact_at: string | null;
+  first_login_at: string | null;
   last_active_at: string | null;
   created_at: string | null;
   attempts_total: number;
@@ -305,6 +307,7 @@ export default function UserDetailPage() {
                 {user.is_premium && !premiumExpired && <Badge tone="success" className="text-[10px] uppercase font-black tracking-widest">Premium</Badge>}
                 {premiumExpired && <Badge tone="warning" className="text-[10px] uppercase font-black tracking-widest">Premium expired</Badge>}
                 {!user.is_premium && !premiumExpired && <Badge tone="neutral" className="text-[10px] uppercase font-black tracking-widest">Free</Badge>}
+                {user.bot_contact_at && !user.first_login_at && <Badge tone="info" className="text-[10px] uppercase font-black tracking-widest">Bot user</Badge>}
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
                 {user.phone && <span>📱 {user.phone}</span>}

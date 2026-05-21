@@ -13,7 +13,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   getWritingDashboardSummary,
@@ -33,7 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CustomTaskCard } from "./custom-task-card";
 import { WritingQuestionFilters } from "./writing-question-filters";
-import { WritingLimitButton, WritingLimitLink } from "./writing-limit-gate";
+import { WritingLimitLink } from "./writing-limit-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -66,25 +66,6 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
               <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">IELTS Writing checker</CardTitle>
-              <CardDescription className="max-w-2xl text-sm font-medium text-muted-foreground">
-                Get band score, sentence fixes, and a desired-score action plan for Task 1 and Task 2.
-              </CardDescription>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {["Band score in 30-60 sec", "Sentence-level corrections", "Band gap action plan", "Task-specific IELTS checklist"].map((item) => (
-                  <span key={item} className="rounded-full border border-border/60 bg-background/70 px-3 py-1 text-[11px] font-semibold text-muted-foreground">
-                    {item}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <WritingLimitButton limitStatus={limitStatus} href={`/exam-preview/writing?task_type=${activeTaskType}`} size="sm" className="h-9 rounded-xl">
-                    Check my essay
-                    <ArrowRight className="h-4 w-4" />
-                </WritingLimitButton>
-                <Button asChild size="sm" variant="outline" className="h-9 rounded-xl">
-                  <Link href="#published-prompts">Pick a prompt</Link>
-                </Button>
-              </div>
             </div>
             <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary md:flex">
               <PenSquare className="h-5 w-5" />
@@ -206,10 +187,51 @@ function PublishedTaskCard({ task, limitStatus }: { task: WritingTaskListItem; l
   const minutes = Math.round((task.time_limit_seconds ?? 0) / 60);
   const subtypeLabel = subtypeDisplayLabel(task.question_subtype);
   const skills = expectedSkills(task.question_subtype, task.task_type);
+  const isNew = task.created_at ? (new Date().getTime() - new Date(task.created_at).getTime()) < 7 * 24 * 60 * 60 * 1000 : false;
 
   return (
     <WritingLimitLink limitStatus={limitStatus} href={`/exam-preview/writing?taskId=${task.id}`} className="group block text-left">
-      <Card className="flex h-full flex-col overflow-hidden rounded-2xl border-border/60 bg-card/75 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
+      <Card className="relative flex h-full flex-col overflow-hidden rounded-2xl border-border/60 bg-card/77 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-950">
+        {isNew && (
+          <div className="absolute left-0 top-0 z-30 h-[80px] w-[80px] overflow-hidden rounded-tl-2xl pointer-events-none select-none">
+            <svg width="80" height="80" viewBox="0 0 80 80" className="absolute left-0 top-0">
+              <defs>
+                <linearGradient id="ribbonGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#9e0c1b" />
+                  <stop offset="35%" stopColor="#e62035" />
+                  <stop offset="50%" stopColor="#ff4d6d" />
+                  <stop offset="65%" stopColor="#e62035" />
+                  <stop offset="100%" stopColor="#9e0c1b" />
+                </linearGradient>
+              </defs>
+              <path 
+                d="M 0 0 
+                   L 0 62 
+                   C 0 62, 2 62, 5 58 
+                   C 12 48, 48 12, 58 5 
+                   C 62 2, 62 0, 62 0 
+                   Z" 
+                fill="url(#ribbonGrad)" 
+              />
+              <path d="M 0 62 C 0 62, 3 64, 5 62 L 0 56 Z" fill="#590007" />
+              <path d="M 62 0 C 62 0, 64 3, 62 5 L 56 0 Z" fill="#590007" />
+              <text 
+                x="22" 
+                y="29" 
+                transform="rotate(-45 22 29)" 
+                fill="#ffffff" 
+                fontFamily="system-ui, -apple-system, sans-serif" 
+                fontWeight="900" 
+                fontSize="10.5" 
+                letterSpacing="1.5" 
+                textAnchor="middle" 
+                filter="drop-shadow(0px 1px 1px rgba(0,0,0,0.6))"
+              >
+                NEW
+              </text>
+            </svg>
+          </div>
+        )}
         {imgSrc ? (
           <div className="relative h-40 w-full overflow-hidden bg-white p-2 dark:bg-slate-950">
             {/* eslint-disable-next-line @next/next/no-img-element */}

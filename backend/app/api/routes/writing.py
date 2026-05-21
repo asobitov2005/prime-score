@@ -163,6 +163,7 @@ def _serialize_task_list_item(task: WritingTask) -> WritingTaskListItem:
         source=task.source,
         question_subtype=task.question_subtype.value if task.question_subtype else None,
         description=task.description,
+        created_at=task.created_at,
     )
 
 

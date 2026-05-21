@@ -27,6 +27,7 @@ export interface WritingTaskListItem {
   question_subtype?: WritingQuestionSubtype | null;
   source?: string | null;
   description?: string | null;
+  created_at?: string;
 }
 
 export interface WritingTaskListResponse {

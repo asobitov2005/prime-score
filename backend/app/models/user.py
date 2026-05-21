@@ -21,6 +21,8 @@ class User(UUIDMixin, TimestampMixin, Base):
     name_is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     username_is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     avatar_is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    bot_contact_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     show_on_leaderboard: Mapped[bool] = mapped_column(Boolean, default=True)

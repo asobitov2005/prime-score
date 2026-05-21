@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.api.routes import auth as auth_routes
-from app.bot.main import _is_contact_refresh_due
+from app.bot.main import _apply_bot_contact_to_user, _is_contact_refresh_due
 from app.models.user import User
 from app.services import telegram_profile_sync
 
@@ -184,6 +184,60 @@ def test_upsert_user_from_login_grants_welcome_premium_bonus() -> None:
     assert created.is_premium is True
     assert created.premium_until == now + timedelta(days=1)
     assert created.telegram_contact_updated_at == now
+    assert created.first_login_at == now
+
+
+def test_upsert_user_from_login_marks_existing_bot_contact_as_new_login() -> None:
+    now = datetime(2026, 5, 22, 12, 0, tzinfo=UTC)
+    user = User(
+        id=UUID("12121212-1212-1212-1212-121212121212"),
+        telegram_id=121212121,
+        phone="+998901212121",
+        first_name="Bot",
+        last_name="Contact",
+        username="bot_contact",
+        bot_contact_at=now - timedelta(minutes=5),
+        first_login_at=None,
+        is_premium=False,
+    )
+
+    updated = auth_routes._upsert_user_from_login(
+        user,
+        telegram_id=121212121,
+        phone="+998901212121",
+        username="bot_contact",
+        first_name="Bot",
+        last_name="Contact",
+        avatar_url=None,
+        now=now,
+    )
+
+    assert updated.bot_contact_at == now - timedelta(minutes=5)
+    assert updated.first_login_at == now
+
+
+def test_apply_bot_contact_to_user_creates_free_user_without_first_login() -> None:
+    now = datetime(2026, 5, 22, 12, 0, tzinfo=UTC)
+
+    user = _apply_bot_contact_to_user(
+        None,
+        telegram_id=232323232,
+        phone="901234567",
+        username="bot_user",
+        first_name="Bot",
+        last_name="User",
+        avatar_url=None,
+        now=now,
+    )
+
+    assert user.telegram_id == 232323232
+    assert user.phone == "+998901234567"
+    assert user.first_name == "Bot"
+    assert user.last_name == "User"
+    assert user.username == "bot_user"
+    assert user.is_premium is False
+    assert user.bot_contact_at == now
+    assert user.first_login_at is None
 
 
 def test_upsert_user_from_login_does_not_restore_deleted_user_directly() -> None:

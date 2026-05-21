@@ -16,6 +16,8 @@ type UserRow = {
   avatarUrl: string | null;
   premiumState: "active" | "expired" | "free";
   premiumUntil: string | null;
+  botContactAt: string | null;
+  firstLoginAt: string | null;
   leaderboardVisible: boolean;
   attempts: number;
   completed: number;
@@ -153,6 +155,8 @@ export default function UsersPage() {
           avatarUrl: u.avatar_url ?? null,
           premiumState,
           premiumUntil,
+          botContactAt: u.bot_contact_at ?? null,
+          firstLoginAt: u.first_login_at ?? null,
           leaderboardVisible: u.show_on_leaderboard ?? true,
           attempts: u.attempts_total ?? 0,
           completed: u.attempts_completed ?? 0,
@@ -174,7 +178,12 @@ export default function UsersPage() {
     if (premiumFilter !== "all" && u.premiumState !== premiumFilter) return false;
     if (leaderboardFilter === "visible" && !u.leaderboardVisible) return false;
     if (leaderboardFilter === "hidden" && u.leaderboardVisible) return false;
-    if (search && !u.name.toLowerCase().includes(search.toLowerCase()) && !(u.username ?? "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (
+      search &&
+      !u.name.toLowerCase().includes(search.toLowerCase()) &&
+      !(u.username ?? "").toLowerCase().includes(search.toLowerCase()) &&
+      !(u.phone ?? "").toLowerCase().includes(search.toLowerCase())
+    ) return false;
     return true;
   });
 
@@ -395,8 +404,11 @@ export default function UsersPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="truncate font-medium text-foreground">{user.name || "Unnamed user"}</div>
-                          <div className="mt-1 truncate text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            {user.username ? `@${user.username}` : user.phone ?? "—"}
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            <span className="truncate">{user.username ? `@${user.username}` : user.phone ?? "—"}</span>
+                            {user.botContactAt && !user.firstLoginAt && (
+                              <Badge tone="info" className="text-[9px] uppercase tracking-widest">Bot user</Badge>
+                            )}
                           </div>
                         </div>
                       </div>

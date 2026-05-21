@@ -261,8 +261,43 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
               <Card key={test.id} className="group relative overflow-hidden rounded-2xl border-primary/20 bg-card/50 hover:bg-card hover:border-primary/30 transition-all duration-300 flex flex-col shadow-sm">
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/40" />
                 {isNew && (
-                  <div className="absolute left-[-35px] top-[22px] z-20 w-[140px] -rotate-45 bg-gradient-to-r from-[#FF0055] to-[#FF3377] py-1 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-md border-y border-white/20">
-                    New
+                  <div className="absolute left-0 top-0 z-30 h-[80px] w-[80px] overflow-hidden rounded-tl-2xl pointer-events-none select-none">
+                    <svg width="80" height="80" viewBox="0 0 80 80" className="absolute left-0 top-0">
+                      <defs>
+                        <linearGradient id="ribbonGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#9e0c1b" />
+                          <stop offset="35%" stopColor="#e62035" />
+                          <stop offset="50%" stopColor="#ff4d6d" />
+                          <stop offset="65%" stopColor="#e62035" />
+                          <stop offset="100%" stopColor="#9e0c1b" />
+                        </linearGradient>
+                      </defs>
+                      <path 
+                        d="M 0 0 
+                           L 0 62 
+                           C 0 62, 2 62, 5 58 
+                           C 12 48, 48 12, 58 5 
+                           C 62 2, 62 0, 62 0 
+                           Z" 
+                        fill="url(#ribbonGrad)" 
+                      />
+                      <path d="M 0 62 C 0 62, 3 64, 5 62 L 0 56 Z" fill="#590007" />
+                      <path d="M 62 0 C 62 0, 64 3, 62 5 L 56 0 Z" fill="#590007" />
+                      <text 
+                        x="22" 
+                        y="29" 
+                        transform="rotate(-45 22 29)" 
+                        fill="#ffffff" 
+                        fontFamily="system-ui, -apple-system, sans-serif" 
+                        fontWeight="900" 
+                        fontSize="10.5" 
+                        letterSpacing="1.5" 
+                        textAnchor="middle" 
+                        filter="drop-shadow(0px 1px 1px rgba(0,0,0,0.6))"
+                      >
+                        NEW
+                      </text>
+                    </svg>
                   </div>
                 )}
                 <CardHeader className="p-5 pb-2 flex-1 pt-8">

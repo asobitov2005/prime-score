@@ -1,6 +1,7 @@
 import type { AdminRole } from "@/lib/types";
 import {
   LayoutDashboard,
+  Bot,
   FileText,
   Users,
   CreditCard,
@@ -76,6 +77,12 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/users",
         description: "User management and session controls",
         icon: Users
+      },
+      {
+        label: "Bot users",
+        href: "/bot-users",
+        description: "Telegram bot contacts and first-login status",
+        icon: Bot
       },
       {
         label: "Reviews",

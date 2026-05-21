@@ -127,10 +127,51 @@ function TaskCard({ task }: { task: WritingTaskListItem }) {
   const stripped = stripHtml(task.description ?? "").slice(0, 140);
   const imgSrc = task.task_type === "task_1" ? resolveWritingAssetUrl(task.image_url) : null;
   const minutes = Math.round((task.time_limit_seconds ?? 0) / 60);
+  const isNew = task.created_at ? (new Date().getTime() - new Date(task.created_at).getTime()) < 7 * 24 * 60 * 60 * 1000 : false;
 
   return (
     <Link href={`/exam-preview/writing?taskId=${task.id}`} className="group block">
-      <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-border/60 bg-card/70 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
+      <Card className="relative flex h-full flex-col overflow-hidden rounded-3xl border-border/60 bg-card/70 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
+        {isNew && (
+          <div className="absolute left-0 top-0 z-30 h-[80px] w-[80px] overflow-hidden rounded-tl-3xl pointer-events-none select-none">
+            <svg width="80" height="80" viewBox="0 0 80 80" className="absolute left-0 top-0">
+              <defs>
+                <linearGradient id="ribbonGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#9e0c1b" />
+                  <stop offset="35%" stopColor="#e62035" />
+                  <stop offset="50%" stopColor="#ff4d6d" />
+                  <stop offset="65%" stopColor="#e62035" />
+                  <stop offset="100%" stopColor="#9e0c1b" />
+                </linearGradient>
+              </defs>
+              <path 
+                d="M 0 0 
+                   L 0 62 
+                   C 0 62, 2 62, 5 58 
+                   C 12 48, 48 12, 58 5 
+                   C 62 2, 62 0, 62 0 
+                   Z" 
+                fill="url(#ribbonGrad)" 
+              />
+              <path d="M 0 62 C 0 62, 3 64, 5 62 L 0 56 Z" fill="#590007" />
+              <path d="M 62 0 C 62 0, 64 3, 62 5 L 56 0 Z" fill="#590007" />
+              <text 
+                x="22" 
+                y="29" 
+                transform="rotate(-45 22 29)" 
+                fill="#ffffff" 
+                fontFamily="system-ui, -apple-system, sans-serif" 
+                fontWeight="900" 
+                fontSize="10.5" 
+                letterSpacing="1.5" 
+                textAnchor="middle" 
+                filter="drop-shadow(0px 1px 1px rgba(0,0,0,0.6))"
+              >
+                NEW
+              </text>
+            </svg>
+          </div>
+        )}
         {imgSrc ? (
           <div className="relative h-44 w-full overflow-hidden bg-white p-2 dark:bg-slate-950">
             {/* eslint-disable-next-line @next/next/no-img-element */}

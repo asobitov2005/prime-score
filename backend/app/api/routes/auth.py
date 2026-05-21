@@ -57,6 +57,7 @@ def _upsert_user_from_login(
             username=username,
             avatar_url=avatar_url,
             telegram_contact_updated_at=now,
+            first_login_at=now,
             is_premium=True,
             premium_until=now + timedelta(days=1),
         )
@@ -71,6 +72,8 @@ def _upsert_user_from_login(
     if not user.avatar_is_custom:
         user.avatar_url = avatar_url
     user.telegram_contact_updated_at = now
+    if user.first_login_at is None:
+        user.first_login_at = now
     return user
 
 
@@ -283,6 +286,8 @@ async def verify_code(
         is_new_user = True
     elif db_user is None:
         is_new_user = True
+    elif db_user.first_login_at is None:
+        is_new_user = True
 
     avatar_url = await _resolve_telegram_avatar_url(
         telegram_id,
@@ -299,6 +304,11 @@ async def verify_code(
         avatar_url=avatar_url,
         now=now,
     )
+    if is_new_user:
+        welcome_until = now + timedelta(days=1)
+        if db_user.premium_until is None or db_user.premium_until < welcome_until:
+            db_user.is_premium = True
+            db_user.premium_until = welcome_until
     db.add(db_user)
 
     try:

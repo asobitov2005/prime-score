@@ -190,6 +190,8 @@ class AdminUserDetailRead(BaseModel):
     is_premium: bool = False
     premium_until: str | None = None
     show_on_leaderboard: bool = True
+    bot_contact_at: str | None = None
+    first_login_at: str | None = None
     last_active_at: str | None = None
     created_at: str | None = None
     attempts_total: int = 0
@@ -1988,6 +1990,8 @@ async def _build_admin_user_detail(
         is_premium=user.is_premium,
         premium_until=user.premium_until.isoformat() if user.premium_until else None,
         show_on_leaderboard=user.show_on_leaderboard,
+        bot_contact_at=user.bot_contact_at.isoformat() if user.bot_contact_at else None,
+        first_login_at=user.first_login_at.isoformat() if user.first_login_at else None,
         last_active_at=user.last_active_at.isoformat() if user.last_active_at else None,
         created_at=user.created_at.isoformat() if user.created_at else None,
         attempts_total=int(attempts_total),

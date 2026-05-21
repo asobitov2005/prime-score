@@ -8,9 +8,9 @@ import { DashboardCharts } from "@/components/charts/dashboard-charts";
 import { getCatalogTests } from "@/lib/server-data";
 import { getDashboardActivity, getDashboardAnalytics, getUserAttempts, getWeeklyLeaderboardPreview, getXpSummary, type LeaderboardPreviewSummary } from "@/lib/server-me";
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
-import { DashboardAverageCards, OverallBandKpiCard } from "./dashboard-average-cards";
+import { OverallBandKpiCard } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
-import { ActivitySummary } from "./activity-summary";
+import { ActivitySummary, StudyTimeCard } from "./activity-summary";
 import { StreakHeatmap } from "./streak-heatmap";
 import { PremiumFeatureGate } from "./premium-feature-gate";
 import { XpSummaryCard } from "./xp-summary-card";
@@ -22,7 +22,8 @@ interface InProgressTestCardState {
   title: string;
   progressPercent: number;
   answeredLabel: string;
-  timingLabel: string;
+  timeSpentLabel: string;
+  estimatedFinishLabel: string;
   detailLabel: string;
   attemptId: string;
   type: string;
@@ -65,31 +66,39 @@ function formatSecondsAsClock(totalSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatMinutesEstimate(totalSeconds: number): string {
+  const minutes = Math.max(1, Math.round(totalSeconds / 60));
+  return `${minutes} min`;
+}
+
 function getInProgressTest(attempts: AttemptRow[]): InProgressTestCardState | null {
   const inProgressAttempt = attempts.find(a => a.status === "in_progress");
   if (!inProgressAttempt) return null;
 
   const totalQuestions = Math.max(0, inProgressAttempt.totalQuestions ?? 0);
   const answeredCount = Math.max(0, inProgressAttempt.answeredCount ?? 0);
+  const computedProgress = totalQuestions > 0 ? Math.floor((Math.min(answeredCount, totalQuestions) / totalQuestions) * 100) : null;
   const progressPercent = Math.max(
     0,
     Math.min(
-      inProgressAttempt.progressPercent ?? (totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0),
+      computedProgress ?? Math.floor(inProgressAttempt.progressPercent ?? 0),
       100,
     ),
   );
   const timeSpentSec = Math.max(0, inProgressAttempt.timeSpentSec ?? 0);
   const timeLimitSeconds = Math.max(0, inProgressAttempt.timeLimitSeconds ?? 0);
   const remainingSeconds = timeLimitSeconds > 0 ? Math.max(0, timeLimitSeconds - timeSpentSec) : 0;
-  const timingLabel = inProgressAttempt.mode === "exam" && timeLimitSeconds > 0
-    ? formatSecondsAsClock(remainingSeconds)
-    : inProgressAttempt.timeSpent;
+  const unansweredCount = totalQuestions > 0 ? Math.max(0, totalQuestions - answeredCount) : 0;
+  const paceEstimateSeconds = answeredCount > 0 ? (timeSpentSec / answeredCount) * unansweredCount : 0;
+  const estimatedFinishLabel = remainingSeconds > 0
+    ? formatMinutesEstimate(remainingSeconds)
+    : paceEstimateSeconds > 0
+      ? formatMinutesEstimate(paceEstimateSeconds)
+      : "—";
   const answeredLabel = totalQuestions > 0
     ? `${Math.min(answeredCount, totalQuestions)}/${totalQuestions}`
     : String(answeredCount);
-  const detailLabel = inProgressAttempt.mode === "exam"
-    ? "Resume under exam conditions."
-    : "Pick up exactly where you paused.";
+  const detailLabel = "Pick up exactly where you paused.";
 
   return {
     attemptId: inProgressAttempt.id,
@@ -98,7 +107,8 @@ function getInProgressTest(attempts: AttemptRow[]): InProgressTestCardState | nu
     title: inProgressAttempt.testTitle,
     progressPercent,
     answeredLabel,
-    timingLabel,
+    timeSpentLabel: timeSpentSec > 0 ? formatSecondsAsClock(timeSpentSec) : inProgressAttempt.timeSpent,
+    estimatedFinishLabel,
     detailLabel,
   };
 }
@@ -421,79 +431,86 @@ export default async function DashboardPage() {
         </div>
 
 
-        {/* Top Row: Recommended and Scores aligned in height */}
-        <div className="grid lg:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
-          <div className="space-y-3">
+        {/* Top Row: Continue progress + study analytics */}
+        <div className="space-y-3">
+          <div className="grid gap-4 xl:grid-cols-[580px_minmax(0,1fr)] xl:items-stretch">
             {inProgressTest ? (
-              <Card className="relative min-h-[228px] overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-all group">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-80" />
-                <div className="absolute top-0 right-0 p-2 opacity-5 dark:opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
-                  <Clock className="w-20 h-20 -rotate-12 text-blue-900 dark:text-white" />
-                </div>
-                <CardContent className="flex h-full p-3 relative z-10">
-                  <div className="flex w-full flex-col justify-between gap-2">
-                    <div className="flex flex-col gap-2.5 md:flex-row md:items-start md:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-1.5 font-bold tracking-wider uppercase text-[9px] backdrop-blur-sm">
-                          In Progress
-                        </Badge>
-                        <h2 className="truncate text-base md:text-lg font-semibold tracking-tight text-blue-950 dark:text-white">
+              <Card className="group relative min-h-[176px] w-full max-w-[580px] overflow-hidden rounded-2xl border border-sky-100 bg-sky-50 shadow-md shadow-sky-950/8 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-sky-950/12 dark:border-sky-500/20 dark:bg-slate-950">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.22),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.72),rgba(219,234,254,0.5)_45%,rgba(186,230,253,0.42))] dark:bg-[radial-gradient(circle_at_18%_18%,rgba(56,189,248,0.18),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.95),rgba(8,47,73,0.7))]" />
+                <div className="absolute -right-10 -top-12 h-28 w-28 rounded-full bg-sky-300/30 blur-2xl transition-transform duration-700 group-hover:scale-110 dark:bg-sky-500/15" />
+                <CardContent className="relative z-10 flex h-full flex-col justify-between gap-3 p-3 md:p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <Badge variant="outline" className="mb-2 rounded-full border-sky-300/70 bg-white/75 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-sky-700 shadow-sm backdrop-blur dark:border-sky-400/25 dark:bg-white/10 dark:text-sky-200">
+                        IN PROGRESS
+                      </Badge>
+                      <div className="max-w-xl">
+                        <h2 className="line-clamp-1 text-lg font-semibold leading-tight tracking-tight text-sky-950 dark:text-white">
                           {inProgressTest.title}
                         </h2>
-                        <p className="mt-1 text-blue-800/80 dark:text-white/70 font-medium text-[11px]">
+                        <p className="mt-1 text-[13px] font-medium text-sky-800/75 dark:text-sky-100/70">
                           {inProgressTest.detailLabel}
                         </p>
                       </div>
                     </div>
 
-                    <div className="rounded-xl bg-white/50 dark:bg-white/[0.04] px-2.5 py-1.5">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="space-y-0.5">
-                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-blue-700/70 dark:text-white/50">
-                            Progress
-                          </p>
-                          <p className="text-sm font-semibold text-blue-950 dark:text-white">
-                            {inProgressTest.progressPercent}%
-                          </p>
-                        </div>
-                        <div className="space-y-0.5">
-                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-blue-700/70 dark:text-white/50">
-                            Answers
-                          </p>
-                          <p className="text-sm font-semibold text-blue-950 dark:text-white">
-                            {inProgressTest.answeredLabel}
-                          </p>
-                        </div>
-                        <div className="space-y-0.5">
-                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-blue-700/70 dark:text-white/50">
-                            Time
-                          </p>
-                          <p className="text-sm font-semibold text-blue-950 dark:text-white">
-                            {inProgressTest.timingLabel}
-                          </p>
-                        </div>
+                    <div className="relative mx-auto flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-white/65 shadow-inner shadow-sky-900/10 backdrop-blur dark:bg-white/10">
+                      <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 112 112" aria-hidden="true">
+                        <circle cx="56" cy="56" r="44" fill="none" stroke="rgba(14,165,233,0.16)" strokeWidth="10" />
+                        <circle
+                          cx="56"
+                          cy="56"
+                          r="44"
+                          fill="none"
+                          stroke="url(#in-progress-test-progress)"
+                          strokeLinecap="round"
+                          strokeWidth="10"
+                          strokeDasharray={276.46}
+                          strokeDashoffset={276.46 - (276.46 * inProgressTest.progressPercent) / 100}
+                          className="transition-[stroke-dashoffset] duration-500"
+                        />
+                        <defs>
+                          <linearGradient id="in-progress-test-progress" x1="20" x2="96" y1="20" y2="96" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#38BDF8" />
+                            <stop offset="0.55" stopColor="#2563EB" />
+                            <stop offset="1" stopColor="#0EA5E9" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                      <div className="text-center">
+                        <p className="text-2xl font-semibold leading-none tracking-tight text-sky-950 dark:text-white">
+                          {inProgressTest.progressPercent}%
+                        </p>
+                        <p className="mt-0.5 text-[7px] font-bold uppercase tracking-[0.1em] text-sky-700/65 dark:text-sky-100/55">
+                          Progress
+                        </p>
                       </div>
-
-                      <div className="mt-1.5 space-y-1">
-                        <div className="h-1.5 w-full bg-blue-200/70 dark:bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-blue-600 dark:bg-blue-400 transition-[width]"
-                            style={{ width: `${inProgressTest.progressPercent}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-1.5">
-                      <Button
-                        asChild
-                        className="w-fit bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 text-white font-semibold shadow-md transition-all active:scale-95 text-[11px] h-7 rounded-lg px-3"
-                      >
-                        <Link href={`/exam-preview/${inProgressTest.type}?attemptId=${inProgressTest.attemptId}&mode=${inProgressTest.mode}&resume=${Date.now()}`}>
-                          Continue <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
                     </div>
                   </div>
+
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 backdrop-blur dark:bg-white/[0.07]">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sky-700/65 dark:text-sky-100/55">Answers</p>
+                      <p className="mt-0.5 text-base font-semibold tracking-tight text-sky-950 dark:text-white">{inProgressTest.answeredLabel}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 backdrop-blur dark:bg-white/[0.07]">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sky-700/65 dark:text-sky-100/55">Time spent</p>
+                      <p className="mt-0.5 text-base font-semibold tracking-tight text-sky-950 dark:text-white">{inProgressTest.timeSpentLabel}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 backdrop-blur dark:bg-white/[0.07]">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sky-700/65 dark:text-sky-100/55">Estimated finish</p>
+                      <p className="mt-0.5 text-base font-semibold tracking-tight text-sky-950 dark:text-white">{inProgressTest.estimatedFinishLabel}</p>
+                    </div>
+                  </div>
+
+                  <Button
+                    asChild
+                    className="h-9 w-full rounded-xl bg-sky-600 text-[13px] font-semibold text-white shadow-md shadow-sky-700/20 transition-all hover:bg-sky-700 active:scale-[0.99] dark:bg-sky-500 dark:hover:bg-sky-400"
+                  >
+                    <Link href={`/exam-preview/${inProgressTest.type}?attemptId=${inProgressTest.attemptId}&mode=${inProgressTest.mode}&resume=${Date.now()}`}>
+                      Continue Test <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             ) : (
@@ -524,12 +541,10 @@ export default async function DashboardPage() {
               </Card>
             )}
 
-            <ActivitySummary analytics={analytics} />
+            <StudyTimeCard analytics={analytics} className="h-full min-h-[176px]" />
           </div>
 
-          <div className="h-full">
-            <DashboardAverageCards initialAnalytics={analytics} />
-          </div>
+          <ActivitySummary analytics={analytics} />
         </div>
 
         {/* Second Row: Remaining widgets */}

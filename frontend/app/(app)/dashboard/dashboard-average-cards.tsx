@@ -282,7 +282,7 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
         })}
       </div>
 
-      <StudyTimeCard analytics={analytics} className="h-auto min-h-[133px]" />
+      <StudyTimeCard analytics={analytics} className="h-auto min-h-[300px]" />
     </div>
   );
 }

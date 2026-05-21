@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import socket
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -25,6 +26,7 @@ from app.core.config import get_settings
 from app.db.session import get_session_maker
 from app.models import ops as _ops_models
 from app.models.user import User
+from app.services.user_cleanup import purge_user_data
 from app.services.object_storage import upload_user_avatar_image
 from app.services.code_store import get_code_store
 from app.services.user_names import normalize_user_name_parts
@@ -107,6 +109,17 @@ def _login_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def _normalize_phone_number(value: str) -> str:
+    normalized = re.sub(r"[\s().-]+", "", value.strip())
+    if normalized.isdigit() and len(normalized) == 9:
+        normalized = f"+998{normalized}"
+    if normalized.startswith("00"):
+        normalized = "+" + normalized[2:]
+    if normalized and not normalized.startswith("+"):
+        normalized = "+" + normalized
+    return normalized
+
+
 def _code_copy_keyboard(code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -139,6 +152,73 @@ def _merge_current_telegram_profile(contact: dict, telegram_user: types.User | N
         "last_name": last_name,
         "avatar_url": contact.get("avatar_url"),
     }
+
+
+def _apply_bot_contact_to_user(
+    user: User | None,
+    *,
+    telegram_id: int,
+    phone: str,
+    username: str | None,
+    first_name: str,
+    last_name: str | None,
+    avatar_url: str | None,
+    now: datetime,
+) -> User:
+    first_name, last_name = normalize_user_name_parts(first_name, last_name)
+    phone = _normalize_phone_number(phone)
+    if user is None:
+        return User(
+            telegram_id=telegram_id,
+            phone=phone,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            avatar_url=avatar_url,
+            telegram_contact_updated_at=now,
+            bot_contact_at=now,
+            is_premium=False,
+        )
+
+    user.telegram_id = telegram_id
+    user.phone = phone
+    if not user.name_is_custom:
+        user.first_name = first_name
+        user.last_name = last_name
+    if not user.username_is_custom:
+        user.username = username
+    if not user.avatar_is_custom:
+        user.avatar_url = avatar_url
+    user.telegram_contact_updated_at = now
+    user.bot_contact_at = now
+    return user
+
+
+async def _save_bot_contact_user(contact: dict) -> None:
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        telegram_id = int(contact["telegram_id"])
+        phone = _normalize_phone_number(str(contact["phone"]))
+        user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        if user is None:
+            user = await session.scalar(select(User).where(User.phone == phone))
+        if user is not None and user.deleted_at is not None:
+            await purge_user_data(session, user=user)
+            user = None
+
+        session.add(
+            _apply_bot_contact_to_user(
+                user,
+                telegram_id=telegram_id,
+                phone=phone,
+                username=contact.get("username"),
+                first_name=contact["first_name"],
+                last_name=contact.get("last_name"),
+                avatar_url=contact.get("avatar_url"),
+                now=datetime.now(UTC),
+            )
+        )
+        await session.commit()
 
 
 async def _fetch_telegram_avatar_url(bot: Bot, telegram_id: int) -> str | None:
@@ -239,9 +319,7 @@ async def run_bot() -> None:
             )
             return
 
-        phone = message.contact.phone_number
-        if not phone.startswith("+"):
-            phone = "+" + phone
+        phone = _normalize_phone_number(message.contact.phone_number)
 
         first_name, last_name = normalize_user_name_parts(
             message.from_user.first_name or message.from_user.username or "User",
@@ -255,6 +333,19 @@ async def run_bot() -> None:
             last_name=last_name,
             avatar_url=None,
         )
+        try:
+            await _save_bot_contact_user(
+                {
+                    "telegram_id": message.from_user.id,
+                    "phone": phone,
+                    "username": message.from_user.username,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "avatar_url": None,
+                }
+            )
+        except Exception:
+            logger.exception("Failed to save bot contact user %s", message.from_user.id)
         await message.answer(
             "✅ <b>Phone number received.</b>\n\n"
             "Tap the button below to get your login code.",
@@ -296,6 +387,11 @@ async def run_bot() -> None:
                 last_name=contact.get("last_name"),
                 avatar_url=avatar_url,
             )
+
+        try:
+            await _save_bot_contact_user(contact)
+        except Exception:
+            logger.exception("Failed to save bot contact user %s", contact["telegram_id"])
 
         code = await store.create_code(
             telegram_id=contact["telegram_id"],

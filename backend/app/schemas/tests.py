@@ -100,6 +100,7 @@ class TestCatalogItemRead(BaseModel):
     section_title: str | None = None
     version: int = 1
     section_count: int = 0
+    created_at: datetime
 
 
 class TestListResponse(BaseModel):

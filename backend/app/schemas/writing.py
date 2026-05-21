@@ -48,6 +48,7 @@ class WritingTaskListItem(BaseModel):
     source: str | None = None
     question_subtype: str | None = None
     description: str | None = None
+    created_at: datetime
 
 
 class WritingTaskListResponse(BaseModel):
