@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { AdminAiWorkspace } from "@/components/ai-workspace";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Notice, SectionHeader, Select, Textarea } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import type {
@@ -35,6 +34,74 @@ const PROMPT_KEYS: WritingPromptKey[] = [
   "roast_user_template",
   "vocabulary_upgrade_policy",
 ];
+
+const PROMPT_LABELS: Record<WritingPromptKey, { title: string; description: string; rows: number }> = {
+  grader_system: {
+    title: "Grader system prompt",
+    description: "Main system instruction used by the IELTS writing grader.",
+    rows: 10,
+  },
+  grader_user_template: {
+    title: "Grader user template",
+    description: "User prompt template. Keep required placeholders intact.",
+    rows: 12,
+  },
+  criterion_task_achievement: {
+    title: "Criterion: Task Achievement / Response",
+    description: "Criterion-specific grading policy.",
+    rows: 5,
+  },
+  criterion_coherence_cohesion: {
+    title: "Criterion: Coherence and Cohesion",
+    description: "Criterion-specific grading policy.",
+    rows: 5,
+  },
+  criterion_lexical_resource: {
+    title: "Criterion: Lexical Resource",
+    description: "Criterion-specific grading policy.",
+    rows: 5,
+  },
+  criterion_grammar_accuracy: {
+    title: "Criterion: Grammar Accuracy",
+    description: "Criterion-specific grading policy.",
+    rows: 5,
+  },
+  annotation_prompt: {
+    title: "Annotation prompt",
+    description: "Prompt for essay issue annotations.",
+    rows: 8,
+  },
+  annotation_repair_prompt: {
+    title: "Annotation repair prompt",
+    description: "Used to repair malformed annotation JSON.",
+    rows: 6,
+  },
+  json_repair_prompt: {
+    title: "JSON repair prompt",
+    description: "General JSON repair instruction.",
+    rows: 6,
+  },
+  improved_version_prompt: {
+    title: "Improved version prompt",
+    description: "Prompt used to rewrite/improve submitted writing.",
+    rows: 8,
+  },
+  roast_system: {
+    title: "Roast system prompt",
+    description: "System instruction for roast feedback.",
+    rows: 8,
+  },
+  roast_user_template: {
+    title: "Roast user template",
+    description: "User template for roast feedback.",
+    rows: 10,
+  },
+  vocabulary_upgrade_policy: {
+    title: "Vocabulary upgrade policy",
+    description: "Policy block used when suggesting vocabulary upgrades.",
+    rows: 6,
+  },
+};
 
 type ProviderDraft = {
   label: string;
@@ -90,6 +157,11 @@ export function AiSettingsDashboard() {
     [profiles, selectedProfileId],
   );
 
+  const selectedProfileEntries = useMemo(() => {
+    const entriesByKey = new Map((selectedProfile?.entries ?? []).map((entry) => [entry.key, entry]));
+    return PROMPT_KEYS.map((key) => entriesByKey.get(key) ?? { key, body: "", format: "text" as const });
+  }, [selectedProfile]);
+
   useEffect(() => {
     if (notice == null) return undefined;
     const timeoutId = window.setTimeout(() => setNotice(null), 3200);
@@ -141,6 +213,20 @@ export function AiSettingsDashboard() {
         ...(current[provider] ?? { label: provider, apiKey: "", baseUrl: "", isEnabled: false }),
         ...patch,
       },
+    }));
+  }
+
+  function updateSelectedPromptEntry(key: WritingPromptKey, body: string) {
+    if (!selectedProfile) return;
+    setProfiles((current) => current.map((item) => {
+      if (item.id !== selectedProfile.id) return item;
+      const exists = item.entries.some((entry) => entry.key === key);
+      return {
+        ...item,
+        entries: exists
+          ? item.entries.map((entry) => entry.key === key ? { ...entry, body } : entry)
+          : [...item.entries, { key, body, format: "text" }],
+      };
     }));
   }
 
@@ -278,7 +364,7 @@ export function AiSettingsDashboard() {
 
   return (
     <div className="space-y-8">
-      <SectionHeader eyebrow="AI Ops" title="AI Providers + Writing Profiles" description="Manage live provider keys, model bindings, prompt profiles, rubrics, anchors, and the admin AI workspace from one surface." />
+      <SectionHeader eyebrow="Writing AI" title="Writing Prompts + AI Settings" description="Edit every writing prompt used by grading, annotation, rewrite, and roast flows. The old chat workspace is disabled." />
 
       {notice ? <Notice tone={notice.tone} title={notice.title} description={notice.description} /> : null}
 
@@ -395,7 +481,7 @@ export function AiSettingsDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Writing Prompt Profiles</CardTitle>
-            <CardDescription>Draft, edit, preview, and publish versioned prompt bundles.</CardDescription>
+            <CardDescription>All writing prompt keys are visible here. Save as draft, then publish to make them live.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-[1fr,1fr,1fr,auto]">
@@ -437,16 +523,19 @@ export function AiSettingsDashboard() {
                       <Input value={selectedProfile.description ?? ""} onChange={(event) => setProfiles((current) => current.map((item) => item.id === selectedProfile.id ? { ...item, description: event.target.value } : item))} />
                     </div>
                   </div>
-                  {selectedProfile.entries.map((entry) => (
-                    <div key={entry.key} className="space-y-2">
-                      <Label>{entry.key}</Label>
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    Showing {selectedProfileEntries.length}/{PROMPT_KEYS.length} writing prompts for this profile.
+                  </div>
+                  {selectedProfileEntries.map((entry) => (
+                    <div key={entry.key} className="space-y-2 rounded-xl border border-border p-3">
+                      <div className="space-y-1">
+                        <Label>{PROMPT_LABELS[entry.key].title}</Label>
+                        <p className="text-xs text-muted-foreground">{entry.key} · {PROMPT_LABELS[entry.key].description}</p>
+                      </div>
                       <Textarea
                         value={entry.body}
-                        rows={entry.key.includes("template") || entry.key.includes("prompt") ? 8 : 4}
-                        onChange={(event) => setProfiles((current) => current.map((item) => item.id === selectedProfile.id ? {
-                          ...item,
-                          entries: item.entries.map((candidate) => candidate.key === entry.key ? { ...candidate, body: event.target.value } : candidate),
-                        } : item))}
+                        rows={PROMPT_LABELS[entry.key].rows}
+                        onChange={(event) => updateSelectedPromptEntry(entry.key, event.target.value)}
                       />
                     </div>
                   ))}
@@ -527,16 +616,6 @@ export function AiSettingsDashboard() {
           </Card>
         </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Admin AI Workspace</CardTitle>
-          <CardDescription>The runtime chat surface below now follows the active admin-chat AI binding.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AdminAiWorkspace />
-        </CardContent>
-      </Card>
     </div>
   );
 }

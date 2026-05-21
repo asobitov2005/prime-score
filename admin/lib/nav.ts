@@ -8,11 +8,9 @@ import {
   BarChart3,
   ScrollText,
   CreditCard as PlansIcon,
-  Globe,
   Headphones,
   MessageSquareText,
   Settings,
-  Sparkles,
   PenSquare
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -62,10 +60,10 @@ export const adminNavGroups: AdminNavGroup[] = [
         icon: PenSquare
       },
       {
-        label: "AI Workspace",
+        label: "Writing Prompts",
         href: "/ai",
-        description: "Threaded admin copilots, jobs, and tool traces",
-        icon: Sparkles
+        description: "Edit writing grader, roast, annotation, and rewrite prompts",
+        icon: PenSquare
       }
     ]
   },
