@@ -35,6 +35,7 @@ class User(UUIDMixin, TimestampMixin, Base):
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="user")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
+    telegram_profile: Mapped["TelegramUser | None"] = relationship(back_populates="linked_user")
 
 
 class Session(UUIDMixin, TimestampMixin, Base):
@@ -60,3 +61,24 @@ class TelegramLoginCode(UUIDMixin, TimestampMixin, Base):
     used: Mapped[bool] = mapped_column(Boolean, default=False)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
     blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TelegramUser(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "telegram_users"
+
+    telegram_id: Mapped[int] = mapped_column(BIGINT, unique=True, index=True)
+    linked_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), unique=True, nullable=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    first_name: Mapped[str] = mapped_column(String(100))
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    language_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    is_bot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    start_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    first_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    bot_contact_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    linked_user: Mapped["User | None"] = relationship(back_populates="telegram_profile")

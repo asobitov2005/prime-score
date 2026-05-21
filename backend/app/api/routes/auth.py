@@ -29,6 +29,7 @@ from app.services.code_store import get_code_store
 from app.services.notification_sender import create_and_send_notification
 from app.services.object_storage import upload_user_avatar_image
 from app.services.premium_access import reconcile_user_premium_status
+from app.services.telegram_users import link_telegram_user_after_login
 from app.services.telegram_profile_sync import sync_user_telegram_profile
 from app.services.user_cleanup import purge_user_data
 from app.services.user_names import resolve_login_name_parts
@@ -312,6 +313,8 @@ async def verify_code(
     db.add(db_user)
 
     try:
+        await db.flush()
+        await link_telegram_user_after_login(db, user=db_user, now=now)
         await db.commit()
         await db.refresh(db_user)
     except Exception as exc:

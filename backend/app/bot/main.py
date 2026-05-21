@@ -29,6 +29,7 @@ from app.models.user import User
 from app.services.user_cleanup import purge_user_data
 from app.services.object_storage import upload_user_avatar_image
 from app.services.code_store import get_code_store
+from app.services.telegram_users import record_contact_event, record_start_event
 from app.services.user_names import normalize_user_name_parts
 
 logging.basicConfig(
@@ -206,17 +207,48 @@ async def _save_bot_contact_user(contact: dict) -> None:
             await purge_user_data(session, user=user)
             user = None
 
-        session.add(
-            _apply_bot_contact_to_user(
-                user,
-                telegram_id=telegram_id,
-                phone=phone,
-                username=contact.get("username"),
-                first_name=contact["first_name"],
-                last_name=contact.get("last_name"),
-                avatar_url=contact.get("avatar_url"),
-                now=datetime.now(UTC),
-            )
+        linked_user = _apply_bot_contact_to_user(
+            user,
+            telegram_id=telegram_id,
+            phone=phone,
+            username=contact.get("username"),
+            first_name=contact["first_name"],
+            last_name=contact.get("last_name"),
+            avatar_url=contact.get("avatar_url"),
+            now=datetime.now(UTC),
+        )
+        session.add(linked_user)
+        await session.flush()
+        telegram_user = await record_contact_event(
+            session,
+            telegram_id=telegram_id,
+            phone=phone,
+            username=contact.get("username"),
+            first_name=contact["first_name"],
+            last_name=contact.get("last_name"),
+            avatar_url=contact.get("avatar_url"),
+            language_code=contact.get("language_code"),
+            is_bot=bool(contact.get("is_bot", False)),
+        )
+        telegram_user.linked_user_id = linked_user.id
+        await session.commit()
+
+
+async def _save_started_telegram_user(telegram_user: types.User) -> None:
+    first_name, last_name = normalize_user_name_parts(
+        telegram_user.first_name or telegram_user.username or "User",
+        telegram_user.last_name,
+    )
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        await record_start_event(
+            session,
+            telegram_id=telegram_user.id,
+            first_name=first_name,
+            last_name=last_name,
+            username=telegram_user.username,
+            language_code=telegram_user.language_code,
+            is_bot=telegram_user.is_bot,
         )
         await session.commit()
 
@@ -280,6 +312,11 @@ async def run_bot() -> None:
 
     @dp.message(Command("start"))
     async def cmd_start(message: types.Message) -> None:
+        try:
+            await _save_started_telegram_user(message.from_user)
+        except Exception:
+            logger.exception("Failed to save started telegram user %s", message.from_user.id)
+
         contact = await store.get_contact(message.from_user.id)
         if contact is None:
             contact = await _get_saved_contact(message.from_user.id)
@@ -342,6 +379,8 @@ async def run_bot() -> None:
                     "first_name": first_name,
                     "last_name": last_name,
                     "avatar_url": None,
+                    "language_code": message.from_user.language_code,
+                    "is_bot": message.from_user.is_bot,
                 }
             )
         except Exception:

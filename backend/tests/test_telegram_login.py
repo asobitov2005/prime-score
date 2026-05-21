@@ -8,8 +8,9 @@ import pytest
 
 from app.api.routes import auth as auth_routes
 from app.bot.main import _apply_bot_contact_to_user, _is_contact_refresh_due
-from app.models.user import User
+from app.models.user import TelegramUser, User
 from app.services import telegram_profile_sync
+from app.services import telegram_users as telegram_user_service
 
 
 def test_upsert_user_from_login_refreshes_telegram_profile_fields() -> None:
@@ -272,6 +273,72 @@ def test_upsert_user_from_login_does_not_restore_deleted_user_directly() -> None
     assert restored.phone == "+998907777777"
     assert restored.username == "restored_user"
     assert restored.telegram_contact_updated_at == now
+
+
+def test_apply_start_event_tracks_plain_start_without_contact() -> None:
+    now = datetime(2026, 5, 22, 13, 0, tzinfo=UTC)
+    record = TelegramUser(
+        telegram_id=987654321,
+        first_name="Initial",
+        last_name=None,
+        start_count=0,
+    )
+
+    updated = telegram_user_service._apply_start_event(
+        record,
+        first_name="Azizbek",
+        last_name=None,
+        username="azizbekdev",
+        language_code="uz",
+        is_bot=False,
+        now=now,
+    )
+
+    assert updated.first_name == "Azizbek"
+    assert updated.username == "azizbekdev"
+    assert updated.language_code == "uz"
+    assert updated.start_count == 1
+    assert updated.first_started_at == now
+    assert updated.last_started_at == now
+    assert updated.bot_contact_at is None
+    assert updated.first_login_at is None
+
+
+def test_apply_login_event_links_started_user_to_real_account() -> None:
+    now = datetime(2026, 5, 22, 14, 0, tzinfo=UTC)
+    record = TelegramUser(
+        telegram_id=123123123,
+        first_name="Started",
+        last_name="Only",
+        username="started_only",
+        start_count=2,
+        first_started_at=now - timedelta(minutes=20),
+        last_started_at=now - timedelta(minutes=5),
+    )
+    user = User(
+        id=UUID("34343434-3434-3434-3434-343434343434"),
+        telegram_id=123123123,
+        phone="+998901234567",
+        first_name="Real",
+        last_name="User",
+        username="real_user",
+        avatar_url="https://cdn.primescore.uz/avatar/real-user.jpg",
+        bot_contact_at=now - timedelta(minutes=4),
+        first_login_at=now,
+        is_premium=True,
+    )
+
+    updated = telegram_user_service._apply_login_event(record, user=user, now=now)
+
+    assert updated.linked_user_id == user.id
+    assert updated.phone == "+998901234567"
+    assert updated.first_name == "Real"
+    assert updated.last_name == "User"
+    assert updated.username == "real_user"
+    assert updated.avatar_url == "https://cdn.primescore.uz/avatar/real-user.jpg"
+    assert updated.start_count == 2
+    assert updated.bot_contact_at == now - timedelta(minutes=4)
+    assert updated.first_login_at == now
 
 
 class _FakeTelegramBotSession:

@@ -9,18 +9,23 @@ import { cn } from "@/lib/utils";
 
 type BotUserRow = {
   id: string;
+  telegramId: number;
+  linkedUserId: string | null;
   firstName: string;
   lastName: string | null;
   username: string | null;
   phone: string | null;
   avatarUrl: string | null;
+  startCount: number;
+  firstStartedAt: string | null;
+  lastStartedAt: string | null;
   botContactAt: string | null;
   firstLoginAt: string | null;
   isPremium: boolean;
   createdAt: string | null;
 };
 
-type StatusFilter = "all" | "waiting" | "logged_in";
+type StatusFilter = "all" | "started_only" | "waiting" | "logged_in";
 
 const API_BASE = ADMIN_PUBLIC_API_BASE_URL;
 
@@ -29,6 +34,7 @@ function displayName(user: BotUserRow): string {
 }
 
 function statusOf(user: BotUserRow): StatusFilter {
+  if (!user.botContactAt && !user.firstLoginAt) return "started_only";
   return user.firstLoginAt ? "logged_in" : "waiting";
 }
 
@@ -50,7 +56,7 @@ export default function BotUsersPage() {
         return;
       }
 
-      const res = await fetch(`${API_BASE}/users`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE}/telegram-users`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
         throw new Error(payload?.detail ?? "Bot userlarni yuklab bo'lmadi.");
@@ -58,20 +64,23 @@ export default function BotUsersPage() {
 
       const data = await res.json();
       setUsers(
-        data
-          .filter((user: any) => Boolean(user.bot_contact_at))
-          .map((user: any) => ({
-            id: user.id,
-            firstName: user.first_name ?? "",
-            lastName: user.last_name ?? null,
-            username: user.username ?? null,
-            phone: user.phone ?? null,
-            avatarUrl: user.avatar_url ?? null,
-            botContactAt: user.bot_contact_at ?? null,
-            firstLoginAt: user.first_login_at ?? null,
-            isPremium: Boolean(user.is_premium),
-            createdAt: user.created_at ?? null,
-          }))
+        data.map((user: any) => ({
+          id: user.id,
+          telegramId: user.telegram_id,
+          linkedUserId: user.linked_user_id ?? null,
+          firstName: user.first_name ?? "",
+          lastName: user.last_name ?? null,
+          username: user.username ?? null,
+          phone: user.phone ?? null,
+          avatarUrl: user.avatar_url ?? null,
+          startCount: Number(user.start_count ?? 0),
+          firstStartedAt: user.first_started_at ?? null,
+          lastStartedAt: user.last_started_at ?? null,
+          botContactAt: user.bot_contact_at ?? null,
+          firstLoginAt: user.first_login_at ?? null,
+          isPremium: Boolean(user.is_premium),
+          createdAt: user.created_at ?? null,
+        }))
       );
     } catch (error) {
       setUsers([]);
@@ -86,9 +95,10 @@ export default function BotUsersPage() {
   }, []);
 
   const metrics = useMemo(() => {
-    const waiting = users.filter((user) => !user.firstLoginAt).length;
-    const loggedIn = users.length - waiting;
-    return { total: users.length, waiting, loggedIn };
+    const startedOnly = users.filter((user) => statusOf(user) === "started_only").length;
+    const waiting = users.filter((user) => statusOf(user) === "waiting").length;
+    const loggedIn = users.filter((user) => statusOf(user) === "logged_in").length;
+    return { total: users.length, startedOnly, waiting, loggedIn };
   }, [users]);
 
   const filtered = users.filter((user) => {
@@ -122,18 +132,20 @@ export default function BotUsersPage() {
       <SectionHeader
         eyebrow="Telegram"
         title="Bot users"
-        description="Telegram bot orqali phone contact yuborgan userlar va ularning birinchi login holati."
+        description="Telegram botga kirgan userlar: start bosganlar, contact yuborganlar va birinchi login qilganlar."
         actions={<Link href="/users" className={buttonClassName({ variant: "outline", size: "sm" })}>All users</Link>}
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard label="Bot contacts" value={metrics.total} />
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard label="Telegram users" value={metrics.total} />
+        <MetricCard label="Started only" value={metrics.startedOnly} />
         <MetricCard label="Waiting login" value={metrics.waiting} tone="warning" />
         <MetricCard label="Logged in" value={metrics.loggedIn} tone="success" />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {filterButton("all", "All")}
+        {filterButton("started_only", "Started only")}
         {filterButton("waiting", "Waiting login")}
         {filterButton("logged_in", "Logged in")}
         <input
@@ -159,6 +171,7 @@ export default function BotUsersPage() {
                 <tr className="bg-muted/30 text-left text-xs uppercase tracking-[0.24em] text-muted-foreground">
                   <th className="border-b border-border px-3 py-3 font-medium">User</th>
                   <th className="border-b border-border px-3 py-3 font-medium">Status</th>
+                  <th className="border-b border-border px-3 py-3 font-medium">Last seen</th>
                   <th className="border-b border-border px-3 py-3 font-medium">Bot contact</th>
                   <th className="border-b border-border px-3 py-3 font-medium">First login</th>
                   <th className="border-b border-border px-3 py-3 font-medium">Premium</th>
@@ -168,12 +181,12 @@ export default function BotUsersPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-10 text-center text-sm text-muted-foreground" colSpan={6}>No bot users found.</td>
+                    <td className="px-3 py-10 text-center text-sm text-muted-foreground" colSpan={7}>No bot users found.</td>
                   </tr>
                 ) : null}
                 {filtered.map((user) => {
                   const name = displayName(user);
-                  const waiting = !user.firstLoginAt;
+                  const status = statusOf(user);
                   return (
                     <tr key={user.id} className="align-top transition-colors hover:bg-muted/30">
                       <td className="border-b border-border/50 px-3 py-4">
@@ -195,9 +208,16 @@ export default function BotUsersPage() {
                         </div>
                       </td>
                       <td className="border-b border-border/50 px-3 py-4">
-                        <Badge tone={waiting ? "warning" : "success"} className="text-[10px] uppercase font-black tracking-widest">
-                          {waiting ? "Waiting login" : "Logged in"}
+                        <Badge
+                          tone={status === "logged_in" ? "success" : status === "waiting" ? "warning" : "neutral"}
+                          className="text-[10px] uppercase font-black tracking-widest"
+                        >
+                          {status === "logged_in" ? "Logged in" : status === "waiting" ? "Waiting login" : "Started only"}
                         </Badge>
+                      </td>
+                      <td className="border-b border-border/50 px-3 py-4 text-[11px] font-bold uppercase text-muted-foreground">
+                        <div>{user.lastStartedAt ? formatDate(user.lastStartedAt) : "-"}</div>
+                        <div className="mt-1 text-[10px] tracking-widest text-muted-foreground/80">{user.startCount} starts</div>
                       </td>
                       <td className="border-b border-border/50 px-3 py-4 text-[11px] font-bold uppercase text-muted-foreground">
                         {user.botContactAt ? formatDate(user.botContactAt) : "-"}
@@ -211,7 +231,11 @@ export default function BotUsersPage() {
                         </Badge>
                       </td>
                       <td className="border-b border-border/50 px-3 py-4">
-                        <Link href={`/users/${user.id}`} className={buttonClassName({ variant: "outline", size: "sm" })}>View</Link>
+                        {user.linkedUserId ? (
+                          <Link href={`/users/${user.linkedUserId}`} className={buttonClassName({ variant: "outline", size: "sm" })}>View</Link>
+                        ) : (
+                          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">No account</span>
+                        )}
                       </td>
                     </tr>
                   );

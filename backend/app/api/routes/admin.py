@@ -38,7 +38,7 @@ from app.models.enums import PaymentStatus as ModelPaymentStatus
 from app.models.enums import TestStatus as ModelTestStatus
 from app.models.test import Question, QuestionGroup, Test
 from app.models.user import Session as UserSession
-from app.models.user import User
+from app.models.user import TelegramUser, User
 from app.models.ops import AuditLog, Notification
 from app.models.review import Review
 from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
@@ -197,6 +197,27 @@ class AdminUserDetailRead(BaseModel):
     attempts_total: int = 0
     attempts_completed: int = 0
     average_band: float | None = None
+
+
+class AdminTelegramUserRead(BaseModel):
+    id: UUID
+    telegram_id: int
+    linked_user_id: UUID | None = None
+    first_name: str
+    last_name: str | None = None
+    username: str | None = None
+    phone: str | None = None
+    avatar_url: str | None = None
+    language_code: str | None = None
+    is_bot: bool = False
+    start_count: int = 0
+    first_started_at: str | None = None
+    last_started_at: str | None = None
+    bot_contact_at: str | None = None
+    first_login_at: str | None = None
+    is_premium: bool = False
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class AdminUserAttemptRead(BaseModel):
@@ -2005,6 +2026,52 @@ async def _get_active_user_or_404(session: AsyncSession, user_id: UUID) -> User:
     if user is None or user.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return user
+
+
+@router.get("/telegram-users", response_model=list[AdminTelegramUserRead])
+async def list_telegram_users(
+    current_admin: AdminPrincipal = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[AdminTelegramUserRead]:
+    _ = current_admin
+    rows = list(
+        (
+            await session.scalars(
+                select(TelegramUser).order_by(
+                    TelegramUser.last_started_at.desc().nullslast(),
+                    TelegramUser.created_at.desc(),
+                )
+            )
+        ).all()
+    )
+    result: list[AdminTelegramUserRead] = []
+    for row in rows:
+        linked_user = None
+        if row.linked_user_id is not None:
+            linked_user = await session.get(User, row.linked_user_id)
+        result.append(
+            AdminTelegramUserRead(
+                id=row.id,
+                telegram_id=row.telegram_id,
+                linked_user_id=row.linked_user_id,
+                first_name=row.first_name,
+                last_name=row.last_name,
+                username=row.username,
+                phone=row.phone,
+                avatar_url=row.avatar_url,
+                language_code=row.language_code,
+                is_bot=row.is_bot,
+                start_count=int(row.start_count or 0),
+                first_started_at=row.first_started_at.isoformat() if row.first_started_at else None,
+                last_started_at=row.last_started_at.isoformat() if row.last_started_at else None,
+                bot_contact_at=row.bot_contact_at.isoformat() if row.bot_contact_at else None,
+                first_login_at=row.first_login_at.isoformat() if row.first_login_at else None,
+                is_premium=bool(linked_user.is_premium) if linked_user is not None else False,
+                created_at=row.created_at.isoformat() if row.created_at else None,
+                updated_at=row.updated_at.isoformat() if row.updated_at else None,
+            )
+        )
+    return result
 
 
 @router.get("/users", response_model=list[AdminUserDetailRead])
