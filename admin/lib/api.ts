@@ -1,14 +1,7 @@
 import type {
-  AdminAiCreateThreadInput,
   AdminAiProviderConfig,
   AdminAiProviderModel,
   AdminAiUseCaseBinding,
-  AdminAiJob,
-  AdminAiSendMessageInput,
-  AdminAiThreadDetail,
-  AdminAiThreadSummary,
-  AdminAiToolTrace,
-  AdminAiUpdateThreadInput,
   AdminWritingAnchorSet,
   AdminWritingConfigAuditEntry,
   AdminWritingPromptPreview,
@@ -258,74 +251,6 @@ type BackendAdminDraft = {
       detail: string;
     };
   };
-};
-
-type BackendAdminAiScope = {
-  type?: "test" | "plan" | "user" | "analytics" | "general";
-  id?: string | null;
-  label?: string | null;
-  description?: string | null;
-};
-
-type BackendAdminAiThreadSummary = {
-  id: string;
-  title: string;
-  summary?: string | null;
-  status: "idle" | "queued" | "running" | "completed" | "failed" | "archived";
-  updated_at?: string | null;
-  created_at?: string | null;
-  message_count?: number | null;
-  last_message_preview?: string | null;
-  active_job_id?: string | null;
-  scope?: BackendAdminAiScope | null;
-};
-
-type BackendAdminAiMessage = {
-  id: string;
-  role: "system" | "user" | "assistant" | "tool";
-  content?: string | null;
-  created_at?: string | null;
-  status?: "pending" | "streaming" | "completed" | "failed" | null;
-  author_label?: string | null;
-  job_id?: string | null;
-  tool_name?: string | null;
-  error_message?: string | null;
-};
-
-type BackendAdminAiTrace = {
-  id: string;
-  label?: string | null;
-  tool_name: string;
-  status?: "pending" | "running" | "completed" | "failed" | "cancelled" | null;
-  started_at?: string | null;
-  finished_at?: string | null;
-  duration_ms?: number | null;
-  input_summary?: string | null;
-  output_summary?: string | null;
-};
-
-type BackendAdminAiJob = {
-  id: string;
-  title: string;
-  status: "queued" | "running" | "completed" | "failed" | "cancelled";
-  kind?: "chat" | "analysis" | "generation" | "review" | null;
-  summary?: string | null;
-  created_at?: string | null;
-  started_at?: string | null;
-  finished_at?: string | null;
-  model?: string | null;
-  error_message?: string | null;
-  progress?: {
-    completed_steps?: number | null;
-    total_steps?: number | null;
-    label?: string | null;
-  } | null;
-  traces?: BackendAdminAiTrace[] | null;
-};
-
-type BackendAdminAiThreadDetail = BackendAdminAiThreadSummary & {
-  messages?: BackendAdminAiMessage[] | null;
-  jobs?: BackendAdminAiJob[] | null;
 };
 
 type BackendAdminAiProviderConfig = {
@@ -954,86 +879,6 @@ function fallbackIsoDate(value?: string | null): string {
   return value ?? new Date().toISOString();
 }
 
-function mapAdminAiScope(scope?: BackendAdminAiScope | null): AdminAiThreadSummary["scope"] {
-  return {
-    type: scope?.type ?? "general",
-    id: scope?.id ?? undefined,
-    label: scope?.label?.trim() || "General workspace",
-    description: scope?.description?.trim() || undefined
-  };
-}
-
-function mapAdminAiTrace(trace: BackendAdminAiTrace): AdminAiToolTrace {
-  return {
-    id: trace.id,
-    label: trace.label?.trim() || trace.tool_name,
-    toolName: trace.tool_name,
-    status: trace.status ?? "pending",
-    startedAt: trace.started_at ?? null,
-    finishedAt: trace.finished_at ?? null,
-    durationMs: trace.duration_ms ?? null,
-    inputSummary: trace.input_summary?.trim() || null,
-    outputSummary: trace.output_summary?.trim() || null
-  };
-}
-
-function mapAdminAiJob(job: BackendAdminAiJob): AdminAiJob {
-  return {
-    id: job.id,
-    title: job.title,
-    status: job.status,
-    kind: job.kind ?? "chat",
-    summary: job.summary?.trim() || "Waiting for model output.",
-    createdAt: fallbackIsoDate(job.created_at),
-    startedAt: job.started_at ?? null,
-    finishedAt: job.finished_at ?? null,
-    model: job.model ?? null,
-    errorMessage: job.error_message?.trim() || null,
-    progress: job.progress
-      ? {
-          completedSteps: job.progress.completed_steps ?? 0,
-          totalSteps: job.progress.total_steps ?? 0,
-          label: job.progress.label?.trim() || "Progress"
-        }
-      : null,
-    traces: (job.traces ?? []).map(mapAdminAiTrace)
-  };
-}
-
-function mapAdminAiThreadSummary(thread: BackendAdminAiThreadSummary): AdminAiThreadSummary {
-  return {
-    id: thread.id,
-    title: thread.title,
-    summary: thread.summary?.trim() || "No summary yet.",
-    status: thread.status,
-    updatedAt: fallbackIsoDate(thread.updated_at),
-    createdAt: fallbackIsoDate(thread.created_at),
-    messageCount: thread.message_count ?? 0,
-    lastMessagePreview: thread.last_message_preview?.trim() || "No messages yet.",
-    activeJobId: thread.active_job_id ?? null,
-    scope: mapAdminAiScope(thread.scope)
-  };
-}
-
-function mapAdminAiThreadDetail(thread: BackendAdminAiThreadDetail): AdminAiThreadDetail {
-  const summary = mapAdminAiThreadSummary(thread);
-  return {
-    ...summary,
-    messages: (thread.messages ?? []).map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content ?? "",
-      createdAt: fallbackIsoDate(message.created_at),
-      status: message.status ?? "completed",
-      authorLabel: message.author_label?.trim() || (message.role === "user" ? "You" : "PrimeScore AI"),
-      jobId: message.job_id ?? null,
-      toolName: message.tool_name ?? null,
-      errorMessage: message.error_message?.trim() || null
-    })),
-    jobs: (thread.jobs ?? []).map(mapAdminAiJob)
-  };
-}
-
 function mapAdminAiProviderConfig(config: BackendAdminAiProviderConfig): AdminAiProviderConfig {
   return {
     id: config.id,
@@ -1356,67 +1201,6 @@ export const adminApi = {
     await requestJson<BackendAdminAudioTranscriptJobRead>(`/audio/transcribe/jobs/${jobId}/cancel`, {
       method: "POST",
     });
-  },
-  async listAiThreads(): Promise<AdminAiThreadSummary[]> {
-    const response = await requestJson<BackendAdminAiThreadSummary[]>("/ai/threads");
-    return response.map(mapAdminAiThreadSummary);
-  },
-  async createAiThread(input: AdminAiCreateThreadInput = {}): Promise<AdminAiThreadDetail> {
-    const response = await requestJson<BackendAdminAiThreadDetail>("/ai/threads", {
-      method: "POST",
-      body: JSON.stringify({
-        title: input.title,
-        scope: input.scope
-      })
-    });
-    return mapAdminAiThreadDetail(response);
-  },
-  async getAiThread(threadId: string): Promise<AdminAiThreadDetail> {
-    const response = await requestJson<BackendAdminAiThreadDetail>(`/ai/threads/${threadId}`);
-    return mapAdminAiThreadDetail(response);
-  },
-  async updateAiThread(threadId: string, input: AdminAiUpdateThreadInput): Promise<AdminAiThreadDetail> {
-    const response = await requestJson<BackendAdminAiThreadDetail>(`/ai/threads/${threadId}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        title: input.title,
-        status: input.status
-      })
-    });
-    return mapAdminAiThreadDetail(response);
-  },
-  async archiveAiThread(threadId: string): Promise<void> {
-    const response = await fetchAdminApi(`${baseUrl}/ai/threads/${threadId}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`Admin API request failed: ${response.status} ${response.statusText}`);
-    }
-  },
-  async sendAiMessage(threadId: string, input: AdminAiSendMessageInput): Promise<AdminAiThreadDetail> {
-    const response = await requestJson<BackendAdminAiThreadDetail>(`/ai/threads/${threadId}/messages`, {
-      method: "POST",
-      body: JSON.stringify({
-        content: input.content,
-        scope: input.scope
-      })
-    });
-    return mapAdminAiThreadDetail(response);
-  },
-  async retryAiJob(threadId: string, jobId: string): Promise<AdminAiThreadDetail> {
-    const response = await requestJson<BackendAdminAiThreadDetail>(`/ai/threads/${threadId}/jobs/${jobId}/retry`, {
-      method: "POST"
-    });
-    return mapAdminAiThreadDetail(response);
-  },
-  async cancelAiJob(threadId: string, jobId: string): Promise<AdminAiThreadDetail> {
-    const response = await requestJson<BackendAdminAiThreadDetail>(`/ai/threads/${threadId}/jobs/${jobId}/cancel`, {
-      method: "POST"
-    });
-    return mapAdminAiThreadDetail(response);
   },
   async listAiProviders(): Promise<AdminAiProviderConfig[]> {
     const response = await requestJson<BackendAdminAiProviderConfig[]>("/ai/providers");
