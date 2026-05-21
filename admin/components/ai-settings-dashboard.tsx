@@ -320,7 +320,7 @@ export function AiSettingsDashboard() {
       setModelsByProvider((current) => ({ ...current, [provider]: models }));
       const nextProviders = await adminApi.listAiProviders();
       setProviders(nextProviders);
-      setNotice({ tone: "success", title: "Models synced", description: `${provider} returned ${models.length} model rows.` });
+      setNotice({ tone: "success", title: "Models fetched", description: `${provider} returned ${models.length} model rows.` });
     } catch (error) {
       setNotice({ tone: "warning", title: "Sync failed", description: error instanceof Error ? error.message : "Model sync failed." });
     } finally {
@@ -500,7 +500,7 @@ export function AiSettingsDashboard() {
                 <div className="flex flex-wrap gap-3">
                   <Button variant="outline" onClick={() => handleSaveProvider(provider.provider)} disabled={busyKey !== null}>Save</Button>
                   <Button variant="secondary" onClick={() => handleValidateProvider(provider.provider)} disabled={busyKey !== null}>Validate</Button>
-                  <Button onClick={() => handleSyncProvider(provider.provider)} disabled={busyKey !== null}>Sync Models</Button>
+                  <Button onClick={() => handleSyncProvider(provider.provider)} disabled={busyKey !== null}>Fetch Models</Button>
                 </div>
                 {provider.lastSyncError ? <Notice tone="warning" title="Last sync error" description={provider.lastSyncError} /> : null}
                 <div className="rounded-lg border border-border">
