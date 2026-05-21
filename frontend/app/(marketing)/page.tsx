@@ -66,6 +66,7 @@ export default async function LandingPage() {
     questionCount: t.questionCount,
     estimatedMinutes: t.estimatedMinutes,
     isPremiumLocked: t.accessType === "premium",
+    createdAt: t.createdAt,
   }));
   const structuredDataBlocks = [
     buildOrganizationStructuredData(),
