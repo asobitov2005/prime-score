@@ -49,3 +49,14 @@ def test_serialize_me_payment_hides_card_after_completion() -> None:
 
     assert payload.card_label is None
     assert payload.card_number is None
+
+
+def test_serialize_me_payment_handles_legacy_null_metadata() -> None:
+    payment = _build_payment(status="expired")
+    payment.meta = None
+
+    payload = _serialize_me_payment(payment, None)
+
+    assert payload.plan_name == "Unknown plan"
+    assert payload.support_contact == "@TheBugCreator"
+    assert payload.payment_instructions

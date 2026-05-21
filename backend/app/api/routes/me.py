@@ -548,16 +548,17 @@ def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
     payment_method_values = {item.value for item in PaymentMethod}
     method_value = payment.provider if payment.provider in payment_method_values else PaymentMethod.card_transfer.value
     exposes_card_details = str(payment.status or "") in PENDING_PAYMENT_STATUSES
-    support_contact = str(payment.meta.get("support_contact") or DEFAULT_PAYMENT_SUPPORT_CONTACT)
+    metadata = payment.meta if isinstance(payment.meta, dict) else {}
+    support_contact = str(metadata.get("support_contact") or DEFAULT_PAYMENT_SUPPORT_CONTACT)
     payment_instructions = str(
-        payment.meta.get("payment_instructions")
+        metadata.get("payment_instructions")
         or "Transfer the amount to the card, then send a screenshot to Telegram support."
     )
     return MePaymentRead(
         id=payment.id,
         invoice_code=payment.invoice_code,
         plan_id=payment.plan_id,
-        plan_name=plan.name if plan is not None else str(payment.meta.get("plan_name", "Unknown plan")),
+        plan_name=plan.name if plan is not None else str(metadata.get("plan_name", "Unknown plan")),
         duration_days=plan.duration_days if plan is not None else None,
         method=PaymentMethod(method_value),
         status=str(payment.status or "pending"),
@@ -946,6 +947,7 @@ async def cancel_my_payment(
     payment.status_reason = "Canceled by user."
 
     await session.commit()
+    await session.refresh(payment)
     plan = await session.get(Plan, payment.plan_id) if payment.plan_id else None
     return MePaymentCancelResponse(
         message="Payment invoice canceled.",
