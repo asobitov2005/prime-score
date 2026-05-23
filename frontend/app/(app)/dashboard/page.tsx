@@ -14,6 +14,7 @@ import { ActivitySummary, StudyTimeCard } from "./activity-summary";
 import { StreakHeatmap } from "./streak-heatmap";
 import { PremiumFeatureGate } from "./premium-feature-gate";
 import { XpSummaryCard } from "./xp-summary-card";
+import { SkillPerformance } from "./skill-performance";
 import { cn } from "@/lib/utils";
 import type { AttemptRow, DashboardAnalytics } from "@/lib/types";
 import { pickQuickTests } from "./quick-tests";
@@ -429,6 +430,12 @@ export default async function DashboardPage() {
           <OverallBandKpiCard initialAnalytics={analytics} />
           <LeaderboardPreviewCard summary={leaderboardPreview} />
         </div>
+
+        <SkillPerformance
+          analytics={analytics}
+          attempts={attempts}
+          writingHistory={writingHistory}
+        />
 
 
         {/* Top Row: Continue progress + study analytics */}
