@@ -103,6 +103,10 @@ def _should_grant_premium_bonus(
     )
 
 
+def _user_can_receive_full_test_premium_bonus(user: User | None) -> bool:
+    return bool(user is not None and user.full_test_premium_bonus_granted_at is None)
+
+
 def _normalized_attempt_time_spent(
     *,
     saved_time_spent_sec: int | None,
@@ -675,7 +679,7 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
 
     if _should_grant_premium_bonus(attempt=attempt, metadata=metadata):
         user = await session.get(User, attempt.user_id)
-        if user is not None:
+        if _user_can_receive_full_test_premium_bonus(user):
             bonus_until = await grant_premium_bonus(
                 session,
                 user=user,
@@ -683,7 +687,9 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
                 title="Test bonus activated",
                 body="You completed a full Reading or Listening test. Your +2 premium days are active.",
                 telegram_text="🎉 <b>Test bonus activated</b>\n\nYou completed a full Reading or Listening test. Your +2 premium days are active.",
+                now=now,
             )
+            user.full_test_premium_bonus_granted_at = now
             metadata["premium_bonus_granted"] = True
             metadata["premium_bonus_days"] = 2
             metadata["premium_bonus_granted_at"] = now.isoformat()

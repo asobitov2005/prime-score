@@ -370,8 +370,6 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                     const badgeBg = test.isPremiumLocked ? "bg-orange-100 dark:bg-orange-900/40" : "bg-emerald-100 dark:bg-emerald-900/40";
                     const badgeText = test.isPremiumLocked ? "text-[#c25010] dark:text-orange-400" : "text-[#059669] dark:text-emerald-400";
                     const badgeLabel = test.isPremiumLocked ? "Pro" : "Free";
-                    const isNew = test.createdAt ? (new Date().getTime() - new Date(test.createdAt).getTime()) < 7 * 24 * 60 * 60 * 1000 : false;
-
                     return (
                       <Link
                         key={test.id}
@@ -382,11 +380,6 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                           cardBorder,
                         )}
                       >
-                        {isNew && (
-                          <div className="absolute left-[-30px] top-[15px] z-10 w-[120px] -rotate-45 bg-gradient-to-r from-[#FF0055] to-[#FF3377] py-0.5 text-center text-[9px] font-bold uppercase tracking-[0.2em] text-white shadow-sm border-y border-white/20">
-                            New
-                          </div>
-                        )}
                         <div className="flex items-center gap-3 md:gap-4 min-w-0">
                           <div className={cn("flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 relative z-10", iconBgColor, iconColor)}>
                             {isReading ? (

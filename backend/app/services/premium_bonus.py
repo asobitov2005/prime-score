@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import NotificationType
 from app.models.user import User
-# from app.core.enums import NotificationType
-# from app.services.notification_sender import create_and_send_notification
+from app.services.notification_sender import create_and_send_notification
+
+
+logger = logging.getLogger(__name__)
 
 
 async def grant_premium_bonus(
@@ -26,15 +30,16 @@ async def grant_premium_bonus(
     user.is_premium = True
     user.premium_until = premium_until
 
-    # Temporarily disabled: full-test +2 day bonus should still be granted,
-    # but users should not receive the bonus notification yet.
-    # await create_and_send_notification(
-    #     session,
-    #     user_id=user.id,
-    #     type=NotificationType.gift_received,
-    #     title=title,
-    #     body=body,
-    #     telegram_text=telegram_text,
-    # )
+    try:
+        await create_and_send_notification(
+            session,
+            user_id=user.id,
+            type=NotificationType.gift_received,
+            title=title,
+            body=body,
+            telegram_text=telegram_text,
+        )
+    except Exception:
+        logger.exception("Failed to send full-test premium bonus notification to user %s", user.id)
 
     return premium_until
