@@ -256,9 +256,11 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
             const completedScoreText = formatCompletedScore(completedAttempt, test.questionCount, isFull);
             const isExamPreviewTest = test.id === "reading-cam18-t1";
             const isCambridge = isCambridgeTest(test.source, test.sourceDetail);
+            const detailHref = `/tests/${test.slug || test.id}`;
 
             return (
               <Card key={test.id} className="group relative overflow-hidden rounded-2xl border-primary/20 bg-card/50 hover:bg-card hover:border-primary/30 transition-all duration-300 flex flex-col shadow-sm">
+                <Link href={detailHref} aria-label={`Open ${test.title}`} className="absolute inset-0 z-10" />
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/40" />
                 {isNew && (
                   <div className="absolute left-0 top-0 z-30 h-[80px] w-[80px] overflow-hidden rounded-tl-2xl pointer-events-none select-none">
@@ -370,7 +372,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                 </CardHeader>
 
                 <CardContent className="p-5 pt-2 shrink-0">
-                   <div className="pt-3 border-t border-border/5">
+                   <div className="relative z-20 pt-3 border-t border-border/5">
                       <StartTestModal test={test} activeAttempt={activeAttempt} completedAttempt={completedAttempt} />
                    </div>
                 </CardContent>
