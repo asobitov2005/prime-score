@@ -9,33 +9,16 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 from app.models.enums import AccessType, QuestionType, TestFormat, TestSource, TestStatus, TestType
 
 
-def _enum_values(enum: type) -> list[str]:
-    return [item.value for item in enum]
-
-
 class Test(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "tests"
 
     title: Mapped[str] = mapped_column(String(255))
     slug: Mapped[str] = mapped_column(String(320), unique=True, index=True)
-    type: Mapped[TestType] = mapped_column(
-        Enum(TestType, native_enum=False, values_callable=_enum_values),
-        index=True,
-    )
-    format: Mapped[TestFormat] = mapped_column(
-        Enum(TestFormat, native_enum=False, values_callable=_enum_values),
-        index=True,
-        default=TestFormat.FULL,
-    )
-    access_type: Mapped[AccessType] = mapped_column(
-        Enum(AccessType, native_enum=False, values_callable=_enum_values),
-        index=True,
-    )
-    status: Mapped[TestStatus] = mapped_column(
-        Enum(TestStatus, native_enum=False, values_callable=_enum_values),
-        default=TestStatus.DRAFT,
-    )
-    source: Mapped[TestSource] = mapped_column(Enum(TestSource, native_enum=False, values_callable=_enum_values))
+    type: Mapped[TestType] = mapped_column(Enum(TestType, native_enum=False), index=True)
+    format: Mapped[TestFormat] = mapped_column(Enum(TestFormat, native_enum=False), index=True, default=TestFormat.FULL)
+    access_type: Mapped[AccessType] = mapped_column(Enum(AccessType, native_enum=False), index=True)
+    status: Mapped[TestStatus] = mapped_column(Enum(TestStatus, native_enum=False), default=TestStatus.DRAFT)
+    source: Mapped[TestSource] = mapped_column(Enum(TestSource, native_enum=False))
     source_detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
     exam_date: Mapped[date | None] = mapped_column(nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -78,10 +61,7 @@ class QuestionGroup(UUIDMixin, TimestampMixin, Base):
     section_id: Mapped[UUID] = mapped_column(ForeignKey("test_sections.id"), index=True)
     title: Mapped[str] = mapped_column(String(255))
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
-    question_type: Mapped[QuestionType] = mapped_column(
-        Enum(QuestionType, native_enum=False, values_callable=_enum_values),
-        index=True,
-    )
+    question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType, native_enum=False), index=True)
     question_start: Mapped[int] = mapped_column(Integer)
     question_end: Mapped[int] = mapped_column(Integer)
     shared_content: Mapped[dict] = mapped_column(JSONB, default=dict)
