@@ -372,9 +372,9 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                 </CardHeader>
 
                 <CardContent className="p-5 pt-2 shrink-0">
-                   <div className="relative z-20 pt-3 border-t border-border/5">
-                      <StartTestModal test={test} activeAttempt={activeAttempt} completedAttempt={completedAttempt} />
-                   </div>
+                  <div className="relative z-20 pt-3 border-t border-border/5">
+                    <StartTestModal test={test} activeAttempt={activeAttempt} completedAttempt={completedAttempt} />
+                  </div>
                 </CardContent>
               </Card>
             );
