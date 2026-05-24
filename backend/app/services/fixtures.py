@@ -16,6 +16,7 @@ from app.services.scoring import listening_exam_seconds
 
 READING_TEST_ID = UUID("11111111-1111-1111-1111-111111111111")
 LISTENING_TEST_ID = UUID("22222222-2222-2222-2222-222222222222")
+FIXTURE_CREATED_AT = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 def _uuid(seed: str) -> UUID:
@@ -108,6 +109,8 @@ TEST_CATALOG_FIXTURES: list[dict[str, object]] = [
         "total_questions": 40,
         "version": 1,
         "section_count": 3,
+        "created_at": FIXTURE_CREATED_AT,
+        "updated_at": FIXTURE_CREATED_AT,
     },
     {
         "id": LISTENING_TEST_ID,
@@ -123,6 +126,8 @@ TEST_CATALOG_FIXTURES: list[dict[str, object]] = [
         "total_questions": 40,
         "version": 1,
         "section_count": 4,
+        "created_at": FIXTURE_CREATED_AT,
+        "updated_at": FIXTURE_CREATED_AT,
     },
 ]
 

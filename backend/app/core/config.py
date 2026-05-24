@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     project_name: str = "PrimeScore"
     environment: str = "development"
     database_url: str = "postgresql+asyncpg://postgres:1112@127.0.0.1:5433/primescore"
+    database_pool_size: int = 10
+    database_max_overflow: int = 20
+    database_pool_timeout: int = 10
+    database_pool_recycle: int = 1800
     redis_url: str = "redis://127.0.0.1:6379/0"
     timezone: str = "Asia/Tashkent"
     telegram_bot_token: str = "change-me"

@@ -41,6 +41,15 @@ type BackendTestDetail = BackendTestCatalogItem & {
   }>;
 };
 
+class ServerDataRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function requestApi<T>(path: string): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
@@ -58,7 +67,7 @@ async function requestApi<T>(path: string): Promise<T> {
   if (!response.ok) {
     const text = await response.text().catch(() => "no body");
     console.error(`Frontend API request failed for ${path} with status ${response.status}: ${text}`);
-    throw new Error(`Frontend API request failed for ${path}`);
+    throw new ServerDataRequestError(`Frontend API request failed for ${path}`, response.status);
   }
 
   return (await response.json()) as T;
@@ -176,8 +185,11 @@ export async function getCatalogTestDetail(testId: string): Promise<TestCatalogI
   try {
     const item = await requestApi<BackendTestDetail>(`/tests/${testId}`);
     return mapTestDetail(item);
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof ServerDataRequestError && error.status === 404) {
+      return null;
+    }
+    throw error;
   }
 }
 
