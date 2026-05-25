@@ -136,12 +136,11 @@ function mapLeaderboardProfileCatalog(profile: LeaderboardUserProfileResponse): 
       accuracy: profile.stats.accuracy ?? 0,
       achievementsUnlocked: profile.stats.achievements_unlocked,
     },
-    achievements: profile.achievement_catalog.map((achievement) => ({
+    achievements: profile.achievements.map((achievement) => ({
       id: achievement.id,
       image: achievement.image ?? leaderboardBadgeImage(achievement.title) ?? undefined,
       title: achievement.title,
       rarity: normalizeRarity(achievement.rarity),
-      status: achievement.status,
     })),
   };
 }

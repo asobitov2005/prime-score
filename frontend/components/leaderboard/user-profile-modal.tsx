@@ -36,7 +36,6 @@ export type UserProfileModalData = {
     icon?: React.ReactNode;
     title: string;
     rarity: Rarity;
-    status: "unlocked" | "in_progress" | "locked";
   }[];
 };
 
@@ -80,7 +79,7 @@ export function LeaderboardUserProfileModal({
   return (
     <>
       {isOpen ? (
-        <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain">
+        <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain pointer-events-none">
           {/* Backdrop */}
           <button
             type="button"
@@ -90,7 +89,7 @@ export function LeaderboardUserProfileModal({
           />
 
           <div
-            className={`relative z-10 mt-6 flex min-h-0 flex-col overflow-hidden bg-white backdrop-blur-2xl animate-in slide-in-from-bottom-6 duration-200 md:mx-auto md:mt-[5dvh] md:max-h-[90dvh] md:w-full md:max-w-lg md:animate-in md:fade-in md:zoom-in-95 dark:bg-slate-900/95 border ${user?.isPremium ? 'border-amber-400/50 dark:border-amber-500/40 shadow-[0_8px_40px_rgba(245,158,11,0.2)]' : 'border-slate-200 dark:border-white/10 shadow-xl'} rounded-t-[28px] md:rounded-[28px] max-h-[calc(100dvh-1.5rem)]`}
+            className={`relative z-10 mt-6 flex min-h-0 flex-col overflow-hidden bg-white backdrop-blur-2xl animate-in slide-in-from-bottom-6 duration-200 md:mx-auto md:mt-[5dvh] md:max-h-[90dvh] md:w-full md:max-w-lg md:animate-in md:fade-in md:zoom-in-95 dark:bg-slate-900/95 border ${user?.isPremium ? 'border-amber-400/50 dark:border-amber-500/40 shadow-[0_8px_40px_rgba(245,158,11,0.2)]' : 'border-slate-200 dark:border-white/10 shadow-xl'} rounded-t-[28px] md:rounded-[28px] max-h-[calc(100dvh-1.5rem)] pointer-events-auto`}
           >
             {/* Top decorative glow for premium users */}
             {user?.isPremium && (
@@ -226,48 +225,39 @@ export function LeaderboardUserProfileModal({
               </div>
 
               {/* ACHIEVEMENTS LIBRARY */}
-              {user.achievements && user.achievements.length > 0 && (
+              {user.achievements && user.achievements.length > 0 ? (
                 <div className="mt-8">
                   <div className="flex justify-between items-center mb-3 px-1">
-                    <h4 className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400 font-bold">Achievements Library ({user.achievements.length})</h4>
+                    <h4 className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400 font-bold">Unlocked Achievements ({user.achievements.length})</h4>
                   </div>
                   <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
                     {user.achievements.map((ach) => {
                       const achStyle = rarityConfig[ach.rarity] || rarityConfig.Common;
-                      const isUnlocked = ach.status === "unlocked";
-                      const isInProgress = ach.status === "in_progress";
                       return (
                         <div key={ach.id} className="group relative flex flex-col items-center gap-2 cursor-default">
-                          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border flex items-center justify-center transition-all duration-300 relative ${
-                            isUnlocked
-                              ? "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                              : isInProgress
-                                ? "bg-blue-50/70 dark:bg-blue-500/10 border-blue-200 dark:border-blue-400/20"
-                                : "bg-slate-100/80 dark:bg-slate-900 border-slate-200/80 dark:border-slate-800"
-                          }`}>
-                            <div className={`absolute inset-0 bg-gradient-to-br ${achStyle.color} ${isUnlocked ? "opacity-0 group-hover:opacity-10" : isInProgress ? "opacity-10" : "opacity-0"} rounded-2xl transition-opacity duration-300`}></div>
+                          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 transition-all duration-300 group-hover:scale-105 group-hover:border-slate-400 dark:border-slate-700 dark:bg-slate-800 sm:h-16 sm:w-16">
+                            <div className={`absolute inset-0 bg-gradient-to-br ${achStyle.color} opacity-0 group-hover:opacity-10 rounded-2xl transition-opacity duration-300`}></div>
                             {ach.image ? (
-                              <Image src={ach.image} alt={ach.title} width={32} height={32} className={`object-contain ${isUnlocked ? "" : isInProgress ? "opacity-90" : "opacity-35 grayscale"}`} />
+                              <Image src={ach.image} alt={ach.title} width={32} height={32} className="object-contain" />
                             ) : (
-                              ach.icon || <Award className={`w-7 h-7 sm:w-8 sm:h-8 ${isUnlocked ? achStyle.text : isInProgress ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-600"}`} />
+                              ach.icon || <Award className={`w-7 h-7 sm:w-8 sm:h-8 ${achStyle.text}`} />
                             )}
                           </div>
                           <span className="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 font-medium w-full text-center truncate px-1 group-hover:text-slate-900 dark:group-hover:text-slate-300 transition-colors">
                             {ach.title}
                           </span>
-                          <span className={`text-[8px] font-bold uppercase tracking-[0.16em] ${
-                            isUnlocked
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : isInProgress
-                                ? "text-blue-600 dark:text-blue-400"
-                                : "text-slate-400 dark:text-slate-600"
-                          }`}>
-                            {isUnlocked ? "Unlocked" : isInProgress ? "Progress" : "Locked"}
+                          <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400">
+                            Unlocked
                           </span>
                         </div>
                       );
                     })}
                   </div>
+                </div>
+              ) : (
+                <div className="mt-8 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center dark:border-slate-800 dark:bg-slate-900/60">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Unlocked Achievements</p>
+                  <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">No badges unlocked yet.</p>
                 </div>
               )}
 
