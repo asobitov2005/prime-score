@@ -104,6 +104,16 @@ function mapBackendLeaderboardEntry(entry: BackendLeaderboardEntry): Leaderboard
   };
 }
 
+function mapCurrentUserLeaderboardEntry(
+  entry: BackendLeaderboardEntry,
+  visibleCount: number,
+): LeaderboardEntry {
+  return mapBackendLeaderboardEntry({
+    ...entry,
+    rank: entry.rank > 0 ? entry.rank : visibleCount + 1,
+  });
+}
+
 function mapXpSummary(payload: XpSummaryResponse): XpSummary {
   return {
     totalXp: payload.total_xp,
@@ -375,7 +385,9 @@ export function createApiClient(config: ApiClientConfig = {}) {
         .then<LeaderboardResponseData>((payload) => ({
           period: payload.period,
           items: payload.items.map(mapBackendLeaderboardEntry),
-          currentUser: payload.current_user ? mapBackendLeaderboardEntry(payload.current_user) : null,
+          currentUser: payload.current_user
+            ? mapCurrentUserLeaderboardEntry(payload.current_user, payload.items.length)
+            : null,
         })),
     getLeaderboardUserProfile: (userId: string) =>
       request<LeaderboardUserProfileResponse>(`/leaderboard/users/${encodeURIComponent(userId)}`, { method: "GET" }),

@@ -137,9 +137,7 @@ function EntryRow({ entry, isCurrentUser = false, onClick }: { entry: Leaderboar
       )}
     >
       <div className="flex items-center justify-center">
-        {entry.rank === 0 ? (
-          <span className="text-xs font-semibold text-muted-foreground">—</span>
-        ) : icon ? (
+        {icon ? (
           icon
         ) : (
           <span className={cn("text-sm font-bold", isCurrentUser ? "text-primary" : "text-muted-foreground")}>

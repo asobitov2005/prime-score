@@ -457,23 +457,29 @@ export async function getXpSummary(): Promise<XpSummary> {
 
 export async function getLeaderboardRank(type: "combined" | TestType = "combined"): Promise<number | null> {
   try {
-    const payload = await requestBackend<{
-      current_user?: {
-        rank: number;
-      } | null;
-    }>(`/leaderboard?type=${encodeURIComponent(type)}&period=all_time`);
-    const rank = payload.current_user?.rank ?? null;
-    return typeof rank === "number" && rank > 0 ? rank : null;
+    const payload = await requestBackend<BackendLeaderboardResponse>(`/leaderboard?type=${encodeURIComponent(type)}&period=all_time`);
+    return effectiveCurrentUserRank(payload);
   } catch {
     return null;
   }
 }
 
+function effectiveCurrentUserRank(payload: BackendLeaderboardResponse): number | null {
+  const rank = payload.current_user?.rank ?? null;
+  if (typeof rank === "number" && rank > 0) {
+    return rank;
+  }
+  if (payload.current_user) {
+    return payload.items.length + 1;
+  }
+  return null;
+}
+
 export async function getWeeklyLeaderboardPreview(): Promise<LeaderboardPreviewSummary> {
   try {
     const payload = await requestBackend<BackendLeaderboardResponse>("/leaderboard?period=week");
-    const rank = payload.current_user?.rank ?? null;
-    if (typeof rank !== "number" || rank <= 0) {
+    const rank = effectiveCurrentUserRank(payload);
+    if (rank === null) {
       return { rank: null, topPercent: null };
     }
 

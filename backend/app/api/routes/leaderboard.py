@@ -330,13 +330,14 @@ async def get_leaderboard(
     if current_user_entry is None:
         user = await session.get(User, current_user.id)
         if user is not None:
+            fallback_rank = len(sorted_rows) + 1
             period_xp = (
                 int(user.total_xp or 0)
                 if internal_period == PERIOD_ALL_TIME
                 else await get_user_period_xp(session, user_id=user.id, period_type=internal_period)
             )
             current_user_entry = LeaderboardEntryRead(
-                rank=0,
+                rank=fallback_rank,
                 user_id=user.id,
                 avatar_url=user.avatar_url,
                 display_name=_display_name(user),
