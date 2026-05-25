@@ -105,7 +105,7 @@ export function TelegramWebAppLogin() {
   useEffect(() => {
     const tg = getTelegramWebApp();
     if (!tg?.initData) {
-      setStatus("need_telegram");
+      window.location.replace("/");
       return;
     }
 
