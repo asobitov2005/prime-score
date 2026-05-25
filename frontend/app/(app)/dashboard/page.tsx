@@ -10,7 +10,7 @@ import { getDashboardActivity, getDashboardAnalytics, getUserAttempts, getWeekly
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
 import { OverallBandKpiCard } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
-import { ActivitySummary, StudyTimeCard } from "./activity-summary";
+import { StudyTimeCard } from "./activity-summary";
 import { StreakHeatmap } from "./streak-heatmap";
 import { PremiumFeatureGate } from "./premium-feature-gate";
 import { XpSummaryCard } from "./xp-summary-card";
@@ -551,7 +551,6 @@ export default async function DashboardPage() {
             <StudyTimeCard analytics={analytics} className="h-full min-h-[176px]" />
           </div>
 
-          <ActivitySummary analytics={analytics} />
         </div>
 
         {/* Second Row: Remaining widgets */}
