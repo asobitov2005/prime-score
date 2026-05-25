@@ -1,3 +1,11 @@
+x-prime-score-hosts: &prime_score_hosts
+  - "postgres:172.28.100.2"
+  - "redis:172.28.100.3"
+  - "minio:172.28.100.4"
+  - "api:172.28.100.10"
+  - "frontend:172.28.100.11"
+  - "admin:172.28.100.12"
+
 services:
   postgres:
     image: postgres:16
@@ -48,6 +56,7 @@ services:
   api:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
       DATABASE_POOL_SIZE: ${API_DATABASE_POOL_SIZE:-20}
@@ -88,6 +97,7 @@ services:
   worker:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
       DATABASE_POOL_SIZE: ${WORKER_DATABASE_POOL_SIZE:-5}
@@ -122,6 +132,7 @@ services:
   beat:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
       DATABASE_POOL_SIZE: ${BEAT_DATABASE_POOL_SIZE:-2}
@@ -156,6 +167,7 @@ services:
   bot:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
       DATABASE_POOL_SIZE: ${BOT_DATABASE_POOL_SIZE:-3}
@@ -188,6 +200,7 @@ services:
   frontend:
     image: ghcr.io/asobitov2005/prime-score-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    extra_hosts: *prime_score_hosts
     depends_on:
       api:
         condition: service_healthy
@@ -206,6 +219,7 @@ services:
   admin:
     image: ghcr.io/asobitov2005/prime-score-admin:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    extra_hosts: *prime_score_hosts
     depends_on:
       api:
         condition: service_healthy
