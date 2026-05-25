@@ -36,6 +36,7 @@ export type UserProfileModalData = {
     icon?: React.ReactNode;
     title: string;
     rarity: Rarity;
+    status: "unlocked" | "in_progress" | "locked";
   }[];
 };
 
@@ -79,17 +80,17 @@ export function LeaderboardUserProfileModal({
   return (
     <>
       {isOpen ? (
-        <div className="fixed inset-0 z-[100]">
+        <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain">
           {/* Backdrop */}
           <button
             type="button"
             onClick={onClose}
-            className="absolute inset-0 h-full w-full cursor-default bg-slate-900/40 backdrop-blur-sm dark:bg-slate-950/80"
+            className="fixed inset-0 h-full w-full cursor-default bg-slate-900/40 backdrop-blur-sm dark:bg-slate-950/80"
             aria-label="Close profile modal"
           />
 
           <div
-            className={`absolute inset-x-0 bottom-0 top-6 flex min-h-0 flex-col overflow-hidden bg-white backdrop-blur-2xl animate-in slide-in-from-bottom-6 duration-200 md:left-1/2 md:top-1/2 md:h-[min(760px,90dvh)] md:w-full md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:animate-in md:fade-in md:zoom-in-95 dark:bg-slate-900/95 border ${user?.isPremium ? 'border-amber-400/50 dark:border-amber-500/40 shadow-[0_8px_40px_rgba(245,158,11,0.2)]' : 'border-slate-200 dark:border-white/10 shadow-xl'} rounded-t-[28px] md:rounded-[28px]`}
+            className={`relative z-10 mt-6 flex min-h-0 flex-col overflow-hidden bg-white backdrop-blur-2xl animate-in slide-in-from-bottom-6 duration-200 md:mx-auto md:mt-[5dvh] md:max-h-[90dvh] md:w-full md:max-w-lg md:animate-in md:fade-in md:zoom-in-95 dark:bg-slate-900/95 border ${user?.isPremium ? 'border-amber-400/50 dark:border-amber-500/40 shadow-[0_8px_40px_rgba(245,158,11,0.2)]' : 'border-slate-200 dark:border-white/10 shadow-xl'} rounded-t-[28px] md:rounded-[28px] max-h-[calc(100dvh-1.5rem)]`}
           >
             {/* Top decorative glow for premium users */}
             {user?.isPremium && (
@@ -97,7 +98,7 @@ export function LeaderboardUserProfileModal({
             )}
 
             {/* Asosiy Scrollable Container */}
-            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-10 touch-pan-y md:p-8 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-white/10">
+            <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-10 touch-pan-y md:p-8 [scrollbar-width:thin] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-white/10">
               
               {/* Header Info Row (Online & Close) */}
               <div className="flex justify-between items-start mb-4">
@@ -157,7 +158,7 @@ export function LeaderboardUserProfileModal({
                 <div className="flex items-center justify-center gap-3 text-sm font-medium">
                   <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-400/10 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-400/20">
                     <Trophy className="w-4 h-4" />
-                    <span>#{user.rank} Weekly</span>
+                    <span>#{user.rank} All-time</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-400/10 px-3 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-400/20">
                     <Award className="w-4 h-4" />
@@ -233,18 +234,35 @@ export function LeaderboardUserProfileModal({
                   <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
                     {user.achievements.map((ach) => {
                       const achStyle = rarityConfig[ach.rarity] || rarityConfig.Common;
+                      const isUnlocked = ach.status === "unlocked";
+                      const isInProgress = ach.status === "in_progress";
                       return (
-                        <div key={ach.id} className="group relative flex flex-col items-center gap-2 cursor-pointer">
-                          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:border-slate-400 dark:group-hover:border-slate-500 relative`}>
-                            <div className={`absolute inset-0 bg-gradient-to-br ${achStyle.color} opacity-0 group-hover:opacity-10 rounded-2xl transition-opacity duration-300`}></div>
+                        <div key={ach.id} className="group relative flex flex-col items-center gap-2 cursor-default">
+                          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border flex items-center justify-center transition-all duration-300 relative ${
+                            isUnlocked
+                              ? "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                              : isInProgress
+                                ? "bg-blue-50/70 dark:bg-blue-500/10 border-blue-200 dark:border-blue-400/20"
+                                : "bg-slate-100/80 dark:bg-slate-900 border-slate-200/80 dark:border-slate-800"
+                          }`}>
+                            <div className={`absolute inset-0 bg-gradient-to-br ${achStyle.color} ${isUnlocked ? "opacity-0 group-hover:opacity-10" : isInProgress ? "opacity-10" : "opacity-0"} rounded-2xl transition-opacity duration-300`}></div>
                             {ach.image ? (
-                              <Image src={ach.image} alt={ach.title} width={32} height={32} className="object-contain" />
+                              <Image src={ach.image} alt={ach.title} width={32} height={32} className={`object-contain ${isUnlocked ? "" : isInProgress ? "opacity-90" : "opacity-35 grayscale"}`} />
                             ) : (
-                              ach.icon || <Award className={`w-7 h-7 sm:w-8 sm:h-8 ${achStyle.text}`} />
+                              ach.icon || <Award className={`w-7 h-7 sm:w-8 sm:h-8 ${isUnlocked ? achStyle.text : isInProgress ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-600"}`} />
                             )}
                           </div>
                           <span className="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 font-medium w-full text-center truncate px-1 group-hover:text-slate-900 dark:group-hover:text-slate-300 transition-colors">
                             {ach.title}
+                          </span>
+                          <span className={`text-[8px] font-bold uppercase tracking-[0.16em] ${
+                            isUnlocked
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : isInProgress
+                                ? "text-blue-600 dark:text-blue-400"
+                                : "text-slate-400 dark:text-slate-600"
+                          }`}>
+                            {isUnlocked ? "Unlocked" : isInProgress ? "Progress" : "Locked"}
                           </span>
                         </div>
                       );

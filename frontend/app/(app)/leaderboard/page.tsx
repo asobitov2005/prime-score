@@ -8,10 +8,41 @@ import { cn } from "@/lib/utils";
 import { createApiClient } from "@/lib/api/client";
 import type { LeaderboardEntry, LeaderboardResponseData, LeaderboardPeriod } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
-import { achievements } from "@/src/data/achievements";
 import { EQUIPPED_ACHIEVEMENT_STORAGE_KEY } from "@/src/components/achievements/AchievementsClient";
 import { LeaderboardUserProfileModal, type UserProfileModalData, type Rarity } from "@/components/leaderboard/user-profile-modal";
 import type { LeaderboardUserProfileResponse } from "@/lib/api/types";
+
+const BADGE_IMAGE_BY_TITLE: Record<string, string> = {
+  "Bronze Learner": "/badges/level/badge-level-bronze-learner.png",
+  "Silver Scholar": "/badges/level/badge-level-silver-scholar.png",
+  "Gold Achiever": "/badges/level/badge-level-gold-achiever.png",
+  "Platinum Master": "/badges/level/badge-level-platinum-master.png",
+  "Prime Legend": "/badges/level/badge-level-prime-legend.png",
+  "3 Day Streak": "/badges/streak/day-3.png",
+  "7 Day Warrior": "/badges/streak/day-7.png",
+  "14 Day Consistent Learner": "/badges/streak/day-14.png",
+  "30 Day Streak": "/badges/streak/day-30.png",
+  "60 Day Discipline Master": "/badges/streak/day-60.png",
+  "90 Day Unbreakable": "/badges/streak/day-60.png",
+  "180 Day Iron Mind": "/badges/streak/day-180.png",
+  "365 Day Prime Legend": "/badges/streak/day-360.png",
+  "Reading Beast": "/badges/skill/reading.png",
+  "Perfect Listening": "/badges/skill/listening.png",
+  "Writing Excellence": "/badges/skill/writing.png",
+  "Speaking Elite": "/badges/skill/speaking.png",
+  "Accuracy Monster": "/badges/performance/performance-accuracy-monster.png",
+  "Mock Warrior": "/badges/special/special-mock-warrior.png",
+  "Mock Addict": "/badges/special/special-mock-addict.png",
+  "Early Supporter": "/badges/special/special-early-supporter.png",
+  "Weekly Top 10": "/badges/special/special-weekly-top-10.png",
+  "Rank #1": "/badges/special/special-rank-1.png",
+  "Top 1%": "/badges/special/special-top-1.png",
+  "XP Hunter": "/badges/special/special-xp-hunter.png",
+  "XP Machine": "/badges/special/special-xp-machine.png",
+  "Weekend Grinder": "/badges/special/special-weekend-grinder.png",
+  "Early Bird": "/badges/special/special-early-bird.png",
+  "Night Owl": "/badges/special/special-night-owl.png",
+};
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
@@ -43,21 +74,11 @@ function leaderboardBadgeImage(badge: string | null): string | null {
   if (!badge) {
     return null;
   }
-
-  const directMatch = achievements.find((achievement) => achievement.title === badge && achievement.category === "level")
-    ?? achievements.find((achievement) => achievement.title === badge);
-
-  if (directMatch) {
-    return directMatch.image;
-  }
-
   const aliases: Record<string, string> = {
-    "30 Day Streak": "/badges/streak/day-30.png",
     "Consistency Builder": "/badges/streak/day-7.png",
     "Mock Master": "/badges/special/special-mock-warrior.png",
   };
-
-  return aliases[badge] ?? null;
+  return BADGE_IMAGE_BY_TITLE[badge] ?? aliases[badge] ?? null;
 }
 
 function leaderboardBadgeTextClass(badge: string | null): string {
@@ -89,7 +110,7 @@ function normalizeRarity(value?: string | null): Rarity {
   return "Common";
 }
 
-function mapLeaderboardProfileResponse(profile: LeaderboardUserProfileResponse): UserProfileModalData {
+function mapLeaderboardProfileCatalog(profile: LeaderboardUserProfileResponse): UserProfileModalData {
   const equippedBadgeTitle = profile.equipped_badge?.title ?? "No badge equipped";
 
   return {
@@ -115,11 +136,12 @@ function mapLeaderboardProfileResponse(profile: LeaderboardUserProfileResponse):
       accuracy: profile.stats.accuracy ?? 0,
       achievementsUnlocked: profile.stats.achievements_unlocked,
     },
-    achievements: profile.achievements.map((achievement) => ({
+    achievements: profile.achievement_catalog.map((achievement) => ({
       id: achievement.id,
       image: achievement.image ?? leaderboardBadgeImage(achievement.title) ?? undefined,
       title: achievement.title,
       rarity: normalizeRarity(achievement.rarity),
+      status: achievement.status,
     })),
   };
 }
@@ -372,7 +394,7 @@ export default function LeaderboardPage() {
       <LeaderboardUserProfileModal
         isOpen={!!selectedEntry}
         onClose={() => setSelectedEntry(null)}
-        user={profileQuery.data ? mapLeaderboardProfileResponse(profileQuery.data) : null}
+        user={profileQuery.data ? mapLeaderboardProfileCatalog(profileQuery.data) : null}
         isLoading={profileQuery.isLoading}
       />
     </>
