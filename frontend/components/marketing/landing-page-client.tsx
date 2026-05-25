@@ -12,10 +12,6 @@ import type { ReviewItem } from "@/lib/mock-data";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
 
-import { FloatingElements } from "@/components/marketing/floating-elements";
-
-
-
 const listeningWaveHeights = [42, 68, 35, 82, 58, 94, 46, 76, 28, 63, 88, 51, 72, 39, 96, 55, 80, 31, 66, 91, 44, 74, 36, 60];
 const speakingWaveHeights = [48, 72, 39, 83, 56, 90, 44, 78, 52];
 
@@ -123,7 +119,7 @@ const sectionPages = [
               <div className="w-4 h-4 bg-emerald-500 rounded-full animate-pulse"></div>
             </div>
           </div>
-          <div className="text-[10px] sm:text-xs font-mono text-foreground/80 mt-1 font-medium bg-background/80 px-2 py-0.5 rounded-full border border-border/50 backdrop-blur-sm">AI Examiner</div>
+          <div className="text-[10px] sm:text-xs font-mono text-foreground/80 mt-1 font-medium bg-background/80 px-2 py-0.5 rounded-full border border-border/50">AI Examiner</div>
         </div>
         <div className="flex gap-1.5 items-end h-16 mt-auto mb-2 opacity-80">
           {speakingWaveHeights.map((height, i) => (
@@ -161,7 +157,7 @@ function ScrollReveal({ children, className, id }: { children: ReactNode; classN
       id={id}
       className={cn(
         className,
-        "transition-all duration-1000 ease-out",
+        "transition-[opacity,transform] duration-700 ease-out",
         inView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
       )}
     >
@@ -182,17 +178,9 @@ function formatOnlineCount(value: number): string {
 }
 
 export function LandingPageClient({ plans, reviews, onlineCount, initialTests = [] }: LandingPageClientProps) {
-  const [skillIndex, setSkillIndex] = useState(0);
   const [isReviewsVisible, setIsReviewsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
   const reviewsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSkillIndex((current) => (current + 1) % skills.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -236,7 +224,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
           <div className="space-y-8 md:space-y-10 min-w-0">
             <div className="space-y-4">
               <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
-                <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-md backdrop-blur-sm">
+                <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-md">
                   <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
@@ -250,21 +238,16 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 ease-out fill-mode-both flex flex-col">
                 <span>Master Your IELTS</span>
                 <span className="relative h-[1.15em] overflow-hidden inline-block w-full">
-                  {skills.map((skill, index) => (
-                    <span
-                      key={skill}
-                      className={cn(
-                        "absolute top-0 left-0 bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent transition-all duration-700 ease-in-out pb-2",
-                        index === skillIndex
-                          ? "translate-y-0 opacity-100"
-                          : index < skillIndex
-                            ? "-translate-y-full opacity-0"
-                            : "translate-y-full opacity-0",
-                      )}
-                    >
-                      {skill}
-                    </span>
-                  ))}
+                  <span className="landing-skill-track flex flex-col">
+                    {[...skills, skills[0]].map((skill, index) => (
+                      <span
+                        key={`${skill}-${index}`}
+                        className="h-[1.15em] bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent pb-2"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </span>
                 </span>
               </h1>
 
@@ -317,9 +300,9 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
               <MarketingAuthCta
                 guestLabel="Get Started"
                 authLabel="Dashboard"
-                className="h-11 px-5 text-sm font-semibold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 rounded-xl bg-primary text-background"
+                className="h-11 px-5 text-sm font-semibold shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5 rounded-xl bg-primary text-background"
               />
-              <Button asChild variant="outline" className="h-11 px-5 text-sm font-medium border-border/60 bg-background/50 backdrop-blur-sm hover:bg-muted/50 rounded-xl transition-all">
+              <Button asChild variant="outline" className="h-11 px-5 text-sm font-medium border-border/60 bg-background/50 hover:bg-muted/50 rounded-xl transition-colors">
                 <Link href="#features">
                   View Features
                 </Link>
@@ -330,7 +313,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
           <div className="relative w-full max-w-lg min-w-0 mx-auto mt-0 lg:-mt-6 lg:mx-0 animate-in fade-in slide-in-from-right-10 duration-1000 delay-300 ease-out fill-mode-both">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.08)_0%,transparent_70%)] pointer-events-none transform-gpu -z-10" />
 
-            <div className="relative rounded-3xl border border-border/50 bg-card shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.4)] transition-all duration-700 overflow-hidden flex flex-col transform-gpu">
+            <div className="relative rounded-3xl border border-border/50 bg-card shadow-[0_40px_80px_-20px_rgba(0,0,0,0.3)] hover:shadow-[0_40px_100px_-20px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden flex flex-col transform-gpu">
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary/40 via-primary to-primary/40 opacity-80" />
 
               <div className="p-6 md:p-8 space-y-5 relative z-10 pt-8">
@@ -347,7 +330,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                       key={tab}
                       onClick={() => setActiveTab(tab)}
                       className={cn(
-                        "flex-1 px-4 py-2.5 text-[13px] md:text-[14px] font-medium rounded-xl transition-all duration-300 whitespace-nowrap",
+                        "flex-1 px-4 py-2.5 text-[13px] md:text-[14px] font-medium rounded-xl transition-[background-color,color,box-shadow,border-color,transform] duration-200 whitespace-nowrap",
                         activeTab === tab
                           ? "bg-background text-foreground shadow-[0_4px_12px_-2px_rgba(0,0,0,0.12)] border border-border/50 scale-[1.02]"
                           : "text-muted-foreground hover:text-foreground",
@@ -375,7 +358,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                         key={test.id}
                         href={`/tests/${test.slug}`}
                         className={cn(
-                          "group relative overflow-hidden flex items-center justify-between gap-4 p-3 md:p-4 rounded-2xl border transition-all hover:scale-[1.01] hover:shadow-md cursor-pointer",
+                          "group relative overflow-hidden flex items-center justify-between gap-4 p-3 md:p-4 rounded-2xl border transition-[background-color,border-color,box-shadow,transform] duration-150 hover:scale-[1.01] hover:shadow-md cursor-pointer",
                           cardBg,
                           cardBorder,
                         )}
@@ -408,7 +391,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                           <span className={cn("hidden sm:flex px-2.5 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-[0.14em] shadow-sm", badgeBg, badgeText)}>
                             {badgeLabel}
                           </span>
-                          <div className="flex h-10 w-10 items-center justify-center text-[#0a1b3f] dark:text-foreground/80 transition-all duration-300 group-hover:scale-125 group-hover:text-[#d94b04] dark:group-hover:text-primary">
+                          <div className="flex h-10 w-10 items-center justify-center text-[#0a1b3f] dark:text-foreground/80 transition-[color,transform] duration-200 group-hover:scale-125 group-hover:text-[#d94b04] dark:group-hover:text-primary">
                             <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" className="drop-shadow-sm" xmlns="http://www.w3.org/2000/svg">
                               <path
                                 d="M18.4452 11.0253C19.1837 11.4554 19.1837 12.5446 18.4452 12.9747L7.66492 19.2598C6.9264 19.6899 6 19.1504 6 18.2851L6 5.71493C6 4.8496 6.9264 4.31012 7.66492 4.74021L18.4452 11.0253Z"
@@ -435,9 +418,9 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
           </div>
         </ScrollReveal>
 
-        <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+        <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 [content-visibility:auto] [contain-intrinsic-size:980px]">
           <div className="max-w-6xl mx-auto space-y-6 mb-12 text-center">
-            <h2 className="whitespace-nowrap text-[15px] min-[380px]:text-lg sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
+            <h2 className="text-[15px] min-[380px]:text-lg sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Online IELTS mock practice for <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">every section.</span>
             </h2>
             <p className="text-muted-foreground font-medium text-base md:text-lg leading-relaxed">
@@ -452,7 +435,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                 href={mod.href}
                 style={{ transitionDelay: `${i * 100}ms` }}
                 className={cn(
-                  "group relative rounded-[2rem] border p-6 flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(var(--primary),0.15)] hover:border-primary/40 overflow-hidden cursor-pointer",
+                  "group relative rounded-[2rem] border p-6 flex flex-col transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(var(--primary),0.15)] hover:border-primary/40 overflow-hidden cursor-pointer",
                   mod.className
                 )}
               >
@@ -462,7 +445,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                 <div
                   className="relative z-10 h-full flex flex-col"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-background/80 backdrop-blur-md flex items-center justify-center border border-border/50 mb-5 shadow-sm group-hover:scale-110 group-hover:bg-card transition-all duration-300">
+                  <div className="w-12 h-12 rounded-xl bg-background/80 flex items-center justify-center border border-border/50 mb-5 shadow-sm group-hover:scale-110 group-hover:bg-card transition-[transform,background-color] duration-200">
                     {mod.icon}
                   </div>
 
@@ -482,7 +465,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
           </ScrollReveal>
         </section>
 
-        <ScrollReveal id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30">
+        <ScrollReveal id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 [content-visibility:auto] [contain-intrinsic-size:820px]">
           <div className="text-center space-y-4 mb-12">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Pricing that matches your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">exam timeline.</span>
@@ -495,7 +478,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
           <PricingPlanGrid plans={plans} compact />
 
           <div className="mt-8 flex justify-center">
-            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-all shadow-xl bg-background/80 backdrop-blur-md">
+            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-[background-color,color,transform] shadow-xl bg-background/80">
               <Link href="/pricing">
                 Compare all plans <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -505,7 +488,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
 
         <ScrollReveal
           id="reviews"
-          className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 pb-20"
+          className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 pb-20 [content-visibility:auto] [contain-intrinsic-size:820px]"
         >
           <div className="text-center space-y-4 mb-16">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
@@ -525,19 +508,19 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
             }}
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full px-2">
-              <div className="flex flex-col gap-6 animate-marquee-down hover:[animation-play-state:paused]">
+              <div className={cn("flex flex-col gap-6", isReviewsVisible && "animate-marquee-down hover:[animation-play-state:paused]")}>
                 {[...reviews, ...reviews].map((review, index) => (
                   <ReviewCard key={`col1-${index}`} review={review} />
                 ))}
               </div>
 
-              <div className="hidden md:flex flex-col gap-6 animate-marquee-up hover:[animation-play-state:paused]">
+              <div className={cn("hidden md:flex flex-col gap-6", isReviewsVisible && "animate-marquee-up hover:[animation-play-state:paused]")}>
                 {[...reviews].reverse().concat([...reviews].reverse()).map((review, index) => (
                   <ReviewCard key={`col2-${index}`} review={review} />
                 ))}
               </div>
 
-              <div className="hidden md:flex flex-col gap-6 animate-marquee-down hover:[animation-play-state:paused]">
+              <div className={cn("hidden md:flex flex-col gap-6", isReviewsVisible && "animate-marquee-down hover:[animation-play-state:paused]")}>
                 {[...reviews.slice(3), ...reviews.slice(0, 3), ...reviews.slice(3), ...reviews.slice(0, 3)].map((review, index) => (
                   <ReviewCard key={`col3-${index}`} review={review} />
                 ))}
@@ -546,7 +529,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
           </div>
 
           <div className="mt-8 flex justify-center relative z-20">
-            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-all shadow-xl bg-background/80 backdrop-blur-md">
+            <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-[background-color,color,transform] shadow-xl bg-background/80">
               <Link href="/reviews">
                 View all reviews <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -554,7 +537,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
           </div>
         </ScrollReveal>
 
-        <ScrollReveal className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-3 text-center flex flex-col items-center overflow-hidden">
+        <ScrollReveal className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-3 text-center flex flex-col items-center overflow-hidden [content-visibility:auto] [contain-intrinsic-size:420px]">
           <div className="max-w-3xl mx-auto space-y-6 relative z-10">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
@@ -569,7 +552,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                 <MarketingAuthCta
                   guestLabel="Get Started for Free"
                   authLabel="Go to Dashboard"
-                  className="h-11 px-6 text-sm sm:h-14 sm:px-10 sm:text-base font-semibold shadow-xl shadow-primary/20 transition-all hover:-translate-y-0.5 rounded-xl bg-primary/90 text-primary-foreground relative z-10"
+                  className="h-11 px-6 text-sm sm:h-14 sm:px-10 sm:text-base font-semibold shadow-xl shadow-primary/20 transition-transform hover:-translate-y-0.5 rounded-xl bg-primary/90 text-primary-foreground relative z-10"
                 />
               </div>
             </div>
@@ -582,7 +565,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
 
 function ReviewCard({ review }: { review: ReviewItem }) {
   return (
-    <div className="group relative p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between gap-6 shadow-sm hover:shadow-[0_0_40px_rgba(255,107,0,0.1)] overflow-hidden">
+    <div className="group relative p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/40 hover:-translate-y-1 transition-[transform,box-shadow,border-color] duration-200 flex flex-col justify-between gap-6 shadow-sm hover:shadow-[0_0_40px_rgba(255,107,0,0.1)] overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
       <div className="space-y-4 relative z-10">
         <svg className="h-6 w-6 text-primary/40 group-hover:text-primary transition-colors duration-300" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -591,7 +574,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
         <p className="text-sm font-medium text-muted-foreground leading-relaxed italic group-hover:text-foreground/90 transition-colors">"{review.text}"</p>
       </div>
       <div className="flex items-center gap-3 pt-2 border-t border-border/40 relative z-10">
-        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner ring-2 ring-background group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner ring-2 ring-background group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-200">
           {review.name.charAt(0)}
         </div>
         <div>

@@ -177,9 +177,11 @@
 @layer utilities {
   .animate-marquee-up {
     animation: marquee-up 80s linear infinite;
+    will-change: transform;
   }
   .animate-marquee-down {
     animation: marquee-down 80s linear infinite;
+    will-change: transform;
   }
   
   /* Enterprise Grid Background */
@@ -220,7 +222,7 @@
     background: conic-gradient(from 90deg at 50% 50%, #00000000 50%, #ff6b00, #ff0055, #ff6b00, #00000000 100%);
     opacity: 1;
     transition: opacity 0.3s ease;
-    animation: aurora-spin 2s linear infinite;
+    animation: aurora-spin 8s linear infinite;
     z-index: -1;
   }
   .aurora-btn:hover::before {
@@ -236,6 +238,29 @@
 
   @keyframes aurora-spin {
     100% { transform: rotate(360deg); }
+  }
+
+  .landing-skill-track {
+    animation: landing-skill-track 12s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  @keyframes landing-skill-track {
+    0%, 18% { transform: translateY(0); }
+    25%, 43% { transform: translateY(-20%); }
+    50%, 68% { transform: translateY(-40%); }
+    75%, 93% { transform: translateY(-60%); }
+    100% { transform: translateY(-80%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee-up,
+    .animate-marquee-down,
+    .aurora-btn::before,
+    .landing-skill-track {
+      animation: none !important;
+      will-change: auto;
+    }
   }
 }
 
