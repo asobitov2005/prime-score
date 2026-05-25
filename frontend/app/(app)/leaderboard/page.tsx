@@ -232,13 +232,21 @@ export default function LeaderboardPage() {
     enabled: Boolean(selectedEntry?.userId),
     staleTime: 60_000,
   });
+  const currentProfileQuery = useQuery({
+    queryKey: ["leaderboard-user-profile-self", userId],
+    queryFn: () => api.getLeaderboardUserProfile(userId!),
+    enabled: hasHydrated && isAuthenticated && Boolean(userId),
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     setEquippedAchievementId(window.localStorage.getItem(EQUIPPED_ACHIEVEMENT_STORAGE_KEY));
   }, []);
 
   const equippedAchievement = equippedAchievementId
-    ? achievements.find((achievement) => achievement.id === equippedAchievementId && achievement.status === "unlocked")
+    ? currentProfileQuery.data?.achievement_catalog.find(
+        (achievement) => achievement.id === equippedAchievementId && achievement.status === "unlocked"
+      ) ?? null
     : null;
 
   const withEquippedBadge = (entry: LeaderboardEntry): LeaderboardEntry => {

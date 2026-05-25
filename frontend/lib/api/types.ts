@@ -76,6 +76,27 @@ export interface LeaderboardUserProfileResponse {
     rarity: string;
     image?: string | null;
   }>;
+  achievement_catalog: Array<{
+    id: string;
+    title: string;
+    description: string;
+    category: "level" | "streak" | "skill" | "performance" | "special";
+    skill_type?: "reading" | "listening" | "writing" | "speaking" | null;
+    rarity: string;
+    image?: string | null;
+    status: "unlocked" | "in_progress" | "locked";
+    requirement: string;
+    required_xp?: number | null;
+    unlock_level?: number | null;
+    streak_days?: number | null;
+    xp_reward?: number | null;
+    unlocked_at?: string | null;
+    progress?: {
+      current: number;
+      target: number;
+      label: string;
+    } | null;
+  }>;
 }
 
 export interface SubscribeBody {

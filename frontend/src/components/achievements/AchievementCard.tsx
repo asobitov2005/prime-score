@@ -51,7 +51,7 @@ function xpToGo(achievement: Achievement): number | null {
     return null;
   }
 
-  const current = achievement.progress?.current ?? 2615;
+  const current = achievement.progress?.current ?? 0;
   return Math.max(0, achievement.requiredXp - current);
 }
 
@@ -60,7 +60,7 @@ function streakDaysToGo(achievement: Achievement): number | null {
     return null;
   }
 
-  const current = achievement.progress?.current ?? 11;
+  const current = achievement.progress?.current ?? 0;
   return Math.max(0, achievement.streakDays - current);
 }
 

@@ -43,6 +43,30 @@ class LeaderboardUserAchievementRead(BaseModel):
     image: str | None = None
 
 
+class LeaderboardUserAchievementProgressRead(BaseModel):
+    current: int = 0
+    target: int = 0
+    label: str = ""
+
+
+class LeaderboardUserAchievementStateRead(BaseModel):
+    id: str
+    title: str
+    description: str
+    category: str
+    skill_type: str | None = None
+    rarity: str = "Common"
+    image: str | None = None
+    status: str = "locked"
+    requirement: str
+    required_xp: int | None = None
+    unlock_level: int | None = None
+    streak_days: int | None = None
+    xp_reward: int | None = None
+    unlocked_at: datetime | None = None
+    progress: LeaderboardUserAchievementProgressRead | None = None
+
+
 class LeaderboardUserStatsRead(BaseModel):
     longest_streak: int = 0
     highest_band: float | None = None
@@ -66,3 +90,4 @@ class LeaderboardUserProfileRead(BaseModel):
     active_titles: list[str] = Field(default_factory=list)
     stats: LeaderboardUserStatsRead = Field(default_factory=LeaderboardUserStatsRead)
     achievements: list[LeaderboardUserAchievementRead] = Field(default_factory=list)
+    achievement_catalog: list[LeaderboardUserAchievementStateRead] = Field(default_factory=list)

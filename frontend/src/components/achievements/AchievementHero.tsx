@@ -13,6 +13,7 @@ export function AchievementHero({ achievements }: { achievements: Achievement[] 
   const equippedBadge = achievements.find((achievement) => achievement.status === "unlocked" && achievement.featured)
     ?? achievements.find((achievement) => achievement.status === "unlocked");
   const featuredBadge = equippedBadge ?? achievements.find((achievement) => achievement.featured) ?? achievements[0];
+  const currentTitle = equippedBadge?.title ?? "No title equipped";
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card shadow-xl shadow-slate-200/70 dark:bg-slate-950/80 dark:shadow-black/30">
@@ -58,7 +59,7 @@ export function AchievementHero({ achievements }: { achievements: Achievement[] 
               </div>
               <div>
                 <p className="text-xs font-semibold text-muted-foreground sm:text-right">Current title</p>
-            <p className="mt-1 text-lg font-semibold text-foreground">Consistent Learner</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{currentTitle}</p>
               </div>
             </div>
             <div className="mt-4 h-3 overflow-hidden rounded-full bg-white shadow-inner dark:bg-slate-900">

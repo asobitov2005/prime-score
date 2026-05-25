@@ -120,6 +120,81 @@ def test_level_formula_matches_examples() -> None:
     assert xp.calculate_level(10000) == 11
 
 
+def test_achievement_catalog_keeps_higher_level_badges_locked_for_level_one_user() -> None:
+    user = SimpleNamespace(
+        current_level=1,
+        total_xp=0,
+        current_streak=0,
+        best_streak=0,
+        created_at=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    catalog = leaderboard_route._build_achievement_catalog(
+        user=user,
+        reading_attempt_count=0,
+        reading_average_accuracy=None,
+        listening_perfect_score_reached=False,
+        listening_best_score=0,
+        listening_best_target=0,
+        writing_submission_count=0,
+        writing_best_band=None,
+        speaking_completed_count=0,
+        recent_full_mock_accuracy=None,
+        recent_full_mock_count=0,
+        full_mock_completions=0,
+        weekend_day_count=0,
+        early_session_count=0,
+        late_session_count=0,
+        rank=0,
+        weekly_rank=None,
+        leaderboard_size=0,
+    )
+
+    bronze = next(item for item in catalog if item.id == "level-bronze-learner")
+    silver = next(item for item in catalog if item.id == "level-silver-scholar")
+
+    assert bronze.status == "locked"
+    assert silver.status == "locked"
+
+
+def test_achievement_catalog_requires_both_level_and_xp_for_level_badges() -> None:
+    user = SimpleNamespace(
+        current_level=10,
+        total_xp=1_950,
+        current_streak=0,
+        best_streak=0,
+        created_at=datetime(2026, 5, 10, tzinfo=UTC),
+    )
+
+    catalog = leaderboard_route._build_achievement_catalog(
+        user=user,
+        reading_attempt_count=0,
+        reading_average_accuracy=None,
+        listening_perfect_score_reached=False,
+        listening_best_score=0,
+        listening_best_target=0,
+        writing_submission_count=0,
+        writing_best_band=None,
+        speaking_completed_count=0,
+        recent_full_mock_accuracy=None,
+        recent_full_mock_count=0,
+        full_mock_completions=0,
+        weekend_day_count=0,
+        early_session_count=0,
+        late_session_count=0,
+        rank=0,
+        weekly_rank=None,
+        leaderboard_size=0,
+    )
+
+    silver = next(item for item in catalog if item.id == "level-silver-scholar")
+
+    assert silver.status == "in_progress"
+    assert silver.progress is not None
+    assert "Level 10 / 10" in silver.progress.label
+    assert "1,950 / 2,000 XP" in silver.progress.label
+
+
 async def test_create_xp_transaction_applies_daily_cap(monkeypatch) -> None:
     added: list[object] = []
     user = SimpleNamespace(total_xp=650, current_level=3)

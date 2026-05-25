@@ -97,21 +97,23 @@ function requirementItems(achievement: Achievement): string[] {
 }
 
 function progressLabel(achievement: Achievement): string | null {
+  const progress = achievement.progress;
+
   if (achievement.status === "unlocked") {
     return null;
   }
 
-  if (achievement.progress) {
+  if (progress) {
     const unit = achievement.category === "streak" ? "days" : achievement.category === "level" ? "XP" : "";
-    return `${formatNumber(achievement.progress.current)} / ${formatNumber(achievement.progress.target)}${unit ? ` ${unit}` : ""}`;
+    return `${formatNumber(progress.current)} / ${formatNumber(progress.target)}${unit ? ` ${unit}` : ""}`;
   }
 
   if (achievement.category === "level" && achievement.requiredXp) {
-    return `2,615 / ${formatNumber(achievement.requiredXp)} XP`;
+    return `0 / ${formatNumber(achievement.requiredXp)} XP`;
   }
 
   if (achievement.category === "streak" && achievement.streakDays) {
-    return `11 / ${formatNumber(achievement.streakDays)} days`;
+    return `0 / ${formatNumber(achievement.streakDays)} days`;
   }
 
   return null;
@@ -141,6 +143,7 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
   const progress = progressPercent(achievement);
   const progressText = progressLabel(achievement);
   const isUnlocked = achievement.status === "unlocked";
+  const isInProgress = achievement.status === "in_progress";
 
   useEffect(() => {
     if (!open) return;
@@ -233,6 +236,11 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
                     <>
                       <BadgeCheck className="h-4 w-4 text-emerald-500" />
                       <span className="text-emerald-600">Unlocked</span>
+                    </>
+                  ) : isInProgress ? (
+                    <>
+                      <Sparkles className="h-4 w-4 text-blue-500" />
+                      <span className="text-blue-600 dark:text-blue-400">In progress</span>
                     </>
                   ) : (
                     <>
