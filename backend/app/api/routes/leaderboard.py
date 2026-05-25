@@ -5,7 +5,7 @@ from math import ceil
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -181,6 +181,11 @@ def _attempt_accuracy(attempt: Attempt) -> float | None:
     if attempt.raw_score is None or int(attempt.max_score or 0) <= 0:
         return None
     return (int(attempt.raw_score or 0) / max(1, int(attempt.max_score or 0))) * 100
+
+
+async def _table_exists(session: AsyncSession, table_name: str) -> bool:
+    value = await session.scalar(select(func.to_regclass(table_name)))
+    return value is not None
 
 
 def _rarity_for_streak_days(days: int) -> str:
@@ -815,7 +820,7 @@ async def get_leaderboard_user_profile(
                 .order_by(WritingSubmission.submitted_at.desc(), WritingSubmission.created_at.desc())
             )
         ).all()
-    )
+    ) if await _table_exists(session, WritingSubmission.__tablename__) else []
     writing_submission_ids = [submission.id for submission in writing_submissions]
     writing_evaluations = list(
         (
@@ -824,7 +829,7 @@ async def get_leaderboard_user_profile(
                 .where(WritingEvaluation.submission_id.in_(writing_submission_ids))
             )
         ).all()
-    ) if writing_submission_ids else []
+    ) if writing_submission_ids and await _table_exists(session, WritingEvaluation.__tablename__) else []
     speaking_sessions = list(
         (
             await session.scalars(
@@ -833,7 +838,7 @@ async def get_leaderboard_user_profile(
                 .order_by(SpeakingSession.graded_at.desc().nullslast(), SpeakingSession.created_at.desc())
             )
         ).all()
-    )
+    ) if await _table_exists(session, SpeakingSession.__tablename__) else []
 
     total_time_seconds = sum(
         max(0, int((attempt.attempt_metadata or {}).get("time_spent_sec", 0) or 0))
