@@ -18,7 +18,9 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
+    MenuButtonWebApp,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
 from sqlalchemy import select
 
@@ -94,17 +96,23 @@ def _bot_session() -> AiohttpSession:
     return session
 
 
-def _phone_keyboard() -> ReplyKeyboardMarkup:
+def _phone_keyboard(webapp_url: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📱 Share phone number", request_contact=True)]],
+        keyboard=[
+            [KeyboardButton(text="🚀 Open PrimeScore", web_app=WebAppInfo(url=webapp_url))],
+            [KeyboardButton(text="📱 Share phone number", request_contact=True)],
+        ],
         resize_keyboard=True,
         persistent=True,
     )
 
 
-def _login_keyboard() -> ReplyKeyboardMarkup:
+def _login_keyboard(webapp_url: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="🔑 Login")]],
+        keyboard=[
+            [KeyboardButton(text="🚀 Open PrimeScore", web_app=WebAppInfo(url=webapp_url))],
+            [KeyboardButton(text="🔑 Login")],
+        ],
         resize_keyboard=True,
         persistent=True,
     )
@@ -309,6 +317,17 @@ async def run_bot() -> None:
     bot = Bot(token=settings.telegram_bot_token, session=_bot_session())
     dp = Dispatcher()
     store = get_code_store()
+    webapp_url = settings.telegram_webapp_url
+
+    try:
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="Open PrimeScore",
+                web_app=WebAppInfo(url=webapp_url),
+            )
+        )
+    except TelegramAPIError:
+        logger.exception("Failed to set Telegram WebApp menu button.")
 
     @dp.message(Command("start"))
     async def cmd_start(message: types.Message) -> None:
@@ -334,17 +353,17 @@ async def run_bot() -> None:
         if contact is not None:
             await message.answer(
                 "👋 <b>Welcome back to PrimeScore!</b>\n\n"
-                "Tap the button below to get your login code.",
+                "Open the app directly or tap Login to get your code.",
                 parse_mode="HTML",
-                reply_markup=_login_keyboard(),
+                reply_markup=_login_keyboard(webapp_url),
             )
             return
 
         await message.answer(
             "👋 <b>Welcome to PrimeScore!</b>\n\n"
-            "Share your phone number to sign in.",
+            "Open the app directly, or share your phone number for code login.",
             parse_mode="HTML",
-            reply_markup=_phone_keyboard(),
+            reply_markup=_phone_keyboard(webapp_url),
         )
 
     @dp.message(F.contact)
@@ -352,7 +371,7 @@ async def run_bot() -> None:
         if message.contact.user_id != message.from_user.id:
             await message.answer(
                 "❌ Please share only your own number.",
-                reply_markup=_phone_keyboard(),
+                reply_markup=_phone_keyboard(webapp_url),
             )
             return
 
@@ -387,9 +406,9 @@ async def run_bot() -> None:
             logger.exception("Failed to save bot contact user %s", message.from_user.id)
         await message.answer(
             "✅ <b>Phone number received.</b>\n\n"
-            "Tap the button below to get your login code.",
+            "Open the app directly or tap Login to get your code.",
             parse_mode="HTML",
-            reply_markup=_login_keyboard(),
+            reply_markup=_login_keyboard(webapp_url),
         )
 
     @dp.message(F.text == "🔑 Login")
@@ -411,7 +430,7 @@ async def run_bot() -> None:
         if not contact:
             await message.answer(
                 "⚠️ Please share your phone number first.",
-                reply_markup=_phone_keyboard(),
+                reply_markup=_phone_keyboard(webapp_url),
             )
             return
 
@@ -470,12 +489,12 @@ async def run_bot() -> None:
         if contact:
             await message.answer(
                 "🔑 Tap the button to get your login code:",
-                reply_markup=_login_keyboard(),
+                reply_markup=_login_keyboard(webapp_url),
             )
         else:
             await message.answer(
                 "📱 Please share your phone number:",
-                reply_markup=_phone_keyboard(),
+                reply_markup=_phone_keyboard(webapp_url),
             )
 
     logger.info("Bot starting (long-polling)...")

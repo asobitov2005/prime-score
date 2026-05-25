@@ -5,6 +5,8 @@ import type {
   MeProfileRead,
   MeProfileUpdateBody,
   AuthSessionStatusResponse,
+  AuthLoginResponse,
+  AuthTelegramWebAppBody,
   RedeemResponse,
   GenerateGiftCodeBody,
   GenerateGiftCodeResponse,
@@ -247,31 +249,18 @@ export function createApiClient(config: ApiClientConfig = {}) {
       method: "POST",
       body: JSON.stringify({ telegram_id: body.telegramId })
     }),
-    verifyCode: (body: AuthVerifyCodeBody) => request<{
-      session_id: string;
-      access_token: string;
-      refresh_token: string;
-      access_expires_in_seconds: number;
-      refresh_expires_in_seconds: number;
-      user: {
-        id: string;
-        first_name: string;
-        last_name?: string | null;
-        username?: string | null;
-        phone?: string | null;
-        avatar_url?: string | null;
-        is_premium: boolean;
-        premium_until?: string | null;
-        telegram_id?: number | null;
-        created_at?: string | null;
-      };
-      is_new_user?: boolean;
-      welcome_bonus_days?: number;
-    }>("/auth/verify-code", {
+    verifyCode: (body: AuthVerifyCodeBody) => request<AuthLoginResponse>("/auth/verify-code", {
       method: "POST",
       body: JSON.stringify({
         telegram_id: body.telegramId,
         code: body.code,
+      })
+    }),
+    telegramWebAppLogin: (body: AuthTelegramWebAppBody) => request<AuthLoginResponse>("/auth/telegram-webapp", {
+      method: "POST",
+      body: JSON.stringify({
+        init_data: body.initData,
+        request_contact: Boolean(body.requestContact),
       })
     }),
     refresh: async (refreshToken: string) => {

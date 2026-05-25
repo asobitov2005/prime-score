@@ -27,6 +27,11 @@ class AuthVerifyCodeRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6)
 
 
+class AuthTelegramWebAppRequest(BaseModel):
+    init_data: str = Field(min_length=1)
+    request_contact: bool = False
+
+
 class AuthRefreshRequest(BaseModel):
     refresh_token: str
 

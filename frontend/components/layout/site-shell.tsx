@@ -71,7 +71,9 @@ export function SiteShell({ children }: SiteShellProps) {
     || currentPath.startsWith("/writing")
     || currentPath.startsWith("/speaking")
     || currentPath.startsWith("/articles");
-  const hideSiteChrome = currentPath.startsWith("/admin") || currentPath.startsWith("/exam-preview/");
+  const hideSiteChrome = currentPath.startsWith("/admin")
+    || currentPath.startsWith("/exam-preview/")
+    || currentPath.startsWith("/telegram");
   const welcomeBonusVisible = hasHydrated && isAuthenticated && isAppRoute && welcomeBonusDays > 0;
 
   const fetchNotifications = async () => {

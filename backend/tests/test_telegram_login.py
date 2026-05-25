@@ -11,6 +11,81 @@ from app.bot.main import _apply_bot_contact_to_user, _is_contact_refresh_due
 from app.models.user import TelegramUser, User
 from app.services import telegram_profile_sync
 from app.services import telegram_users as telegram_user_service
+from app.services.telegram_webapp import (
+    TelegramWebAppValidationError,
+    build_signed_telegram_webapp_init_data,
+    build_telegram_webapp_fallback_phone,
+    validate_telegram_webapp_init_data,
+)
+
+
+def test_validate_telegram_webapp_init_data_accepts_signed_payload() -> None:
+    token = "123456:test-token"
+    auth_date = datetime(2026, 5, 25, 8, 0, tzinfo=UTC)
+    init_data = build_signed_telegram_webapp_init_data(
+        bot_token=token,
+        auth_date=auth_date,
+        user={
+            "id": 972538005,
+            "first_name": "Azizbek",
+            "last_name": "Sobitov",
+            "username": "TheBugCreator",
+            "language_code": "uz",
+            "photo_url": "https://t.me/i/userpic/320/avatar.jpg",
+        },
+    )
+
+    user = validate_telegram_webapp_init_data(
+        init_data,
+        bot_token=token,
+        now_timestamp=int(auth_date.timestamp()) + 30,
+    )
+
+    assert user.telegram_id == 972538005
+    assert user.first_name == "Azizbek"
+    assert user.last_name == "Sobitov"
+    assert user.username == "TheBugCreator"
+    assert user.language_code == "uz"
+    assert user.photo_url == "https://t.me/i/userpic/320/avatar.jpg"
+
+
+def test_validate_telegram_webapp_init_data_rejects_forged_hash() -> None:
+    token = "123456:test-token"
+    auth_date = datetime(2026, 5, 25, 8, 0, tzinfo=UTC)
+    init_data = build_signed_telegram_webapp_init_data(
+        bot_token=token,
+        auth_date=auth_date,
+        user={"id": 972538005, "first_name": "Azizbek"},
+    ).replace("Azizbek", "Attacker")
+
+    with pytest.raises(TelegramWebAppValidationError, match="signature"):
+        validate_telegram_webapp_init_data(
+            init_data,
+            bot_token=token,
+            now_timestamp=int(auth_date.timestamp()) + 30,
+        )
+
+
+def test_validate_telegram_webapp_init_data_rejects_expired_payload() -> None:
+    token = "123456:test-token"
+    auth_date = datetime(2026, 5, 25, 8, 0, tzinfo=UTC)
+    init_data = build_signed_telegram_webapp_init_data(
+        bot_token=token,
+        auth_date=auth_date,
+        user={"id": 972538005, "first_name": "Azizbek"},
+    )
+
+    with pytest.raises(TelegramWebAppValidationError, match="expired"):
+        validate_telegram_webapp_init_data(
+            init_data,
+            bot_token=token,
+            max_age_seconds=60,
+            now_timestamp=int(auth_date.timestamp()) + 61,
+        )
+
+
+def test_build_telegram_webapp_fallback_phone_is_stable() -> None:
+    assert build_telegram_webapp_fallback_phone(972538005) == "tg:972538005"
 
 
 def test_upsert_user_from_login_refreshes_telegram_profile_fields() -> None:

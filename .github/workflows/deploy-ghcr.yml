@@ -279,6 +279,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=/api
             API_INTERNAL_BASE_URL=http://api:8000/api
+            NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=primescorebot
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/prime-score-frontend:latest

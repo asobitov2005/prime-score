@@ -24,6 +24,33 @@ export interface AuthVerifyCodeBody {
   code: string;
 }
 
+export interface AuthTelegramWebAppBody {
+  initData: string;
+  requestContact?: boolean;
+}
+
+export interface AuthLoginResponse {
+  session_id: string;
+  access_token: string;
+  refresh_token: string;
+  access_expires_in_seconds: number;
+  refresh_expires_in_seconds: number;
+  user: {
+    id: string;
+    first_name: string;
+    last_name?: string | null;
+    username?: string | null;
+    phone?: string | null;
+    avatar_url?: string | null;
+    is_premium: boolean;
+    premium_until?: string | null;
+    telegram_id?: number | null;
+    created_at?: string | null;
+  };
+  is_new_user?: boolean;
+  welcome_bonus_days?: number;
+}
+
 export interface TestListQuery {
   type?: TestType;
   access?: AccessType;

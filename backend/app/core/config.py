@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://127.0.0.1:6379/0"
     timezone: str = "Asia/Tashkent"
     telegram_bot_token: str = "change-me"
+    telegram_webapp_url: str = "https://primescore.uz/telegram"
+    telegram_webapp_auth_max_age_seconds: int = 86_400
     jwt_secret: str = "change-me"
     jwt_refresh_secret: str = "change-me-too"
     access_token_expire_minutes: int = 43200

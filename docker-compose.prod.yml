@@ -67,6 +67,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBAPP_URL: ${TELEGRAM_WEBAPP_URL:-https://primescore.uz/telegram}
       CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
@@ -108,6 +109,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBAPP_URL: ${TELEGRAM_WEBAPP_URL:-https://primescore.uz/telegram}
       CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
@@ -143,6 +145,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBAPP_URL: ${TELEGRAM_WEBAPP_URL:-https://primescore.uz/telegram}
       CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
@@ -178,6 +181,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN}
+      TELEGRAM_WEBAPP_URL: ${TELEGRAM_WEBAPP_URL:-https://primescore.uz/telegram}
       CORS_ORIGINS: '["http://localhost:3100","http://localhost:3101","http://127.0.0.1:3100","http://127.0.0.1:3101"]'
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
@@ -207,6 +211,7 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
       API_INTERNAL_BASE_URL: ${API_INTERNAL_BASE_URL:-http://api:8000/api}
+      NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-primescorebot}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))"]
       interval: 10s

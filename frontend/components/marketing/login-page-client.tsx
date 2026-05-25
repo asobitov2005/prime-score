@@ -46,7 +46,7 @@ export function LoginPageClient() {
   const [errorMsg, setErrorMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const BOT_USERNAME = "primescorebot";
+  const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "primescorebot";
 
   const handleVerify = async () => {
     setIsLoading(true);
