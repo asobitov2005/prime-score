@@ -168,12 +168,12 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-150 ease-out fill-mode-both flex flex-col">
                 <span>Master Your IELTS</span>
-                <span className="relative h-[1.15em] overflow-hidden inline-block w-full">
+                <span className="relative h-[1.15em] overflow-hidden inline-block w-full leading-[1.15]">
                   <span className="landing-skill-track flex flex-col">
                     {[...skills, skills[0]].map((skill, index) => (
                       <span
                         key={`${skill}-${index}`}
-                        className="h-[1.15em] bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent pb-2"
+                        className="block h-[1.15em] leading-[1.15] bg-gradient-to-r from-primary/80 via-primary to-primary/60 bg-clip-text text-transparent"
                       >
                         {skill}
                       </span>
