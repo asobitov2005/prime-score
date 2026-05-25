@@ -154,6 +154,9 @@ run_database_migrations() {
 
   docker run --rm \
     --network "$network_name" \
+    --add-host postgres:172.28.100.2 \
+    --add-host redis:172.28.100.3 \
+    --add-host minio:172.28.100.4 \
     --env-file .env \
     -e DATABASE_URL="postgresql+asyncpg://${postgres_user}:${POSTGRES_PASSWORD}@postgres:5432/${postgres_db}" \
     -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
