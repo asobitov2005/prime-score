@@ -1281,6 +1281,28 @@ async def _leaderboard_rows_from_transactions(
     occurred_at: datetime,
 ) -> list[tuple[LeaderboardSnapshot, User]]:
     period_start, start_at, end_at = _period_datetime_bounds(period_type, occurred_at)
+    users = (
+        await session.scalars(
+            select(User)
+            .where(User.deleted_at.is_(None))
+            .order_by(User.created_at.asc())
+        )
+    ).all()
+    if not users:
+        return []
+
+    snapshots: dict[UUID, tuple[LeaderboardSnapshot, User]] = {
+        user.id: (
+            LeaderboardSnapshot(
+                user_id=user.id,
+                period_type=period_type,
+                period_start=period_start,
+            ),
+            user,
+        )
+        for user in users
+    }
+
     filters = [
         XPTransaction.counts_toward_leaderboard.is_(True),
         User.deleted_at.is_(None),
@@ -1299,19 +1321,8 @@ async def _leaderboard_rows_from_transactions(
         )
     ).all()
 
-    snapshots: dict[UUID, tuple[LeaderboardSnapshot, User]] = {}
     for transaction, user in rows:
-        snapshot, _ = snapshots.setdefault(
-            user.id,
-            (
-                LeaderboardSnapshot(
-                    user_id=user.id,
-                    period_type=period_type,
-                    period_start=period_start,
-                ),
-                user,
-            ),
-        )
+        snapshot, _ = snapshots[user.id]
         xp_amount = int(transaction.xp_amount or 0)
         snapshot.xp_total += xp_amount
         snapshot.achieved_at = transaction.created_at
@@ -1332,8 +1343,7 @@ async def _leaderboard_rows_from_transactions(
     result: list[tuple[LeaderboardSnapshot, User]] = []
     for snapshot, user in snapshots.values():
         snapshot.xp_total = max(0, int(snapshot.xp_total or 0))
-        if snapshot.xp_total > 0:
-            result.append((snapshot, user))
+        result.append((snapshot, user))
     return result
 
 
@@ -1343,7 +1353,7 @@ async def _all_time_leaderboard_rows_from_users(
     users = (
         await session.scalars(
             select(User)
-            .where(User.deleted_at.is_(None), User.total_xp > 0)
+            .where(User.deleted_at.is_(None))
             .order_by(User.total_xp.desc())
         )
     ).all()
@@ -1357,7 +1367,6 @@ async def _all_time_leaderboard_rows_from_users(
             .where(
                 XPTransaction.counts_toward_leaderboard.is_(True),
                 User.deleted_at.is_(None),
-                User.total_xp > 0,
             )
             .order_by(XPTransaction.created_at.asc())
         )
