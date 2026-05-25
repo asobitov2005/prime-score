@@ -1,13 +1,12 @@
-"use client";
-
 import Link from "next/link";
-import React, { useEffect, useRef, useState, type ReactNode } from "react";
-import { useInView } from "@/hooks/use-in-view";
-import { ArrowRight, BookOpenText, CheckCircle2, Headphones, Mic2, PenSquare, ShieldCheck, Zap, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpenText, Headphones, Mic2, PenSquare } from "lucide-react";
+import { LandingFeaturedTests } from "@/components/marketing/landing-featured-tests";
+import { LandingPricingGrid } from "@/components/marketing/landing-pricing-grid";
+import { LandingReviewsMarquee } from "@/components/marketing/landing-reviews-marquee";
+import { LandingScrollReveal } from "@/components/marketing/landing-scroll-reveal";
 import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
-import { PricingPlanGrid } from "@/components/marketing/pricing-plan-grid";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
+import type { LandingFeaturedTest } from "@/components/marketing/landing-types";
 import type { ReviewItem } from "@/lib/mock-data";
 import type { MarketingPlan } from "@/lib/server-plans";
 import { cn } from "@/lib/utils";
@@ -137,35 +136,6 @@ const sectionPages = [
 
 const skills = ["Reading.", "Listening.", "Writing.", "Speaking."];
 
-type LandingFeaturedTest = {
-  id: string;
-  slug: string;
-  title: string;
-  type: string;
-  source: string;
-  questionCount: number;
-  estimatedMinutes: number;
-  isPremiumLocked: boolean;
-  createdAt: string;
-};
-
-function ScrollReveal({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
-  const [ref, inView] = useInView({ threshold: 0.1 });
-  return (
-    <div
-      ref={ref as React.RefObject<HTMLDivElement>}
-      id={id}
-      className={cn(
-        className,
-        "transition-[opacity,transform] duration-700 ease-out",
-        inView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
 interface LandingPageClientProps {
   plans: MarketingPlan[];
   reviews: ReviewItem[];
@@ -178,49 +148,10 @@ function formatOnlineCount(value: number): string {
 }
 
 export function LandingPageClient({ plans, reviews, onlineCount, initialTests = [] }: LandingPageClientProps) {
-  const [isReviewsVisible, setIsReviewsVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState("All");
-  const reviewsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setIsReviewsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.1 },
-    );
-
-    if (reviewsRef.current) {
-      observer.observe(reviewsRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
-  const getDisplayedTests = () => {
-    const sourceTests = initialTests;
-    let filtered = sourceTests;
-
-    if (activeTab !== "All") {
-      filtered = sourceTests.filter((test) => test.type.toLowerCase() === activeTab.toLowerCase());
-      return filtered.slice(0, 4);
-    }
-
-    const readingTests = sourceTests.filter((test) => test.type === "reading").slice(0, 2);
-    const listeningTests = sourceTests.filter((test) => test.type === "listening").slice(0, 2);
-
-    return [...readingTests, ...listeningTests].slice(0, 4);
-  };
-
-  const displayedTests = getDisplayedTests();
-
   return (
     <div className="relative mx-auto max-w-[1600px] overflow-hidden">
       <div className="w-full px-4 pt-8 pb-0 sm:px-12 sm:pt-12 sm:pb-0 lg:px-16 lg:pt-20 lg:pb-0 origin-top transform scale-100 md:scale-[0.85] xl:scale-[0.9] transition-transform mx-auto md:-mb-[12%] xl:-mb-[8%]">
-        <ScrollReveal className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
+        <div className="relative z-10 w-full grid gap-12 lg:gap-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-start pt-0 md:pt-4">
           <div className="space-y-8 md:space-y-10 min-w-0">
             <div className="space-y-4">
               <div className="animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out fill-mode-both">
@@ -324,99 +255,11 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                   </Link>
                 </div>
 
-                <div className="bg-muted/30 p-1.5 rounded-[1.25rem] flex items-center justify-between overflow-x-auto no-scrollbar border border-border/10 shadow-inner">
-                  {["All", "Reading", "Listening"].map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className={cn(
-                        "flex-1 px-4 py-2.5 text-[13px] md:text-[14px] font-medium rounded-xl transition-[background-color,color,box-shadow,border-color,transform] duration-200 whitespace-nowrap",
-                        activeTab === tab
-                          ? "bg-background text-foreground shadow-[0_4px_12px_-2px_rgba(0,0,0,0.12)] border border-border/50 scale-[1.02]"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-3">
-                  {displayedTests.length > 0 ? displayedTests.map((test) => {
-                    const isReading = test.type === "reading";
-                    const isListening = test.type === "listening";
-
-                    const cardBg = isReading ? "bg-orange-50/50 dark:bg-orange-950/10" : isListening ? "bg-blue-50/50 dark:bg-blue-950/10" : "bg-purple-50/50 dark:bg-purple-950/10";
-                    const cardBorder = isReading ? "border-orange-100 dark:border-orange-900/30" : isListening ? "border-blue-100 dark:border-blue-900/30" : "border-purple-100 dark:border-purple-900/30";
-                    const iconBgColor = isReading ? "bg-orange-100 dark:bg-orange-900/40" : isListening ? "bg-blue-100 dark:bg-blue-900/40" : "bg-purple-100 dark:bg-purple-900/40";
-                    const iconColor = isReading ? "text-[#e86c27] dark:text-orange-400" : isListening ? "text-[#2e7ddb] dark:text-blue-400" : "text-[#7c5cdb] dark:text-purple-400";
-                    const badgeBg = test.isPremiumLocked ? "bg-orange-100 dark:bg-orange-900/40" : "bg-emerald-100 dark:bg-emerald-900/40";
-                    const badgeText = test.isPremiumLocked ? "text-[#c25010] dark:text-orange-400" : "text-[#059669] dark:text-emerald-400";
-                    const badgeLabel = test.isPremiumLocked ? "Pro" : "Free";
-                    return (
-                      <Link
-                        key={test.id}
-                        href={`/tests/${test.slug}`}
-                        className={cn(
-                          "group relative overflow-hidden flex items-center justify-between gap-4 p-3 md:p-4 rounded-2xl border transition-[background-color,border-color,box-shadow,transform] duration-150 hover:scale-[1.01] hover:shadow-md cursor-pointer",
-                          cardBg,
-                          cardBorder,
-                        )}
-                      >
-                        <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                          <div className={cn("flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 relative z-10", iconBgColor, iconColor)}>
-                            {isReading ? (
-                              <BookOpenText className="h-5 w-5 md:h-6 md:w-6" />
-                            ) : isListening ? (
-                              <Headphones className="h-5 w-5 md:h-6 md:w-6" />
-                            ) : (
-                              <span className="font-serif font-semibold text-base md:text-lg">W</span>
-                            )}
-                          </div>
-                          <div className="space-y-1 min-w-0 relative z-10">
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-[14px] md:text-[15px] text-foreground leading-tight truncate">{test.title}</p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] md:text-[12px] font-medium text-muted-foreground/80">
-                              <span className="uppercase tracking-wider font-medium">{test.source.replace("Official", "").trim()}</span>
-                              <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                              <span>{test.questionCount} questions</span>
-                              <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                              <span>{test.estimatedMinutes} min</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 shrink-0 pl-1">
-                          <span className={cn("hidden sm:flex px-2.5 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-[0.14em] shadow-sm", badgeBg, badgeText)}>
-                            {badgeLabel}
-                          </span>
-                          <div className="flex h-10 w-10 items-center justify-center text-[#0a1b3f] dark:text-foreground/80 transition-[color,transform] duration-200 group-hover:scale-125 group-hover:text-[#d94b04] dark:group-hover:text-primary">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" className="drop-shadow-sm" xmlns="http://www.w3.org/2000/svg">
-                              <path
-                                d="M18.4452 11.0253C19.1837 11.4554 19.1837 12.5446 18.4452 12.9747L7.66492 19.2598C6.9264 19.6899 6 19.1504 6 18.2851L6 5.71493C6 4.8496 6.9264 4.31012 7.66492 4.74021L18.4452 11.0253Z"
-                                strokeLinejoin="round"
-                                strokeLinecap="round"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  }) : (
-                    <EmptyState
-                      compact
-                      icon="search"
-                      title={activeTab === "All" ? "No tests found" : `No ${activeTab.toLowerCase()} tests found`}
-                      description="Published IELTS tests will appear here as soon as they are available."
-                      className="border-dashed bg-muted/15 shadow-none"
-                    />
-                  )}
-                </div>
+                <LandingFeaturedTests initialTests={initialTests} />
               </div>
             </div>
           </div>
-        </ScrollReveal>
+        </div>
 
         <section id="features" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 [content-visibility:auto] [contain-intrinsic-size:980px]">
           <div className="max-w-6xl mx-auto space-y-6 mb-12 text-center">
@@ -428,7 +271,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
             </p>
           </div>
 
-          <ScrollReveal className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-[1600px]">
+          <LandingScrollReveal className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-[1600px]">
             {sectionPages.map((mod, i) => (
               <Link
                 key={mod.id}
@@ -462,10 +305,10 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
                 </div>
               </Link>
             ))}
-          </ScrollReveal>
+          </LandingScrollReveal>
         </section>
 
-        <ScrollReveal id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 [content-visibility:auto] [contain-intrinsic-size:820px]">
+        <LandingScrollReveal id="pricing" className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 [content-visibility:auto] [contain-intrinsic-size:820px]">
           <div className="text-center space-y-4 mb-12">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
               Pricing that matches your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">exam timeline.</span>
@@ -475,7 +318,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
             </p>
           </div>
 
-          <PricingPlanGrid plans={plans} compact />
+          <LandingPricingGrid plans={plans} />
 
           <div className="mt-8 flex justify-center">
             <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-[background-color,color,transform] shadow-xl bg-background/80">
@@ -484,9 +327,9 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
               </Link>
             </Button>
           </div>
-        </ScrollReveal>
+        </LandingScrollReveal>
 
-        <ScrollReveal
+        <LandingScrollReveal
           id="reviews"
           className="relative z-10 w-full mt-24 lg:mt-32 pt-16 border-t border-border/30 pb-20 [content-visibility:auto] [contain-intrinsic-size:820px]"
         >
@@ -499,34 +342,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
             </p>
           </div>
 
-          <div
-            ref={reviewsRef}
-            className={cn("relative h-[600px] overflow-hidden", isReviewsVisible ? "opacity-100" : "opacity-0 transition-opacity duration-1000")}
-            style={{
-              maskImage: "linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)",
-              WebkitMaskImage: "linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)",
-            }}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full px-2">
-              <div className={cn("flex flex-col gap-6", isReviewsVisible && "animate-marquee-down hover:[animation-play-state:paused]")}>
-                {[...reviews, ...reviews].map((review, index) => (
-                  <ReviewCard key={`col1-${index}`} review={review} />
-                ))}
-              </div>
-
-              <div className={cn("hidden md:flex flex-col gap-6", isReviewsVisible && "animate-marquee-up hover:[animation-play-state:paused]")}>
-                {[...reviews].reverse().concat([...reviews].reverse()).map((review, index) => (
-                  <ReviewCard key={`col2-${index}`} review={review} />
-                ))}
-              </div>
-
-              <div className={cn("hidden md:flex flex-col gap-6", isReviewsVisible && "animate-marquee-down hover:[animation-play-state:paused]")}>
-                {[...reviews.slice(3), ...reviews.slice(0, 3), ...reviews.slice(3), ...reviews.slice(0, 3)].map((review, index) => (
-                  <ReviewCard key={`col3-${index}`} review={review} />
-                ))}
-              </div>
-            </div>
-          </div>
+          <LandingReviewsMarquee reviews={reviews} />
 
           <div className="mt-8 flex justify-center relative z-20">
             <Button asChild variant="outline" className="rounded-xl h-12 px-8 font-medium border-border/60 hover:bg-muted/50 hover:text-foreground hover:scale-105 transition-[background-color,color,transform] shadow-xl bg-background/80">
@@ -535,9 +351,9 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
               </Link>
             </Button>
           </div>
-        </ScrollReveal>
+        </LandingScrollReveal>
 
-        <ScrollReveal className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-3 text-center flex flex-col items-center overflow-hidden [content-visibility:auto] [contain-intrinsic-size:420px]">
+        <LandingScrollReveal className="relative z-10 w-full mt-0 border-t border-border/30 pt-24 pb-3 text-center flex flex-col items-center overflow-hidden [content-visibility:auto] [contain-intrinsic-size:420px]">
           <div className="max-w-3xl mx-auto space-y-6 relative z-10">
             <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1] animate-in fade-in slide-in-from-bottom-8 duration-1000">
               Ready to Practice Like It's the <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60 pr-2">Real Exam?</span>
@@ -557,30 +373,7 @@ export function LandingPageClient({ plans, reviews, onlineCount, initialTests = 
               </div>
             </div>
           </div>
-        </ScrollReveal>
-      </div>
-    </div>
-  );
-}
-
-function ReviewCard({ review }: { review: ReviewItem }) {
-  return (
-    <div className="group relative p-6 rounded-[2rem] bg-card/40 border border-border/50 hover:border-primary/40 hover:-translate-y-1 transition-[transform,box-shadow,border-color] duration-200 flex flex-col justify-between gap-6 shadow-sm hover:shadow-[0_0_40px_rgba(255,107,0,0.1)] overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-      <div className="space-y-4 relative z-10">
-        <svg className="h-6 w-6 text-primary/40 group-hover:text-primary transition-colors duration-300" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
-        </svg>
-        <p className="text-sm font-medium text-muted-foreground leading-relaxed italic group-hover:text-foreground/90 transition-colors">"{review.text}"</p>
-      </div>
-      <div className="flex items-center gap-3 pt-2 border-t border-border/40 relative z-10">
-        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner ring-2 ring-background group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-200">
-          {review.name.charAt(0)}
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-foreground">{review.name}</p>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-500">Band {review.band}</p>
-        </div>
+        </LandingScrollReveal>
       </div>
     </div>
   );
