@@ -300,7 +300,7 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
           </div>
 
           <div className="flex flex-col lg:flex-row gap-6 items-start">
-            <div className="min-h-[292px] rounded-3xl border border-border/70 bg-card/50 p-5 shadow-sm ring-1 ring-border/25 w-fit mx-auto lg:mx-0 transition-colors hover:bg-card/60 backdrop-blur-sm shrink-0">
+            <div className="min-h-[292px] rounded-3xl border border-border/70 bg-card/50 p-5 shadow-sm ring-1 ring-border/25 w-fit mx-auto lg:mx-0 transition-colors hover:bg-card/60 shrink-0">
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-7 gap-2 text-center mb-1">
                   {WEEKDAYS.map((day) => (
@@ -324,13 +324,13 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                         aria-label={`${formatSelectedDay(cell.date)} · ${cell.attemptsCount} attempt${cell.attemptsCount === 1 ? "" : "s"} · ${formatMinutes(cell.timeSpentSec)}`}
                         title={`${formatSelectedDay(cell.date)} · ${cell.attemptsCount} attempt${cell.attemptsCount === 1 ? "" : "s"} · ${formatMinutes(cell.timeSpentSec)}`}
                         className={cn(
-                          "group relative flex h-[28px] w-[40px] sm:h-[30px] sm:w-[46px] rounded-[8px] sm:rounded-[10px] border text-left transition-all duration-300 disabled:pointer-events-none overflow-hidden",
+                          "group relative flex h-[28px] w-[40px] sm:h-[30px] sm:w-[46px] rounded-[8px] sm:rounded-[10px] border text-left transition-colors duration-150 disabled:pointer-events-none overflow-hidden",
                           cell.inMonth ? "opacity-100" : "opacity-0 invisible",
                           toneClass,
-                          isSelected && "ring-2 ring-offset-[1.5px] ring-emerald-500/60 ring-offset-background scale-[1.03] shadow-sm z-20",
+                          isSelected && "ring-2 ring-offset-[1.5px] ring-emerald-500/60 ring-offset-background shadow-sm z-20",
                           cell.isToday && !isSelected && "ring-1 ring-orange-500/60 ring-offset-1 ring-offset-background",
                           !isSelected && !cell.isFuture && cell.inMonth && cell.attemptsCount === 0 && "hover:bg-muted/50 border-border/60",
-                          !isSelected && !cell.isFuture && cell.attemptsCount > 0 && "hover:scale-[1.03] hover:shadow-sm hover:z-20"
+                          !isSelected && !cell.isFuture && cell.attemptsCount > 0 && "hover:shadow-sm hover:z-20"
                         )}
                       >
                         {isSelected ? (
@@ -400,7 +400,7 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                         <span className="text-foreground">{formatMinutes(selectedCell.readingTimeSec)}</span>
                       </div>
                       <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50 shadow-inner">
-                        <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.readingTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
+                        <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.readingTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
                       </div>
                     </div>
 
@@ -410,7 +410,7 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                         <span className="text-foreground">{formatMinutes(selectedCell.listeningTimeSec)}</span>
                       </div>
                       <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50 shadow-inner">
-                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.listeningTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
+                        <div className="h-full bg-emerald-500 rounded-full transition-[width] duration-200" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.listeningTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
                       </div>
                     </div>
 
@@ -420,7 +420,7 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                         <span className="text-foreground">{formatMinutes(selectedCell.writingTimeSec)}</span>
                       </div>
                       <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50 shadow-inner">
-                        <div className="h-full bg-violet-500 rounded-full transition-all duration-500" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.writingTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
+                        <div className="h-full bg-violet-500 rounded-full transition-[width] duration-200" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.writingTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
                       </div>
                     </div>
                   </div>

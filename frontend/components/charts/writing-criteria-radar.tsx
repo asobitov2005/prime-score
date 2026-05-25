@@ -44,7 +44,7 @@ export function WritingCriteriaRadar({ criteria }: WritingCriteriaRadarProps) {
   ];
 
   return (
-    <Card className="col-span-1 rounded-2xl border border-border/50 bg-card/70 shadow-sm backdrop-blur-sm">
+    <Card className="col-span-1 rounded-2xl border border-border/50 bg-card/70 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-foreground">Writing Skills Breakdown</CardTitle>
       </CardHeader>

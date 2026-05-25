@@ -577,10 +577,7 @@ export function SiteShell({ children }: SiteShellProps) {
                         </button>
                       )}
                     </div>
-                    <div
-                      className="max-h-72 overflow-y-auto overscroll-contain"
-                      data-lenis-prevent
-                    >
+                    <div className="max-h-72 overflow-y-auto overscroll-contain">
                       {notifications.length === 0 ? (
                         <div className="px-4 py-8 text-center text-sm text-muted-foreground">No notifications yet</div>
                       ) : (

@@ -284,7 +284,7 @@ export default function LeaderboardPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-7xl space-y-6 pb-12 animate-in fade-in duration-500">
+      <div className="mx-auto max-w-7xl space-y-6 pb-12">
         <div className="relative overflow-hidden rounded-3xl border border-border/50 bg-card/80 shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-amber-500" />
           <div className="relative z-10 space-y-4 p-5 lg:p-6">
@@ -307,7 +307,7 @@ export default function LeaderboardPage() {
                   key={tab.id}
                   onClick={() => setPeriod(tab.id as LeaderboardPeriod)}
                   className={cn(
-                    "flex-1 whitespace-nowrap rounded-xl px-5 py-2.5 text-[14px] font-semibold transition-all sm:flex-none",
+                    "flex-1 whitespace-nowrap rounded-xl px-5 py-2.5 text-[14px] font-semibold transition-colors sm:flex-none",
                     period === tab.id
                       ? "border border-orange-300/80 bg-background text-foreground shadow-sm shadow-orange-950/5"
                       : "text-muted-foreground hover:bg-background hover:text-foreground",
@@ -320,7 +320,7 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-3xl border border-border/50 bg-card/50 shadow-lg shadow-black/5 backdrop-blur-xl">
+        <div className="overflow-hidden rounded-3xl border border-border/50 bg-card/50 shadow-lg shadow-black/5">
           <div className="grid grid-cols-[48px_minmax(0,1.4fr)_88px_78px] gap-3 border-b border-border/50 bg-muted/20 px-4 py-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground md:grid-cols-[56px_minmax(0,1.6fr)_110px_88px_110px_138px] md:px-6">
             <div className="text-center">Rank</div>
             <div>User</div>

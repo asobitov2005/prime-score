@@ -323,7 +323,7 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
           const Icon = skill.icon;
           return (
             <Link key={skill.key} href={skill.href} className="block group">
-              <div className="relative h-full overflow-hidden rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-950/5 dark:border-slate-800/80 dark:bg-slate-950/40 dark:hover:border-indigo-500/20 dark:hover:shadow-black/20">
+              <div className="relative h-full overflow-hidden rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-950/5 dark:border-slate-800/80 dark:bg-slate-950/40 dark:hover:border-indigo-500/20 dark:hover:shadow-black/20">
                 <div className="flex flex-col gap-3.5">
                   {/* Card Header (Icon & Label) */}
                   <div className="flex items-center gap-3">

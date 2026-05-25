@@ -153,13 +153,17 @@ export function getAverageBand(analytics: DashboardAnalytics, type: TestType): n
   return roundToIeltsBand(total / values.length);
 }
 
-export function useDashboardAnalytics(initialAnalytics: DashboardAnalytics, filter: DashboardAnalyticsFilter = "all") {
+export function useDashboardAnalytics(
+  initialAnalytics: DashboardAnalytics,
+  filter: DashboardAnalyticsFilter = "all",
+  enabled = true
+) {
   const api = useMemo(() => createApiClient(), []);
   const { userId, accessToken } = useAuthStore();
 
   return useQuery({
     queryKey: ["dashboard-analytics", userId, filter],
-    enabled: Boolean(userId && accessToken),
+    enabled: enabled && Boolean(userId && accessToken),
     queryFn: async () => {
       if (!userId || !accessToken) {
         return initialAnalytics;

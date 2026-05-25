@@ -79,17 +79,17 @@ export function LeaderboardUserProfileModal({
   return (
     <>
       {isOpen ? (
-        <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain pointer-events-none">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-4">
           {/* Backdrop */}
           <button
             type="button"
             onClick={onClose}
-            className="fixed inset-0 h-full w-full cursor-default bg-slate-900/40 backdrop-blur-sm dark:bg-slate-950/80"
+            className="absolute inset-0 h-full w-full cursor-default bg-slate-900/40 dark:bg-slate-950/80"
             aria-label="Close profile modal"
           />
 
           <div
-            className={`relative z-10 mt-6 flex min-h-0 flex-col overflow-hidden bg-white backdrop-blur-2xl animate-in slide-in-from-bottom-6 duration-200 md:mx-auto md:mt-[5dvh] md:max-h-[90dvh] md:w-full md:max-w-lg md:animate-in md:fade-in md:zoom-in-95 dark:bg-slate-900/95 border ${user?.isPremium ? 'border-amber-400/50 dark:border-amber-500/40 shadow-[0_8px_40px_rgba(245,158,11,0.2)]' : 'border-slate-200 dark:border-white/10 shadow-xl'} rounded-t-[28px] md:rounded-[28px] max-h-[calc(100dvh-1.5rem)] pointer-events-auto`}
+            className={`relative z-10 flex max-h-[calc(100dvh-1rem)] min-h-0 w-full flex-col overflow-hidden bg-white dark:bg-slate-900/95 border ${user?.isPremium ? 'border-amber-400/50 dark:border-amber-500/40 shadow-[0_8px_32px_rgba(245,158,11,0.18)]' : 'border-slate-200 dark:border-white/10 shadow-xl'} rounded-t-[28px] sm:max-w-lg sm:rounded-[28px]`}
           >
             {/* Top decorative glow for premium users */}
             {user?.isPremium && (
@@ -128,7 +128,7 @@ export function LeaderboardUserProfileModal({
                 {/* Avatar */}
                 <div className="relative mb-5 mt-2">
                   {user.isPremium && (
-                    <div className="absolute -inset-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full blur-md opacity-40 animate-pulse"></div>
+                    <div className="absolute -inset-2 rounded-full bg-gradient-to-br from-amber-400/20 to-orange-500/20"></div>
                   )}
                   <div className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-[3px] ${user.isPremium ? 'border-amber-400' : 'border-slate-200 dark:border-slate-700'} bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl font-bold text-slate-900 dark:text-white shadow-lg`}>
                     {user.avatarUrl ? (
@@ -183,7 +183,7 @@ export function LeaderboardUserProfileModal({
                   {/* Icon (No Box, Native Shape) */}
                   <div className="relative shrink-0 flex items-center justify-center">
                     {/* Subtle glow behind the hex badge itself */}
-                    <div className={`absolute inset-0 bg-gradient-to-br ${activeBadgeStyle.color} blur-[20px] opacity-40 rounded-full`}></div>
+                    <div className={`absolute inset-0 rounded-full bg-gradient-to-br ${activeBadgeStyle.color} opacity-15`}></div>
 
                     {user.equippedBadge.image ? (
                       <Image src={user.equippedBadge.image} alt={user.equippedBadge.title} width={64} height={64} className="relative z-10 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.15)] sm:w-[72px] sm:h-[72px]" />
@@ -235,7 +235,7 @@ export function LeaderboardUserProfileModal({
                       const achStyle = rarityConfig[ach.rarity] || rarityConfig.Common;
                       return (
                         <div key={ach.id} className="group relative flex flex-col items-center gap-2 cursor-default">
-                          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 transition-all duration-300 group-hover:scale-105 group-hover:border-slate-400 dark:border-slate-700 dark:bg-slate-800 sm:h-16 sm:w-16">
+                          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 transition-colors duration-150 group-hover:border-slate-400 dark:border-slate-700 dark:bg-slate-800 sm:h-16 sm:w-16">
                             <div className={`absolute inset-0 bg-gradient-to-br ${achStyle.color} opacity-0 group-hover:opacity-10 rounded-2xl transition-opacity duration-300`}></div>
                             {ach.image ? (
                               <Image src={ach.image} alt={ach.title} width={32} height={32} className="object-contain" />
@@ -274,7 +274,7 @@ export function LeaderboardUserProfileModal({
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-colors group cursor-default text-center">
-      <div className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-950/50 shadow-sm dark:shadow-inner group-hover:scale-110 transition-transform duration-300 mb-2 sm:mb-2.5">
+      <div className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-950/50 shadow-sm dark:shadow-inner mb-2 sm:mb-2.5">
         {icon}
       </div>
       <div className="w-full min-w-0 flex flex-col items-center">

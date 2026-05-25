@@ -377,7 +377,7 @@ export function AppShell({ children }: AppShellProps) {
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto space-y-4 pb-6 no-scrollbar" data-lenis-prevent>
+        <div className="flex-1 overflow-y-auto space-y-4 pb-6 no-scrollbar">
           <SidebarContent />
         </div>
       </div>
@@ -392,7 +392,6 @@ export function AppShell({ children }: AppShellProps) {
       }}>
         <div className="flex flex-col gap-4 h-full">
           <div
-            data-lenis-prevent
             className={cn(
               "flex-1 min-h-0 overscroll-contain pr-2 scroll-smooth flex flex-col gap-4",
               isTestsSubmenuOpen ? "overflow-y-auto sidebar-scrollbar" : "overflow-y-auto no-scrollbar"

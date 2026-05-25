@@ -237,9 +237,9 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
 
-  const overallQuery = useDashboardAnalytics(initialAnalytics, "all");
-  const analysisQuery = useDashboardAnalytics(initialAnalytics, analysisFilter);
-  const comparisonQuery = useDashboardAnalytics(initialAnalytics, comparisonFilter);
+  const overallQuery = useDashboardAnalytics(initialAnalytics, "all", false);
+  const analysisQuery = useDashboardAnalytics(initialAnalytics, analysisFilter, isAnalysisOpen);
+  const comparisonQuery = useDashboardAnalytics(initialAnalytics, comparisonFilter, isComparisonOpen);
 
   const overallData = overallQuery.data ?? initialAnalytics ?? EMPTY_ANALYTICS;
   const analysisData = analysisQuery.data ?? EMPTY_ANALYTICS;
@@ -256,7 +256,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
 
   return (
     <section className="space-y-6">
-      <Card className="overflow-hidden rounded-[2.5rem] border border-border/40 shadow-sm bg-card/60 backdrop-blur-md">
+      <Card className="overflow-hidden rounded-[2.5rem] border border-border/40 shadow-sm bg-card/60">
         <CardHeader className="border-b border-border/40 bg-card/40 px-6 py-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -491,7 +491,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
         ) : null}
         {!isPremium && isAnalysisOpen ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center px-5">
-            <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg backdrop-blur-sm">
+            <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400">
                 <Lock className="h-4 w-4" />
               </div>
@@ -535,7 +535,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
               <div
                 key={`${test.testTitle}-${test.testDate}`}
                 className={cn(
-                  "rounded-2xl border p-4 shadow-sm backdrop-blur-sm",
+                  "rounded-2xl border p-4 shadow-sm",
                   index === comparisonAnalytics.comparison.tests.length - 1
                     ? "border-primary/30 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent shadow-[0_16px_40px_-28px_rgba(37,99,235,0.65)]"
                     : "border-border/50 bg-background/75"
@@ -616,7 +616,7 @@ export function DashboardCharts({ analytics: initialAnalytics }: DashboardCharts
         ) : null}
         {!isPremium && isComparisonOpen ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center px-5">
-            <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg backdrop-blur-sm">
+            <div className="rounded-2xl border border-amber-500/25 bg-background/90 px-5 py-4 text-center shadow-lg">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400">
                 <Lock className="h-4 w-4" />
               </div>

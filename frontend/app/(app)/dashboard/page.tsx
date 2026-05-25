@@ -285,8 +285,8 @@ function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummar
 
   return (
     <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-card p-4 text-foreground shadow-xl shadow-orange-950/8 dark:border-orange-500/20 dark:bg-slate-950/80 dark:shadow-black/30">
-      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-orange-200/35 blur-2xl dark:bg-orange-500/15" />
-      <div className="absolute -bottom-12 -left-10 h-28 w-28 rounded-full bg-amber-200/25 blur-2xl dark:bg-amber-500/10" />
+      <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-orange-200/25 dark:bg-orange-500/10" />
+      <div className="absolute -bottom-12 -left-10 h-28 w-28 rounded-full bg-amber-200/18 dark:bg-amber-500/8" />
 
       <div className="relative flex min-h-[142px] flex-col justify-between gap-4">
         <div className="flex items-start justify-between gap-3">
@@ -417,7 +417,7 @@ export default async function DashboardPage() {
   }[weaknessDiagnosis.severity];
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-500 pb-12">
+    <div className="space-y-5 pb-12">
 
       {/* 1. Welcome + Quick Action & Continue Test */}
       <div className="space-y-6">
@@ -435,13 +435,13 @@ export default async function DashboardPage() {
         <div className="space-y-3">
           <div className="grid gap-4 xl:grid-cols-[580px_minmax(0,1fr)] xl:items-stretch">
             {inProgressTest ? (
-              <Card className="group relative min-h-[176px] w-full max-w-[580px] overflow-hidden rounded-2xl border border-sky-100 bg-sky-50 shadow-md shadow-sky-950/8 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-sky-950/12 dark:border-sky-500/20 dark:bg-slate-950">
+              <Card className="group relative min-h-[176px] w-full max-w-[580px] overflow-hidden rounded-2xl border border-sky-100 bg-sky-50 shadow-md shadow-sky-950/8 transition-shadow hover:shadow-lg hover:shadow-sky-950/12 dark:border-sky-500/20 dark:bg-slate-950">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.22),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.72),rgba(219,234,254,0.5)_45%,rgba(186,230,253,0.42))] dark:bg-[radial-gradient(circle_at_18%_18%,rgba(56,189,248,0.18),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.95),rgba(8,47,73,0.7))]" />
-                <div className="absolute -right-10 -top-12 h-28 w-28 rounded-full bg-sky-300/30 blur-2xl transition-transform duration-700 group-hover:scale-110 dark:bg-sky-500/15" />
+                <div className="absolute -right-10 -top-12 h-28 w-28 rounded-full bg-sky-300/18 dark:bg-sky-500/10" />
                 <CardContent className="relative z-10 flex h-full flex-col justify-between gap-3 p-3 md:p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="min-w-0 flex-1">
-                      <Badge variant="outline" className="mb-2 rounded-full border-sky-300/70 bg-white/75 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-sky-700 shadow-sm backdrop-blur dark:border-sky-400/25 dark:bg-white/10 dark:text-sky-200">
+                      <Badge variant="outline" className="mb-2 rounded-full border-sky-300/70 bg-white/75 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-sky-700 shadow-sm dark:border-sky-400/25 dark:bg-white/10 dark:text-sky-200">
                         IN PROGRESS
                       </Badge>
                       <div className="max-w-xl">
@@ -454,7 +454,7 @@ export default async function DashboardPage() {
                       </div>
                     </div>
 
-                    <div className="relative mx-auto flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-white/65 shadow-inner shadow-sky-900/10 backdrop-blur dark:bg-white/10">
+                    <div className="relative mx-auto flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-white/65 shadow-inner shadow-sky-900/10 dark:bg-white/10">
                       <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 112 112" aria-hidden="true">
                         <circle cx="56" cy="56" r="44" fill="none" stroke="rgba(14,165,233,0.16)" strokeWidth="10" />
                         <circle
@@ -467,7 +467,7 @@ export default async function DashboardPage() {
                           strokeWidth="10"
                           strokeDasharray={276.46}
                           strokeDashoffset={276.46 - (276.46 * inProgressTest.progressPercent) / 100}
-                          className="transition-[stroke-dashoffset] duration-500"
+                          className="transition-[stroke-dashoffset] duration-300"
                         />
                         <defs>
                           <linearGradient id="in-progress-test-progress" x1="20" x2="96" y1="20" y2="96" gradientUnits="userSpaceOnUse">
@@ -489,15 +489,15 @@ export default async function DashboardPage() {
                   </div>
 
                   <div className="grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 backdrop-blur dark:bg-white/[0.07]">
+                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 dark:bg-white/[0.07]">
                       <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sky-700/65 dark:text-sky-100/55">Answers</p>
                       <p className="mt-0.5 text-base font-semibold tracking-tight text-sky-950 dark:text-white">{inProgressTest.answeredLabel}</p>
                     </div>
-                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 backdrop-blur dark:bg-white/[0.07]">
+                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 dark:bg-white/[0.07]">
                       <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sky-700/65 dark:text-sky-100/55">Time spent</p>
                       <p className="mt-0.5 text-base font-semibold tracking-tight text-sky-950 dark:text-white">{inProgressTest.timeSpentLabel}</p>
                     </div>
-                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 backdrop-blur dark:bg-white/[0.07]">
+                    <div className="rounded-xl bg-white/72 px-3 py-2 shadow-sm shadow-sky-950/5 dark:bg-white/[0.07]">
                       <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sky-700/65 dark:text-sky-100/55">Estimated finish</p>
                       <p className="mt-0.5 text-base font-semibold tracking-tight text-sky-950 dark:text-white">{inProgressTest.estimatedFinishLabel}</p>
                     </div>
@@ -505,7 +505,7 @@ export default async function DashboardPage() {
 
                   <Button
                     asChild
-                    className="h-9 w-full rounded-xl bg-sky-600 text-[13px] font-semibold text-white shadow-md shadow-sky-700/20 transition-all hover:bg-sky-700 active:scale-[0.99] dark:bg-sky-500 dark:hover:bg-sky-400"
+                    className="h-9 w-full rounded-xl bg-sky-600 text-[13px] font-semibold text-white shadow-md shadow-sky-700/20 transition-colors hover:bg-sky-700 active:scale-[0.99] dark:bg-sky-500 dark:hover:bg-sky-400"
                   >
                     <Link href={`/exam-preview/${inProgressTest.type}?attemptId=${inProgressTest.attemptId}&mode=${inProgressTest.mode}&resume=${Date.now()}`}>
                       Continue Test <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
@@ -514,14 +514,14 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="relative min-h-[228px] overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-all group">
+              <Card className="relative min-h-[228px] overflow-hidden bg-blue-50 dark:bg-slate-950 border border-blue-100 dark:border-border/50 shadow-sm hover:shadow-md transition-shadow group">
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-80" />
                 <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:scale-110 transition-transform duration-700 pointer-events-none">
                   <Target className="w-32 h-32 -rotate-12 text-blue-900 dark:text-white" />
                 </div>
                 <CardContent className="flex h-full flex-col justify-between p-4 md:p-5 relative z-10">
                   <div>
-                    <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-2 font-bold tracking-wider uppercase text-[9px] backdrop-blur-sm">
+                    <Badge variant="outline" className="bg-blue-100/50 dark:bg-white/10 text-blue-800 dark:text-white border-blue-200 dark:border-white/20 mb-2 font-bold tracking-wider uppercase text-[9px]">
                       Recommended For You
                     </Badge>
                     <h2 className="text-xl md:text-2xl font-semibold tracking-tight mb-1.5 text-blue-950 dark:text-white">{recTitle}</h2>
@@ -546,14 +546,16 @@ export default async function DashboardPage() {
 
         </div>
 
-        <SkillPerformance
-          analytics={analytics}
-          attempts={attempts}
-          writingHistory={writingHistory}
-        />
+        <section className="[content-visibility:auto] [contain-intrinsic-size:420px]">
+          <SkillPerformance
+            analytics={analytics}
+            attempts={attempts}
+            writingHistory={writingHistory}
+          />
+        </section>
 
         {/* Second Row: Remaining widgets */}
-        <div className="grid grid-cols-1 gap-6 items-start">
+        <div className="grid grid-cols-1 gap-6 items-start [content-visibility:auto] [contain-intrinsic-size:900px]">
           <div className="w-full">
             <StreakHeatmap
               activity={activity}
@@ -569,7 +571,7 @@ export default async function DashboardPage() {
             >
               <Card className="relative h-full overflow-hidden rounded-3xl border-border/50 bg-card/80 shadow-sm">
                 <div className={cn("absolute inset-0 bg-gradient-to-br", diagnosisAccent.wash)} />
-                <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full border border-border/40 bg-background/35 blur-sm" />
+                <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full border border-border/40 bg-background/25" />
                 <CardContent className="relative z-10 p-5 md:p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3">
@@ -705,9 +707,11 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <DashboardCharts analytics={analytics} />
+      <section className="[content-visibility:auto] [contain-intrinsic-size:360px]">
+        <DashboardCharts analytics={analytics} />
+      </section>
 
-      <section className="grid items-stretch gap-8 lg:grid-cols-[1.5fr_1fr]">
+      <section className="grid items-stretch gap-8 lg:grid-cols-[1.5fr_1fr] [content-visibility:auto] [contain-intrinsic-size:720px]">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">Recent Activity</h2>
@@ -834,7 +838,7 @@ export default async function DashboardPage() {
                     <div className="p-5 transition-colors hover:bg-muted/30 group">
                       <div className="flex items-center gap-4">
                         <div className={cn(
-                          "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
+                          "h-11 w-11 rounded-xl flex items-center justify-center shrink-0",
                           isReading ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                         )}>
                           {isReading ? <BookOpenText className="h-5 w-5" /> : <Headphones className="h-5 w-5" />}

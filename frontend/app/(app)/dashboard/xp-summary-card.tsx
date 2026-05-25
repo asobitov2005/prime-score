@@ -26,7 +26,7 @@ export function XpSummaryCard({ summary }: { summary: XpSummary }) {
 
   return (
     <section className="relative h-full overflow-hidden rounded-[1.2rem] bg-indigo-600 p-[1px] shadow-xl shadow-indigo-950/15">
-      <div className="relative h-full overflow-hidden rounded-[1.15rem] bg-white/[0.07] p-3.5 text-white backdrop-blur-xl md:p-4">
+      <div className="relative h-full overflow-hidden rounded-[1.15rem] bg-white/[0.07] p-3.5 text-white md:p-4">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2.5">
             <div className="relative h-[56px] w-[52px] shrink-0">
@@ -93,7 +93,7 @@ export function XpSummaryCard({ summary }: { summary: XpSummary }) {
             <div className="relative h-3 overflow-hidden rounded-full bg-indigo-950/28 shadow-inner">
               <div className="absolute inset-0 bg-white/10" />
               <div
-                className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-violet-300 via-indigo-400 to-sky-300 shadow-[0_0_18px_rgba(129,140,248,0.58),0_0_30px_rgba(56,189,248,0.28)] transition-all duration-1000 ease-out"
+                className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-violet-300 via-indigo-400 to-sky-300 shadow-[0_0_18px_rgba(129,140,248,0.58),0_0_30px_rgba(56,189,248,0.28)] transition-[width] duration-300 ease-out"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>

@@ -56,7 +56,7 @@ export function WelcomeHeader({ analytics }: WelcomeHeaderProps) {
           </p>
         </div>
 
-        <div className="w-full rounded-2xl border border-border/60 bg-background/75 px-3.5 py-3 shadow-lg shadow-slate-900/5 backdrop-blur md:w-[158px]">
+        <div className="w-full rounded-2xl border border-border/60 bg-background/75 px-3.5 py-3 shadow-lg shadow-slate-900/5 md:w-[158px]">
           <div className="flex items-center gap-2.5">
             <svg className="h-10 w-10 shrink-0" viewBox="0 0 48 48" fill="none" aria-hidden="true">
               <path

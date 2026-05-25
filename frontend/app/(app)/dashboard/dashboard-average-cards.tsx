@@ -169,7 +169,7 @@ export function OverallBandKpiCard({ initialAnalytics }: DashboardAverageCardsPr
 
   return (
     <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-card p-3 shadow-xl shadow-orange-950/8 dark:border-orange-500/20 dark:bg-slate-950/80 dark:shadow-black/30">
-      <div className="absolute -right-16 -top-20 h-44 w-44 rounded-full bg-orange-200/35 blur-3xl dark:bg-orange-500/15" />
+      <div className="absolute -right-16 -top-20 h-44 w-44 rounded-full bg-orange-200/25 dark:bg-orange-500/10" />
       <div className="relative">
         <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[104px_minmax(0,1fr)]">
           <div className="flex flex-col items-center">
@@ -263,7 +263,7 @@ export function DashboardAverageCards({ initialAnalytics }: DashboardAverageCard
             <div
               key={section.key}
               className={cn(
-                "flex h-full items-center gap-3 rounded-xl border p-2 transition-all duration-300 shadow-sm relative overflow-hidden min-h-[46px]",
+                "flex h-full items-center gap-3 rounded-xl border p-2 transition-colors duration-150 shadow-sm relative overflow-hidden min-h-[46px]",
                 "bg-background/40 hover:bg-background/80 group",
                 section.borderColor
               )}
