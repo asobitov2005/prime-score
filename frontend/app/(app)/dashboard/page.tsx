@@ -431,13 +431,6 @@ export default async function DashboardPage() {
           <LeaderboardPreviewCard summary={leaderboardPreview} />
         </div>
 
-        <SkillPerformance
-          analytics={analytics}
-          attempts={attempts}
-          writingHistory={writingHistory}
-        />
-
-
         {/* Top Row: Continue progress + study analytics */}
         <div className="space-y-3">
           <div className="grid gap-4 xl:grid-cols-[580px_minmax(0,1fr)] xl:items-stretch">
@@ -552,6 +545,12 @@ export default async function DashboardPage() {
           </div>
 
         </div>
+
+        <SkillPerformance
+          analytics={analytics}
+          attempts={attempts}
+          writingHistory={writingHistory}
+        />
 
         {/* Second Row: Remaining widgets */}
         <div className="grid grid-cols-1 gap-6 items-start">
