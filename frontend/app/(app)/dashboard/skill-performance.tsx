@@ -175,7 +175,8 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const readingPointsRaw = analytics.progressSeries
     .map(p => p.reading)
     .filter((v): v is number => v !== null && v !== undefined);
-  const readingPoints = generateProgressSparkPoints(readingPointsRaw, [3.2, 2.8, 3.0, 3.2, 3.5]);
+  const readingHasScore = avgReading !== null && avgReading > 0;
+  const readingPoints = readingHasScore ? generateProgressSparkPoints(readingPointsRaw, [0, 0, 0, 0, 0]) : [0, 0, 0, 0, 0];
   const readingAttempts = attempts.filter(a => a.type === "reading" && (a.status === "completed" || a.status === "submitted"));
   const lastReadingDate = readingAttempts.length > 0 ? readingAttempts[0].lastSavedAt : null;
   const readingThisWeekCount = readingAttempts.filter(a => isWithinLast7Days(a.lastSavedAt)).length;
@@ -185,7 +186,8 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const listeningPointsRaw = analytics.progressSeries
     .map(p => p.listening)
     .filter((v): v is number => v !== null && v !== undefined);
-  const listeningPoints = generateProgressSparkPoints(listeningPointsRaw, [2.5, 3.0, 2.8, 2.5, 3.0]);
+  const listeningHasScore = avgListening !== null && avgListening > 0;
+  const listeningPoints = listeningHasScore ? generateProgressSparkPoints(listeningPointsRaw, [0, 0, 0, 0, 0]) : [0, 0, 0, 0, 0];
   const listeningAttempts = attempts.filter(a => a.type === "listening" && (a.status === "completed" || a.status === "submitted"));
   const lastListeningDate = listeningAttempts.length > 0 ? listeningAttempts[0].lastSavedAt : null;
   const listeningThisWeekCount = listeningAttempts.filter(a => isWithinLast7Days(a.lastSavedAt)).length;
@@ -195,7 +197,8 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const writingPointsRaw = analytics.progressSeries
     .map(p => p.writing)
     .filter((v): v is number => v !== null && v !== undefined);
-  const writingPoints = generateProgressSparkPoints(writingPointsRaw, [5.5, 6.0, 5.8, 6.2, 6.5]);
+  const writingHasScore = avgWriting !== null && avgWriting > 0;
+  const writingPoints = writingHasScore ? generateProgressSparkPoints(writingPointsRaw, [0, 0, 0, 0, 0]) : [0, 0, 0, 0, 0];
   const writingSubmissions = writingHistory.items.filter(w => String(w.status).toLowerCase() === "completed");
   const lastWritingDate = writingSubmissions.length > 0 ? (writingSubmissions[0].graded_at ?? writingSubmissions[0].submitted_at) : null;
   const writingThisWeekCount = writingHistory.items.filter(w => isWithinLast7Days(w.submitted_at)).length;
@@ -229,11 +232,7 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const readingBadge = getSkillBadge(avgReading);
   const listeningBadge = getSkillBadge(avgListening);
   const writingBadge = getSkillBadge(avgWriting);
-  // Speaking is premium high-fidelity mock
-  const speakingBadge = {
-    text: "~ Improving",
-    badgeClass: "text-amber-600 bg-amber-50 border-amber-100 dark:text-amber-400 dark:bg-amber-950/20 dark:border-amber-900/30"
-  };
+  const notStartedBadge = getSkillBadge(null);
 
   const skills: SkillCardData[] = [
     {
@@ -242,14 +241,14 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       icon: BookOpenText,
       iconBg: "bg-blue-50 dark:bg-blue-950/40 border border-blue-100/50 dark:border-blue-900/30",
       iconColor: "text-blue-600 dark:text-blue-400",
-      score: avgReading && avgReading > 0 ? avgReading.toFixed(1) : "3.0", // Mock baseline if empty to match visual perfection
-      badgeText: avgReading && avgReading > 0 ? readingBadge.text : "↓ Needs focus",
-      badgeClass: avgReading && avgReading > 0 ? readingBadge.badgeClass : "text-rose-600 bg-rose-50 border-rose-100 dark:text-rose-400 dark:bg-rose-950/20 dark:border-rose-900/30",
+      score: readingHasScore ? avgReading.toFixed(1) : "—",
+      badgeText: readingHasScore ? readingBadge.text : notStartedBadge.text,
+      badgeClass: readingHasScore ? readingBadge.badgeClass : notStartedBadge.badgeClass,
       sparklineColor: "#6366F1", // Indigo
       sparklineGradientId: "spark-reading",
       sparkPoints: readingPoints,
-      lastTestText: lastReadingDate ? `Last test: ${getDaysAgoText(lastReadingDate)}` : "Last test: 2 days ago",
-      xpText: `+${readingThisWeekCount * 20 + 20} XP this week`,
+      lastTestText: lastReadingDate ? `Last test: ${getDaysAgoText(lastReadingDate)}` : "Last test: Never",
+      xpText: `+${readingThisWeekCount * 20} XP this week`,
       href: "/analytics/reading"
     },
     {
@@ -258,14 +257,14 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       icon: Headphones,
       iconBg: "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100/50 dark:border-emerald-900/30",
       iconColor: "text-emerald-600 dark:text-emerald-400",
-      score: avgListening && avgListening > 0 ? avgListening.toFixed(1) : "3.0",
-      badgeText: avgListening && avgListening > 0 ? listeningBadge.text : "↓ Needs focus",
-      badgeClass: avgListening && avgListening > 0 ? listeningBadge.badgeClass : "text-rose-600 bg-rose-50 border-rose-100 dark:text-rose-400 dark:bg-rose-950/20 dark:border-rose-900/30",
+      score: listeningHasScore ? avgListening.toFixed(1) : "—",
+      badgeText: listeningHasScore ? listeningBadge.text : notStartedBadge.text,
+      badgeClass: listeningHasScore ? listeningBadge.badgeClass : notStartedBadge.badgeClass,
       sparklineColor: "#10B981", // Emerald
       sparklineGradientId: "spark-listening",
       sparkPoints: listeningPoints,
-      lastTestText: lastListeningDate ? `Last test: ${getDaysAgoText(lastListeningDate)}` : "Last test: 1 day ago",
-      xpText: `+${listeningThisWeekCount * 20 + 80} XP this week`,
+      lastTestText: lastListeningDate ? `Last test: ${getDaysAgoText(lastListeningDate)}` : "Last test: Never",
+      xpText: `+${listeningThisWeekCount * 20} XP this week`,
       href: "/analytics/listening"
     },
     {
@@ -274,14 +273,14 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       icon: PenSquare,
       iconBg: "bg-violet-50 dark:bg-violet-950/40 border border-violet-100/50 dark:border-violet-900/30",
       iconColor: "text-violet-600 dark:text-violet-400",
-      score: avgWriting && avgWriting > 0 ? avgWriting.toFixed(1) : "6.5",
-      badgeText: avgWriting && avgWriting > 0 ? writingBadge.text : "↑ Strength",
-      badgeClass: avgWriting && avgWriting > 0 ? writingBadge.badgeClass : "text-emerald-600 bg-emerald-50 border-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/20 dark:border-emerald-900/30",
+      score: writingHasScore ? avgWriting.toFixed(1) : "—",
+      badgeText: writingHasScore ? writingBadge.text : notStartedBadge.text,
+      badgeClass: writingHasScore ? writingBadge.badgeClass : notStartedBadge.badgeClass,
       sparklineColor: "#8B5CF6", // Violet
       sparklineGradientId: "spark-writing",
       sparkPoints: writingPoints,
-      lastTestText: lastWritingDate ? `Last test: ${getDaysAgoText(lastWritingDate)}` : "Last test: 3 days ago",
-      xpText: `+${writingThisWeekCount * 30 + 140} XP this week`,
+      lastTestText: lastWritingDate ? `Last test: ${getDaysAgoText(lastWritingDate)}` : "Last test: Never",
+      xpText: `+${writingThisWeekCount * 30} XP this week`,
       href: "/analytics/writing"
     },
     {
@@ -290,14 +289,14 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       icon: Mic,
       iconBg: "bg-sky-50 dark:bg-sky-950/40 border border-sky-100/50 dark:border-sky-900/30",
       iconColor: "text-sky-600 dark:text-sky-400",
-      score: "3.5",
-      badgeText: speakingBadge.text,
-      badgeClass: speakingBadge.badgeClass,
+      score: "—",
+      badgeText: notStartedBadge.text,
+      badgeClass: notStartedBadge.badgeClass,
       sparklineColor: "#F59E0B", // Amber/Orange
       sparklineGradientId: "spark-speaking",
-      sparkPoints: [3.2, 3.0, 3.4, 3.2, 3.5], // Perfect premium visual curve matching 3.5
-      lastTestText: "Last test: 5 days ago",
-      xpText: "+60 XP this week",
+      sparkPoints: [0, 0, 0, 0, 0],
+      lastTestText: "Last test: Never",
+      xpText: "+0 XP this week",
       href: "/analytics/speaking"
     }
   ];

@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { DashboardAnalytics } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
+import { getAverageBand } from "@/components/charts/use-dashboard-analytics";
 
 interface ActivitySummaryProps {
   analytics: DashboardAnalytics;
@@ -99,6 +100,19 @@ function formatShortDate(value: string | null | undefined): string {
 
 export function ActivitySummary({ analytics }: ActivitySummaryProps) {
   const progressSeries = analytics.progressSeries;
+  const buildScore = (key: "reading" | "listening" | "writing") => {
+    const score = getAverageBand(analytics, key);
+    return score && score > 0 ? score.toFixed(1) : "—";
+  };
+
+  const buildStatus = (scoreText: string) => {
+    if (scoreText === "—") return "Not started";
+    const score = Number(scoreText);
+    if (score < 5) return "Needs focus";
+    if (score < 7) return "Improving";
+    return "Strength";
+  };
+
   const buildTrend = (key: "reading" | "listening" | "writing", fallback: number[]) => {
     const values = progressSeries
       .map((point) => point[key])
@@ -113,16 +127,29 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
     return formatShortDate(point?.occurredAt);
   };
 
+  const countThisWeek = (key: "reading" | "listening" | "writing") =>
+    progressSeries.filter((point) => {
+      if (point[key] === null || point[key] === undefined) return false;
+      const date = new Date(point.occurredAt);
+      if (Number.isNaN(date.getTime())) return false;
+      const diffDays = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays >= 0 && diffDays <= 7;
+    }).length;
+
+  const readingScore = buildScore("reading");
+  const listeningScore = buildScore("listening");
+  const writingScore = buildScore("writing");
+
   const skillCards = [
     {
       id: "reading",
       label: "Reading",
-      score: "3.0",
-      status: "Needs focus",
-      xp: "+20 XP this week",
+      score: readingScore,
+      status: buildStatus(readingScore),
+      xp: `+${countThisWeek("reading") * 20} XP this week`,
       href: "/analytics/reading",
       lastTest: getLastTestDate("reading"),
-      trend: buildTrend("reading", [2.5, 2.5, 3.0, 3.0, 3.0]),
+      trend: buildTrend("reading", [0, 0, 0, 0, 0]),
       icon: BookOpen,
       accent: "text-blue-700 dark:text-blue-300",
       iconBg: "bg-blue-500/12",
@@ -132,12 +159,12 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
     {
       id: "listening",
       label: "Listening",
-      score: "3.0",
-      status: "Needs focus",
-      xp: "+80 XP this week",
+      score: listeningScore,
+      status: buildStatus(listeningScore),
+      xp: `+${countThisWeek("listening") * 20} XP this week`,
       href: "/analytics/listening",
       lastTest: getLastTestDate("listening"),
-      trend: buildTrend("listening", [2.0, 2.5, 2.5, 3.0, 3.0]),
+      trend: buildTrend("listening", [0, 0, 0, 0, 0]),
       icon: Headphones,
       accent: "text-emerald-700 dark:text-emerald-300",
       iconBg: "bg-emerald-500/12",
@@ -147,12 +174,12 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
     {
       id: "writing",
       label: "Writing",
-      score: "6.5",
-      status: "Strength",
-      xp: "+140 XP this week",
+      score: writingScore,
+      status: buildStatus(writingScore),
+      xp: `+${countThisWeek("writing") * 30} XP this week`,
       href: "/analytics/writing",
       lastTest: getLastTestDate("writing"),
-      trend: buildTrend("writing", [5.5, 5.5, 6.0, 6.0, 6.5]),
+      trend: buildTrend("writing", [0, 0, 0, 0, 0]),
       icon: PenSquare,
       accent: "text-violet-700 dark:text-violet-300",
       iconBg: "bg-violet-500/12",
@@ -162,12 +189,12 @@ export function ActivitySummary({ analytics }: ActivitySummaryProps) {
     {
       id: "speaking",
       label: "Speaking",
-      score: "3.5",
-      status: "Improving",
-      xp: "+60 XP this week",
+      score: "—",
+      status: "Not started",
+      xp: "+0 XP this week",
       href: "/analytics/speaking",
       lastTest: "No speaking test yet",
-      trend: [2.5, 3.0, 3.0, 3.5, 3.5],
+      trend: [0, 0, 0, 0, 0],
       icon: MessageSquareQuote,
       accent: "text-amber-700 dark:text-amber-300",
       iconBg: "bg-amber-500/12",
