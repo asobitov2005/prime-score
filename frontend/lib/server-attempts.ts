@@ -119,6 +119,7 @@ export type BackendAttemptRead = {
   mode: AttemptMode;
   time_limit_seconds: number;
   time_spent_sec?: number;
+  section_time_spent_sec?: Record<string, number>;
   answers?: Record<string, string>;
   active_question_id?: string | null;
   text_highlights?: Record<string, BackendAttemptTextHighlight[]>;
@@ -214,16 +215,24 @@ export type BackendAttemptReview = {
   }>;
 };
 
+function forwardedAuthHeaders(authHeader?: string | null): HeadersInit | undefined {
+  return authHeader ? { Authorization: authHeader } : undefined;
+}
+
 async function requestBackend<T>(path: string, init?: RequestInit): Promise<T> {
   return requestServerUserApi<T>(path, init);
 }
 
-export async function startBackendAttempt(payload: StartAttemptPayload): Promise<{
+export async function startBackendAttempt(
+  payload: StartAttemptPayload,
+  authHeader?: string | null
+): Promise<{
   attemptId: string;
   timeLimitSeconds: number;
 }> {
   const response = await requestBackend<BackendStartAttemptResponse>(`/tests/${payload.testId}/start`, {
     method: "POST",
+    headers: forwardedAuthHeaders(authHeader),
     body: JSON.stringify({
       scope: payload.scope,
       section_id: payload.sectionId,
@@ -253,10 +262,12 @@ export async function getBackendAttemptReview(attemptId: string): Promise<Backen
 export async function saveBackendAttemptAnswer(
   attemptId: string,
   questionId: string,
-  value: string
+  value: string,
+  authHeader?: string | null
 ): Promise<void> {
   await requestBackend(`/attempts/${attemptId}/answer`, {
     method: "PATCH",
+    headers: forwardedAuthHeaders(authHeader),
     body: JSON.stringify({
       question_id: questionId,
       value
@@ -268,15 +279,19 @@ export async function saveBackendAttemptProgress(
   attemptId: string,
   payload: {
     timeSpentSec?: number;
+    sectionTimeSpentSec?: Record<string, number>;
     activeQuestionId?: string;
     textHighlights?: Record<string, BackendAttemptTextHighlight[]>;
     uiState?: { theme?: "light" | "dark"; splitRatio?: number; fontScale?: number };
-  }
+  },
+  authHeader?: string | null
 ): Promise<void> {
   await requestBackend(`/attempts/${attemptId}/progress`, {
     method: "PATCH",
+    headers: forwardedAuthHeaders(authHeader),
     body: JSON.stringify({
       time_spent_sec: payload.timeSpentSec,
+      section_time_spent_sec: payload.sectionTimeSpentSec,
       active_question_id: payload.activeQuestionId,
       text_highlights: payload.textHighlights,
       ui_state: payload.uiState
@@ -290,9 +305,14 @@ export async function saveBackendAttemptProgress(
   });
 }
 
-export async function submitBackendAttempt(attemptId: string, reason: string = "user_confirmed"): Promise<void> {
+export async function submitBackendAttempt(
+  attemptId: string,
+  reason: string = "user_confirmed",
+  authHeader?: string | null
+): Promise<void> {
   await requestBackend(`/attempts/${attemptId}/submit`, {
     method: "POST",
+    headers: forwardedAuthHeaders(authHeader),
     body: JSON.stringify({ confirm: true, reason })
   });
 }

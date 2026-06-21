@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/store/auth-store";
-import { mockReviews, type ReviewItem } from "@/lib/mock-data";
 import { getFrontendClientApiBaseUrl } from "@/lib/api-base";
+import type { ReviewItem } from "@/components/marketing/landing-types";
 
 const baseUrl = getFrontendClientApiBaseUrl();
 
@@ -68,7 +68,7 @@ export async function listPublicReviews(): Promise<ReviewItem[]> {
     const payload = (await response.json()) as BackendPublicReview[];
     return payload.map(mapReview);
   } catch {
-    return mockReviews;
+    return [];
   }
 }
 

@@ -21,12 +21,15 @@ export async function POST(request: Request) {
       ? "full"
       : payload.scope;
 
-    const result = await startBackendAttempt({
-      ...payload,
-      scope: normalizedScope,
-      sectionId: normalizedScope === "section" && hasValidSectionId ? requestedSectionId : undefined,
-      forceNew: payload.forceNew ?? payload.force_new ?? false,
-    });
+    const result = await startBackendAttempt(
+      {
+        ...payload,
+        scope: normalizedScope,
+        sectionId: normalizedScope === "section" && hasValidSectionId ? requestedSectionId : undefined,
+        forceNew: payload.forceNew ?? payload.force_new ?? false,
+      },
+      request.headers.get("authorization")
+    );
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ServerUserApiError) {

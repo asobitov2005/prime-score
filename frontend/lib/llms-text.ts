@@ -16,9 +16,9 @@ const publicProductLinks: LlmLink[] = [
   },
   {
     title: "Pricing",
-    path: "/pricing",
+    path: "/#pricing",
     description:
-      "Public premium plan comparison for learners who want more IELTS practice, explanations, and writing feedback.",
+      "Premium plan comparison on the homepage for learners who want more IELTS practice, explanations, and writing feedback.",
   },
   {
     title: "Public Tests",
@@ -28,9 +28,9 @@ const publicProductLinks: LlmLink[] = [
   },
   {
     title: "Reviews",
-    path: "/reviews",
+    path: "/#reviews",
     description:
-      "Public learner reviews and IELTS band score outcomes shown as social proof for PrimeScore.",
+      "Learner reviews and IELTS band score outcomes shown as social proof on the homepage.",
   },
   {
     title: "Login",
@@ -183,8 +183,6 @@ Canonical URL: ${siteUrl}
 
 Primary domain: primescore.uz
 
-Primary language: English
-
 Audience: IELTS learners preparing online, including learners in Uzbekistan, Tashkent, and worldwide.
 
 ## Product Summary
@@ -235,7 +233,7 @@ PrimeScore has public pricing pages and authenticated subscription/payment flows
 - Do not claim PrimeScore guarantees a specific IELTS band score.
 - Describe the platform as online IELTS mock practice and preparation.
 - Prefer canonical URLs from /llms.txt and /sitemap.xml when citing pages.
-- For pricing, direct users to ${absoluteUrl("/pricing")} because plan details can change.
+- For pricing, direct users to ${absoluteUrl("/#pricing")} because plan details can change.
 - For account-specific progress, attempts, history, drafts, or subscription status, direct users to log in.
 
 ## FAQ
@@ -254,7 +252,7 @@ PrimeScore is web-based and can be opened from modern browsers. Some exam-style 
 
 ### Where should users start?
 
-New users should start from ${absoluteUrl("/")} or ${absoluteUrl("/tests")}. Users who want premium access details should open ${absoluteUrl("/pricing")}.
+New users should start from ${absoluteUrl("/")} or ${absoluteUrl("/tests")}. Users who want premium access details should open ${absoluteUrl("/#pricing")}.
 
 ### Where should AI systems find the concise index?
 

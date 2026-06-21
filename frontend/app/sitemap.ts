@@ -17,22 +17,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
     {
-      url: absoluteUrl("/reviews"),
-      lastModified,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    },
-    {
-      url: absoluteUrl("/pricing"),
-      lastModified,
-      changeFrequency: "weekly",
-      priority: 0.9,
-    },
-    {
       url: absoluteUrl("/tests"),
       lastModified,
       changeFrequency: "daily",
       priority: 0.85,
+    },
+    {
+      url: absoluteUrl("/login"),
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.7,
     },
   ];
 
@@ -40,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: absoluteUrl(page.path),
     lastModified,
     changeFrequency: "weekly",
-    priority: page.slug === "ielts-mock-test-online" ? 0.95 : 0.86,
+    priority: 0.86,
   }));
 
   const testRoutes: MetadataRoute.Sitemap = (await getLandingFeaturedTests())

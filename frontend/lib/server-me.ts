@@ -1,4 +1,5 @@
 import { formatDate, formatDateTime } from "@/lib/date-time";
+import { formatIeltsBand, roundIeltsBand } from "@/lib/ielts-band";
 import { requestServerUserApi } from "@/lib/server-user-auth";
 import type {
   AttemptRow,
@@ -10,6 +11,9 @@ import type {
   DashboardQuestionTypeAnalysisItem,
   DashboardQuestionTypeComparison,
   DashboardQuestionTypeComparisonItem,
+  DashboardSectionAnalysisItem,
+  DashboardSkillFocusItem,
+  DashboardSkillTimeAnalysis,
   DashboardStat,
   TestType,
   XpSummary
@@ -53,6 +57,7 @@ type BackendMeActivityPoint = {
   reading_time_sec: number;
   listening_time_sec: number;
   writing_time_sec: number;
+  speaking_time_sec?: number;
 };
 
 type BackendMeAttempt = {
@@ -92,6 +97,8 @@ type BackendQuestionTypeComparisonItem = {
   current_accuracy?: number | null;
   delta?: number | null;
   accuracies?: Array<number | null>;
+  current_worked_count?: number;
+  current_error_count?: number;
 };
 
 type BackendQuestionTypeComparisonTest = {
@@ -120,6 +127,7 @@ type BackendBandProgressPoint = {
   reading?: number | null;
   listening?: number | null;
   writing?: number | null;
+  speaking?: number | null;
 };
 
 type BackendPerformanceStudyTime = {
@@ -127,6 +135,7 @@ type BackendPerformanceStudyTime = {
   reading_time_sec: number;
   listening_time_sec: number;
   writing_time_sec?: number | null;
+  speaking_time_sec?: number | null;
 };
 
 type BackendPerformanceTestCountBucket = {
@@ -142,6 +151,7 @@ type BackendPerformanceSummary = {
   reading: BackendPerformanceTestCountBucket;
   listening: BackendPerformanceTestCountBucket;
   writing?: BackendPerformanceTestCountBucket | null;
+  speaking?: BackendPerformanceTestCountBucket | null;
 };
 
 type BackendWritingCriteria = {
@@ -151,9 +161,17 @@ type BackendWritingCriteria = {
   grammatical_range_accuracy?: number | null;
 };
 
+type BackendSpeakingCriteria = {
+  fluency?: number | null;
+  lexical_resource?: number | null;
+  grammar?: number | null;
+  pronunciation?: number | null;
+};
+
 type BackendDashboardAnalytics = {
   performance_summary: BackendPerformanceSummary;
   writing_criteria?: BackendWritingCriteria | null;
+  speaking_criteria?: BackendSpeakingCriteria | null;
   question_type_analysis: BackendQuestionTypeAnalysisItem[];
   comparison: BackendQuestionTypeComparison;
   error_distribution: BackendErrorDistributionItem[];
@@ -164,6 +182,9 @@ type BackendDashboardAnalytics = {
   personal_bests?: BackendPersonalBests;
   speed_metrics?: BackendSpeedMetrics;
   improvement_rate?: BackendImprovementRate;
+  section_analysis?: BackendSectionAnalysisItem[];
+  skill_focus?: BackendSkillFocusItem[];
+  time_analysis?: BackendSkillTimeAnalysis | null;
 };
 
 type BackendAccuracyTrendPoint = {
@@ -208,6 +229,34 @@ type BackendImprovementRate = {
   percent_change?: number | null;
 };
 
+type BackendSectionAnalysisItem = {
+  section_number: number;
+  label: string;
+  worked_count: number;
+  correct_count: number;
+  accuracy: number;
+  attempts_count: number;
+  avg_time_sec?: number | null;
+};
+
+type BackendSkillFocusItem = {
+  key: string;
+  label: string;
+  value?: number | null;
+  value_label: string;
+  subtext?: string | null;
+  status?: string | null;
+};
+
+type BackendSkillTimeAnalysis = {
+  avg_time_per_test_sec?: number | null;
+  recommended_time_sec?: number | null;
+  time_management_status: string;
+  slowest_section?: BackendSectionAnalysisItem | null;
+  fastest_section?: BackendSectionAnalysisItem | null;
+  unanswered_avg_percent?: number | null;
+};
+
 type BackendLeaderboardEntry = {
   rank: number;
   user_id: string;
@@ -236,12 +285,8 @@ function formatAttemptDuration(totalSeconds: number | null | undefined): string 
 }
 
 function formatBandScore(value: number | string | null | undefined): string | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  const numericValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numericValue) ? numericValue.toFixed(1) : null;
+  const formatted = formatIeltsBand(value, "");
+  return formatted || null;
 }
 
 function normalizeAttemptSource(source: string | null | undefined, title: string): string {
@@ -318,7 +363,9 @@ function mapComparison(
       previousAccuracy: item.previous_accuracy ?? null,
       currentAccuracy: item.current_accuracy ?? null,
       delta: item.delta ?? null,
-      accuracies: item.accuracies ?? []
+      accuracies: item.accuracies ?? [],
+      currentWorkedCount: item.current_worked_count ?? 0,
+      currentErrorCount: item.current_error_count ?? 0,
     }))
   };
 }
@@ -339,9 +386,10 @@ function mapProgressSeries(
   return items.map((item) => ({
     label: item.label,
     occurredAt: item.occurred_at,
-    reading: item.reading ?? null,
-    listening: item.listening ?? null,
-    writing: item.writing ?? null
+    reading: roundIeltsBand(item.reading),
+    listening: roundIeltsBand(item.listening),
+    writing: roundIeltsBand(item.writing),
+    speaking: roundIeltsBand(item.speaking)
   }));
 }
 
@@ -353,7 +401,8 @@ function mapPerformanceSummary(
       totalTimeSec: summary.study_time.total_time_sec,
       readingTimeSec: summary.study_time.reading_time_sec,
       listeningTimeSec: summary.study_time.listening_time_sec,
-      writingTimeSec: summary.study_time.writing_time_sec ?? 0
+      writingTimeSec: summary.study_time.writing_time_sec ?? 0,
+      speakingTimeSec: summary.study_time.speaking_time_sec ?? 0
     },
     reading: {
       fullCount: summary.reading.full_count,
@@ -375,7 +424,48 @@ function mapPerformanceSummary(
       section2Count: summary.writing.section_2_count,
       section3Count: summary.writing.section_3_count,
       section4Count: summary.writing.section_4_count
+    } : undefined,
+    speaking: summary.speaking ? {
+      fullCount: summary.speaking.full_count,
+      section1Count: summary.speaking.section_1_count,
+      section2Count: summary.speaking.section_2_count,
+      section3Count: summary.speaking.section_3_count,
+      section4Count: summary.speaking.section_4_count
     } : undefined
+  };
+}
+
+function mapSectionAnalysisItem(item: BackendSectionAnalysisItem): DashboardSectionAnalysisItem {
+  return {
+    sectionNumber: item.section_number,
+    label: item.label,
+    workedCount: item.worked_count,
+    correctCount: item.correct_count,
+    accuracy: item.accuracy,
+    attemptsCount: item.attempts_count,
+    avgTimeSec: item.avg_time_sec ?? null,
+  };
+}
+
+function mapSkillFocusItem(item: BackendSkillFocusItem): DashboardSkillFocusItem {
+  return {
+    key: item.key,
+    label: item.label,
+    value: item.value ?? null,
+    valueLabel: item.value_label,
+    subtext: item.subtext ?? null,
+    status: item.status ?? null,
+  };
+}
+
+function mapSkillTimeAnalysis(item: BackendSkillTimeAnalysis | null | undefined): DashboardSkillTimeAnalysis {
+  return {
+    avgTimePerTestSec: item?.avg_time_per_test_sec ?? null,
+    recommendedTimeSec: item?.recommended_time_sec ?? null,
+    timeManagementStatus: item?.time_management_status ?? "No timing data",
+    slowestSection: item?.slowest_section ? mapSectionAnalysisItem(item.slowest_section) : null,
+    fastestSection: item?.fastest_section ? mapSectionAnalysisItem(item.fastest_section) : null,
+    unansweredAvgPercent: item?.unanswered_avg_percent ?? null,
   };
 }
 
@@ -390,12 +480,12 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
       },
       {
         label: "Average band",
-        value: stats.average_band?.toFixed(1) ?? "N/A",
+        value: formatIeltsBand(stats.average_band, "N/A"),
         detail: "Calculated from completed full attempts."
       },
       {
         label: "Best Reading",
-        value: stats.reading_band?.toFixed(1) ?? "N/A",
+        value: formatIeltsBand(stats.reading_band, "N/A"),
         detail: "Highest completed Reading band."
       },
       {
@@ -494,9 +584,10 @@ export async function getWeeklyLeaderboardPreview(): Promise<LeaderboardPreviewS
   }
 }
 
-export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
+export async function getDashboardAnalytics(testType?: TestType): Promise<DashboardAnalytics> {
   try {
-    const analytics = await requestBackend<BackendDashboardAnalytics>("/me/analytics");
+    const suffix = testType ? `?test_type=${encodeURIComponent(testType)}` : "";
+    const analytics = await requestBackend<BackendDashboardAnalytics>(`/me/analytics${suffix}`);
     const sd = analytics.score_distribution;
     const pb = analytics.personal_bests;
     const sm = analytics.speed_metrics;
@@ -504,10 +595,16 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
     return {
       performanceSummary: mapPerformanceSummary(analytics.performance_summary),
       writingCriteria: analytics.writing_criteria ? {
-        taskAchievement: analytics.writing_criteria.task_achievement ?? null,
-        coherenceCohesion: analytics.writing_criteria.coherence_cohesion ?? null,
-        lexicalResource: analytics.writing_criteria.lexical_resource ?? null,
-        grammaticalRangeAccuracy: analytics.writing_criteria.grammatical_range_accuracy ?? null,
+        taskAchievement: roundIeltsBand(analytics.writing_criteria.task_achievement),
+        coherenceCohesion: roundIeltsBand(analytics.writing_criteria.coherence_cohesion),
+        lexicalResource: roundIeltsBand(analytics.writing_criteria.lexical_resource),
+        grammaticalRangeAccuracy: roundIeltsBand(analytics.writing_criteria.grammatical_range_accuracy),
+      } : null,
+      speakingCriteria: analytics.speaking_criteria ? {
+        fluency: roundIeltsBand(analytics.speaking_criteria.fluency),
+        lexicalResource: roundIeltsBand(analytics.speaking_criteria.lexical_resource),
+        grammar: roundIeltsBand(analytics.speaking_criteria.grammar),
+        pronunciation: roundIeltsBand(analytics.speaking_criteria.pronunciation),
       } : null,
       questionTypeAnalysis: mapQuestionTypeAnalysis(analytics.question_type_analysis),
       comparison: mapComparison(analytics.comparison),
@@ -516,7 +613,7 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
       accuracyTrend: (analytics.accuracy_trend ?? []).map((p) => ({
         date: p.date,
         accuracy: p.accuracy,
-        band: p.band ?? null,
+        band: roundIeltsBand(p.band),
         testType: p.test_type ?? null,
       })),
       weeklyActivity: (analytics.weekly_activity ?? []).map((p) => ({
@@ -532,7 +629,7 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
         band7_5To9: sd?.band_7_5_to_9 ?? 0,
       },
       personalBests: {
-        bestBand: pb?.best_band ?? null,
+        bestBand: roundIeltsBand(pb?.best_band),
         bestAccuracy: pb?.best_accuracy ?? null,
         longestStreak: pb?.longest_streak ?? 0,
         currentStreak: pb?.current_streak ?? 0,
@@ -549,16 +646,21 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
         delta: ir?.delta ?? null,
         percentChange: ir?.percent_change ?? null,
       },
+      sectionAnalysis: (analytics.section_analysis ?? []).map(mapSectionAnalysisItem),
+      skillFocus: (analytics.skill_focus ?? []).map(mapSkillFocusItem),
+      timeAnalysis: mapSkillTimeAnalysis(analytics.time_analysis),
     };
   } catch {
     return {
       performanceSummary: {
-        studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0, writingTimeSec: 0 },
+        studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0, writingTimeSec: 0, speakingTimeSec: 0 },
         reading: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
         listening: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
-        writing: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 }
+        writing: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
+        speaking: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 }
       },
       writingCriteria: null,
+      speakingCriteria: null,
       questionTypeAnalysis: [],
       comparison: {
         previousTestTitle: null,
@@ -576,6 +678,16 @@ export async function getDashboardAnalytics(): Promise<DashboardAnalytics> {
       personalBests: { bestBand: null, bestAccuracy: null, longestStreak: 0, currentStreak: 0, fastestFullTestSec: null },
       speedMetrics: { avgTimePerQuestionSec: null, readingAvgSecPerQuestion: null, listeningAvgSecPerQuestion: null },
       improvementRate: { last5AvgBand: null, prev5AvgBand: null, delta: null, percentChange: null },
+      sectionAnalysis: [],
+      skillFocus: [],
+      timeAnalysis: {
+        avgTimePerTestSec: null,
+        recommendedTimeSec: null,
+        timeManagementStatus: "No timing data",
+        slowestSection: null,
+        fastestSection: null,
+        unansweredAvgPercent: null,
+      },
     };
   }
 }
@@ -590,6 +702,7 @@ export async function getDashboardActivity(): Promise<DashboardActivityPoint[]> 
       readingTimeSec: point.reading_time_sec ?? 0,
       listeningTimeSec: point.listening_time_sec ?? 0,
       writingTimeSec: point.writing_time_sec ?? 0,
+      speakingTimeSec: point.speaking_time_sec ?? 0,
     }));
   } catch {
     return [];

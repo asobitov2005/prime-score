@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Award, BadgeCheck, Sparkles, Trophy } from "lucide-react";
+import { Award, BadgeCheck, Trophy } from "lucide-react";
 import type { Achievement } from "@/src/types/achievement";
 
 function formatNumber(value: number): string {
@@ -23,19 +23,6 @@ export function AchievementHero({ achievements }: { achievements: Achievement[] 
 
       <div className="relative grid gap-6 p-5 md:p-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
         <div className="space-y-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              PrimeScore Rewards
-            </div>
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Achievements</h1>
-              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-muted-foreground md:text-base">
-                Unlock badges as you build consistency, improve your IELTS skills, and climb the leaderboard.
-              </p>
-            </div>
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl bg-white/80 p-4 shadow-sm dark:bg-white/[0.04]">
               <p className="text-xs font-semibold text-muted-foreground">Total badges</p>

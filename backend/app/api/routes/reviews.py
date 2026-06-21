@@ -47,10 +47,12 @@ async def list_public_reviews(session: AsyncSession = Depends(get_db_session)) -
 
 
 @router.get("/live-stats", response_model=LandingLiveStatsRead)
-async def get_landing_live_stats() -> LandingLiveStatsRead:
-    snapshot = landing_live_metrics_service.get_snapshot()
+async def get_landing_live_stats(
+    session: AsyncSession = Depends(get_db_session),
+) -> LandingLiveStatsRead:
+    snapshot = await landing_live_metrics_service.get_snapshot(session)
     return LandingLiveStatsRead(
-        online_count=snapshot.online_count,
+        total_users=snapshot.total_users,
         refreshed_at=snapshot.refreshed_at,
     )
 

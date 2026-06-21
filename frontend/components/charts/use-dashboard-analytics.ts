@@ -35,7 +35,8 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
         totalTimeSec: response.performance_summary.study_time.total_time_sec,
         readingTimeSec: response.performance_summary.study_time.reading_time_sec,
         listeningTimeSec: response.performance_summary.study_time.listening_time_sec,
-        writingTimeSec: response.performance_summary.study_time.writing_time_sec
+        writingTimeSec: response.performance_summary.study_time.writing_time_sec,
+        speakingTimeSec: response.performance_summary.study_time.speaking_time_sec
       },
       reading: {
         fullCount: response.performance_summary.reading.full_count,
@@ -57,6 +58,13 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
         section2Count: response.performance_summary.writing.section_2_count,
         section3Count: response.performance_summary.writing.section_3_count,
         section4Count: response.performance_summary.writing.section_4_count
+      } : undefined,
+      speaking: response.performance_summary.speaking ? {
+        fullCount: response.performance_summary.speaking.full_count,
+        section1Count: response.performance_summary.speaking.section_1_count,
+        section2Count: response.performance_summary.speaking.section_2_count,
+        section3Count: response.performance_summary.speaking.section_3_count,
+        section4Count: response.performance_summary.speaking.section_4_count
       } : undefined
     },
     writingCriteria: response.writing_criteria ? {
@@ -64,6 +72,12 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
       coherenceCohesion: response.writing_criteria.coherence_cohesion ?? null,
       lexicalResource: response.writing_criteria.lexical_resource ?? null,
       grammaticalRangeAccuracy: response.writing_criteria.grammatical_range_accuracy ?? null,
+    } : null,
+    speakingCriteria: response.speaking_criteria ? {
+      fluency: response.speaking_criteria.fluency ?? null,
+      lexicalResource: response.speaking_criteria.lexical_resource ?? null,
+      grammar: response.speaking_criteria.grammar ?? null,
+      pronunciation: response.speaking_criteria.pronunciation ?? null,
     } : null,
     questionTypeAnalysis: response.question_type_analysis.map((item) => ({
       label: item.label,
@@ -86,7 +100,9 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
         previousAccuracy: item.previous_accuracy ?? null,
         currentAccuracy: item.current_accuracy ?? null,
         delta: item.delta ?? null,
-        accuracies: item.accuracies ?? []
+        accuracies: item.accuracies ?? [],
+        currentWorkedCount: item.current_worked_count ?? 0,
+        currentErrorCount: item.current_error_count ?? 0,
       }))
     },
     errorDistribution: response.error_distribution.map((item) => ({
@@ -99,7 +115,8 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
       occurredAt: item.occurred_at,
       reading: item.reading ?? null,
       listening: item.listening ?? null,
-      writing: item.writing ?? null
+      writing: item.writing ?? null,
+      speaking: item.speaking ?? null
     })),
     accuracyTrend: (response.accuracy_trend ?? []).map((p) => ({
       date: p.date,
@@ -137,12 +154,61 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
       delta: response.improvement_rate?.delta ?? null,
       percentChange: response.improvement_rate?.percent_change ?? null,
     },
+    sectionAnalysis: (response.section_analysis ?? []).map((item) => ({
+      sectionNumber: item.section_number,
+      label: item.label,
+      workedCount: item.worked_count,
+      correctCount: item.correct_count,
+      accuracy: item.accuracy,
+      attemptsCount: item.attempts_count,
+      avgTimeSec: item.avg_time_sec ?? null,
+    })),
+    skillFocus: (response.skill_focus ?? []).map((item) => ({
+      key: item.key,
+      label: item.label,
+      value: item.value ?? null,
+      valueLabel: item.value_label,
+      subtext: item.subtext ?? null,
+      status: item.status ?? null,
+    })),
+    timeAnalysis: {
+      avgTimePerTestSec: response.time_analysis?.avg_time_per_test_sec ?? null,
+      recommendedTimeSec: response.time_analysis?.recommended_time_sec ?? null,
+      timeManagementStatus: response.time_analysis?.time_management_status ?? "No timing data",
+      slowestSection: response.time_analysis?.slowest_section ? {
+        sectionNumber: response.time_analysis.slowest_section.section_number,
+        label: response.time_analysis.slowest_section.label,
+        workedCount: response.time_analysis.slowest_section.worked_count,
+        correctCount: response.time_analysis.slowest_section.correct_count,
+        accuracy: response.time_analysis.slowest_section.accuracy,
+        attemptsCount: response.time_analysis.slowest_section.attempts_count,
+        avgTimeSec: response.time_analysis.slowest_section.avg_time_sec ?? null,
+      } : null,
+      fastestSection: response.time_analysis?.fastest_section ? {
+        sectionNumber: response.time_analysis.fastest_section.section_number,
+        label: response.time_analysis.fastest_section.label,
+        workedCount: response.time_analysis.fastest_section.worked_count,
+        correctCount: response.time_analysis.fastest_section.correct_count,
+        accuracy: response.time_analysis.fastest_section.accuracy,
+        attemptsCount: response.time_analysis.fastest_section.attempts_count,
+        avgTimeSec: response.time_analysis.fastest_section.avg_time_sec ?? null,
+      } : null,
+      unansweredAvgPercent: response.time_analysis?.unanswered_avg_percent ?? null,
+    },
   };
 }
 
 export function getAverageBand(analytics: DashboardAnalytics, type: TestType): number | null {
   const values = analytics.progressSeries
-    .map((point) => (type === "reading" ? point.reading : type === "listening" ? point.listening : point.writing))
+    .map((point) => (
+      type === "reading"
+        ? point.reading
+        : type === "listening"
+          ? point.listening
+          : type === "writing"
+            ? point.writing
+            : point.speaking
+    ))
     .filter((value): value is number => value !== null && value !== undefined);
 
   if (values.length === 0) {

@@ -21,6 +21,7 @@ import type {
 import { fetchAdminApi } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { normalizeAdminTestSourceDetail } from "@/lib/test-source";
+import { sanitizeAdminQuestionGroupOptionFields } from "@/lib/question-group-options";
 
 const baseUrl = ADMIN_PUBLIC_API_BASE_URL;
 
@@ -755,22 +756,24 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
         marker_count: section.markerCount
       };
     }),
-    question_groups: questionGroups.map((group) => ({
-      id: isUuidLike(group.id) ? group.id : undefined,
-      section_id: sectionIdMap.get(group.sectionId) ?? generateUuid(),
-      title: sanitizeQuestionGroupTitle(group.title),
-      instructions: group.instructions,
-      options_title: group.optionsTitle,
-      type_id: resolvedQuestionType(group.typeId),
-      question_start: group.questionStart,
-      question_end: group.questionEnd,
-      shared_options: group.typeId === "listening_plan_map_labeling_free_text" ? [] : group.sharedOptions,
-      question_block: group.questionBlock,
-      answer_block: group.answerBlock,
-      secondary_block: group.secondaryBlock,
+    question_groups: questionGroups.map((group) => {
+      const sanitizedGroup = sanitizeAdminQuestionGroupOptionFields(group);
+      return {
+      id: isUuidLike(sanitizedGroup.id) ? sanitizedGroup.id : undefined,
+      section_id: sectionIdMap.get(sanitizedGroup.sectionId) ?? generateUuid(),
+      title: sanitizeQuestionGroupTitle(sanitizedGroup.title),
+      instructions: sanitizedGroup.instructions,
+      options_title: sanitizedGroup.optionsTitle,
+      type_id: resolvedQuestionType(sanitizedGroup.typeId),
+      question_start: sanitizedGroup.questionStart,
+      question_end: sanitizedGroup.questionEnd,
+      shared_options: sanitizedGroup.typeId === "listening_plan_map_labeling_free_text" ? [] : sanitizedGroup.sharedOptions,
+      question_block: sanitizedGroup.questionBlock,
+      answer_block: sanitizedGroup.answerBlock,
+      secondary_block: sanitizedGroup.secondaryBlock,
       diagram_title: "",
-      diagram_image_url: group.diagramImageUrl,
-      questions: group.questions.map((question) => ({
+      diagram_image_url: sanitizedGroup.diagramImageUrl,
+      questions: sanitizedGroup.questions.map((question) => ({
         id: isUuidLike(question.id) ? question.id : undefined,
         label: question.label,
         prompt: question.prompt,
@@ -778,7 +781,8 @@ function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPay
         explanation: question.explanation,
         variants: question.variants || []
       }))
-    }))
+    };
+    })
   };
 }
 
@@ -830,7 +834,7 @@ function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
         markerCount: section.marker_count,
       })),
     },
-    questionGroups: (draft.questionGroups ?? []).map((group) => ({
+    questionGroups: (draft.questionGroups ?? []).map((group) => sanitizeAdminQuestionGroupOptionFields({
       id: group.id,
       sectionId: group.section_id,
       title: sanitizeQuestionGroupTitle(String(group.title ?? "")),

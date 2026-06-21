@@ -7,6 +7,7 @@ import {
   USER_SESSION_EXPIRED_MESSAGE,
 } from "@/lib/user-auth-client";
 import type {
+  WritingDraftListResponse,
   WritingTaskType,
   WritingSubmissionRecord,
   WritingSubmissionResult,
@@ -72,6 +73,10 @@ export function getWritingTaskClient(taskId: string): Promise<WritingTaskDetail>
 
 export function getWritingDraftClient(draftKey: string): Promise<WritingDraftRead> {
   return clientFetch<WritingDraftRead>(`/writing/drafts/${draftKey}`);
+}
+
+export function getWritingDraftsClient(): Promise<WritingDraftListResponse> {
+  return clientFetch<WritingDraftListResponse>(`/writing/drafts`);
 }
 
 export function saveWritingDraftClient(draftKey: string, payload: WritingDraftUpsertRequest): Promise<WritingDraftRead> {

@@ -46,6 +46,7 @@ interface WritingDraftRecord {
   imageDataUrl?: string | null;
   started?: boolean;
   timeSpentSeconds?: number;
+  updatedAt?: string;
 }
 
 interface DraftPayload {
@@ -391,6 +392,7 @@ export function WritingExamClient({
               imageDataUrl: payload.image_data_url,
               started: payload.started,
               timeSpentSeconds: payload.time_spent_seconds,
+              updatedAt: new Date(now).toISOString(),
             } satisfies WritingDraftRecord),
           );
           void saveWritingDraftClient(storageKey, payload)

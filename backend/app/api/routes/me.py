@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -43,7 +44,11 @@ from app.schemas.me import (
     MeQuestionTypeComparisonItemRead,
     MeQuestionTypeComparisonRead,
     MeQuestionTypeComparisonTestRead,
+    MeSectionAnalysisItemRead,
     MeScoreDistributionRead,
+    MeSkillFocusItemRead,
+    MeSpeakingCriteriaRead,
+    MeSkillTimeAnalysisRead,
     MeSpeedMetricsRead,
     MeStatsRead,
     MeWeeklyActivityPointRead,
@@ -59,6 +64,7 @@ from app.schemas.payments import (
     MePaymentRead,
 )
 from app.services.attempt_repo import iter_user_attempts_from_db
+from app.models.speaking import SpeakingEvaluation, SpeakingSession, SpeakingTest
 from app.services.gift_entitlements import (
     ensure_manual_premium_entitlement_for_user,
     generate_user_gift_code,
@@ -72,8 +78,9 @@ from app.services.payment_service import (
     create_plan_payment,
     expire_stale_payments,
 )
+from app.services.plan_catalog import ensure_default_plans
 from app.services.premium_access import reconcile_user_premium_status
-from app.services.runtime_store import band_for_raw_score, iter_user_attempts
+from app.services.attempt_runtime import AttemptRuntime, band_for_raw_score
 from app.services.scoring import mc_multiple_question_weight
 from app.services.telegram_profile_sync import sync_user_telegram_profile
 from app.services.user_names import normalize_user_name_parts
@@ -124,6 +131,21 @@ LISTENING_QUESTION_TYPE_LABELS = {
     "listening_short_answer": "Short Answer",
 }
 
+LISTENING_FOCUS_CATEGORIES = {
+    "listening_mc_single": ("paraphrase_understanding", "Paraphrase Understanding"),
+    "listening_mc_multiple": ("distractor_handling", "Distractor Handling"),
+    "listening_matching": ("distractor_handling", "Distractor Handling"),
+    "listening_plan_map_labeling": ("detail_recognition", "Detail Recognition"),
+    "listening_plan_map_diagram_labeling": ("detail_recognition", "Detail Recognition"),
+    "listening_form_completion": ("spelling_accuracy", "Spelling Accuracy"),
+    "listening_note_completion": ("spelling_accuracy", "Spelling Accuracy"),
+    "listening_table_completion": ("spelling_accuracy", "Spelling Accuracy"),
+    "listening_flowchart_completion": ("spelling_accuracy", "Spelling Accuracy"),
+    "listening_summary_completion": ("spelling_accuracy", "Spelling Accuracy"),
+    "listening_sentence_completion": ("spelling_accuracy", "Spelling Accuracy"),
+    "listening_short_answer": ("spelling_accuracy", "Spelling Accuracy"),
+}
+
 
 def _question_type_label(question_type: str, include_module_prefix: bool = False) -> str:
     if question_type in READING_QUESTION_TYPE_LABELS:
@@ -141,6 +163,8 @@ def _question_type_catalog(test_type: TestType | None) -> list[tuple[str, str]]:
         return list(READING_QUESTION_TYPE_LABELS.items())
     if test_type == TestType.listening:
         return list(LISTENING_QUESTION_TYPE_LABELS.items())
+    if test_type in {TestType.writing, TestType.speaking}:
+        return []
     return [
         *((key, f"Reading - {label}") for key, label in READING_QUESTION_TYPE_LABELS.items()),
         *((key, f"Listening - {label}") for key, label in LISTENING_QUESTION_TYPE_LABELS.items()),
@@ -215,6 +239,7 @@ def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
                 "reading": [],
                 "listening": [],
                 "writing": [],
+                "speaking": [],
             },
         )
         if occurred_at > point["occurred_at"]:
@@ -230,6 +255,8 @@ def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
             point["listening"].append(band_value)
         elif test_type == TestType.writing:
             point["writing"].append(band_value)
+        elif test_type == TestType.speaking:
+            point["speaking"].append(band_value)
 
     def _average(values: list[float]) -> float | None:
         if not values:
@@ -244,6 +271,7 @@ def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
                 reading=_average(point["reading"]),
                 listening=_average(point["listening"]),
                 writing=_average(point["writing"]),
+                speaking=_average(point["speaking"]),
             )
             for point in grouped.values()
         ],
@@ -293,6 +321,7 @@ def _build_comparison(attempts, test_type: TestType | None) -> MeQuestionTypeCom
     include_module_prefix = test_type is None
     attempt_stats = [_attempt_type_stats(attempt, include_module_prefix=include_module_prefix) for attempt in attempts_for_comparison]
     labels = [label for _, label in _question_type_catalog(test_type)]
+    current_stats = attempt_stats[-1]
 
     items = [
         MeQuestionTypeComparisonItemRead(
@@ -305,6 +334,8 @@ def _build_comparison(attempts, test_type: TestType | None) -> MeQuestionTypeCom
                 )
                 for stats in attempt_stats
             ],
+            current_worked_count=current_stats.get(label, {}).get("worked_count", 0),
+            current_error_count=current_stats.get(label, {}).get("error_count", 0),
         )
         for label in labels
     ]
@@ -361,10 +392,321 @@ def _build_error_distribution(analysis: list[MeQuestionTypeAnalysisItemRead]) ->
     return sorted(items, key=lambda item: (-item.error_count, item.label))
 
 
+def _section_label(test_type: TestType | None, section_number: int) -> str:
+    if test_type == TestType.reading:
+        return f"Passage {section_number}"
+    if test_type == TestType.listening:
+        return f"Part {section_number}"
+    if test_type == TestType.writing:
+        return f"Task {section_number}"
+    return f"Section {section_number}"
+
+
+def _section_number_from_title(title: str) -> int | None:
+    match = re.search(r"\b(?:passage|part|section|task)\s*(\d)\b", title, re.I)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _section_map(snapshot: dict[str, object]) -> dict[str, int]:
+    mapped: dict[str, int] = {}
+    for index, section in enumerate(snapshot.get("sections", []), start=1):
+        if not isinstance(section, dict):
+            continue
+        section_id = str(section.get("section_id") or section.get("id") or "").strip()
+        title = str(section.get("title") or section.get("label") or "")
+        number = None
+        try:
+            number = int(section.get("section_number") or section.get("number") or 0)
+        except (TypeError, ValueError):
+            number = None
+        number = number or _section_number_from_title(title) or index
+        if section_id:
+            mapped[section_id] = number
+    return mapped
+
+
+def _section_number_for_item(attempt, item: dict[str, object]) -> int:
+    snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
+    section_id = str(item.get("section_id") or "").strip()
+    mapped = _section_map(snapshot)
+    if section_id and section_id in mapped:
+        return mapped[section_id]
+
+    title = str(item.get("section_title") or "")
+    title_number = _section_number_from_title(title)
+    if title_number:
+        return title_number
+
+    try:
+        question_number = int(item.get("question_number") or 0)
+    except (TypeError, ValueError):
+        question_number = 0
+
+    test_type = snapshot.get("test_type")
+    if test_type == TestType.reading:
+        return max(1, min(3, ((max(question_number, 1) - 1) // 13) + 1))
+    if test_type == TestType.listening:
+        return max(1, min(4, ((max(question_number, 1) - 1) // 10) + 1))
+    return 1
+
+
+def _is_answered(value: object) -> bool:
+    return value is not None and str(value).strip() != ""
+
+
+def _build_section_analysis(attempts, test_type: TestType | None) -> list[MeSectionAnalysisItemRead]:
+    if test_type not in {TestType.reading, TestType.listening, TestType.writing}:
+        return []
+
+    sections: dict[int, dict[str, float | int]] = {}
+    section_attempt_times: dict[int, list[int]] = {}
+
+    for attempt in attempts:
+        snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
+        if snapshot.get("test_type") != test_type:
+            continue
+
+        scoring_items = list(getattr(attempt, "scoring_items", []) or [])
+        seen_sections: set[int] = set()
+        for item in scoring_items:
+            if not isinstance(item, dict):
+                continue
+            section_number = _section_number_for_item(attempt, item)
+            state = sections.setdefault(section_number, {"worked": 0, "correct": 0.0, "total": 0, "attempts": 0})
+            answered = _is_answered(item.get("answer_value"))
+            if answered:
+                state["worked"] = int(state["worked"]) + 1
+            state["total"] = int(state["total"]) + 1
+            state["correct"] = float(state["correct"]) + float(item.get("awarded_score") or (1 if item.get("is_correct") else 0))
+            seen_sections.add(section_number)
+
+        for section_number in seen_sections:
+            sections.setdefault(section_number, {"worked": 0, "correct": 0.0, "total": 0, "attempts": 0})
+            sections[section_number]["attempts"] = int(sections[section_number]["attempts"]) + 1
+
+        section_numbers_by_id = _section_map(snapshot)
+        section_time_map = getattr(attempt, "metadata", {}).get("section_time_spent_sec") if isinstance(getattr(attempt, "metadata", {}), dict) else None
+        if isinstance(section_time_map, dict):
+            for section_id, seconds in section_time_map.items():
+                section_number = section_numbers_by_id.get(str(section_id).strip())
+                if section_number is None:
+                    continue
+                try:
+                    time_spent = int(seconds or 0)
+                except (TypeError, ValueError):
+                    continue
+                if time_spent > 0:
+                    section_attempt_times.setdefault(section_number, []).append(time_spent)
+
+        scope = _attempt_scope_value(attempt)
+        if scope == TestScope.section.value:
+            snapshot_sections = list(snapshot.get("sections") or [])
+            section_number = None
+            if snapshot_sections and isinstance(snapshot_sections[0], dict):
+                try:
+                    section_number = int(snapshot_sections[0].get("section_number") or 0)
+                except (TypeError, ValueError):
+                    section_number = None
+            section_number = section_number or next(iter(seen_sections), None)
+            time_spent = int(getattr(attempt, "time_spent_sec", 0) or 0)
+            if section_number and time_spent > 0 and not (isinstance(section_time_map, dict) and section_time_map):
+                section_attempt_times.setdefault(section_number, []).append(time_spent)
+
+    items: list[MeSectionAnalysisItemRead] = []
+    for section_number in sorted(sections):
+        state = sections[section_number]
+        total = int(state["total"])
+        correct = float(state["correct"])
+        times = section_attempt_times.get(section_number, [])
+        items.append(
+            MeSectionAnalysisItemRead(
+                section_number=section_number,
+                label=_section_label(test_type, section_number),
+                worked_count=int(state["worked"]),
+                correct_count=round(correct, 1),
+                accuracy=round((correct / total) * 100, 1) if total > 0 else 0.0,
+                attempts_count=int(state["attempts"]),
+                avg_time_sec=round(sum(times) / len(times)) if times else None,
+            )
+        )
+    return items
+
+
+def _build_unanswered_average(attempts, test_type: TestType | None) -> float | None:
+    percentages: list[float] = []
+    for attempt in attempts:
+        snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
+        if test_type is not None and snapshot.get("test_type") != test_type:
+            continue
+        scoring_items = [item for item in list(getattr(attempt, "scoring_items", []) or []) if isinstance(item, dict)]
+        if not scoring_items:
+            continue
+        unanswered = sum(1 for item in scoring_items if not _is_answered(item.get("answer_value")))
+        percentages.append((unanswered / len(scoring_items)) * 100)
+    if not percentages:
+        return None
+    return round(sum(percentages) / len(percentages), 1)
+
+
+def _build_time_analysis(attempts, test_type: TestType | None, section_analysis: list[MeSectionAnalysisItemRead]) -> MeSkillTimeAnalysisRead:
+    scoped_attempts = [
+        attempt for attempt in attempts
+        if test_type is None or (attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}).get("test_type") == test_type
+    ]
+    times = [int(getattr(a, "time_spent_sec", 0) or 0) for a in scoped_attempts if int(getattr(a, "time_spent_sec", 0) or 0) > 0]
+    avg_time = round(sum(times) / len(times)) if times else None
+    recommended = None
+    if test_type in {TestType.reading, TestType.listening}:
+        full_limits = [
+            int(getattr(a, "time_limit_seconds", 0) or 0)
+            for a in scoped_attempts
+            if _attempt_scope_value(a) == TestScope.full.value and int(getattr(a, "time_limit_seconds", 0) or 0) > 0
+        ]
+        recommended = round(sum(full_limits) / len(full_limits)) if full_limits else 3600
+    elif test_type == TestType.writing:
+        recommended = 2400
+    elif test_type == TestType.speaking:
+        recommended = 840
+
+    if avg_time is None or recommended is None:
+        status = "No timing data"
+    elif avg_time > recommended * 1.1:
+        status = "Needs improvement"
+    elif avg_time < recommended * 0.75:
+        status = "Fast pace"
+    else:
+        status = "On track"
+
+    timed_sections = [item for item in section_analysis if item.avg_time_sec is not None]
+    slowest = max(timed_sections, key=lambda item: item.avg_time_sec or 0) if timed_sections else None
+    fastest = min(timed_sections, key=lambda item: item.avg_time_sec or 0) if timed_sections else None
+    return MeSkillTimeAnalysisRead(
+        avg_time_per_test_sec=avg_time,
+        recommended_time_sec=recommended,
+        time_management_status=status,
+        slowest_section=slowest,
+        fastest_section=fastest,
+        unanswered_avg_percent=_build_unanswered_average(scoped_attempts, test_type),
+    )
+
+
+def _build_listening_focus(attempts) -> list[MeSkillFocusItemRead]:
+    buckets: dict[str, dict[str, object]] = {
+        key: {"label": label, "correct": 0.0, "total": 0}
+        for key, label in dict(LISTENING_FOCUS_CATEGORIES.values()).items()
+    }
+    for attempt in attempts:
+        snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
+        if snapshot.get("test_type") != TestType.listening:
+            continue
+        for item in list(getattr(attempt, "scoring_items", []) or []):
+            if not isinstance(item, dict):
+                continue
+            category = LISTENING_FOCUS_CATEGORIES.get(str(item.get("question_type") or ""))
+            if category is None:
+                continue
+            key, label = category
+            bucket = buckets.setdefault(key, {"label": label, "correct": 0.0, "total": 0})
+            bucket["total"] = int(bucket["total"]) + 1
+            bucket["correct"] = float(bucket["correct"]) + float(item.get("awarded_score") or (1 if item.get("is_correct") else 0))
+
+    focus: list[MeSkillFocusItemRead] = []
+    for key in ["detail_recognition", "paraphrase_understanding", "distractor_handling", "spelling_accuracy"]:
+        bucket = buckets.get(key)
+        if not bucket:
+            continue
+        total = int(bucket["total"])
+        value = round((float(bucket["correct"]) / total) * 100, 1) if total else None
+        focus.append(
+            MeSkillFocusItemRead(
+                key=key,
+                label=str(bucket["label"]),
+                value=value,
+                value_label=f"{value:g}%" if value is not None else "No data",
+                subtext="Based on matching listening question types" if total else "No answered questions in this category yet",
+                status="stable" if value is not None and value >= 70 else "needs_work" if value is not None else "empty",
+            )
+        )
+    return focus
+
+
+def _build_skill_focus(
+    attempts,
+    test_type: TestType | None,
+    section_analysis: list[MeSectionAnalysisItemRead],
+) -> list[MeSkillFocusItemRead]:
+    if test_type == TestType.speaking:
+        criteria = _build_speaking_criteria(attempts)
+        if criteria is None:
+            return []
+        values = [
+            ("fluency", "Fluency & Coherence", criteria.fluency),
+            ("lexical_resource", "Lexical Resource", criteria.lexical_resource),
+            ("grammar", "Grammar Range & Accuracy", criteria.grammar),
+            ("pronunciation", "Pronunciation", criteria.pronunciation),
+        ]
+        practiced = [(key, label, value) for key, label, value in values if value is not None]
+        if not practiced:
+            return []
+        weakest = min(practiced, key=lambda item: item[2] or 0)
+        strongest = max(practiced, key=lambda item: item[2] or 0)
+        return [
+            MeSkillFocusItemRead(
+                key="weakest_criterion",
+                label="Weakest Criterion",
+                value=weakest[2],
+                value_label=weakest[1],
+                subtext=f"{weakest[1]} average is Band {weakest[2]:g}",
+                status="needs_work",
+            ),
+            MeSkillFocusItemRead(
+                key="best_criterion",
+                label="Best Criterion",
+                value=strongest[2],
+                value_label=strongest[1],
+                subtext=f"{strongest[1]} average is Band {strongest[2]:g}",
+                status="stable",
+            ),
+        ]
+
+    focus: list[MeSkillFocusItemRead] = []
+    practiced_sections = [item for item in section_analysis if item.worked_count > 0]
+    if practiced_sections:
+        weakest = min(practiced_sections, key=lambda item: (item.accuracy, -item.worked_count))
+        best = max(practiced_sections, key=lambda item: (item.accuracy, item.worked_count))
+        focus.append(MeSkillFocusItemRead(
+            key="weakest_section",
+            label="Weakest Section",
+            value=weakest.accuracy,
+            value_label=weakest.label,
+            subtext=f"{weakest.label} accuracy is {weakest.accuracy:g}%",
+            status="needs_work",
+        ))
+        focus.append(MeSkillFocusItemRead(
+            key="best_section",
+            label="Best Section",
+            value=best.accuracy,
+            value_label=best.label,
+            subtext=f"{best.label} accuracy is {best.accuracy:g}%",
+            status="stable",
+        ))
+
+    if test_type == TestType.listening:
+        focus[1:1] = _build_listening_focus(attempts)
+
+    return focus
+
+
 def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
     reading = MePerformanceTestCountBucketRead()
     listening = MePerformanceTestCountBucketRead()
     writing = MePerformanceTestCountBucketRead()
+    speaking = MePerformanceTestCountBucketRead()
     study_time = MePerformanceStudyTimeRead()
     seen_test_keys: set[tuple[str, str, str]] = set()
 
@@ -378,6 +720,8 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
             bucket = listening
         elif test_type == "writing":
             bucket = writing
+        elif test_type == "speaking":
+            bucket = speaking
 
         if bucket is None:
             continue
@@ -390,6 +734,8 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
             study_time.listening_time_sec += time_spent_sec
         elif test_type == "writing":
             study_time.writing_time_sec += time_spent_sec
+        elif test_type == "speaking":
+            study_time.speaking_time_sec += time_spent_sec
 
         sections = list(attempt.test_snapshot.get("sections") or [])
         section_number = 0
@@ -425,7 +771,7 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
             elif section_number == 4:
                 bucket.section_4_count += 1
 
-    return MePerformanceSummaryRead(study_time=study_time, reading=reading, listening=listening, writing=writing)
+    return MePerformanceSummaryRead(study_time=study_time, reading=reading, listening=listening, writing=writing, speaking=speaking)
 
 
 def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
@@ -441,6 +787,7 @@ def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
         show_on_leaderboard=principal.show_on_leaderboard,
         telegram_id=principal.telegram_id,
         avatar_url=principal.avatar_url,
+        language=principal.language,
         created_at=principal.created_at,
     )
 
@@ -457,6 +804,7 @@ def _profile_from_user(user: User) -> MeProfileRead:
         show_on_leaderboard=user.show_on_leaderboard,
         telegram_id=user.telegram_id,
         avatar_url=user.avatar_url,
+        language=user.language or "en",
         last_active_at=user.last_active_at,
         created_at=user.created_at,
         total_xp=int(user.total_xp or 0),
@@ -769,6 +1117,8 @@ async def redeem_code(
 
     if not normalized_code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enter a redeem code first.")
+    if len(normalized_code) < 7:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Redeem code must be at least 7 characters.")
 
     gift_code = await session.scalar(
         select(GiftCode).where(func.upper(GiftCode.code) == normalized_code)
@@ -900,6 +1250,8 @@ async def create_my_payment(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
 
+    await ensure_default_plans(session)
+
     plan = await session.get(Plan, payload.plan_id)
     if plan is None or str(plan.catalog or "public") != "public" or not plan.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selected subscription plan was not found.")
@@ -957,15 +1309,16 @@ async def cancel_my_payment(
 
 async def _load_attempts(current_user: DebugPrincipal, session: AsyncSession):
     try:
-        attempts = await iter_user_attempts_from_db(session, user_id=current_user.id)
-        if attempts:
-            return attempts
-    except Exception:
+        return await iter_user_attempts_from_db(session, user_id=current_user.id)
+    except Exception as exc:
         try:
             await session.rollback()
         except Exception:
             pass
-    return iter_user_attempts(current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load user attempts.",
+        ) from exc
 
 
 def _filter_attempts_by_type(attempts, test_type: TestType | None):
@@ -991,10 +1344,12 @@ def _effective_attempt_band_score(attempt) -> Decimal | float | None:
     test_type = TestType(str(snapshot.get("test_type", TestType.reading)))
     if attempt.band_score is not None and (
         _attempt_scope_value(attempt) == TestScope.full.value
-        or test_type == TestType.writing
+        or test_type in {TestType.writing, TestType.speaking}
     ):
         return attempt.band_score
     if attempt.raw_score is None:
+        return None
+    if test_type == TestType.speaking:
         return None
 
     return band_for_raw_score(test_type, int(attempt.raw_score))
@@ -1004,7 +1359,6 @@ async def _load_writing_attempts(current_user: DebugPrincipal, session: AsyncSes
     from app.models.writing import WritingSubmission, WritingEvaluation, WritingTask
     from app.models.enums import WritingSubmissionStatus
     from app.core.enums import AttemptStatus
-    from app.services.runtime_store import AttemptRuntime
 
     rows = (await session.execute(
         select(WritingSubmission, WritingEvaluation, WritingTask)
@@ -1055,6 +1409,75 @@ async def _load_writing_attempts(current_user: DebugPrincipal, session: AsyncSes
             test_snapshot=snapshot,
             metadata=metadata,
             scoring_items=[]
+        ))
+
+    return adapters
+
+
+def _speaking_entry_mode_parts(entry_mode: str) -> list[int]:
+    if entry_mode == "full":
+        return [1, 2, 3]
+    match = re.search(r"part_(\d)", entry_mode)
+    if not match:
+        return [1]
+    return [max(1, min(3, int(match.group(1))))]
+
+
+async def _load_speaking_attempts(current_user: DebugPrincipal, session: AsyncSession):
+    rows = (await session.execute(
+        select(SpeakingSession, SpeakingEvaluation, SpeakingTest)
+        .join(SpeakingTest, SpeakingTest.id == SpeakingSession.speaking_test_id)
+        .join(SpeakingEvaluation, SpeakingEvaluation.speaking_session_id == SpeakingSession.id)
+        .where(SpeakingSession.user_id == current_user.id)
+        .where(SpeakingEvaluation.overall_band.is_not(None))
+    )).all()
+
+    adapters = []
+    for speaking_session, evaluation, speaking_test in rows:
+        entry_mode = str(speaking_session.entry_mode or "full")
+        part_numbers = _speaking_entry_mode_parts(entry_mode)
+        scope = TestScope.full if entry_mode == "full" else TestScope.section
+        started_at = speaking_session.started_at or speaking_session.created_at
+        completed_at = speaking_session.graded_at or speaking_session.ended_at or speaking_session.created_at
+        time_spent_sec = 0
+        if started_at and (speaking_session.ended_at or completed_at):
+            ended_at = speaking_session.ended_at or completed_at
+            time_spent_sec = max(0, int((ended_at - started_at).total_seconds()))
+
+        criteria = {
+            "fluency": evaluation.fluency_band,
+            "lexical_resource": evaluation.lexical_band,
+            "grammar": evaluation.grammar_band,
+            "pronunciation": evaluation.pronunciation_band,
+        }
+
+        adapters.append(AttemptRuntime(
+            attempt_id=speaking_session.id,
+            user_id=speaking_session.user_id,
+            test_id=speaking_session.id,
+            test_version=1,
+            scope=scope,
+            section_id=None,
+            mode=TestMode.practice,
+            status=AttemptStatus.completed,
+            started_at=started_at,
+            completed_at=completed_at,
+            time_spent_sec=time_spent_sec,
+            raw_score=None,
+            total_questions=0,
+            band_score=Decimal(str(evaluation.overall_band)),
+            test_snapshot={
+                "test_type": TestType.speaking.value,
+                "scope": scope.value,
+                "format": entry_mode,
+                "sections": [
+                    {"section_number": part_number, "title": f"Part {part_number}"}
+                    for part_number in part_numbers
+                ],
+                "title": speaking_test.title,
+            },
+            metadata={"speaking_criteria": criteria},
+            scoring_items=[],
         ))
 
     return adapters
@@ -1135,6 +1558,8 @@ async def get_activity(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[MeActivityPointRead]:
     attempts = await _load_attempts(current_user, session)
+    attempts.extend(await _load_writing_attempts(current_user, session))
+    attempts.extend(await _load_speaking_attempts(current_user, session))
     grouped: dict[date, dict[str, int]] = {}
     for attempt in attempts:
         key = attempt.started_at.date()
@@ -1144,6 +1569,7 @@ async def get_activity(
             "reading_time_sec": 0,
             "listening_time_sec": 0,
             "writing_time_sec": 0,
+            "speaking_time_sec": 0,
         })
         entry["attempts_count"] += 1
         entry["time_spent_sec"] += attempt.time_spent_sec
@@ -1155,6 +1581,8 @@ async def get_activity(
             entry["listening_time_sec"] += attempt.time_spent_sec
         elif test_type == "writing":
             entry["writing_time_sec"] += attempt.time_spent_sec
+        elif test_type == "speaking":
+            entry["speaking_time_sec"] += attempt.time_spent_sec
 
     return [
         MeActivityPointRead(activity_date=activity_date, **values)
@@ -1233,22 +1661,31 @@ async def get_attempts(
 
 def _build_accuracy_trend(attempts) -> list[MeAccuracyTrendPointRead]:
     scored = sorted(
-        [a for a in attempts if a.raw_score is not None and getattr(a, "total_questions", 0)],
+        [
+            a for a in attempts
+            if (a.raw_score is not None and getattr(a, "total_questions", 0))
+            or (
+                (a.test_snapshot if isinstance(a.test_snapshot, dict) else {}).get("test_type") == TestType.speaking
+                and _effective_attempt_band_score(a) is not None
+            )
+        ],
         key=lambda a: a.completed_at or a.started_at,
     )
     items: list[MeAccuracyTrendPointRead] = []
     for attempt in scored[-20:]:
-        total_q = max(1, int(getattr(attempt, "total_questions", 0) or 1))
-        accuracy = round((int(attempt.raw_score) / total_q) * 100, 1)
+        band_score = _effective_attempt_band_score(attempt)
+        if attempt.raw_score is not None and getattr(attempt, "total_questions", 0):
+            total_q = max(1, int(getattr(attempt, "total_questions", 0) or 1))
+            accuracy = round((int(attempt.raw_score) / total_q) * 100, 1)
+        elif band_score is not None:
+            accuracy = round((float(band_score) / 9.0) * 100, 1)
+        else:
+            continue
         occurred = attempt.completed_at or attempt.started_at
         items.append(MeAccuracyTrendPointRead(
             date=occurred.strftime("%d %b"),
             accuracy=accuracy,
-            band=(
-                float(band_score)
-                if (band_score := _effective_attempt_band_score(attempt)) is not None
-                else None
-            ),
+            band=float(band_score) if band_score is not None else None,
             test_type=attempt.test_snapshot.get("test_type"),
         ))
     return items
@@ -1362,8 +1799,8 @@ def _build_speed_metrics(completed_attempts) -> MeSpeedMetricsRead:
 
     for a in completed_attempts:
         time_sec = max(0, int(getattr(a, "time_spent_sec", 0) or 0))
-        total_q = max(1, int(getattr(a, "total_questions", 0) or 1))
-        if time_sec <= 0:
+        total_q = int(getattr(a, "total_questions", 0) or 0)
+        if time_sec <= 0 or total_q <= 0:
             continue
         tpq = time_sec / total_q
         all_times.append(tpq)
@@ -1417,7 +1854,9 @@ async def get_dashboard_analytics(
 ) -> MeDashboardAnalyticsRead:
     all_attempts = await _load_attempts(current_user, session)
     writing_attempts = await _load_writing_attempts(current_user, session)
+    speaking_attempts = await _load_speaking_attempts(current_user, session)
     all_attempts.extend(writing_attempts)
+    all_attempts.extend(speaking_attempts)
     completed = [
         attempt
         for attempt in all_attempts
@@ -1425,9 +1864,11 @@ async def get_dashboard_analytics(
     ]
     filtered_completed = _filter_attempts_by_type(completed, test_type)
     analysis = _build_question_type_analysis(filtered_completed, test_type)
+    section_analysis = _build_section_analysis(filtered_completed, test_type)
     return MeDashboardAnalyticsRead(
         performance_summary=_build_performance_summary(filtered_completed),
         writing_criteria=_build_writing_criteria(filtered_completed),
+        speaking_criteria=_build_speaking_criteria(filtered_completed),
         question_type_analysis=analysis,
         comparison=_build_comparison(filtered_completed, test_type),
         error_distribution=_build_error_distribution(analysis),
@@ -1438,6 +1879,9 @@ async def get_dashboard_analytics(
         personal_bests=_build_personal_bests(all_attempts, filtered_completed),
         speed_metrics=_build_speed_metrics(filtered_completed),
         improvement_rate=_build_improvement_rate(filtered_completed),
+        section_analysis=section_analysis,
+        skill_focus=_build_skill_focus(filtered_completed, test_type, section_analysis),
+        time_analysis=_build_time_analysis(filtered_completed, test_type, section_analysis),
     )
 
 
@@ -1476,6 +1920,36 @@ def _build_writing_criteria(attempts) -> MeWritingCriteriaRead | None:
         coherence_cohesion=round(cc / count_cc, 2) if count_cc > 0 else None,
         lexical_resource=round(lr / count_lr, 2) if count_lr > 0 else None,
         grammatical_range_accuracy=round(gra / count_gra, 2) if count_gra > 0 else None,
+    )
+
+
+def _build_speaking_criteria(attempts) -> MeSpeakingCriteriaRead | None:
+    speaking_attempts = [
+        a for a in attempts
+        if a.test_snapshot.get("test_type") == "speaking"
+        and a.metadata.get("speaking_criteria")
+    ]
+    if not speaking_attempts:
+        return None
+
+    totals = {"fluency": 0.0, "lexical_resource": 0.0, "grammar": 0.0, "pronunciation": 0.0}
+    counts = {key: 0 for key in totals}
+    for attempt in speaking_attempts:
+        criteria = attempt.metadata["speaking_criteria"]
+        for key in totals:
+            if criteria.get(key) is None:
+                continue
+            totals[key] += float(criteria[key])
+            counts[key] += 1
+
+    if all(count == 0 for count in counts.values()):
+        return None
+
+    return MeSpeakingCriteriaRead(
+        fluency=round(totals["fluency"] / counts["fluency"], 2) if counts["fluency"] > 0 else None,
+        lexical_resource=round(totals["lexical_resource"] / counts["lexical_resource"], 2) if counts["lexical_resource"] > 0 else None,
+        grammar=round(totals["grammar"] / counts["grammar"], 2) if counts["grammar"] > 0 else None,
+        pronunciation=round(totals["pronunciation"] / counts["pronunciation"], 2) if counts["pronunciation"] > 0 else None,
     )
 
 

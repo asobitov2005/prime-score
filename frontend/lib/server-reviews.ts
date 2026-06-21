@@ -1,4 +1,4 @@
-import { mockReviews, type ReviewItem } from "@/lib/mock-data";
+import type { ReviewItem } from "@/components/marketing/landing-types";
 import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 
 const baseUrl = getFrontendServerApiBaseUrl();
@@ -78,6 +78,6 @@ export async function getPublicReviews(limit = 6): Promise<ReviewItem[]> {
     const payload = (await response.json()) as BackendPublicReview[];
     return payload.map(mapReview).slice(0, limit);
   } catch {
-    return mockReviews.slice(0, limit);
+    return [];
   }
 }

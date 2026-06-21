@@ -82,7 +82,7 @@ export async function getPublicPlans(): Promise<MarketingPlan[]> {
     let response: Response;
     try {
       response = await fetch(`${baseUrl}/plans`, {
-        next: { revalidate: 3600, tags: ["public-plans"] },
+        cache: "no-store",
         signal: controller.signal,
       });
     } finally {

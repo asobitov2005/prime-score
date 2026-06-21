@@ -8,13 +8,13 @@ import { trackCtaClick } from "@/lib/analytics";
 import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 import { useAuthStore } from "@/store/auth-store";
+import { cn } from "@/lib/utils";
 
 export function SidebarPremiumCard() {
   const isPremium = useAuthStore((state) => state.isPremium);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const premiumUntil = useAuthStore((state) => state.premiumUntil);
   const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
-
   const expiryLabel = isPremium && premiumUntil
     ? new Intl.DateTimeFormat("en-GB", {
         day: "numeric",
@@ -24,46 +24,63 @@ export function SidebarPremiumCard() {
     : null;
 
   return (
-    <Card className="group relative overflow-hidden rounded-xl border-0 bg-[linear-gradient(160deg,hsl(var(--card))_0%,hsl(var(--card))_48%,hsl(var(--primary)/0.14)_100%)] shadow-[0_14px_34px_-22px_rgba(0,0,0,0.55)] dark:bg-[linear-gradient(160deg,rgba(18,24,38,0.98)_0%,rgba(16,22,35,0.98)_52%,rgba(245,158,11,0.16)_100%)]">
-      <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-      <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-primary/12 blur-3xl dark:bg-primary/20" />
+    <Card
+      className={cn(
+        "group relative overflow-hidden rounded-[1.125rem] border shadow-[0_8px_22px_-20px_rgba(15,23,42,0.18)]",
+        isPremium
+          ? "border-amber-200/70 bg-gradient-to-br from-white via-amber-50/80 to-orange-50/70 dark:border-amber-500/20 dark:from-slate-900 dark:via-amber-950/25 dark:to-slate-900"
+          : "border-amber-200/70 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/10",
+      )}
+    >
       <CardContent className="relative flex flex-col gap-3 p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 shadow-inner shadow-primary/10 dark:border-primary/30 dark:bg-primary/12">
-            <PrimePremiumIcon className="h-5 w-5 text-primary" />
+          <div
+            className={cn(
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border shadow-inner",
+              isPremium
+                ? "border-amber-200 bg-white text-amber-600 shadow-amber-500/10 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
+                : "border-amber-200 bg-white text-amber-600 shadow-amber-500/10 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300",
+            )}
+          >
+            <PrimePremiumIcon className={cn("h-6 w-6", isPremium ? "text-amber-600 dark:text-amber-300" : "text-amber-600 dark:text-amber-300")} />
           </div>
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2">
-              <p className="whitespace-nowrap text-base font-semibold tracking-[0.02em] text-foreground">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <p
+                className={cn(
+                  "min-w-0 whitespace-nowrap font-semibold leading-5 text-slate-950 dark:text-slate-50",
+                  isPremium ? "text-[15px]" : "text-base",
+                )}
+              >
                 {isPremium ? "Premium Active" : "Go Premium"}
               </p>
               {isPremium ? (
-                <span className="inline-flex items-center rounded-full bg-emerald-500/12 px-2.5 py-1 leading-none">
+                <span className="inline-flex items-center rounded-full bg-amber-500/12 px-2 py-1 leading-none dark:bg-amber-400/15">
                   <span className="premium-live-dot" />
                 </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] leading-none text-primary">
-                  Premium
-                </span>
-              )}
+              ) : null}
             </div>
-            {!isPremium ? null : null}
+            {isPremium && expiryLabel ? (
+              <p className="mt-1 text-[11px] font-medium leading-4 text-amber-900/70 dark:text-amber-100/70">
+                {`Expires ${expiryLabel}`}
+              </p>
+            ) : !isPremium ? (
+              <p className="mt-1 text-[11px] font-medium leading-4 text-amber-900/70 dark:text-amber-100/70">
+                {"Unlock tests, feedback and analytics."}
+              </p>
+            ) : null}
           </div>
         </div>
-
-        {isPremium && expiryLabel ? (
-          <div className="px-1 text-[11px] font-medium leading-5 text-muted-foreground">
-            Expiry date: {expiryLabel}
-          </div>
-        ) : null}
 
         <div className="flex justify-center pt-0.5">
           <Button
             asChild
-            variant={isPremium ? "secondary" : "default"}
-            className={isPremium
-              ? "h-10 w-full rounded-2xl border border-primary/20 bg-background/90 px-4 font-medium text-foreground shadow-sm transition-all duration-200 hover:border-primary/35 hover:bg-background dark:border-white/10 dark:bg-white/8 dark:text-white dark:hover:bg-white/12"
-              : "h-10 w-full rounded-2xl border border-primary/20 bg-background/90 px-4 font-medium text-foreground shadow-sm transition-all duration-200 hover:border-primary/35 hover:bg-background dark:border-white/10 dark:bg-white/8 dark:text-white dark:hover:bg-white/12"}
+            className={cn(
+              "h-10 w-full rounded-xl border-0 px-4 font-semibold shadow-none transition-colors",
+              isPremium
+                ? "bg-amber-500 text-slate-950 hover:bg-amber-400 dark:bg-amber-400 dark:text-slate-950 dark:hover:bg-amber-300"
+                : "bg-orange-500 text-white hover:bg-orange-600",
+            )}
           >
             <Link
               href={subscriptionHref}
@@ -78,7 +95,7 @@ export function SidebarPremiumCard() {
               }}
               className="flex w-full items-center justify-center gap-2 text-center"
             >
-              <span>{isPremium ? "Manage Subscription" : "Upgrade now"}</span>
+              <span>{isPremium ? "Manage Subscription" : "Upgrade Now"}</span>
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>

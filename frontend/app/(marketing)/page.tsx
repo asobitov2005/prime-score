@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LandingPageClient } from "@/components/marketing/landing-page-client";
-import { getLandingOnlineCount } from "@/lib/server-live-stats";
+import { getLandingTotalUsers } from "@/lib/server-live-stats";
 import { getPublicPlans } from "@/lib/server-plans";
 import { getPublicReviews } from "@/lib/server-reviews";
 import { getLandingFeaturedTests } from "@/lib/server-data";
@@ -50,10 +50,10 @@ export const metadata: Metadata = {
 };
 
 export default async function LandingPage() {
-  const [plans, reviews, onlineCount, allTests] = await Promise.all([
+  const [plans, reviews, totalUsers, allTests] = await Promise.all([
     getPublicPlans(),
     getPublicReviews(6),
-    getLandingOnlineCount(),
+    getLandingTotalUsers(),
     getLandingFeaturedTests(),
   ]);
 
@@ -86,7 +86,7 @@ export default async function LandingPage() {
         />
       ))}
 
-      <LandingPageClient plans={plans} reviews={reviews} onlineCount={onlineCount} initialTests={featuredTests} />
+      <LandingPageClient plans={plans} reviews={reviews} totalUsers={totalUsers} initialTests={featuredTests} />
     </>
   );
 }

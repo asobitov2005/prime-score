@@ -10,6 +10,15 @@ const frontendApiBaseUrl = resolveFrontendApiBaseUrl();
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  async redirects() {
+    return [
+      { source: "/pricing", destination: "/#pricing", permanent: true },
+      { source: "/reviews", destination: "/#reviews", permanent: true },
+      { source: "/ielts-mock-test-online", destination: "/", permanent: true },
+      { source: "/ielts-mock-test-uzbekistan", destination: "/", permanent: true },
+      { source: "/ielts-mock-test-tashkent", destination: "/", permanent: true },
+    ];
+  },
   async rewrites() {
     return [
       {

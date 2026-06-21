@@ -1,14 +1,13 @@
 import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
 
 const baseUrl = getFrontendServerApiBaseUrl();
-const FALLBACK_ONLINE_COUNT = 420;
 
 type BackendLandingLiveStats = {
-  online_count: number;
+  total_users: number;
   refreshed_at: string;
 };
 
-export async function getLandingOnlineCount(): Promise<number> {
+export async function getLandingTotalUsers(): Promise<number> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
@@ -30,8 +29,8 @@ export async function getLandingOnlineCount(): Promise<number> {
     }
 
     const payload = (await response.json()) as BackendLandingLiveStats;
-    return Math.max(48, Math.round(payload.online_count));
+    return Math.max(0, Math.round(payload.total_users));
   } catch {
-    return FALLBACK_ONLINE_COUNT;
+    return 0;
   }
 }

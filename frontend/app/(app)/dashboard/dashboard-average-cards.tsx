@@ -1,7 +1,9 @@
 "use client";
 
 import { BookOpenText, Headphones, PenSquare, TrendingDown, TrendingUp } from "lucide-react";
+import { DashboardTrendLineChart } from "@/components/dashboard/dashboard-trend-line-chart";
 import { getAverageBand, roundToIeltsBand, useDashboardAnalytics } from "@/components/charts/use-dashboard-analytics";
+import { getDayTrendPoints } from "@/lib/dashboard-trend";
 import type { DashboardAnalytics } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StudyTimeCard } from "./activity-summary";
@@ -41,125 +43,15 @@ function getOverallBand(analytics: DashboardAnalytics): {
   return { overallBand, reading, listening, writing };
 }
 
-function getFiveWeekTrendPoints(analytics: DashboardAnalytics): { label: string; value: number }[] {
-  const trendByDay = new Map<string, number>();
-
-  analytics.progressSeries.forEach((point) => {
-      const values = [point.reading, point.listening, point.writing]
-        .filter((value): value is number => value !== null && value !== undefined && value > 0);
-
-      if (values.length === 0) {
-        return;
-      }
-
-      const dayKey = new Date(point.occurredAt).toISOString().slice(0, 10);
-      trendByDay.set(dayKey, roundToIeltsBand(values.reduce((sum, value) => sum + value, 0) / values.length));
-    });
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  let lastKnownValue = Array.from(trendByDay.values()).at(-1) ?? 0;
-
-  return Array.from({ length: 5 }, (_, index) => {
-    const day = new Date(today);
-    day.setDate(today.getDate() - ((4 - index) * 7));
-    const dayKey = day.toISOString().slice(0, 10);
-    const value = trendByDay.get(dayKey);
-    if (value !== undefined) {
-      lastKnownValue = value;
-    }
-    return {
-      label: new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit" }).format(day).replace("/", "."),
-      value: lastKnownValue,
-    };
-  });
-}
-
-function MiniBandTrendChart({ points: trendPoints }: { points: { label: string; value: number }[] }) {
-  const chartPoints = trendPoints.length >= 2
-    ? trendPoints
-    : Array.from({ length: 5 }, (_, index) => ({ label: `${index + 1}`, value: 0 }));
-  const width = 320;
-  const height = 132;
-  const leftPad = 48;
-  const rightPad = 6;
-  const topPad = 10;
-  const bottomPad = 26;
-  const plotWidth = width - leftPad - rightPad;
-  const plotHeight = height - topPad - bottomPad;
-  const yTicks = [4, 3, 2];
-  const yMin = 2;
-  const yMax = 4;
-  const yRange = yMax - yMin;
-  const getY = (value: number) => {
-    const normalized = Math.max(0, Math.min((value - yMin) / yRange, 1));
-    return topPad + (1 - normalized) * plotHeight;
-  };
-  const linePoints = chartPoints.map((point, index) => {
-    const x = leftPad + (index / (chartPoints.length - 1)) * plotWidth;
-    const y = getY(point.value);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  const areaPoints = `${leftPad},${height - bottomPad} ${linePoints} ${width - rightPad},${height - bottomPad}`;
-
-  return (
-    <svg className="h-[132px] w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} aria-label="Seven day band trend">
-      <defs>
-        <linearGradient id="band-trend-area" x1="0" x2="0" y1="0" y2="1">
-          <stop stopColor="rgba(249,115,22,0.24)" />
-          <stop offset="1" stopColor="rgba(249,115,22,0)" />
-        </linearGradient>
-      </defs>
-      {yTicks.map((tick) => {
-        const y = getY(tick);
-        return (
-          <g key={tick}>
-            <line x1={leftPad} x2={width - rightPad} y1={y} y2={y} stroke="rgba(148,163,184,0.18)" strokeWidth="1" />
-            <text x={0} y={y + 4} className="fill-muted-foreground text-[13px] font-semibold">{tick.toFixed(1)}</text>
-          </g>
-        );
-      })}
-      <polygon points={areaPoints} fill="url(#band-trend-area)" />
-      <polyline
-        points={linePoints}
-        fill="none"
-        stroke="rgba(249,115,22,0.18)"
-        strokeWidth="10"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <polyline
-        points={linePoints}
-        fill="none"
-        stroke="rgba(249,115,22,0.92)"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {chartPoints.map((point, index) => {
-        const x = leftPad + (index / (chartPoints.length - 1)) * plotWidth;
-        const y = getY(point.value);
-        return <circle key={`${point.label}-${index}`} cx={x} cy={y} r="3.8" fill="rgb(249,115,22)" />;
-      })}
-      {chartPoints.map((point, index) => {
-        const x = leftPad + (index / (chartPoints.length - 1)) * plotWidth;
-        return (
-          <text key={point.label} x={x} y={height - 2} textAnchor="middle" className="fill-muted-foreground text-[12px] font-semibold">
-            {point.label}
-          </text>
-        );
-      })}
-    </svg>
-  );
-}
-
 export function OverallBandKpiCard({ initialAnalytics }: DashboardAverageCardsProps) {
   const analyticsQuery = useDashboardAnalytics(initialAnalytics);
   const analytics = analyticsQuery.data ?? initialAnalytics;
   const { overallBand } = getOverallBand(analytics);
-  const trendPoints = getFiveWeekTrendPoints(analytics);
-  const trendDelta = trendPoints.length >= 2
-    ? roundToIeltsBand(trendPoints[trendPoints.length - 1].value - trendPoints[trendPoints.length - 2].value)
+  const trendPoints = getDayTrendPoints(analytics, "overall", 5);
+  const lastDayValue = trendPoints[trendPoints.length - 1]?.value ?? null;
+  const previousDayValue = trendPoints[trendPoints.length - 2]?.value ?? null;
+  const trendDelta = lastDayValue !== null && previousDayValue !== null
+    ? roundToIeltsBand(lastDayValue - previousDayValue)
     : null;
   const delta = analytics.improvementRate?.delta ?? trendDelta;
   const gaugePath = "M18 100 A52 52 0 1 1 110 100";
@@ -171,8 +63,8 @@ export function OverallBandKpiCard({ initialAnalytics }: DashboardAverageCardsPr
     <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-card p-3 shadow-xl shadow-orange-950/8 dark:border-orange-500/20 dark:bg-slate-950/80 dark:shadow-black/30">
       <div className="absolute -right-16 -top-20 h-44 w-44 rounded-full bg-orange-200/25 dark:bg-orange-500/10" />
       <div className="relative">
-        <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[104px_minmax(0,1fr)]">
-          <div className="flex flex-col items-center">
+        <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)]">
+          <div className="flex shrink-0 flex-col items-center">
             <p className="mb-1.5 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">OVERALL BAND</p>
             <div className="relative h-[108px] w-[108px]">
               <svg className="h-full w-full" viewBox="0 0 128 128" aria-hidden="true">
@@ -226,8 +118,10 @@ export function OverallBandKpiCard({ initialAnalytics }: DashboardAverageCardsPr
             </div>
           </div>
 
-          <div className="min-w-0">
-            <MiniBandTrendChart points={trendPoints} />
+          <div className="min-w-0 self-center">
+            <div className="h-[132px] w-full">
+              <DashboardTrendLineChart points={trendPoints} seriesLabel="Overall" strokeColor="#F97316" height={132} />
+            </div>
           </div>
         </div>
       </div>

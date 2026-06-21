@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Notice, SectionHeader, Select, cn } from "@/components/ui";
+import { AdminMetricsTableLoadingSkeleton } from "@/components/loading-skeletons";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 
@@ -799,17 +800,7 @@ export default function PromoCodesPage() {
   };
 
   if (loading) {
-    return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-8 w-56 rounded-lg bg-muted" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => (
-            <div key={item} className="h-28 rounded-xl bg-muted" />
-          ))}
-        </div>
-        <div className="h-[420px] rounded-xl bg-muted" />
-      </div>
-    );
+    return <AdminMetricsTableLoadingSkeleton columns={7} />;
   }
 
   return (

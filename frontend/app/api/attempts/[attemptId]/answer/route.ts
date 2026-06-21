@@ -17,7 +17,12 @@ export async function PATCH(
     if (!questionId) {
       return NextResponse.json({ message: "Question id is required." }, { status: 400 });
     }
-    await saveBackendAttemptAnswer(params.attemptId, questionId, payload.value);
+    await saveBackendAttemptAnswer(
+      params.attemptId,
+      questionId,
+      payload.value,
+      request.headers.get("authorization")
+    );
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof ServerUserApiError) {

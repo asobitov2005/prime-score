@@ -89,6 +89,7 @@ async def get_current_user(
             show_on_leaderboard=user.show_on_leaderboard,
             telegram_id=user.telegram_id,
             avatar_url=user.avatar_url,
+            language=user.language or "en",
             created_at=user.created_at,
         )
 
@@ -161,6 +162,19 @@ async def get_current_admin(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Admin account is not available.",
+        )
+
+    try:
+        token_auth_version = int(payload.get("auth_version") or 1)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid admin access token.",
+        ) from exc
+    if token_auth_version != (admin.auth_version or 1):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin session is no longer active.",
         )
     return build_admin_principal(admin)
 

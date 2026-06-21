@@ -48,6 +48,11 @@ if [ -n "${TELEGRAM_SESSION_PATH:-}" ]; then
   chown -R appuser:appuser "$SESSION_DIR"
 fi
 
+if [ -f "/app/.secrets/google-vertex-credentials.json" ]; then
+  chmod 640 /app/.secrets/google-vertex-credentials.json
+  chown appuser:appuser /app/.secrets/google-vertex-credentials.json
+fi
+
 if [ "$(id -u)" = "0" ] && [ "${RUN_AS_APPUSER:-1}" = "1" ]; then
   exec su -s /bin/sh appuser -c "cd /app && exec $*"
 fi

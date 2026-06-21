@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = "change-me"
     telegram_webapp_url: str = "https://primescore.uz/telegram"
     telegram_webapp_auth_max_age_seconds: int = 86_400
+    admin_public_url: str = "http://localhost:3001"
     jwt_secret: str = "change-me"
     jwt_refresh_secret: str = "change-me-too"
     access_token_expire_minutes: int = 43200
@@ -28,8 +29,15 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_writing_model: str | None = None
+    gemini_speaking_live_model: str = "gemini-3.1-flash-live-preview"
+    gemini_speaking_grader_model: str = "gemini-2.5-flash-lite"
     gemini_thinking_level: str = "HIGH"
     gemini_max_tool_loops: int = 80
+    google_genai_use_vertexai: bool = False
+    google_cloud_project: str | None = None
+    google_cloud_location: str = "global"
+    google_cloud_live_location: str = "us-central1"
+    google_application_credentials: str | None = None
     cerebras_api_key: str | None = None
     cerebras_base_url: str | None = None
     minio_endpoint: str = "127.0.0.1:9200"

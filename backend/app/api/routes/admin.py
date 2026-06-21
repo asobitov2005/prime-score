@@ -10,7 +10,7 @@ import asyncio
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status, Query
 from pydantic import BaseModel
 from sqlalchemy import Integer, case, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,6 +98,9 @@ from app.schemas.auth import (
     AdminAuthRefreshRequest,
     AdminAuthResponse,
     AdminAuthVerifyOtpRequest,
+    AdminPasswordResetCompleteRequest,
+    AdminPasswordResetRequest,
+    AdminPasswordResetTokenStatusResponse,
 )
 from app.schemas.common import AdminPrincipal, MessageResponse
 from app.schemas.payments import (
@@ -118,19 +121,28 @@ from app.schemas.review import (
 from app.services.admin_auth import (
     ADMIN_LOGIN_OTP_PURPOSE,
     ADMIN_LOGIN_OTP_TTL_SECONDS,
+    ADMIN_PASSWORD_RESET_PURPOSE,
+    ADMIN_PASSWORD_RESET_TTL_SECONDS,
     AdminOtpFailure,
+    build_admin_password_reset_message,
+    build_admin_password_reset_reply_markup,
+    build_admin_password_reset_success_message,
+    build_admin_password_reset_url,
+    consume_admin_password_reset_token,
     authenticate_admin_by_phone_number,
     build_admin_otp_message,
     build_admin_principal,
     create_admin_account,
     generate_admin_otp_code,
+    get_admin_password_reset_challenge,
     get_admin_auth_throttle,
     get_admin_by_id,
+    get_admin_by_phone_number,
     normalize_phone_number,
     update_admin_security_settings,
 )
 from app.services.attempt_repo import iter_user_attempts_from_db
-from app.services.notification_sender import edit_telegram_message, send_telegram_message_with_id
+from app.services.notification_sender import delete_telegram_message, edit_telegram_message, send_telegram_message_with_id
 from app.services.code_store import get_code_store
 from app.services.gift_entitlements import grant_manual_premium_entitlement
 from app.services.plan_catalog import (
@@ -379,8 +391,28 @@ ADMIN_REFRESH_EXPIRES_IN_SECONDS = int(ADMIN_REFRESH_EXPIRES_DELTA.total_seconds
 COMPLETED_ATTEMPT_STATUSES = (ModelAttemptStatus.COMPLETED, ModelAttemptStatusEnum.AUTO_SUBMITTED)
 ADMIN_OTP_SUCCESS_MESSAGE = "🎉 Successfully logged in!"
 ADMIN_OTP_EXPIRED_MESSAGE = "❌ Admin code expired."
+ADMIN_PASSWORD_RESET_GENERIC_MESSAGE = (
+    "If this phone number is linked to an admin account, the Telegram bot will send a reset link."
+)
+ADMIN_PASSWORD_RESET_REPLACED_MESSAGE = "❌ Admin password reset request was replaced by a newer request."
 ADMIN_OTP_EXPIRY_SWEEP_INTERVAL_SECONDS = 10
 _admin_otp_expiry_sweeper_task: asyncio.Task | None = None
+
+
+def _request_ip_address(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        forwarded_ip = forwarded_for.split(",", 1)[0].strip()
+        if forwarded_ip:
+            return forwarded_ip
+
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
 
 
 def _test_type_value(value: object) -> str:
@@ -656,12 +688,13 @@ async def _build_unique_gift_code(
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not generate a unique redeem code.")
 
 
-def _build_admin_token_claims(admin: AdminPrincipal) -> dict[str, str]:
+def _build_admin_token_claims(admin: AdminPrincipal) -> dict[str, object]:
     return {
         "scope": "admin",
         "role": admin.role.value,
         "username": admin.username,
         "email": admin.email,
+        "auth_version": admin.auth_version,
     }
 
 
@@ -685,6 +718,19 @@ async def _edit_admin_otp_message(challenge: AdminLoginOtp, text: str) -> bool:
         message_id=challenge.telegram_message_id,
         text=text,
     )
+
+
+async def _delete_admin_telegram_message_by_ids(chat_id: int, message_id: int | None) -> bool:
+    if not message_id:
+        return True
+    try:
+        return await delete_telegram_message(
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+    except Exception as exc:
+        logger.debug("Admin Telegram delete skipped for message %s: %s", message_id, exc)
+        return False
 
 
 async def _expire_stale_admin_otp_messages(session: AsyncSession, *, now: datetime | None = None) -> int:
@@ -722,6 +768,43 @@ async def _expire_stale_admin_otp_messages(session: AsyncSession, *, now: dateti
     return len(expired_rows)
 
 
+async def _delete_expired_admin_password_reset_messages(session: AsyncSession, *, now: datetime | None = None) -> int:
+    current_time = now or datetime.now(UTC)
+    expired_rows = (
+        await session.execute(
+            select(AdminLoginOtp.id, AdminLoginOtp.telegram_id, AdminLoginOtp.telegram_message_id)
+            .where(
+                AdminLoginOtp.purpose == ADMIN_PASSWORD_RESET_PURPOSE,
+                AdminLoginOtp.expires_at <= current_time,
+                AdminLoginOtp.telegram_message_id.is_not(None),
+            )
+        )
+    ).all()
+    deleted_ids: list[UUID] = []
+    for challenge_id, telegram_id, message_id in expired_rows:
+        message_deleted = await _delete_admin_telegram_message_by_ids(
+            int(telegram_id),
+            int(message_id) if message_id is not None else None,
+        )
+        if message_deleted:
+            deleted_ids.append(UUID(str(challenge_id)))
+
+    if deleted_ids:
+        await session.execute(
+            update(AdminLoginOtp)
+            .where(AdminLoginOtp.id.in_(deleted_ids), AdminLoginOtp.used_at.is_(None))
+            .values(used_at=current_time)
+        )
+        await session.execute(
+            update(AdminLoginOtp)
+            .where(AdminLoginOtp.id.in_(deleted_ids))
+            .values(telegram_message_id=None)
+        )
+        await session.commit()
+
+    return len(deleted_ids)
+
+
 async def _send_admin_otp_expiry_notice(challenge_id: UUID) -> None:
     delay = ADMIN_LOGIN_OTP_TTL_SECONDS
     while delay > 0:
@@ -742,6 +825,7 @@ async def _send_admin_otp_expiry_notice(challenge_id: UUID) -> None:
                 continue
 
             await _expire_stale_admin_otp_messages(session, now=now)
+            await _delete_expired_admin_password_reset_messages(session, now=now)
             return
 
 
@@ -758,6 +842,7 @@ async def _run_admin_otp_expiry_sweeper() -> None:
             session_maker = get_session_maker()
             async with session_maker() as session:
                 await _expire_stale_admin_otp_messages(session)
+                await _delete_expired_admin_password_reset_messages(session)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -774,6 +859,133 @@ def start_admin_otp_expiry_sweeper() -> None:
         _admin_otp_expiry_sweeper_task = asyncio.create_task(_run_admin_otp_expiry_sweeper())
     except RuntimeError as exc:
         logger.debug("Admin OTP expiry sweeper was not scheduled: %s", exc)
+
+
+@router.post("/auth/forgot-password", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
+async def request_admin_password_reset(
+    payload: AdminPasswordResetRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    throttle = get_admin_auth_throttle()
+    try:
+        await throttle.enforce_password_reset_issue_limit(
+            phone_number=payload.phone_number,
+            ip_address=_request_ip_address(request),
+        )
+    except AdminOtpFailure as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many password reset requests. Try again later.",
+        ) from exc
+
+    admin = await get_admin_by_phone_number(session, payload.phone_number)
+    if admin is None or not admin.is_active or admin.telegram_id is None or not admin.phone_number:
+        return MessageResponse(message=ADMIN_PASSWORD_RESET_GENERIC_MESSAGE)
+
+    now = datetime.now(UTC)
+    previous_message_rows = (
+        await session.execute(
+            update(AdminLoginOtp)
+            .where(
+                AdminLoginOtp.admin_id == admin.id,
+                AdminLoginOtp.purpose == ADMIN_PASSWORD_RESET_PURPOSE,
+                AdminLoginOtp.used_at.is_(None),
+                AdminLoginOtp.expires_at > now,
+            )
+            .values(used_at=now)
+            .returning(AdminLoginOtp.telegram_id, AdminLoginOtp.telegram_message_id)
+        )
+    ).all()
+    previous_messages = [
+        (int(row[0]), int(row[1]))
+        for row in previous_message_rows
+        if row[1] is not None
+    ]
+
+    challenge = AdminLoginOtp(
+        admin_id=admin.id,
+        phone_number=admin.phone_number,
+        telegram_id=admin.telegram_id,
+        otp_code=generate_admin_otp_code(),
+        purpose=ADMIN_PASSWORD_RESET_PURPOSE,
+        expires_at=now + timedelta(seconds=ADMIN_PASSWORD_RESET_TTL_SECONDS),
+        attempts=0,
+    )
+    session.add(challenge)
+    await session.flush()
+
+    reset_url = build_admin_password_reset_url(challenge.id)
+    message_id = await send_telegram_message_with_id(
+        chat_id=admin.telegram_id,
+        text=build_admin_password_reset_message(reset_url),
+        reply_markup=build_admin_password_reset_reply_markup(reset_url),
+    )
+    if message_id is None:
+        await session.rollback()
+        return MessageResponse(message=ADMIN_PASSWORD_RESET_GENERIC_MESSAGE)
+    challenge.telegram_message_id = message_id
+
+    await session.commit()
+    await session.refresh(challenge)
+    _schedule_admin_otp_expiry_notice(challenge.id)
+    for chat_id, previous_message_id in previous_messages:
+        await _edit_admin_otp_message_by_ids(
+            chat_id,
+            previous_message_id,
+            ADMIN_PASSWORD_RESET_REPLACED_MESSAGE,
+        )
+
+    return MessageResponse(message=ADMIN_PASSWORD_RESET_GENERIC_MESSAGE)
+
+
+@router.get("/auth/reset-password/{token}", response_model=AdminPasswordResetTokenStatusResponse)
+async def read_admin_password_reset_token(
+    token: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> AdminPasswordResetTokenStatusResponse:
+    now = datetime.now(UTC)
+    try:
+        challenge = await get_admin_password_reset_challenge(session, token=token, now=now)
+    except AdminOtpFailure as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset link is invalid or expired.",
+        ) from exc
+
+    expires_in_seconds = max(0, int((challenge.expires_at - now).total_seconds()))
+    return AdminPasswordResetTokenStatusResponse(expires_in_seconds=expires_in_seconds)
+
+
+@router.post("/auth/reset-password", response_model=MessageResponse)
+async def complete_admin_password_reset(
+    payload: AdminPasswordResetCompleteRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    try:
+        admin = await consume_admin_password_reset_token(
+            session,
+            token=payload.token,
+            new_password=payload.new_password,
+        )
+    except AdminOtpFailure as exc:
+        if exc.reason == "weak_password":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 8 characters.",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset link is invalid or expired.",
+        ) from exc
+
+    if admin.telegram_id is not None:
+        await send_telegram_message_with_id(
+            chat_id=admin.telegram_id,
+            text=build_admin_password_reset_success_message(),
+        )
+
+    return MessageResponse(message="Admin password updated successfully.")
 
 
 @router.post("/auth/login", response_model=AdminAuthChallengeResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -932,6 +1144,14 @@ async def refresh_admin_session(
     admin = await get_admin_by_id(session, admin_id)
     if admin is None or not admin.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin account is not available.")
+
+    try:
+        token_auth_version = int(token_payload.get("auth_version") or 1)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin refresh token.") from exc
+
+    if token_auth_version != (admin.auth_version or 1):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin session is no longer active.")
 
     principal = build_admin_principal(admin)
     claims = _build_admin_token_claims(principal)
@@ -2783,6 +3003,8 @@ async def create_gift_codes(
 
         if payload.quantity > 1 and custom_code:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Custom code can be used only when quantity is 1.")
+        if custom_code and len(custom_code) < 7:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Custom redeem code must be at least 7 characters.")
         if starts_at is not None and starts_at <= datetime.now(UTC):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start date must be in the future.")
         if expires_at is not None and expires_at <= datetime.now(UTC):

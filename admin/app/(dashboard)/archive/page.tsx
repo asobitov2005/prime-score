@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Badge, Card, CardContent, CardTitle, SectionHeader, buttonClassName, formatDate } from "@/components/ui";
+import { AdminTableLoadingSkeleton } from "@/components/loading-skeletons";
 import { adminApi } from "@/lib/api";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
@@ -166,7 +167,7 @@ export default function ArchivePage() {
       <Card>
         <CardContent className="overflow-x-auto p-0">
           {loading ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">Loading...</div>
+            <AdminTableLoadingSkeleton rows={6} columns={5} />
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No archived tests.</div>
           ) : (

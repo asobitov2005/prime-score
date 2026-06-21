@@ -316,8 +316,8 @@ export function buildPricingWebPageStructuredData() {
   return {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "@id": absoluteUrl("/pricing#webpage"),
-    url: absoluteUrl("/pricing"),
+    "@id": absoluteUrl("/#pricing"),
+    url: absoluteUrl("/#pricing"),
     name: "PrimeScore Pricing for IELTS Mock Online Practice",
     description:
       "Compare PrimeScore one-time pricing plans for IELTS mock online practice, Reading and Listening tests, Writing feedback, premium tests, and answer explanations.",
@@ -363,7 +363,7 @@ export function buildPricingOfferCatalogStructuredData(
   return {
     "@context": "https://schema.org",
     "@type": "OfferCatalog",
-    "@id": absoluteUrl("/pricing#offers"),
+    "@id": absoluteUrl("/#pricing-offers"),
     name: "PrimeScore pricing plans",
     itemListElement: plans.map((plan, index) => ({
       "@type": "Offer",
@@ -372,7 +372,7 @@ export function buildPricingOfferCatalogStructuredData(
       description: `One-time ${plan.durationDays}-day PrimeScore plan for IELTS mock online practice.`,
       price: Number.isFinite(plan.numericPrice) ? plan.numericPrice.toFixed(0) : "0",
       priceCurrency: plan.currency,
-      url: absoluteUrl("/pricing"),
+      url: absoluteUrl("/#pricing"),
       category: "Education",
     })),
   };

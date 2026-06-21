@@ -3,6 +3,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
+test("reading preview hides option bank for free-text summary completion", () => {
+  const filename = path.join(__dirname, "../components/exam/reading-exam-preview.tsx");
+  const source = fs.readFileSync(filename, "utf8");
+
+  assert.match(source, /from "@\/lib\/question-group-options"/);
+  assert.match(source, /if \(!groupUsesOptionBank\(group\.type\)\) \{\s*return null;\s*\}/);
+  assert.match(source, /if \(!groupUsesOptionBank\(group\.type\)\) \{\s*return \[\];\s*\}/);
+});
+
 test("reading preview renders flowchart completions from \\\\ separators", () => {
   const filename = path.join(__dirname, "../components/exam/reading-exam-preview.tsx");
   const source = fs.readFileSync(filename, "utf8");

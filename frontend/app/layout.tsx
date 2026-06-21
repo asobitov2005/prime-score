@@ -25,6 +25,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
             __html: `
               try {
                 const theme = localStorage.getItem('prime-theme') || 'light';
+                document.documentElement.classList.remove('light', 'dark');
                 document.documentElement.classList.add(theme);
               } catch (e) {}
             `,

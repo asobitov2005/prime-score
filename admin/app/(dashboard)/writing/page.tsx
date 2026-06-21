@@ -28,6 +28,7 @@ import {
   buttonClassName,
   cn
 } from "@/components/ui";
+import { AdminTableLoadingSkeleton } from "@/components/loading-skeletons";
 import type {
   WritingTask,
   WritingTaskStatus,
@@ -394,10 +395,7 @@ export default function WritingTasksPage() {
       <Card className="rounded-2xl overflow-hidden">
         <CardContent className="overflow-x-auto p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              Loading writing tasks…
-            </div>
+            <AdminTableLoadingSkeleton rows={6} columns={9} />
           ) : tasks.length === 0 ? (
             <EmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
           ) : (

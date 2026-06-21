@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Card, CardContent, CardHeader, CardTitle, SectionHeader } from "@/components/ui";
+import { AdminSettingsLoadingSkeleton } from "@/components/loading-skeletons";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
@@ -183,12 +184,7 @@ export default function SettingsPage() {
     }
   };
 
-  if (loading) return (
-    <div className="space-y-4 animate-pulse max-w-4xl">
-      <div className="h-8 w-48 bg-muted rounded-lg" />
-      {[1,2,3].map(i => <div key={i} className="h-40 bg-muted rounded-xl" />)}
-    </div>
-  );
+  if (loading) return <AdminSettingsLoadingSkeleton />;
 
   if (!settings) return <div className="text-sm text-muted-foreground">Failed to load settings.</div>;
 

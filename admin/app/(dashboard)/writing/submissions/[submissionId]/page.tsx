@@ -19,6 +19,7 @@ import {
   SectionHeader,
   buttonClassName
 } from "@/components/ui";
+import { AdminDetailLoadingSkeleton } from "@/components/loading-skeletons";
 import type { WritingSubmission } from "@/lib/writing-api";
 import {
   describeSubmissionStatus,
@@ -89,12 +90,7 @@ export default function WritingSubmissionDetailPage({ params }: { params: { subm
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        Loading submission…
-      </div>
-    );
+    return <AdminDetailLoadingSkeleton />;
   }
 
   if (error || !submission) {

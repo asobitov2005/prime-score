@@ -81,6 +81,10 @@ function progressPercent(achievement: Achievement): number {
   return Math.max(0, Math.min((achievement.progress.current / achievement.progress.target) * 100, 100));
 }
 
+function isBronzeLearnerBadge(achievement: Achievement): boolean {
+  return achievement.id === "level-bronze-learner" || achievement.title === "Bronze Learner";
+}
+
 function requirementItems(achievement: Achievement): string[] {
   if (achievement.category === "level") {
     return [
@@ -104,16 +108,24 @@ function progressLabel(achievement: Achievement): string | null {
   }
 
   if (progress) {
-    const unit = achievement.category === "streak" ? "days" : achievement.category === "level" ? "XP" : "";
-    return `${formatNumber(progress.current)} / ${formatNumber(progress.target)}${unit ? ` ${unit}` : ""}`;
+    const isXpProgress = achievement.category === "level" || achievement.requiredXp || /\bXP\b/i.test(progress.label);
+    if (isXpProgress) {
+      return `${formatNumber(progress.current)} of ${formatNumber(achievement.requiredXp ?? progress.target)} XP`;
+    }
+
+    if (achievement.category === "streak" || achievement.streakDays) {
+      return `${formatNumber(progress.current)} of ${formatNumber(achievement.streakDays ?? progress.target)} days`;
+    }
+
+    return progress.label;
   }
 
   if (achievement.category === "level" && achievement.requiredXp) {
-    return `0 / ${formatNumber(achievement.requiredXp)} XP`;
+    return `0 of ${formatNumber(achievement.requiredXp)} XP`;
   }
 
   if (achievement.category === "streak" && achievement.streakDays) {
-    return `0 / ${formatNumber(achievement.streakDays)} days`;
+    return `0 of ${formatNumber(achievement.streakDays)} days`;
   }
 
   return null;
@@ -207,7 +219,13 @@ export function AchievementModal({ achievement, open, onClose, isEquipped, onEqu
                 alt={achievement.title}
                 width={128}
                 height={128}
-                className="relative z-10 h-20 sm:h-24 w-auto object-contain drop-shadow-2xl transition-transform duration-700 hover:scale-105"
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                onContextMenu={(event) => event.preventDefault()}
+                className={cn(
+                  "relative z-10 h-20 w-auto select-none object-contain drop-shadow-2xl transition-transform duration-700 hover:scale-105 sm:h-24",
+                  isBronzeLearnerBadge(achievement) && "h-[5.5rem] max-w-none scale-[1.18] hover:scale-[1.24] sm:h-[6.5rem]",
+                )}
                 priority
               />
             </div>

@@ -77,6 +77,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
       GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-False}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       RUN_DB_MIGRATIONS: "0"
       RUN_APP_SEED: "0"
     depends_on:
@@ -91,6 +95,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:ro
     networks:
       prime_score_net:
         ipv4_address: 172.28.100.10
@@ -119,6 +125,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
       GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-False}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       RUN_APP_BOOTSTRAP: "0"
     depends_on:
       postgres:
@@ -128,6 +138,8 @@ services:
       minio:
         condition: service_started
     command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "-Q", "default,heavy,notifications,admin_ai,writing", "--concurrency=4", "-Ofair"]
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:ro
     networks:
       - prime_score_net
 
@@ -155,6 +167,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
       GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-False}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       RUN_APP_BOOTSTRAP: "0"
     depends_on:
       postgres:
@@ -164,6 +180,8 @@ services:
       minio:
         condition: service_started
     command: ["celery", "-A", "app.tasks.celery_app", "beat", "--loglevel=info"]
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:ro
     networks:
       - prime_score_net
 
@@ -191,6 +209,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
       GEMINI_THINKING_LEVEL: ${GEMINI_THINKING_LEVEL:-HIGH}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-False}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       RUN_APP_BOOTSTRAP: "0"
     depends_on:
       postgres:
@@ -198,6 +220,8 @@ services:
       redis:
         condition: service_healthy
     command: ["python", "-m", "app.bot.main"]
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:ro
     networks:
       - prime_score_net
 

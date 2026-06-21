@@ -1,12 +1,11 @@
 "use client";
-import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Play, TimerReset, X, ArrowRight, Check } from "lucide-react";
+import { Play, TimerReset, X, ArrowRight, Check, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
@@ -14,14 +13,31 @@ import type { TestCardAttemptSummary, TestCatalogItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { emitNavigationStart } from "@/lib/navigation-transition";
+import { buildExamStartHref } from "@/lib/exam-start";
 
 interface StartTestModalProps {
   test: TestCatalogItem;
   activeAttempt?: TestCardAttemptSummary;
   completedAttempt?: TestCardAttemptSummary;
+  compactAction?: boolean;
+  unlockLabel?: string;
+  startLabel?: string;
+  continueLabel?: string;
+  reviewLabel?: string;
+  buttonClassName?: string;
 }
 
-export function StartTestModal({ test, activeAttempt, completedAttempt }: StartTestModalProps) {
+export function StartTestModal({
+  test,
+  activeAttempt,
+  completedAttempt,
+  compactAction = false,
+  unlockLabel,
+  startLabel,
+  continueLabel,
+  reviewLabel,
+  buttonClassName,
+}: StartTestModalProps) {
   const router = useRouter();
   const { isPremium, isAuthenticated } = useAuthStore();
   const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
@@ -30,10 +46,20 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   const [open, setOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [showRules, setShowRules] = useState(false);
-  const actionLabel = activeAttempt ? "Continue Test" : completedAttempt ? "Retake Test" : "Start Test";
+  const isLockedPremium = test.accessType === "premium" && !isPremium;
+  const effectiveUnlockLabel = unlockLabel ?? "Unlock";
+  const effectiveStartLabel = startLabel ?? "Start Test";
+  const effectiveContinueLabel = continueLabel ?? "Continue Test";
+  const effectiveReviewLabel = reviewLabel ?? "Review";
+  const actionLabel = activeAttempt ? effectiveContinueLabel : completedAttempt ? "Retake Test" : effectiveStartLabel;
   const loadingLabel = activeAttempt ? "Opening..." : "Starting...";
+  const isResumeOrReviewAction = !isLockedPremium && Boolean(activeAttempt || completedAttempt);
+  const actionVariant = isLockedPremium || isResumeOrReviewAction ? "outline" : "default";
+  const resumeOrReviewButtonClassName =
+    "border-orange-300 bg-orange-100 text-orange-700 shadow-none hover:border-orange-400 hover:bg-orange-200 hover:text-orange-800 dark:border-orange-500/35 dark:bg-orange-500/15 dark:text-orange-200 dark:hover:border-orange-500/45 dark:hover:bg-orange-500/22 dark:hover:text-orange-100";
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -74,7 +100,20 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   }
 
   function handleClick() {
+    setStartError(null);
+
+    if (isLockedPremium) {
+      setShowPremiumModal(true);
+      return;
+    }
+
     if (!isAuthenticated) {
+      if (isFullTest) {
+        setOpen(true);
+        setShowRules(false);
+        return;
+      }
+
       const href = test.type === "reading"
         ? `/exam-preview/reading?testId=${test.id}&mode=guest`
         : `/exam-preview/listening?testId=${test.id}&mode=guest`;
@@ -96,48 +135,57 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
   }
 
   function handleStartExamChoice() {
+    if (!isAuthenticated) {
+      emitNavigationStart("/login");
+      router.push("/login");
+      return;
+    }
+
     setShowRules(true);
   }
 
-  async function startTest(mode: "exam" | "practice") {
+  function getPreviewHref(mode: "exam" | "practice" | "guest") {
+    return test.type === "reading"
+      ? `/exam-preview/reading?testId=${test.id}&mode=${mode}`
+      : `/exam-preview/listening?testId=${test.id}&mode=${mode}`;
+  }
+
+  function openPreviewFallback(mode: "exam" | "practice" | "guest") {
+    const href = getPreviewHref(mode);
+    setOpen(false);
+    setShowRules(false);
+    emitNavigationStart(href);
+    router.push(href);
+  }
+
+  function startTest(mode: "exam" | "practice") {
     const effectiveScope = isFullTest ? "full" : "section";
     const effectiveMode = isFullTest ? mode : "practice";
-    if (effectiveMode === "exam") {
-      setOpen(false);
-      setShowRules(false);
+    setStartError(null);
+
+    if (isLockedPremium) {
+      setShowPremiumModal(true);
+      return;
     }
-    const payload = {
+
+    if (!isAuthenticated) {
+      openPreviewFallback("guest");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setOpen(false);
+    setShowRules(false);
+    const href = buildExamStartHref({
+      testType: test.type,
       testId: test.id,
       scope: effectiveScope,
-      sectionId: effectiveScope === "section" ? defaultSectionId : undefined,
       mode: effectiveMode,
+      sectionId: effectiveScope === "section" ? defaultSectionId : undefined,
       forceNew: Boolean(completedAttempt && !activeAttempt),
-    };
-    try {
-      setIsSubmitting(true);
-      const response = await fetch("/internal-api/attempts/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) throw new Error("Failed to start.");
-      const result = (await response.json()) as { attemptId: string };
-      const resumeToken = Date.now();
-      setOpen(false);
-      setShowRules(false);
-      const href = test.type === "reading"
-        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`
-        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`;
-      emitNavigationStart(href);
-      router.push(href);
-    } catch (err) {
-      if (effectiveMode === "exam" && document.fullscreenElement) {
-        void document.exitFullscreen().catch(() => undefined);
-      }
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
+    emitNavigationStart(href);
+    router.push(href);
   }
 
   const TestModal = () => (
@@ -150,11 +198,18 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
         <button
           onClick={() => setOpen(false)}
           className="absolute top-5 right-5 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-muted/80 text-muted-foreground hover:bg-muted hover:text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-sm"
+          aria-label={"Close"}
+          type="button"
         >
           <X className="h-4 w-4" />
         </button>
 
         <div className="p-6 md:p-8 space-y-6 pt-8 md:pt-10">
+          {startError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+              {startError}
+            </div>
+          ) : null}
           <div className="flex justify-between items-start pr-8">
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
@@ -179,15 +234,15 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
                 <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-500 shadow-sm">
                   <TimerReset className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-lg font-bold tracking-tight text-foreground">Practice Mode</CardTitle>
+                <CardTitle className="text-lg font-bold tracking-tight text-foreground">{"Practice Mode"}</CardTitle>
               </CardHeader>
               <CardContent className="pb-6 px-5 flex-1 flex flex-col justify-between">
                 <ul className="space-y-2.5 text-xs font-medium text-muted-foreground/90 mb-5 text-left">
-                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Flexible practice</li>
-                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Timer available</li>
-                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Pause allowed</li>
-                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Review with less pressure</li>
-                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Best for learning</li>
+                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Flexible practice"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Timer available"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Pause allowed"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Review with less pressure"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-emerald-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Best for learning"}</li>
                 </ul>
                 <Button disabled={isSubmitting} onClick={() => startTest("practice")} className="w-full h-10 rounded-lg font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white dark:text-slate-950 shadow-md shadow-emerald-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
                   {isSubmitting ? "Starting..." : "Start Practice"}
@@ -196,24 +251,24 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
             </Card>
 
             <Card className="group relative border-border/60 bg-card/40 transition-all rounded-2xl overflow-hidden flex flex-col shadow-sm">
-              <div className="absolute top-0 right-0 px-3 py-1 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-bl-xl shadow-sm z-10 font-mono">Strict</div>
+              <div className="absolute top-0 right-0 px-3 py-1 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-bl-xl shadow-sm z-10 font-mono">{"Strict"}</div>
               <div className="absolute top-0 left-0 w-full h-1 bg-red-500/20" />
               <CardHeader className="pt-6 pb-3 items-center text-center">
                 <div className="w-12 h-12 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-500 shadow-sm">
                   <Play className="h-6 w-6 fill-current" />
                 </div>
-                <CardTitle className="text-lg font-bold tracking-tight text-foreground">Strict Exam Mode</CardTitle>
+                <CardTitle className="text-lg font-bold tracking-tight text-foreground">{"Strict Exam Mode"}</CardTitle>
               </CardHeader>
               <CardContent className="pb-6 px-5 flex-1 flex flex-col justify-between">
                 <ul className="space-y-2.5 text-xs font-medium text-muted-foreground/90 mb-5 text-left">
-                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Real exam conditions</li>
-                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Full timer</li>
-                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> No pause</li>
-                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Tab switching may end test</li>
-                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> Realistic simulation</li>
+                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Real exam conditions"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Full timer"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"No pause"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Tab switching may end test"}</li>
+                  <li className="flex items-start gap-2"><Check className="text-red-500 h-3.5 w-3.5 mt-0.5 shrink-0" /> {"Realistic simulation"}</li>
                 </ul>
                 <Button variant="destructive" disabled={isSubmitting} onClick={handleStartExamChoice} className="w-full h-10 rounded-lg font-bold text-sm shadow-md shadow-red-500/20 transition-all group-hover:-translate-y-0.5 mt-auto border-0 z-10 relative">
-                  Select Exam Mode
+                  {isAuthenticated ? "Select Exam Mode" : "Login for Exam Mode"}
                 </Button>
               </CardContent>
             </Card>
@@ -234,26 +289,26 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 mb-3">
               <Play className="h-5 w-5 fill-current" />
             </div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">Strict Exam Rules</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">{"Strict Exam Rules"}</h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              This mode simulates a real exam. Focus is strictly monitored.
+              {"This mode simulates a real exam. Focus is strictly monitored."}
             </p>
           </div>
 
           <div className="rounded-xl border border-red-500/15 bg-red-500/5 p-3 space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-red-500 text-center">Auto-submit triggers:</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-red-500 text-center">{"Auto-submit triggers:"}</p>
             <ul className="space-y-2 text-xs font-medium text-foreground">
               <li className="flex items-start gap-2 leading-tight">
                 <div className="mt-0.5 rounded-full bg-red-500/20 p-0.5 shrink-0"><X className="h-2.5 w-2.5 text-red-500" /></div>
-                <span>Leaving <span className="font-bold text-red-500/80">Full Screen</span> mode</span>
+                <span>{"Leaving Full Screen mode"}</span>
               </li>
               <li className="flex items-start gap-2 leading-tight">
                 <div className="mt-0.5 rounded-full bg-red-500/20 p-0.5 shrink-0"><X className="h-2.5 w-2.5 text-red-500" /></div>
-                <span>Switching <span className="font-bold text-red-500/80">Tabs</span> or <span className="font-bold text-red-500/80">Windows</span></span>
+                <span>{"Switching Tabs or Windows"}</span>
               </li>
               <li className="flex items-start gap-2 leading-tight">
                 <div className="mt-0.5 rounded-full bg-red-500/20 p-0.5 shrink-0"><X className="h-2.5 w-2.5 text-red-500" /></div>
-                <span>Opening <span className="font-bold text-red-500/80">other apps</span> over the test</span>
+                <span>{"Opening other apps over the test"}</span>
               </li>
             </ul>
           </div>
@@ -271,7 +326,7 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
               onClick={() => setShowRules(false)}
               className="h-10 w-full rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
             >
-              Go back
+              {"Back"}
             </Button>
           </div>
         </div>
@@ -281,14 +336,28 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
 
   return (
     <>
-      {completedAttempt && !activeAttempt ? (
+      {compactAction && completedAttempt && !activeAttempt && !isLockedPremium ? (
+        <Button
+          onClick={() => openReview(completedAttempt)}
+          size="sm"
+          variant="outline"
+          className={cn(
+            "w-full h-9 text-xs font-bold rounded-lg shadow-sm group/btn transition-all active:scale-95",
+            buttonClassName,
+            resumeOrReviewButtonClassName,
+          )}
+        >
+          {effectiveReviewLabel}
+          <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
+        </Button>
+      ) : completedAttempt && !activeAttempt && !isLockedPremium ? (
         <div className="grid grid-cols-2 gap-2">
           <Button
             onClick={() => openReview(completedAttempt)}
             size="sm"
             className="h-9 text-xs font-bold rounded-lg shadow-sm group/btn transition-all active:scale-95"
           >
-            Review Test
+            {effectiveReviewLabel}
             <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-1" />
           </Button>
           <Button
@@ -301,14 +370,16 @@ export function StartTestModal({ test, activeAttempt, completedAttempt }: StartT
           </Button>
         </div>
       ) : (
-        <Button onClick={handleClick} size="sm" className={cn(
+        <Button onClick={handleClick} size="sm" variant={actionVariant} className={cn(
           "w-full h-9 text-xs font-bold rounded-lg shadow-sm group/btn transition-all active:scale-95",
-          test.accessType === "premium" && !isPremium && "border border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 shadow-none dark:bg-amber-500/20 dark:text-amber-100 dark:hover:bg-amber-500/30"
+          buttonClassName,
+          isResumeOrReviewAction && resumeOrReviewButtonClassName,
+          isLockedPremium && "border-orange-200 bg-white text-orange-600 shadow-none hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-orange-500/30 dark:bg-slate-950/40 dark:text-orange-300 dark:hover:bg-orange-500/10 dark:hover:text-orange-200",
         )}>
-          {test.accessType === "premium" && !isPremium ? (
+          {isLockedPremium ? (
             <>
-              <PrimePremiumIcon className="mr-1.5 h-3.5 w-3.5" />
-              Unlock Premium
+              <Lock className="mr-1.5 h-3.5 w-3.5" />
+              {effectiveUnlockLabel}
             </>
           ) : (
             <>

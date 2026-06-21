@@ -38,6 +38,7 @@ class AttemptUiStateRead(BaseModel):
 
 class AttemptProgressRequest(BaseModel):
     time_spent_sec: int | None = None
+    section_time_spent_sec: dict[str, int] | None = None
     active_question_id: str | None = None
     text_highlights: dict[str, list[AttemptTextHighlightRead]] | None = None
     ui_state: AttemptUiStateRead | None = None
@@ -60,6 +61,7 @@ class AttemptRead(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
     time_spent_sec: int = 0
+    section_time_spent_sec: dict[str, int] = Field(default_factory=dict)
     total_questions: int = 0
     answers_count: int = 0
     raw_score: int | None = None

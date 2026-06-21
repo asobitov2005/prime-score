@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, BookOpenText, Brain, Clock, Gauge, Headphones, Play, Target, PenSquare } from "lucide-react";
+import { BookmarkToggleButton } from "@/components/bookmark-toggle-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DashboardCharts } from "@/components/charts/dashboard-charts";
 import { getCatalogTests } from "@/lib/server-data";
 import { getDashboardActivity, getDashboardAnalytics, getUserAttempts, getWeeklyLeaderboardPreview, getXpSummary, type LeaderboardPreviewSummary } from "@/lib/server-me";
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
+import { getTestSourceLabel } from "@/lib/test-source";
 import { OverallBandKpiCard } from "./dashboard-average-cards";
 import { WelcomeHeader } from "./welcome-header";
 import { StudyTimeCard } from "./activity-summary";
@@ -16,7 +17,8 @@ import { PremiumFeatureGate } from "./premium-feature-gate";
 import { XpSummaryCard } from "./xp-summary-card";
 import { SkillPerformance } from "./skill-performance";
 import { cn } from "@/lib/utils";
-import type { AttemptRow, DashboardAnalytics } from "@/lib/types";
+import { buildWeaknessDiagnosis } from "@/lib/weakness-diagnosis";
+import type { AttemptRow, TestCatalogItem } from "@/lib/types";
 import { pickQuickTests } from "./quick-tests";
 
 interface InProgressTestCardState {
@@ -34,27 +36,6 @@ interface InProgressTestCardState {
 type RecentActivityItem =
   | { kind: "attempt"; key: string; sortAt: string; attempt: AttemptRow }
   | { kind: "writing"; key: string; sortAt: string; submission: WritingHistoryItem };
-
-interface WeaknessDiagnosis {
-  label: string;
-  status: string;
-  severity: "critical" | "attention" | "steady";
-  title: string;
-  description: string;
-  primaryMetric: string;
-  primaryMetricLabel: string;
-  secondaryMetric: string;
-  secondaryMetricLabel: string;
-  focusItems: string[];
-  insights: Array<{
-    label: string;
-    value: string;
-    detail: string;
-    scorePercent: number;
-  }>;
-  href: string;
-  cta: string;
-}
 
 function formatSecondsAsClock(totalSeconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
@@ -114,168 +95,21 @@ function getInProgressTest(attempts: AttemptRow[]): InProgressTestCardState | nu
   };
 }
 
-function formatSecondsShort(seconds: number | null): string {
-  if (seconds === null) return "No data";
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
-}
-
-function buildWeaknessDiagnosis(
-  analytics: DashboardAnalytics,
-  attempts: AttemptRow[],
-  lastAttempt: AttemptRow | null,
-  daysSinceLast: number,
-): WeaknessDiagnosis {
-  const practicedWeaknesses = analytics.questionTypeAnalysis
-    .filter((item) => item.workedCount > 0)
-    .sort((left, right) => {
-      if (left.accuracy !== right.accuracy) return left.accuracy - right.accuracy;
-      return right.errorCount - left.errorCount;
-    });
-  const recentWeaknesses = analytics.comparison.items
-    .filter((item) => item.currentAccuracy !== null)
-    .sort((left, right) => {
-      const leftAccuracy = left.currentAccuracy ?? 100;
-      const rightAccuracy = right.currentAccuracy ?? 100;
-      if (leftAccuracy !== rightAccuracy) return leftAccuracy - rightAccuracy;
-      return (left.delta ?? 0) - (right.delta ?? 0);
-    });
-  const weakestType = practicedWeaknesses[0] ?? null;
-  const recentWeakestType = recentWeaknesses[0] ?? null;
-  const mostCommonError = analytics.errorDistribution[0] ?? null;
-  const lastType = lastAttempt?.type ?? "reading";
-  const href = `/tests?type=${lastType}`;
-  const avgSpeed = analytics.speedMetrics.avgTimePerQuestionSec;
-  const recentInsights = recentWeaknesses.slice(0, 3).map((item) => ({
-    label: item.label,
-    value: `${Math.round(item.currentAccuracy ?? 0)}%`,
-    detail: item.delta === null ? "From latest test" : `${item.delta > 0 ? "Improved" : "Dropped"} ${Math.abs(Math.round(item.delta))}%`,
-    scorePercent: Math.max(0, Math.min(100, Math.round(item.currentAccuracy ?? 0))),
-  }));
-  const aggregateInsights = practicedWeaknesses.slice(0, 3).map((item) => ({
-    label: item.label,
-    value: `${Math.round(item.accuracy)}%`,
-    detail: `${item.errorCount} mistakes in ${item.workedCount} questions`,
-    scorePercent: Math.max(0, Math.min(100, Math.round(item.accuracy))),
-  }));
-
-  if (attempts.length === 0) {
-    return {
-      label: "Weakness Diagnosis",
-      status: "Baseline needed",
-      severity: "attention",
-      title: "No reliable weak area yet",
-      description: "Start with one timed Reading or Listening test so the dashboard can detect real question-type gaps.",
-      primaryMetric: "0",
-      primaryMetricLabel: "completed tests",
-      secondaryMetric: "1 test",
-      secondaryMetricLabel: "needed for baseline",
-      focusItems: ["Take a timed test", "Review wrong answers", "Build first weakness profile"],
-      insights: [],
-      href: "/tests",
-      cta: "Create baseline",
-    };
-  }
-
-  if (daysSinceLast > 3) {
-    return {
-      label: "Weakness Diagnosis",
-      status: "Consistency gap",
-      severity: "attention",
-      title: `${daysSinceLast} days without practice`,
-      description: "The biggest current risk is retention loss. A short timed section is more useful than another passive review.",
-      primaryMetric: `${daysSinceLast}d`,
-      primaryMetricLabel: "inactive",
-      secondaryMetric: formatSecondsShort(avgSpeed),
-      secondaryMetricLabel: "avg/question",
-      focusItems: ["Restart with one section", "Keep strict timing", "Review errors immediately"],
-      insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
-      href,
-      cta: "Restart practice",
-    };
-  }
-
-  if (recentWeakestType && (recentWeakestType.currentAccuracy ?? 100) < 85) {
-    const currentAccuracy = recentWeakestType.currentAccuracy ?? 0;
-    const severity = currentAccuracy < 50 ? "critical" : currentAccuracy < 70 ? "attention" : "steady";
-    const status = currentAccuracy < 50 ? "Latest test risk" : currentAccuracy < 70 ? "Latest weak spot" : "Watchlist";
-    return {
-      label: "Weakness Diagnosis",
-      status,
-      severity,
-      title: recentWeakestType.label,
-      description: "Your latest test shows this is the fastest place to win back marks. Fix it first before starting random practice.",
-      primaryMetric: `${Math.round(currentAccuracy)}%`,
-      primaryMetricLabel: "latest score",
-      secondaryMetric: recentWeakestType.delta === null ? "New" : `${recentWeakestType.delta > 0 ? "+" : ""}${Math.round(recentWeakestType.delta)}%`,
-      secondaryMetricLabel: "trend",
-      focusItems: recentInsights.length > 0
-        ? recentInsights.map((item) => item.label)
-        : ["Review latest mistakes", "Redo same question type", "Retest under timing"],
-      insights: recentInsights,
-      href,
-      cta: "Practice latest weakness",
-    };
-  }
-
-  if (weakestType) {
-    const severity = weakestType.accuracy < 50 ? "critical" : weakestType.accuracy < 70 ? "attention" : "steady";
-    const status = weakestType.accuracy < 50 ? "High impact" : weakestType.accuracy < 70 ? "Needs work" : "Monitor";
-    return {
-      label: "Weakness Diagnosis",
-      status,
-      severity,
-      title: weakestType.label,
-      description: `You answered ${weakestType.correctCount}/${weakestType.workedCount} correctly. This question type should be your next targeted drill.`,
-      primaryMetric: `${Math.round(weakestType.accuracy)}%`,
-      primaryMetricLabel: "accuracy",
-      secondaryMetric: `${weakestType.errorCount}`,
-      secondaryMetricLabel: "missed",
-      focusItems: [
-        "Redo this question type",
-        "Write why each answer was wrong",
-        "Repeat under section timing",
-      ],
-      insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
-      href,
-      cta: "Practice weakness",
-    };
-  }
-
-  if (mostCommonError) {
-    return {
-      label: "Weakness Diagnosis",
-      status: "Error pattern",
-      severity: "attention",
-      title: mostCommonError.label,
-      description: `${Math.round(mostCommonError.share)}% of recent mistakes are concentrated here. Fixing this pattern should raise score faster than random practice.`,
-      primaryMetric: `${mostCommonError.errorCount}`,
-      primaryMetricLabel: "errors",
-      secondaryMetric: `${Math.round(mostCommonError.share)}%`,
-      secondaryMetricLabel: "mistake share",
-      focusItems: ["Review similar questions", "Compare traps", "Drill until stable"],
-      insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
-      href,
-      cta: "Start targeted test",
-    };
-  }
-
+function getDashboardBookmarkItem(test: TestCatalogItem) {
   return {
-    label: "Weakness Diagnosis",
-    status: "Stable",
-    severity: "steady",
-    title: "No major weakness detected",
-    description: "Your recent data does not show a clear recurring gap yet. Use a full mock to expose the next bottleneck.",
-    primaryMetric: formatSecondsShort(avgSpeed),
-    primaryMetricLabel: "avg/question",
-    secondaryMetric: lastAttempt?.band ?? "N/A",
-    secondaryMetricLabel: "last band",
-    focusItems: ["Take a full mock", "Check timing pressure", "Compare section scores"],
-    insights: recentInsights.length > 0 ? recentInsights : aggregateInsights,
-    href: "/tests",
-    cta: "Run full mock",
+    id: test.id,
+    slug: test.slug,
+    title: test.title,
+    type: test.type,
+    format: test.format,
+    accessType: test.accessType,
+    source: test.source,
+    sourceLabel: getTestSourceLabel(test.source),
+    description: test.description,
+    questionCount: test.questionCount,
+    estimatedMinutes: test.estimatedMinutes,
+    href: `/tests/${test.slug || test.id}`,
+    actionLabel: test.accessType === "premium" ? "Unlock" : "Open Test",
   };
 }
 
@@ -350,13 +184,16 @@ export default async function DashboardPage() {
 
   const inProgressTest = getInProgressTest(attempts);
 
+  const completedAttempts = attempts.filter(
+    (attempt) => attempt.status === "completed" || attempt.status === "submitted",
+  );
   const now = new Date();
-  const hasTests = attempts.length > 0;
-  const lastAttempt = hasTests ? attempts[0] : null;
+  const hasTests = completedAttempts.length > 0;
+  const lastAttempt = hasTests ? completedAttempts[0] : null;
 
   let daysSinceLast = 0;
-  if (lastAttempt) {
-    const lastDate = new Date(lastAttempt.date);
+  if (lastAttempt?.lastSavedAt) {
+    const lastDate = new Date(lastAttempt.lastSavedAt);
     if (!Number.isNaN(lastDate.getTime())) {
       daysSinceLast = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
     }
@@ -397,7 +234,7 @@ export default async function DashboardPage() {
     recBtnText = "Start Full Mock";
   }
 
-  const weaknessDiagnosis = buildWeaknessDiagnosis(analytics, attempts, lastAttempt, daysSinceLast);
+  const weaknessDiagnosis = buildWeaknessDiagnosis(analytics, attempts, daysSinceLast);
   const diagnosisAccent = {
     critical: {
       ring: "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300",
@@ -583,7 +420,9 @@ export default async function DashboardPage() {
                           {weaknessDiagnosis.label}
                         </p>
                         <h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
-                          Fix {weaknessDiagnosis.title} first
+                          {weaknessDiagnosis.status === "Stable" || weaknessDiagnosis.status === "Baseline needed"
+                            ? weaknessDiagnosis.title
+                            : `Focus on ${weaknessDiagnosis.title}`}
                         </h3>
                         <p className="mt-1 max-w-xl text-sm font-medium leading-6 text-muted-foreground">
                           {weaknessDiagnosis.description}
@@ -604,7 +443,7 @@ export default async function DashboardPage() {
                             Weak areas
                           </p>
                           <p className="mt-0.5 text-xs font-medium text-muted-foreground">
-                            Lower score means higher priority
+                            Based on enough answered questions to trust the signal
                           </p>
                         </div>
                         <span className="rounded-full bg-card px-2.5 py-1 text-[10px] font-bold text-muted-foreground">
@@ -706,10 +545,6 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
-
-      <section className="[content-visibility:auto] [contain-intrinsic-size:360px]">
-        <DashboardCharts analytics={analytics} />
-      </section>
 
       <section className="grid items-stretch gap-8 lg:grid-cols-[1.5fr_1fr] [content-visibility:auto] [contain-intrinsic-size:720px]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -832,36 +667,42 @@ export default async function DashboardPage() {
             ) : (
               <div className="divide-y divide-border/40">
                 {featuredTests.map(test => {
-                const isReading = test.type === "reading";
-                return (
-                  <Link key={test.id} href={`/tests/${test.slug || test.id}`} className="block">
-                    <div className="p-5 transition-colors hover:bg-muted/30 group">
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "h-11 w-11 rounded-xl flex items-center justify-center shrink-0",
-                          isReading ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                        )}>
-                          {isReading ? <BookOpenText className="h-5 w-5" /> : <Headphones className="h-5 w-5" />}
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <p className="font-bold text-[14px] text-foreground truncate">{test.title}</p>
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                            {test.source.replace("Official", "").trim()}
-                            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                            {test.estimatedMinutes}m
-                          </p>
-                        </div>
-                        <div className={cn(
-                          "h-9 w-9 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm",
-                          isReading ? "bg-blue-600 text-white dark:text-slate-950" : "bg-emerald-600 text-white dark:text-slate-950"
-	                        )}>
-	                        <Play className="h-4 w-4 fill-current ml-0.5" />
-	                      </div>
-	                    </div>
-	                    </div>
-	                  </Link>
-                );
-              })}
+                  const isReading = test.type === "reading";
+                  const testHref = `/tests/${test.slug || test.id}`;
+                  return (
+                    <div key={test.id} className="p-5 transition-colors hover:bg-muted/30 group">
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        <Link href={testHref} className="flex min-w-0 flex-1 items-center gap-4">
+                          <div className={cn(
+                            "h-11 w-11 rounded-xl flex items-center justify-center shrink-0",
+                            isReading ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          )}>
+                            {isReading ? <BookOpenText className="h-5 w-5" /> : <Headphones className="h-5 w-5" />}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <p className="font-bold text-[14px] text-foreground truncate">{test.title}</p>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              {getTestSourceLabel(test.source)}
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                              {test.estimatedMinutes}m
+                            </p>
+                          </div>
+                        </Link>
+                        <BookmarkToggleButton item={getDashboardBookmarkItem(test)} className="h-9 w-9" iconClassName="h-4 w-4" />
+                        <Link
+                          href={testHref}
+                          className={cn(
+                            "h-9 w-9 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-sm",
+                            isReading ? "bg-blue-600 text-white dark:text-slate-950" : "bg-emerald-600 text-white dark:text-slate-950"
+                          )}
+                          aria-label={`Open ${test.title}`}
+                        >
+                          <Play className="h-4 w-4 fill-current ml-0.5" />
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Card>

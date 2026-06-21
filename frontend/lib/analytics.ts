@@ -200,7 +200,7 @@ export function trackLogout(payload: { method: string }) {
 }
 
 export function trackTestStart(payload: {
-  attemptId: string;
+  attemptId?: string;
   testId: string;
   testTitle: string;
   testType: string;
@@ -209,7 +209,7 @@ export function trackTestStart(payload: {
   sectionId?: string;
 }) {
   pushDataLayerEvent("test_start", {
-    attempt_id: payload.attemptId,
+    attempt_id: payload.attemptId ?? null,
     test_id: payload.testId,
     test_title: payload.testTitle,
     test_type: payload.testType,

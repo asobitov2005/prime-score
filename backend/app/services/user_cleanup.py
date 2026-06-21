@@ -21,7 +21,10 @@ from app.models.user import Session as UserSession
 from app.models.user import TelegramLoginCode, User
 from app.models.writing import WritingDraft, WritingEvaluation, WritingSubmission
 from app.services.code_store import get_code_store
-from app.services.runtime_store import delete_user_attempts
+
+
+def delete_user_attempts(_user_id) -> None:
+    return None
 
 
 async def purge_user_data(session: AsyncSession, *, user: User) -> None:

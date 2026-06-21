@@ -268,7 +268,9 @@ export type AiUseCase =
   | "writing_improver"
   | "writing_roast"
   | "writing_image_summary"
-  | "audio_transcription";
+  | "audio_transcription"
+  | "speaking_examiner"
+  | "speaking_grader";
 
 export type WritingTaskTypeScope = "all" | "task_1" | "task_2";
 export type WritingConfigStatus = "draft" | "published" | "archived";

@@ -108,6 +108,35 @@ async def edit_telegram_message(
     return False
 
 
+async def delete_telegram_message(
+    chat_id: int,
+    message_id: int,
+) -> bool:
+    settings = get_settings()
+    token = settings.telegram_bot_token
+    if not token or token == "change-me":
+        return False
+    httpx = _get_httpx()
+    if httpx is None:
+        return False
+    url = f"https://api.telegram.org/bot{token}/deleteMessage"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code == 200:
+                return True
+            if resp.status_code == 400 and "message to delete not found" in resp.text.lower():
+                return True
+            logger.warning("Telegram delete failed: %s %s", resp.status_code, resp.text[:200])
+    except Exception as exc:
+        logger.warning("Telegram delete error: %s", exc)
+    return False
+
+
 async def create_and_send_notification(
     session: AsyncSession,
     *,

@@ -12,7 +12,7 @@ export default async function SkillAnalyticsPage({ params }: { params: Promise<{
     notFound();
   }
 
-  const analytics = await getDashboardAnalytics();
+  const analytics = await getDashboardAnalytics(skill as SkillParam);
 
   return <SkillAnalyticsClient skill={skill as SkillParam} initialAnalytics={analytics} />;
 }

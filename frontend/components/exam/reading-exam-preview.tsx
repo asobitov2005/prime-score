@@ -28,8 +28,12 @@ import {
   normalizeMatchingAnswerValue,
   shouldAutoLetterMatchingOptions,
 } from "@/lib/matching-option-format";
+import {
+  groupUsesOptionBank,
+} from "@/lib/question-group-options";
 import { emitNotificationRefresh } from "@/lib/notification-events";
 import { readBrowserSessionCookies } from "@/lib/user-session-cookies";
+import { fetchInternalUserApi } from "@/lib/internal-user-api";
 import { cn } from "@/lib/utils";
 import type { QuestionType } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
@@ -136,7 +140,13 @@ export interface ReadingExamPreviewData {
   initialAnswers?: Record<string, string>;
   initialTextHighlights?: Record<string, TextHighlight[]>;
   initialTimeSpentSeconds?: number;
+  initialSectionTimeSpentSeconds?: Record<string, number>;
   initialUiState?: PreviewUiState;
+  initialReviewTarget?: {
+    sectionId?: string;
+    questionId?: string;
+    questionType?: string;
+  };
   reviewItems?: Record<string, {
     answerValue?: string | null;
     isCorrect?: boolean | null;
@@ -447,6 +457,9 @@ function normalizeOptionList(options: Array<string | null | undefined>) {
 }
 
 function typedOptionLines(group: PreviewGroup) {
+  if (!groupUsesOptionBank(group.type)) {
+    return [];
+  }
   return group.secondaryBlock?.trim()
     ? splitOptionLines(group.secondaryBlock)
     : normalizeOptionList(group.sharedOptions ?? []);
@@ -461,6 +474,10 @@ function typedQuestionOptionLines(group: PreviewGroup, question: PreviewQuestion
 
   if (question.type.includes("plan_map_labeling")) {
     return normalizeOptionList(group.sharedOptions ?? question.options ?? []);
+  }
+
+  if (!groupUsesOptionBank(question.type)) {
+    return normalizeOptionList(question.options ?? []);
   }
 
   return group.secondaryBlock?.trim()
@@ -559,6 +576,93 @@ function parseInlineItalicSegments(text: string) {
   });
 
   return segments;
+}
+
+function getHighlightNodePlainTextLength(node: Node | undefined): number {
+  if (!node) {
+    return 0;
+  }
+
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent?.length ?? 0;
+  }
+
+  if (node.nodeName === "BR") {
+    return 1;
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return 0;
+  }
+
+  let length = 0;
+  node.childNodes.forEach((child) => {
+    length += getHighlightNodePlainTextLength(child);
+  });
+  return length;
+}
+
+function getHighlightTextOffset(root: HTMLElement, container: Node, offset: number): number {
+  let total = 0;
+  let found = false;
+
+  const visit = (node: Node): boolean => {
+    if (found) {
+      return true;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node === container) {
+        total += offset;
+        found = true;
+        return true;
+      }
+
+      total += node.textContent?.length ?? 0;
+      return false;
+    }
+
+    if (node.nodeName === "BR") {
+      if (node === container) {
+        if (offset > 0) {
+          total += 1;
+        }
+        found = true;
+        return true;
+      }
+
+      total += 1;
+      return false;
+    }
+
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node === container) {
+        for (let index = 0; index < offset; index += 1) {
+          total += getHighlightNodePlainTextLength(node.childNodes[index] ?? undefined);
+        }
+        found = true;
+        return true;
+      }
+
+      for (let index = 0; index < node.childNodes.length; index += 1) {
+        if (visit(node.childNodes[index]!)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  visit(root);
+  return total;
+}
+
+function getHighlightTextOffsets(blockNode: HTMLElement, range: Range) {
+  return {
+    start: getHighlightTextOffset(blockNode, range.startContainer, range.startOffset),
+    end: getHighlightTextOffset(blockNode, range.endContainer, range.endOffset),
+  };
 }
 
 function parseBraceBoldText(text: string) {
@@ -808,6 +912,80 @@ function findSectionIdForQuestion(
   return paragraphs[0] ? sectionKeyForParagraph(paragraphs[0]) : (questionGroups[0] ? sectionKeyForGroup(questionGroups[0]) : "section");
 }
 
+function normalizeSectionTimeSpentSeconds(input?: Record<string, number> | null) {
+  const normalized: Record<string, number> = {};
+  Object.entries(input ?? {}).forEach(([sectionId, seconds]) => {
+    const key = String(sectionId).trim();
+    const value = Math.max(0, Math.floor(Number(seconds) || 0));
+    if (key && value > 0) {
+      normalized[key] = value;
+    }
+  });
+  return normalized;
+}
+
+function mergeSectionTimeSpentSeconds(
+  primary?: Record<string, number> | null,
+  secondary?: Record<string, number> | null
+) {
+  const merged = normalizeSectionTimeSpentSeconds(primary);
+  Object.entries(normalizeSectionTimeSpentSeconds(secondary)).forEach(([sectionId, seconds]) => {
+    merged[sectionId] = Math.max(merged[sectionId] ?? 0, seconds);
+  });
+  return merged;
+}
+
+function normalizeQuestionTypeKey(value: string | null | undefined): string {
+  const normalized = String(value ?? "")
+    .replace(/^(reading|listening)_/i, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+
+  if (normalized === "tfng") return "true_false_not_given";
+  if (normalized === "ynng") return "yes_no_not_given";
+  if (normalized === "mcq" || normalized === "mc") return "multiple_choice";
+  return normalized;
+}
+
+function resolveInitialReviewTarget(
+  target: ReadingExamPreviewData["initialReviewTarget"],
+  questionGroups: PreviewGroup[],
+  paragraphs: PreviewParagraph[]
+): { questionId: string; sectionId: string } | null {
+  if (!target) {
+    return null;
+  }
+
+  if (target.questionId) {
+    const sectionId = findSectionIdForQuestion(target.questionId, questionGroups, paragraphs);
+    if (questionGroups.some((group) => group.questions.some((question) => question.id === target.questionId))) {
+      return { questionId: target.questionId, sectionId };
+    }
+  }
+
+  const targetQuestionType = normalizeQuestionTypeKey(target.questionType);
+  if (targetQuestionType) {
+    const group = questionGroups.find((item) => normalizeQuestionTypeKey(item.type) === targetQuestionType);
+    const questionId = group?.questions[0]?.id;
+    if (group && questionId) {
+      return { questionId, sectionId: sectionKeyForGroup(group) };
+    }
+  }
+
+  if (target.sectionId) {
+    const group = questionGroups.find((item) => sectionKeyForGroup(item) === target.sectionId);
+    if (group?.questions[0]?.id) {
+      return { questionId: group.questions[0].id, sectionId: target.sectionId };
+    }
+
+    return { questionId: "", sectionId: target.sectionId };
+  }
+
+  return null;
+}
+
 export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: ReadingExamPreviewData }) {
   const router = useRouter();
   const isAttemptPreview = Boolean(data?.attemptId);
@@ -820,7 +998,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const textBlockRefs = useRef<Record<string, HTMLElement | null>>({});
   const examData = data ?? DEFAULT_EXAM_DATA;
   const initialTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
-  const initialQuestionId = examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "";
+  const initialReviewTarget = useMemo(
+    () => resolveInitialReviewTarget(examData.initialReviewTarget, examData.questionGroups, examData.paragraphs),
+    [examData.initialReviewTarget, examData.questionGroups, examData.paragraphs]
+  );
+  const initialQuestionId = initialReviewTarget?.questionId || examData.initialUiState?.activeQuestionId || examData.questionGroups[0]?.questions[0]?.id || "";
+  const initialSectionId = initialReviewTarget?.sectionId || findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs);
   const [answers, setAnswers] = useState<Record<string, string>>(examData.initialAnswers ?? {});
   const [hasMounted, setHasMounted] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -836,6 +1019,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [isCalculatingResults, setIsCalculatingResults] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeDialog, setActiveDialog] = useState<PreviewDialog>(null);
+  const activeDialogRef = useRef<PreviewDialog>(null);
   const [fullscreenDialogStage, setFullscreenDialogStage] = useState<FullscreenDialogStage>(null);
   const [fullscreenExitCountdown, setFullscreenExitCountdown] = useState(0);
   const [strictListeningPhase, setStrictListeningPhase] = useState<StrictListeningPhase>("idle");
@@ -844,12 +1028,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [strictListeningPlaybackBlocked, setStrictListeningPlaybackBlocked] = useState(false);
   const [strictListeningElapsedSeconds, setStrictListeningElapsedSeconds] = useState(initialTimeSpentSeconds);
   const [strictListeningAudioSectionId, setStrictListeningAudioSectionId] = useState(
-    findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs)
+    initialSectionId
   );
   const [activeQuestionId, setActiveQuestionId] = useState(initialQuestionId);
-  const [activeSectionId, setActiveSectionId] = useState(
-    findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs)
-  );
+  const [activeSectionId, setActiveSectionId] = useState(initialSectionId);
   const [showPassageQuestionNav, setShowPassageQuestionNav] = useState(false);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [draggingHeading, setDraggingHeading] = useState<{ groupId: string; value: string; sourceQuestionId?: string } | null>(null);
@@ -871,28 +1053,53 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const [syncState, setSyncState] = useState<"idle" | "saving" | "saved" | "error">(
     examData.attemptId ? "saved" : "idle"
   );
+  const dialogResetKey = [
+    mode,
+    examData.attemptId ?? "",
+    examData.testId ?? "",
+    examData.testSlug ?? "",
+    examData.testType ?? "reading",
+    examData.title,
+    initialReviewTarget?.sectionId ?? "",
+    initialReviewTarget?.questionId ?? "",
+    examData.initialReviewTarget?.questionType ?? "",
+  ].join("|");
+  const previousDialogResetKeyRef = useRef<string | null>(null);
   const allowLeaveRef = useRef(false);
   const ignoreNextFullscreenExitRef = useRef(false);
+
+  function updateActiveDialog(nextDialog: PreviewDialog) {
+    activeDialogRef.current = nextDialog;
+    setActiveDialog(nextDialog);
+  }
   const hasExamFullscreenSessionRef = useRef(false);
   const strictListeningCompletedAudioRef = useRef<Record<string, number>>({});
   const saveTimersRef = useRef<Record<string, number>>({});
   const pendingAnswerValuesRef = useRef<Record<string, string>>({});
   const latestAnswersRef = useRef<Record<string, string>>(examData.initialAnswers ?? {});
+  const sectionTimeSpentSecondsRef = useRef<Record<string, number>>(normalizeSectionTimeSpentSeconds(examData.initialSectionTimeSpentSeconds));
+  const activeSectionTimerRef = useRef<{ sectionId: string; startedAtMs: number } | null>(
+    initialSectionId ? { sectionId: initialSectionId, startedAtMs: Date.now() } : null
+  );
   const progressSaveTimerRef = useRef<number | null>(null);
+  const timerBaseSpentSecondsRef = useRef(initialTimeSpentSeconds);
+  const timerBaseStartedAtMsRef = useRef(Date.now());
   const latestProgressRef = useRef<{
     timeSpentSec: number;
+    sectionTimeSpentSec: Record<string, number>;
     activeQuestionId: string;
     textHighlights: Record<string, TextHighlight[]>;
     uiState: PreviewUiState;
   }>({
     timeSpentSec: initialTimeSpentSeconds,
-    activeQuestionId: examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "",
+    sectionTimeSpentSec: normalizeSectionTimeSpentSeconds(examData.initialSectionTimeSpentSeconds),
+    activeQuestionId: initialQuestionId,
     textHighlights: examData.initialTextHighlights ?? {},
     uiState: {
       theme: examData.initialUiState?.theme === "light" ? "light" : "dark",
       splitRatio: clampSplitRatio(examData.initialUiState?.splitRatio ?? 54),
       fontScale: clampFontScale(examData.initialUiState?.fontScale ?? 1),
-      activeQuestionId: examData.initialUiState?.activeQuestionId ?? examData.questionGroups[0]?.questions[0]?.id ?? "",
+      activeQuestionId: initialQuestionId,
     },
   });
 
@@ -1025,6 +1232,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const isReviewMode = mode === "review";
   const isSinglePaneListeningMode = isListeningPreview && !isReviewMode;
   const isStrictListeningExam = isSinglePaneListeningMode && isExamMode;
+  const timedSectionId = isStrictListeningExam && strictListeningPhase !== "transfer" && strictListeningPhase !== "complete"
+    ? strictListeningAudioSectionId
+    : activeSectionId;
   const currentTranscriptSegments = currentSection?.transcriptSegments ?? [];
   const currentTranscriptQuestionLocations = currentSection?.transcriptQuestionLocations ?? [];
   const strictListeningAudioSection = useMemo(
@@ -1070,15 +1280,24 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     const backupHighlightCount = Object.values(backupHighlights).reduce((count, items) => count + items.length, 0);
     const serverTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
     const backupTimeSpentSeconds = Math.max(0, backup?.timeSpentSec ?? 0);
-    const shouldUseBackup = Boolean(backup) && backupTimeSpentSeconds >= serverTimeSpentSeconds;
+    const shouldUseBackupContent = Boolean(backup);
+    const nextSectionTimeSpentSeconds = mergeSectionTimeSpentSeconds(
+      examData.initialSectionTimeSpentSeconds,
+      shouldUseBackupContent ? backup?.sectionTimeSpentSec : undefined
+    );
     const nextTheme = currentTheme;
-    const nextAnswers = shouldUseBackup && backupAnswerCount > 0 ? { ...serverAnswers, ...backupAnswers } : serverAnswers;
-    const nextTextHighlights = shouldUseBackup && backupHighlightCount > 0 ? { ...serverHighlights, ...backupHighlights } : serverHighlights;
-    const nextSplitRatio = clampSplitRatio((shouldUseBackup ? backup?.uiState?.splitRatio : undefined) ?? examData.initialUiState?.splitRatio ?? 54);
-    const nextFontScale = clampFontScale((shouldUseBackup ? backup?.uiState?.fontScale : undefined) ?? examData.initialUiState?.fontScale ?? 1);
-    const nextActiveQuestionId = (shouldUseBackup ? backup?.uiState?.activeQuestionId : undefined) ?? initialQuestionId;
-    const nextSectionId = findSectionIdForQuestion(nextActiveQuestionId, examData.questionGroups, examData.paragraphs);
-    const nextTimeSpentSeconds = shouldUseBackup ? Math.max(serverTimeSpentSeconds, backupTimeSpentSeconds) : serverTimeSpentSeconds;
+    const nextAnswers = shouldUseBackupContent && backupAnswerCount > 0 ? { ...serverAnswers, ...backupAnswers } : serverAnswers;
+    const nextTextHighlights = shouldUseBackupContent && backupHighlightCount > 0 ? { ...serverHighlights, ...backupHighlights } : serverHighlights;
+    const nextSplitRatio = clampSplitRatio((shouldUseBackupContent ? backup?.uiState?.splitRatio : undefined) ?? examData.initialUiState?.splitRatio ?? 54);
+    const nextFontScale = clampFontScale((shouldUseBackupContent ? backup?.uiState?.fontScale : undefined) ?? examData.initialUiState?.fontScale ?? 1);
+    const hasInitialReviewTarget = Boolean(initialReviewTarget);
+    const nextActiveQuestionId = hasInitialReviewTarget
+      ? initialQuestionId
+      : (shouldUseBackupContent ? backup?.uiState?.activeQuestionId : undefined) ?? initialQuestionId;
+    const nextSectionId = hasInitialReviewTarget
+      ? initialSectionId
+      : findSectionIdForQuestion(nextActiveQuestionId, examData.questionGroups, examData.paragraphs);
+    const nextTimeSpentSeconds = Math.max(serverTimeSpentSeconds, backupTimeSpentSeconds);
 
     document.documentElement.classList.add(nextTheme);
     document.documentElement.classList.remove(nextTheme === "light" ? "dark" : "light");
@@ -1089,7 +1308,10 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     setFontScale(nextFontScale);
     setActiveQuestionId(nextActiveQuestionId);
     setActiveSectionId(nextSectionId);
-    setShowPassageQuestionNav(previewSections.length <= 1);
+    setShowPassageQuestionNav(hasInitialReviewTarget || isReviewMode || previewSections.length <= 1);
+    resetWallClockTimer(nextTimeSpentSeconds);
+    sectionTimeSpentSecondsRef.current = nextSectionTimeSpentSeconds;
+    activeSectionTimerRef.current = nextSectionId ? { sectionId: nextSectionId, startedAtMs: Date.now() } : null;
     setTimeLeft(
       mode === "exam"
         ? Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - nextTimeSpentSeconds)
@@ -1100,6 +1322,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     latestAnswersRef.current = nextAnswers;
     latestProgressRef.current = {
       timeSpentSec: nextTimeSpentSeconds,
+      sectionTimeSpentSec: { ...nextSectionTimeSpentSeconds },
       activeQuestionId: nextActiveQuestionId,
       textHighlights: nextTextHighlights,
       uiState: {
@@ -1109,11 +1332,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         activeQuestionId: nextActiveQuestionId,
       },
     };
+    const shouldResetDialogState = previousDialogResetKeyRef.current !== dialogResetKey;
+    previousDialogResetKeyRef.current = dialogResetKey;
+
     setIsSubmitted(false);
     setIsSubmitting(false);
-    setActiveDialog(null);
-    setFullscreenDialogStage(null);
-    setFullscreenExitCountdown(0);
+    if (shouldResetDialogState) {
+      updateActiveDialog(null);
+      setFullscreenDialogStage(null);
+      setFullscreenExitCountdown(0);
+    }
     setStrictListeningPhase(mode === "exam" && examData.testType === "listening" ? "waiting" : "idle");
     setStrictListeningTransferLeft(LISTENING_TRANSFER_SECONDS);
     setStrictListeningIsPlaying(false);
@@ -1125,10 +1353,45 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     pendingAnswerValuesRef.current = {};
     ignoreNextFullscreenExitRef.current = false;
     hasExamFullscreenSessionRef.current = false;
-  }, [examData, initialQuestionId, mode, previewSections.length]);
+  }, [dialogResetKey, examData, initialQuestionId, initialReviewTarget, initialSectionId, isReviewMode, mode, previewSections.length]);
+
+  useEffect(() => {
+    if (!isReviewMode || !initialReviewTarget?.questionId) {
+      return;
+    }
+
+    const scrollTimer = window.setTimeout(() => {
+      const inlineBlank = questionPaneRef.current?.querySelector<HTMLElement>(
+        `[data-question-anchor="${initialReviewTarget.questionId}"]`
+      );
+      if (inlineBlank) {
+        inlineBlank.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+
+      const questionCard = questionPaneRef.current?.querySelector<HTMLElement>(
+        `[id="${initialReviewTarget.questionId}"]`
+      );
+      if (questionCard) {
+        questionCard.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+
+      document
+        .querySelector<HTMLElement>(`[data-heading-drop-question-id="${initialReviewTarget.questionId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 220);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [activeSectionId, initialReviewTarget?.questionId, isReviewMode]);
 
   useEffect(() => {
     const handleFocusOrFullscreenChange = () => {
+      const blockingDialog = activeDialogRef.current;
+      if (blockingDialog && blockingDialog !== "fullscreen") {
+        return;
+      }
+
       const isCurrentlyFullscreen = Boolean(document.fullscreenElement);
       setIsFullscreen(isCurrentlyFullscreen);
 
@@ -1162,7 +1425,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       else if (!isFocused) eventType = "violation_window_blur";
 
       if (examData.attemptId) {
-        void fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/events`, {
+        void fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/events`, {
           method: "POST",
           headers: buildAttemptRequestHeaders(accessToken),
           credentials: "same-origin",
@@ -1173,7 +1436,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
       setFullscreenDialogStage("exited-warning");
       setFullscreenExitCountdown(10);
-      setActiveDialog("fullscreen");
+      updateActiveDialog("fullscreen");
     };
 
     const onVisibilityChange = () => handleFocusOrFullscreenChange();
@@ -1192,7 +1455,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
     };
-  }, [fullscreenDialogStage, isExamMode, isSubmitted, isSubmitting]);
+  }, [accessToken, examData.attemptId, fullscreenDialogStage, isExamMode, isSubmitted, isSubmitting]);
 
   useEffect(() => {
     if (isSubmitted) return;
@@ -1207,8 +1470,13 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       return () => window.clearInterval(timer);
     }
     if (mode === "exam") {
+      const syncExamTimer = () => {
+        const timeSpent = wallClockTimeSpentSeconds();
+        setTimeLeft(Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - timeSpent));
+      };
+      syncExamTimer();
       const timer = window.setInterval(() => {
-        setTimeLeft((current) => (current <= 1 ? 0 : current - 1));
+        syncExamTimer();
       }, 1000);
       return () => window.clearInterval(timer);
     }
@@ -1221,7 +1489,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       setTimeLeft((current) => current + 1);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [isReviewMode, isStrictListeningExam, isSubmitted, mode, strictListeningPhase]);
+  }, [examData.timeLimitSeconds, isReviewMode, isStrictListeningExam, isSubmitted, mode, strictListeningPhase]);
 
   useEffect(() => {
     if (isStrictListeningExam) {
@@ -1385,9 +1653,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   const activeInputClass = theme === "light"
     ? "border-[#2f436f]/70 ring-1 ring-[#2f436f]/20"
     : "border-primary/45 ring-1 ring-primary/20";
-  const numberedPlaceholderClass = theme === "light"
-    ? "placeholder:text-[#2f436f]/90"
-    : "placeholder:text-primary/85";
+  const answerNumberBadgeClassName = theme === "light"
+    ? "border-[#2f436f]/45 bg-white text-[#2f436f]"
+    : "border-primary/35 bg-slate-950/30 text-primary";
+  const inlineAnswerFieldClassName =
+    "mx-1 inline-flex h-[1.55em] min-w-[7.75rem] max-w-full items-center rounded-md border px-2.5 py-0 text-[0.96em] leading-none align-middle shadow-none";
+  const inlineAnswerPlaceholderClassName =
+    "placeholder:text-[0.86em] placeholder:font-semibold placeholder:tracking-[0.04em] placeholder:opacity-100";
+  const inlineRowControlClassName = "h-[1.55em] px-2.5 text-[0.96em] leading-none";
   const layoutStyle = {
     "--reading-pane": `${splitRatio}%`,
     "--question-pane": `${100 - splitRatio}%`,
@@ -1421,6 +1694,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         answers?: Record<string, string>;
         textHighlights?: Record<string, TextHighlight[]>;
         timeSpentSec?: number;
+        sectionTimeSpentSec?: Record<string, number>;
         uiState?: PreviewUiState;
         updatedAt?: number;
       };
@@ -1436,10 +1710,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     }
 
     try {
+      refreshLatestProgressSnapshot();
       window.localStorage.setItem(attemptBackupKey, JSON.stringify({
         answers: latestAnswersRef.current,
         textHighlights: latestProgressRef.current.textHighlights,
         timeSpentSec: latestProgressRef.current.timeSpentSec,
+        sectionTimeSpentSec: latestProgressRef.current.sectionTimeSpentSec,
         uiState: latestProgressRef.current.uiState,
         updatedAt: Date.now(),
       }));
@@ -1467,6 +1743,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     }
   }, [activeSectionId, previewSections]);
 
+  useEffect(() => {
+    if (!examData.attemptId || isSubmitted || isReviewMode || mode === "guest") {
+      activeSectionTimerRef.current = null;
+      return;
+    }
+
+    resetActiveSectionTimer(timedSectionId);
+    return () => flushActiveSectionTime();
+  }, [examData.attemptId, isSubmitted, isReviewMode, mode, timedSectionId]);
+
   function markSyncSaved() {
     setSyncState("saved");
   }
@@ -1475,19 +1761,59 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     setSyncState("error");
   }
 
+  function resetWallClockTimer(timeSpentSeconds: number) {
+    timerBaseSpentSecondsRef.current = Math.max(0, Math.floor(timeSpentSeconds));
+    timerBaseStartedAtMsRef.current = Date.now();
+  }
+
+  function wallClockTimeSpentSeconds() {
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timerBaseStartedAtMsRef.current) / 1000));
+    const nextTimeSpent = timerBaseSpentSecondsRef.current + elapsedSeconds;
+    if (mode === "exam") {
+      return Math.min(Math.max(0, nextTimeSpent), examData.timeLimitSeconds ?? 20 * 60);
+    }
+    return Math.max(0, nextTimeSpent);
+  }
+
   function currentTimeSpentSeconds() {
     if (isStrictListeningExam) {
       return Math.max(0, Math.floor(strictListeningElapsedSeconds));
     }
     if (mode === "exam") {
-      return Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - timeLeft);
+      return wallClockTimeSpentSeconds();
     }
     return Math.max(0, timeLeft);
   }
 
-  useEffect(() => {
+  function flushActiveSectionTime(nowMs = Date.now()) {
+    const current = activeSectionTimerRef.current;
+    if (!current?.sectionId || isReviewMode || mode === "guest") {
+      return;
+    }
+    const elapsedSeconds = Math.max(0, Math.floor((nowMs - current.startedAtMs) / 1000));
+    if (elapsedSeconds <= 0) {
+      return;
+    }
+    sectionTimeSpentSecondsRef.current = {
+      ...sectionTimeSpentSecondsRef.current,
+      [current.sectionId]: (sectionTimeSpentSecondsRef.current[current.sectionId] ?? 0) + elapsedSeconds,
+    };
+    activeSectionTimerRef.current = {
+      sectionId: current.sectionId,
+      startedAtMs: current.startedAtMs + elapsedSeconds * 1000,
+    };
+  }
+
+  function resetActiveSectionTimer(sectionId: string) {
+    flushActiveSectionTime();
+    activeSectionTimerRef.current = sectionId ? { sectionId, startedAtMs: Date.now() } : null;
+  }
+
+  function refreshLatestProgressSnapshot() {
+    flushActiveSectionTime();
     latestProgressRef.current = {
       timeSpentSec: currentTimeSpentSeconds(),
+      sectionTimeSpentSec: { ...sectionTimeSpentSecondsRef.current },
       activeQuestionId,
       textHighlights,
       uiState: {
@@ -1497,7 +1823,11 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         activeQuestionId,
       },
     };
-  }, [activeQuestionId, examData.timeLimitSeconds, fontScale, isStrictListeningExam, mode, splitRatio, strictListeningElapsedSeconds, textHighlights, theme, timeLeft]);
+  }
+
+  useEffect(() => {
+    refreshLatestProgressSnapshot();
+  }, [activeQuestionId, examData.timeLimitSeconds, fontScale, isStrictListeningExam, mode, splitRatio, strictListeningElapsedSeconds, textHighlights, theme, timedSectionId, timeLeft]);
 
   useEffect(() => {
     latestAnswersRef.current = answers;
@@ -1508,7 +1838,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       return;
     }
     writeAttemptBackup();
-  }, [answers, examData.attemptId, isSubmitted, isReviewMode, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timeLeft]);
+  }, [answers, examData.attemptId, isSubmitted, isReviewMode, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timedSectionId, timeLeft]);
 
   useEffect(() => {
     if (!examData.attemptId || isSubmitted || isReviewMode) {
@@ -1521,21 +1851,23 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     window.addEventListener("pagehide", handlePageHide);
     return () => window.removeEventListener("pagehide", handlePageHide);
-  }, [examData.attemptId, isSubmitted, isReviewMode, answers, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timeLeft]);
+  }, [examData.attemptId, isSubmitted, isReviewMode, answers, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timedSectionId, timeLeft]);
 
   async function persistProgressNow() {
     if (!examData.attemptId || isSubmitted || isReviewMode) {
       return;
     }
 
+    refreshLatestProgressSnapshot();
     setSyncState("saving");
     try {
-      const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/progress`, {
+      const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/progress`, {
         method: "PATCH",
         headers: buildAttemptRequestHeaders(accessToken),
         credentials: "same-origin",
         body: JSON.stringify({
           time_spent_sec: latestProgressRef.current.timeSpentSec,
+          section_time_spent_sec: latestProgressRef.current.sectionTimeSpentSec,
           active_question_id: latestProgressRef.current.activeQuestionId,
           text_highlights: latestProgressRef.current.textHighlights,
           ui_state: {
@@ -1585,7 +1917,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     await Promise.all(
       pendingEntries.map(async ([questionId, value]) => {
         try {
-          const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
+          const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
             method: "PATCH",
             headers: buildAttemptRequestHeaders(accessToken),
             credentials: "same-origin",
@@ -1630,7 +1962,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       return;
     }
     queueProgressPersist(700);
-  }, [activeQuestionId, examData.attemptId, fontScale, isSubmitted, isReviewMode, splitRatio, textHighlights, theme]);
+  }, [activeQuestionId, examData.attemptId, fontScale, isSubmitted, isReviewMode, splitRatio, textHighlights, theme, timedSectionId]);
 
   useEffect(() => {
     if (!examData.attemptId || isSubmitted || isReviewMode) {
@@ -1670,7 +2002,21 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       void submitAttempt("user_confirmed");
       return;
     }
-    setActiveDialog("submit");
+    updateActiveDialog("submit");
+  }
+
+  function dismissActiveDialogFromBackdrop() {
+    if (activeDialog === "fullscreen") {
+      if (fullscreenDialogStage === "confirm-exit") {
+        updateActiveDialog(null);
+        setFullscreenDialogStage(null);
+        return;
+      }
+      void recoverFullscreen();
+      return;
+    }
+
+    updateActiveDialog(null);
   }
 
   function persistAnswer(questionId: string, value: string) {
@@ -1703,7 +2049,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
     saveTimersRef.current[questionId] = window.setTimeout(async () => {
       try {
-        const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
+        const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
           method: "PATCH",
           headers: buildAttemptRequestHeaders(accessToken),
           credentials: "same-origin",
@@ -1726,13 +2072,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   async function submitAttempt(reason: SubmitReason) {
     if (isSubmitting) return;
-    setActiveDialog(null);
+    updateActiveDialog(null);
     setFullscreenDialogStage(null);
     setFullscreenExitCountdown(0);
     setIsSubmitting(true);
     setIsSubmitted(true);
 
     if (!examData.attemptId) {
+      setIsSubmitting(false);
       return;
     }
 
@@ -1742,7 +2089,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     try {
       await flushPendingAnswerSaves();
       await flushPendingProgressSave();
-      const response = await fetch(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/submit`, {
+      const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/submit`, {
         method: "POST",
         headers: buildAttemptRequestHeaders(accessToken),
         credentials: "same-origin",
@@ -1826,7 +2173,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   async function confirmSubmit() {
     if (!examData.attemptId) {
-      setActiveDialog(null);
+      updateActiveDialog(null);
       setIsSubmitted(true);
       return;
     }
@@ -1836,7 +2183,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   async function recoverFullscreen() {
     try {
       await document.documentElement.requestFullscreen();
-      setActiveDialog(null);
+      updateActiveDialog(null);
       setFullscreenDialogStage(null);
       setFullscreenExitCountdown(0);
     } catch {}
@@ -1868,6 +2215,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   function navigateToQuestion(questionId: string) {
     setActiveSectionId(findSectionIdForQuestion(questionId, examData.questionGroups, examData.paragraphs));
     setActiveQuestionId(questionId);
+    setShowPassageQuestionNav(true);
 
     const inlineBlank = questionPaneRef.current?.querySelector<HTMLElement>(`[data-question-anchor="${questionId}"]`);
     if (inlineBlank) {
@@ -1894,7 +2242,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   async function toggleFullscreen() {
     if (isExamMode && isFullscreen && !isReviewMode && !isSubmitted) {
       setFullscreenDialogStage("confirm-exit");
-      setActiveDialog("fullscreen");
+      updateActiveDialog("fullscreen");
       return;
     }
 
@@ -1962,7 +2310,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     const handlePopState = () => {
       if (allowLeaveRef.current) return;
       window.history.pushState({ examPreviewGuard: true }, "", window.location.href);
-      setActiveDialog("leave");
+      updateActiveDialog("leave");
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1978,7 +2326,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
       if (!isRefreshShortcut) return;
       event.preventDefault();
-      setActiveDialog("leave");
+      updateActiveDialog("leave");
     };
 
     window.history.pushState({ examPreviewGuard: true }, "", window.location.href);
@@ -1995,7 +2343,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   async function confirmLeave() {
     allowLeaveRef.current = true;
-    setActiveDialog(null);
+    updateActiveDialog(null);
     writeAttemptBackup();
 
     if (examData.attemptId && !isSubmitted) {
@@ -2032,18 +2380,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function getTextOffsets(blockNode: HTMLElement, range: Range) {
-    const fullRange = document.createRange();
-    fullRange.selectNodeContents(blockNode);
-
-    const startRange = fullRange.cloneRange();
-    startRange.setEnd(range.startContainer, range.startOffset);
-    const start = startRange.toString().length;
-
-    const endRange = fullRange.cloneRange();
-    endRange.setEnd(range.endContainer, range.endOffset);
-    const end = endRange.toString().length;
-
-    return { start, end };
+    return getHighlightTextOffsets(blockNode, range);
   }
 
   function handleTextBlockMouseUp(blockKey: string, event?: ReactMouseEvent<HTMLElement>) {
@@ -2482,17 +2819,19 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         if (segmentStart < segmentEnd) {
           const isExplanation = highlight.id.startsWith("explanation-highlight-");
           parts.push(
-            <mark
+            <span
               key={`${highlight.id}-${segmentStart}-${segmentEnd}`}
               className={cn(
-                "rounded-[0.25rem] px-[1px] text-inherit",
                 isExplanation
-                  ? "bg-orange-400/80 ring-2 ring-orange-500/50 dark:bg-orange-500/50 dark:ring-orange-400/50 transition-all duration-300"
-                  : "bg-amber-300/65 dark:bg-[#5b4618]/50 dark:ring-1 dark:ring-[#c9952f]/40"
+                  ? cn(
+                      "exam-text-highlight-explanation",
+                      theme === "dark" && "exam-text-highlight-explanation-dark"
+                    )
+                  : cn("exam-text-highlight", theme === "dark" && "exam-text-highlight-dark")
               )}
             >
               {renderFormattedSlice(segmentStart, segmentEnd, `${keyPrefix}-mark-${index}`)}
-            </mark>
+            </span>
           );
         }
 
@@ -2562,7 +2901,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     return (
       <div className="space-y-2">
         {binaryLayout.prefix ? (
-          <div className="whitespace-pre-wrap">
+          <div
+            ref={(node) => {
+              textBlockRefs.current[`${blockKey}-prefix`] = node;
+            }}
+            data-highlight-text
+            onMouseUp={(event) => handleTextBlockMouseUp(`${blockKey}-prefix`, event)}
+            className="select-text whitespace-pre-wrap"
+          >
             {renderHighlightedText(`${blockKey}-prefix`, binaryLayout.prefix)}
           </div>
         ) : null}
@@ -2633,7 +2979,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
   }
 
   function renderOptionBank(group: PreviewGroup) {
-    if (group.type.includes("matching_information") || group.type.includes("plan_map_labeling")) {
+    if (!groupUsesOptionBank(group.type)) {
       return null;
     }
 
@@ -2773,26 +3119,48 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                       </span>
                     ) : null}
                     <span
-                      ref={(node) => {
-                        textBlockRefs.current[optionBlockKey] = node;
-                      }}
-                      data-highlight-text
-                      onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
                       className={cn(
-                        "select-text flex-1 whitespace-nowrap text-[16px] leading-6 text-foreground",
+                        "flex-1 whitespace-nowrap text-[16px] leading-6 text-foreground",
                         isListeningMatchingGroup && "min-w-0 whitespace-normal break-words leading-5",
                         group.type.includes("matching_headings") && "whitespace-normal"
                       )}
                     >
                       {group.type.includes("matching_headings") ? (
-                        renderHighlightedText(optionBlockKey, `${headingPrefix}. ${text}`)
+                        <span
+                          ref={(node) => {
+                            textBlockRefs.current[optionBlockKey] = node;
+                          }}
+                          data-highlight-text
+                          onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
+                          className="select-text"
+                        >
+                          {renderHighlightedText(optionBlockKey, `${headingPrefix}. ${text}`)}
+                        </span>
                       ) : isListeningMatchingGroup ? (
                         <>
                           <span className="font-black">{value}.</span>{" "}
-                          <span className="font-normal">{renderHighlightedText(optionBlockKey, text)}</span>
+                          <span
+                            ref={(node) => {
+                              textBlockRefs.current[optionBlockKey] = node;
+                            }}
+                            data-highlight-text
+                            onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
+                            className="font-normal select-text"
+                          >
+                            {renderHighlightedText(optionBlockKey, text)}
+                          </span>
                         </>
                       ) : (
-                        renderHighlightedText(optionBlockKey, `${value}. ${text}`)
+                        <span
+                          ref={(node) => {
+                            textBlockRefs.current[optionBlockKey] = node;
+                          }}
+                          data-highlight-text
+                          onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
+                          className="select-text"
+                        >
+                          {renderHighlightedText(optionBlockKey, `${value}. ${text}`)}
+                        </span>
                       )}
                     </span>
                   </>
@@ -2911,13 +3279,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               isMcqMultiple(question.type) && "space-y-0"
             )}>
               <p
-                ref={(node) => {
-                  textBlockRefs.current[`question-prompt-${question.id}`] = node;
-                }}
-                data-highlight-text
-                onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
                 className={cn(
-                  "select-text font-sans text-foreground",
+                  "font-sans text-foreground",
                   isMatchingInformationQuestion && "min-w-[160px] flex-1",
                   isMatchingFeaturesQuestion && "min-w-[180px] flex-1",
                   isListeningMatchingQuestion && "w-[260px] max-w-[260px] flex-none",
@@ -2928,7 +3291,16 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 <span className="mr-3 inline-block whitespace-nowrap text-[16px] font-bold tracking-tight text-foreground">
                   {inlineQuestionLabel}
                 </span>
-                {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
+                <span
+                  ref={(node) => {
+                    textBlockRefs.current[`question-prompt-${question.id}`] = node;
+                  }}
+                  data-highlight-text
+                  onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
+                  className="select-text"
+                >
+                  {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
+                </span>
               </p>
               {isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
               {question.instruction && !group.instruction?.trim() && !isBinaryQuestion && !isMatching(question.type) ? (
@@ -3068,66 +3440,76 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
 
   function renderCompletionAnswer(group: PreviewGroup, question: PreviewQuestion, key: string) {
     const isWordBankGroup = isWordBankCompletion(question.type);
+    const answerLabel = question.label ?? String(question.number);
+    const answerNumberBadge = (
+      <span className={cn("inline-flex h-[1.55em] min-w-[1.55em] items-center justify-center rounded-full border px-1 text-[0.78em] font-bold leading-none align-middle", answerNumberBadgeClassName)}>
+        {answerLabel}
+      </span>
+    );
 
     if (isWordBankGroup) {
       return (
-        <button
-          type="button"
-          key={`${key}-wordbank`}
-          data-question-anchor={question.id}
-          data-wordbank-drop-question-id={question.id}
-          data-wordbank-drop-group-id={group.id}
-          onClick={() => setActiveQuestionId(question.id)}
-          onPointerDown={(event) => {
-            const currentValue = answers[question.id] ?? "";
-            if (!currentValue) {
-              return;
-            }
-            beginWordBankPointerDrag(event, {
-              groupId: group.id,
-              value: currentValue,
-              sourceQuestionId: question.id,
-            });
-          }}
-          className={cn(
-            "mx-1 inline-flex h-8 min-w-[132px] items-center rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none transition",
-            theme === "light"
-              ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
-              : "border-slate-500/55 bg-card text-foreground",
-            dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
-            answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
-            activeQuestionId === question.id && activeInputClass
-          )}
-          style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
-        >
-          <span className={cn(!answers[question.id] && numberedPlaceholderClass)}>
-            {answers[question.id] || (question.label ?? String(question.number))}
-          </span>
-        </button>
+        <span key={`${key}-wordbank-wrap`} className="mx-1 inline-flex items-center gap-1 align-middle">
+          {answerNumberBadge}
+          <button
+            type="button"
+            data-question-anchor={question.id}
+            data-wordbank-drop-question-id={question.id}
+            data-wordbank-drop-group-id={group.id}
+            onClick={() => setActiveQuestionId(question.id)}
+            onPointerDown={(event) => {
+              const currentValue = answers[question.id] ?? "";
+              if (!currentValue) {
+                return;
+              }
+              beginWordBankPointerDrag(event, {
+                groupId: group.id,
+                value: currentValue,
+                sourceQuestionId: question.id,
+              });
+            }}
+            className={cn(
+              inlineAnswerFieldClassName,
+              "mx-0 text-left font-medium transition",
+              theme === "light"
+                ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
+                : "border-slate-500/55 bg-card text-foreground",
+              dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
+              answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+              activeQuestionId === question.id && activeInputClass
+            )}
+            style={{ width: `${inlineAnswerWidth(answers[question.id], answerLabel)}px` }}
+          >
+            <span>{answers[question.id] || "\u00a0"}</span>
+          </button>
+        </span>
       );
     }
 
     return (
-      <Input
-        key={`${key}-input`}
-        value={answers[question.id] ?? ""}
-        onFocus={() => setActiveQuestionId(question.id)}
-        onChange={(event) => persistAnswer(question.id, event.target.value)}
-        placeholder={question.label ?? String(question.number)}
-        data-question-anchor={question.id}
-        className={cn(
-          "mx-1 inline-flex h-8 min-w-[132px] rounded-md border px-3 text-left text-[15px] font-medium align-middle shadow-none placeholder:text-[13px] placeholder:font-semibold placeholder:tracking-[0.04em] placeholder:opacity-100",
-          theme === "light"
-            ? "border-[#2f436f]/45 bg-[#f8faff]"
-            : "border-primary/30 bg-card",
-          numberedPlaceholderClass,
-          inputFocusClass,
-          activeQuestionId === question.id && activeInputClass
-        )}
-        style={{ width: `${inlineAnswerWidth(answers[question.id], question.label ?? String(question.number))}px` }}
-        autoComplete="off"
-        spellCheck="false"
-      />
+      <span key={`${key}-input-wrap`} className="mx-1 inline-flex items-center gap-1 align-middle">
+        {answerNumberBadge}
+        <Input
+          value={answers[question.id] ?? ""}
+          onFocus={() => setActiveQuestionId(question.id)}
+          onChange={(event) => persistAnswer(question.id, event.target.value)}
+          placeholder=""
+          data-question-anchor={question.id}
+          className={cn(
+            inlineAnswerFieldClassName,
+            "mx-0 text-left font-medium",
+            theme === "light"
+              ? "border-[#2f436f]/45 bg-[#f8faff]"
+              : "border-primary/30 bg-card",
+            inlineAnswerPlaceholderClassName,
+            inputFocusClass,
+            activeQuestionId === question.id && activeInputClass
+          )}
+          style={{ width: `${inlineAnswerWidth(answers[question.id], answerLabel)}px` }}
+          autoComplete="off"
+          spellCheck="false"
+        />
+      </span>
     );
   }
 
@@ -3441,16 +3823,20 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   <span className={cn("h-2 w-2 rounded-full bg-current transition", checked ? "opacity-100" : "opacity-0")} />
                 </span>
                 <span
-                  ref={(node) => {
-                    textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
-                  }}
-                  data-highlight-text
-                  onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
-                  className={cn("select-text font-sans text-foreground transition-colors", checked && "text-slate-950 dark:text-slate-50")}
+                  className={cn("font-sans text-foreground transition-colors", checked && "text-slate-950 dark:text-slate-50")}
                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                 >
                   <span className="mr-2 font-black">{optionLetter}.</span>
-                  {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
+                  <span
+                    ref={(node) => {
+                      textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
+                    }}
+                    data-highlight-text
+                    onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
+                    className="select-text"
+                  >
+                    {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
+                  </span>
                 </span>
               </button>
             );
@@ -3518,19 +3904,23 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                   {checked ? <Check className="h-3.5 w-3.5 text-white dark:text-slate-950" strokeWidth={3.25} /> : null}
                 </span>
                 <span
-                  ref={(node) => {
-                    textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
-                  }}
-                  data-highlight-text
-                  onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
                   className={cn(
-                    "select-text font-sans text-foreground transition-colors",
+                    "font-sans text-foreground transition-colors",
                     disabled && "text-muted-foreground"
                   )}
                   style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
                 >
                   <span className="mr-2 font-black">{optionLetter}.</span>
-                  {option}
+                  <span
+                    ref={(node) => {
+                      textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
+                    }}
+                    data-highlight-text
+                    onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
+                    className="select-text"
+                  >
+                    {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
+                  </span>
                 </span>
               </button>
             );
@@ -3587,7 +3977,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                 onFocus={() => setActiveQuestionId(question.id)}
                 onChange={(event) => persistAnswer(question.id, event.target.value)}
                 className={cn(
-                  "flex h-9 w-full appearance-none items-center rounded-xl border border-border bg-card px-3 pr-9 text-sm font-semibold text-foreground shadow-none outline-none transition",
+                  "flex w-full appearance-none items-center rounded-md border border-border bg-card pr-7 font-semibold text-foreground shadow-none outline-none transition",
+                  inlineRowControlClassName,
                   theme === "light"
                     ? "focus:border-[#2f436f]"
                     : "focus:border-primary/45",
@@ -3635,12 +4026,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               value={normalizedMatchingValue}
               onChange={(event) => persistAnswer(question.id, event.target.value)}
               className={cn(
-                "flex w-full appearance-none items-center rounded-xl border border-border bg-card text-sm font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
-                isMatchingInformation
-                  ? "h-8 px-3 pr-8"
-                  : isMatchingFeatures
-                    ? "h-8 px-3 pr-8"
-                    : "h-9 px-4 pr-10",
+                "flex w-full appearance-none items-center rounded-md border border-border bg-card font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
+                isInlineMatching
+                  ? cn(inlineRowControlClassName, "pr-7")
+                  : isMatchingInformation
+                    ? "h-8 px-3 pr-8 text-sm"
+                    : isMatchingFeatures
+                      ? "h-8 px-3 pr-8 text-sm"
+                      : "h-9 px-4 pr-10 text-sm",
                 theme === "light"
                   ? "focus:border-[#2f436f]"
                   : "focus:border-primary/45"
@@ -3773,7 +4166,8 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             onChange={(event) => persistAnswer(question.id, event.target.value)}
             placeholder=""
             className={cn(
-              "h-10 w-full rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none",
+              "w-full rounded-md border-border bg-card px-2 font-medium shadow-none",
+              inlineRowControlClassName,
               isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
               isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
               inputFocusClass
@@ -3904,7 +4298,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
             onClick={applyHighlight}
             title="Highlight selected text"
             aria-label="Highlight selected text"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-300/85 text-slate-900 transition hover:bg-amber-300 dark:bg-[#5b4618]/70 dark:text-[#f2d28c] dark:hover:bg-[#6a531d]/78"
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-full transition",
+              theme === "dark"
+                ? "bg-[#facc15] text-slate-950 hover:bg-[#fde047]"
+                : "bg-[#fde047] text-slate-900 hover:bg-[#facc15]"
+            )}
           >
             <Highlighter className="h-4 w-4" />
           </button>
@@ -3930,8 +4329,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       ) : null}
 
       {activeDialog ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-[340px] overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 duration-300">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={dismissActiveDialogFromBackdrop}
+        >
+          <div
+            className="relative w-full max-w-[340px] overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 duration-300"
+            onClick={(event) => event.stopPropagation()}
+          >
             
             <div className={cn(
               "absolute top-0 left-0 right-0 h-1",
@@ -3988,7 +4393,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     <Button
                       type="button"
                       className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
-                      onClick={() => setActiveDialog(null)}
+                      onClick={() => updateActiveDialog(null)}
                     >
                       Go back to test
                     </Button>
@@ -4011,7 +4416,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         type="button"
                         className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
                         onClick={() => {
-                          setActiveDialog(null);
+                          updateActiveDialog(null);
                           setFullscreenDialogStage(null);
                         }}
                       >
@@ -4050,7 +4455,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     <Button
                       type="button"
                       className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
-                      onClick={() => setActiveDialog(null)}
+                      onClick={() => updateActiveDialog(null)}
                     >
                       Stay in test
                     </Button>
@@ -4071,8 +4476,14 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       ) : null}
 
       {showGuestLoginModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-auto">
-          <div className="relative w-full max-w-[340px] overflow-hidden rounded-[1.5rem] border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-400">
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-auto"
+          onClick={() => setShowGuestLoginModal(false)}
+        >
+          <div
+            className="relative w-full max-w-[340px] overflow-hidden rounded-[1.5rem] border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-400"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="absolute top-0 left-0 right-0 h-1 bg-orange-500" />
             
             <div className="p-6 space-y-6">
@@ -4122,7 +4533,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              onClick={() => setActiveDialog("leave")}
+              onClick={() => updateActiveDialog("leave")}
               className="flex h-10 items-center rounded-md transition hover:opacity-90"
               aria-label="Leave test"
               title="Leave test"
@@ -4436,11 +4847,6 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     ) : null}
                     {renderMatchingHeadingDropArea(paragraph)}
                     <p
-                      ref={(node) => {
-                        textBlockRefs.current[passageBlockKey] = node;
-                      }}
-                      data-highlight-text
-                      onMouseUp={(event) => handleTextBlockMouseUp(passageBlockKey, event)}
                       className={cn(
                         "select-text font-sans text-foreground",
                         paragraphStyle.center && "text-center",
@@ -4457,7 +4863,15 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                           {paragraph.label}
                         </span>
                       ) : null}
-                      {renderHighlightedText(passageBlockKey, paragraphStyle.text)}
+                      <span
+                        ref={(node) => {
+                          textBlockRefs.current[passageBlockKey] = node;
+                        }}
+                        data-highlight-text
+                        onMouseUp={(event) => handleTextBlockMouseUp(passageBlockKey, event)}
+                      >
+                        {renderHighlightedText(passageBlockKey, paragraphStyle.text)}
+                      </span>
                     </p>
                   </div>
                 );
@@ -4532,16 +4946,29 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     <p className="text-base font-black tracking-tight text-foreground">
                       {questionRangeLabelForGroup(group)}
                     </p>
-                    <div
-                      ref={(node) => {
-                        textBlockRefs.current[`group-instruction-${group.id}`] = node;
-                      }}
-                      data-highlight-text
-                      onMouseUp={(event) => handleTextBlockMouseUp(`group-instruction-${group.id}`, event)}
-                      className="mt-2 whitespace-pre-wrap select-text text-[14px] font-medium leading-6 text-foreground md:text-[15px]"
-                      style={{ fontSize: `${Math.max(bodyFontSize - 1, 14)}px`, lineHeight: 1.55 }}
-                    >
-                      {renderInstructionText(`group-instruction-${group.id}`, group.instruction)}
+                    <div className="mt-2 whitespace-pre-wrap text-[14px] font-medium leading-6 text-foreground md:text-[15px]">
+                      {(() => {
+                        const instructionBlockKey = `group-instruction-${group.id}`;
+                        const binaryLayout = parseBinaryInstructionLayout(softenInstructionText(group.instruction));
+
+                        if (binaryLayout) {
+                          return renderInstructionText(instructionBlockKey, group.instruction);
+                        }
+
+                        return (
+                          <div
+                            ref={(node) => {
+                              textBlockRefs.current[instructionBlockKey] = node;
+                            }}
+                            data-highlight-text
+                            onMouseUp={(event) => handleTextBlockMouseUp(instructionBlockKey, event)}
+                            className="select-text"
+                            style={{ fontSize: `${Math.max(bodyFontSize - 1, 14)}px`, lineHeight: 1.55 }}
+                          >
+                            {renderHighlightedText(instructionBlockKey, softenInstructionText(group.instruction))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -4645,7 +5072,7 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                         }}
                         className={cn(
                           "min-w-0 cursor-pointer px-3 py-2 transition",
-                          active ? "flex-[2.2]" : "flex-1",
+                          active && showPassageQuestionNav ? "flex-[2.2]" : "flex-1",
                           active
                             ? completed
                               ? "bg-emerald-500/10 text-foreground"

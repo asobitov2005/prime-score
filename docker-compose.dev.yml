@@ -18,6 +18,12 @@ services:
       PYTHONUNBUFFERED: "1"
       RUN_DB_MIGRATIONS: "1"
       RUN_APP_SEED: "1"
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_GENAI_USE_VERTEXAI: "True"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-gen-lang-client-0991942712}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_CLOUD_LIVE_LOCATION: ${GOOGLE_CLOUD_LIVE_LOCATION:-us-central1}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/google-vertex-credentials.json
     volumes:
       - ./backend:/app
 
@@ -39,6 +45,12 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       RUN_APP_BOOTSTRAP: "0"
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_GENAI_USE_VERTEXAI: "True"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-gen-lang-client-0991942712}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_CLOUD_LIVE_LOCATION: ${GOOGLE_CLOUD_LIVE_LOCATION:-us-central1}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/google-vertex-credentials.json
     volumes:
       - ./backend:/app
 
@@ -59,6 +71,12 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       RUN_APP_BOOTSTRAP: "0"
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_GENAI_USE_VERTEXAI: "True"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-gen-lang-client-0991942712}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_CLOUD_LIVE_LOCATION: ${GOOGLE_CLOUD_LIVE_LOCATION:-us-central1}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/google-vertex-credentials.json
     volumes:
       - ./backend:/app
 
@@ -70,6 +88,12 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       RUN_APP_BOOTSTRAP: "0"
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_GENAI_USE_VERTEXAI: "True"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-gen-lang-client-0991942712}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_CLOUD_LIVE_LOCATION: ${GOOGLE_CLOUD_LIVE_LOCATION:-us-central1}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/google-vertex-credentials.json
     volumes:
       - ./backend:/app
 
@@ -82,6 +106,12 @@ services:
       PYTHONUNBUFFERED: "1"
       RUN_APP_BOOTSTRAP: "0"
       TELEGRAM_SESSION_PATH: /var/lib/primescore/telegram/payment_detector
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_GENAI_USE_VERTEXAI: "True"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-gen-lang-client-0991942712}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_CLOUD_LIVE_LOCATION: ${GOOGLE_CLOUD_LIVE_LOCATION:-us-central1}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/google-vertex-credentials.json
     volumes:
       - ./backend:/app
       - telegram_session_data:/var/lib/primescore/telegram

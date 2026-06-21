@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Notice, SectionHeader, Select, Textarea } from "@/components/ui";
+import { AdminAiSettingsLoadingSkeleton } from "@/components/loading-skeletons";
 import { adminApi } from "@/lib/api";
 import type {
   AdminAiProviderConfig,
@@ -66,6 +67,14 @@ const USE_CASE_LABELS: Record<AiUseCase, { title: string; description: string }>
   audio_transcription: {
     title: "Audio transcription",
     description: "Listening audio transcript generation.",
+  },
+  speaking_examiner: {
+    title: "Speaking AI examiner",
+    description: "Gemini Live model used for IELTS Speaking sessions and per-part examiner turns.",
+  },
+  speaking_grader: {
+    title: "Speaking grader",
+    description: "Post-session scoring model and prompt settings used after the full Speaking conversation is complete.",
   },
 };
 
@@ -137,12 +146,97 @@ const PROMPT_LABELS: Record<WritingPromptKey, { title: string; description: stri
   },
 };
 
+const SPEAKING_EXAMINER_PROMPT_FIELDS = [
+  {
+    label: "Base system instruction",
+    description: "Shared instruction included before every Speaking mode.",
+    path: ["system_instruction"],
+    rows: 6,
+  },
+  {
+    label: "Strict IELTS exam mode",
+    description: "Examiner behavior for the formal IELTS flow.",
+    path: ["mode_instructions", "strict_exam"],
+    rows: 6,
+  },
+  {
+    label: "Free talk mode",
+    description: "Open conversation behavior outside the IELTS structure.",
+    path: ["mode_instructions", "free_talk"],
+    rows: 6,
+  },
+  {
+    label: "Uzbek roast mode",
+    description: "Harsh Uzbek coach behavior. Keep abuse focused on effort, answer quality, and exam performance.",
+    path: ["mode_instructions", "uzbek_roast"],
+    rows: 7,
+  },
+  {
+    label: "Part 1 instruction",
+    description: "Extra instruction for familiar-topic questions.",
+    path: ["part_instructions", "part_1"],
+    rows: 3,
+  },
+  {
+    label: "Part 2 instruction",
+    description: "Extra instruction for cue-card long turn sessions.",
+    path: ["part_instructions", "part_2"],
+    rows: 3,
+  },
+  {
+    label: "Part 3 instruction",
+    description: "Extra instruction for abstract follow-up questions.",
+    path: ["part_instructions", "part_3"],
+    rows: 3,
+  },
+] as const;
+
 type ProviderDraft = {
   label: string;
   apiKey: string;
   baseUrl: string;
   isEnabled: boolean;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseSettingsDraft(draft: string | undefined, fallback: Record<string, unknown>): Record<string, unknown> {
+  if (!draft) return fallback;
+  try {
+    const parsed = JSON.parse(draft) as unknown;
+    return isRecord(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function cloneSettings(value: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+function readNestedString(settings: Record<string, unknown>, path: readonly string[]): string {
+  let current: unknown = settings;
+  for (const segment of path) {
+    if (!isRecord(current)) return "";
+    current = current[segment];
+  }
+  return typeof current === "string" ? current : "";
+}
+
+function writeNestedString(settings: Record<string, unknown>, path: readonly string[], value: string): Record<string, unknown> {
+  const next = cloneSettings(settings);
+  let current: Record<string, unknown> = next;
+  for (const segment of path.slice(0, -1)) {
+    if (!isRecord(current[segment])) {
+      current[segment] = {};
+    }
+    current = current[segment] as Record<string, unknown>;
+  }
+  current[path[path.length - 1]] = value;
+  return next;
+}
 
 function createProviderDraft(provider: AdminAiProviderConfig): ProviderDraft {
   return {
@@ -165,6 +259,7 @@ export function AiSettingsDashboard() {
   const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderDraft>>({});
   const [modelsByProvider, setModelsByProvider] = useState<Partial<Record<AiProvider, AdminAiProviderModel[]>>>({});
   const [useCases, setUseCases] = useState<AdminAiUseCaseBinding[]>([]);
+  const [useCaseSettingsDrafts, setUseCaseSettingsDrafts] = useState<Partial<Record<AiUseCase, string>>>({});
   const [profiles, setProfiles] = useState<AdminWritingPromptProfile[]>([]);
   const [rubrics, setRubrics] = useState<AdminWritingRubric[]>([]);
   const [anchorSets, setAnchorSets] = useState<AdminWritingAnchorSet[]>([]);
@@ -235,6 +330,10 @@ export function AiSettingsDashboard() {
       setProviders(nextProviders);
       setProviderDrafts(Object.fromEntries(nextProviders.map((provider) => [provider.provider, createProviderDraft(provider)])));
       setUseCases(nextUseCases);
+      setUseCaseSettingsDrafts(Object.fromEntries(nextUseCases.map((binding) => [
+        binding.useCase,
+        JSON.stringify(binding.settingsJson ?? {}, null, 2),
+      ])) as Partial<Record<AiUseCase, string>>);
       setProfiles(nextProfiles);
       setRubrics(nextRubrics);
       setAnchorSets(nextAnchorSets);
@@ -328,17 +427,89 @@ export function AiSettingsDashboard() {
     }
   }
 
-  async function handleUseCaseChange(useCase: AiUseCase, providerConfigId: string, providerModelId: string) {
+  async function handleUseCaseChange(
+    useCase: AiUseCase,
+    providerConfigId: string,
+    providerModelId: string,
+    settingsJson?: Record<string, unknown>,
+  ) {
     setBusyKey(`usecase-${useCase}`);
     try {
-      const nextBinding = await adminApi.updateAiUseCase(useCase, { providerConfigId, providerModelId });
+      const nextBinding = await adminApi.updateAiUseCase(useCase, { providerConfigId, providerModelId, settingsJson });
       setUseCases((current) => current.map((item) => (item.useCase === useCase ? nextBinding : item)));
+      setUseCaseSettingsDrafts((current) => ({
+        ...current,
+        [useCase]: JSON.stringify(nextBinding.settingsJson ?? {}, null, 2),
+      }));
       setNotice({ tone: "success", title: "Use-case updated", description: `${useCase} now points to ${nextBinding.modelDisplayName ?? "the selected model"}.` });
     } catch (error) {
       setNotice({ tone: "warning", title: "Use-case update failed", description: error instanceof Error ? error.message : "Use-case update failed." });
     } finally {
       setBusyKey(null);
     }
+  }
+
+  async function handleUseCaseSettingsSave(binding: AdminAiUseCaseBinding) {
+    if (!binding.providerConfigId || !binding.providerModelId) return;
+    setBusyKey(`usecase-settings-${binding.useCase}`);
+    try {
+      const settingsJson = JSON.parse(useCaseSettingsDrafts[binding.useCase] ?? "{}") as Record<string, unknown>;
+      const nextBinding = await adminApi.updateAiUseCase(binding.useCase, {
+        providerConfigId: binding.providerConfigId,
+        providerModelId: binding.providerModelId,
+        settingsJson,
+      });
+      setUseCases((current) => current.map((item) => (item.useCase === binding.useCase ? nextBinding : item)));
+      setUseCaseSettingsDrafts((current) => ({
+        ...current,
+        [binding.useCase]: JSON.stringify(nextBinding.settingsJson ?? {}, null, 2),
+      }));
+      setNotice({ tone: "success", title: "Settings saved", description: `${USE_CASE_LABELS[binding.useCase].title} settings were updated.` });
+    } catch (error) {
+      setNotice({ tone: "warning", title: "Settings save failed", description: error instanceof Error ? error.message : "Settings JSON is invalid." });
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  function updateSpeakingPromptDraft(binding: AdminAiUseCaseBinding, path: readonly string[], value: string) {
+    const currentSettings = parseSettingsDraft(useCaseSettingsDrafts[binding.useCase], binding.settingsJson ?? {});
+    const nextSettings = writeNestedString(currentSettings, path, value);
+    setUseCaseSettingsDrafts((current) => ({
+      ...current,
+      [binding.useCase]: JSON.stringify(nextSettings, null, 2),
+    }));
+  }
+
+  function renderSpeakingExaminerPromptEditor(binding: AdminAiUseCaseBinding) {
+    const settings = parseSettingsDraft(useCaseSettingsDrafts[binding.useCase], binding.settingsJson ?? {});
+
+    return (
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-semibold text-foreground">Speaking examiner prompts</p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            These fields control the live Gemini examiner for strict exam, free talk, Uzbek roast, and part-specific behavior.
+          </p>
+        </div>
+        <div className="mt-4 grid gap-4">
+          {SPEAKING_EXAMINER_PROMPT_FIELDS.map((field) => (
+            <div key={field.path.join(".")} className="space-y-2">
+              <div>
+                <Label>{field.label}</Label>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{field.description}</p>
+              </div>
+              <Textarea
+                value={readNestedString(settings, field.path)}
+                rows={field.rows}
+                className="font-mono text-xs"
+                onChange={(event) => updateSpeakingPromptDraft(binding, field.path, event.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   async function handleCreateProfile() {
@@ -435,7 +606,7 @@ export function AiSettingsDashboard() {
               const nextProvider = providers.find((item) => item.id === event.target.value);
               const nextModel = nextProvider ? (modelsByProvider[nextProvider.provider] ?? [])[0] : null;
               if (nextProvider && nextModel) {
-                void handleUseCaseChange(binding.useCase, nextProvider.id, nextModel.id);
+                void handleUseCaseChange(binding.useCase, nextProvider.id, nextModel.id, binding.settingsJson);
               }
             }}>
               {providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -443,17 +614,46 @@ export function AiSettingsDashboard() {
           </div>
           <div className="space-y-2">
             <Label>Model</Label>
-            <Select value={modelId} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value)}>
+            <Select value={modelId} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value, binding.settingsJson)}>
               {models.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
             </Select>
           </div>
         </div>
+        {binding.useCase.startsWith("speaking_") ? (
+          <div className="mt-4 space-y-2 border-t border-border pt-4">
+            {binding.useCase === "speaking_examiner" ? renderSpeakingExaminerPromptEditor(binding) : null}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <Label>Prompt, cache, and budget settings JSON</Label>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Keep long reusable instructions here so runtime can cache stable prompts and avoid unnecessary repeated model calls.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => void handleUseCaseSettingsSave(binding)}
+                disabled={busyKey !== null || !binding.providerConfigId || !binding.providerModelId}
+              >
+                Save Settings
+              </Button>
+            </div>
+            <Textarea
+              value={useCaseSettingsDrafts[binding.useCase] ?? JSON.stringify(binding.settingsJson ?? {}, null, 2)}
+              rows={binding.useCase === "speaking_grader" ? 10 : 8}
+              className="font-mono text-xs"
+              onChange={(event) => setUseCaseSettingsDrafts((current) => ({
+                ...current,
+                [binding.useCase]: event.target.value,
+              }))}
+            />
+          </div>
+        ) : null}
       </div>
     );
   }
 
   if (loading) {
-    return <div className="space-y-4"><div className="h-12 rounded-xl bg-muted animate-pulse" /><div className="h-80 rounded-xl bg-muted animate-pulse" /></div>;
+    return <AdminAiSettingsLoadingSkeleton />;
   }
 
   return (
@@ -549,8 +749,8 @@ export function AiSettingsDashboard() {
       {otherUseCases.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Other Model Bindings</CardTitle>
-            <CardDescription>Non-writing runtime bindings. Admin chat is hidden because the workspace chat was removed.</CardDescription>
+            <CardTitle>Runtime Model Bindings</CardTitle>
+            <CardDescription>Speaking, transcription, and other non-writing runtime roles. Admin chat is hidden because the workspace chat was removed.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {otherUseCases.map(renderUseCaseBinding)}

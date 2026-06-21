@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import type { AttemptMode, TestCatalogItem, TestScope } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { emitNavigationStart } from "@/lib/navigation-transition";
+import { buildExamStartHref } from "@/lib/exam-start";
 
 interface TestStartPageProps {
   test: TestCatalogItem;
@@ -29,36 +30,17 @@ export function TestStartPage({ test }: TestStartPageProps) {
   const effectiveScope = isFullTest ? scope : "section";
   const effectiveMode = effectiveScope === "section" ? "practice" : mode;
 
-  async function startAttempt() {
-    try {
-      setIsSubmitting(true);
-      const response = await fetch("/internal-api/attempts/start", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          testId: test.id,
-          scope: effectiveScope,
-          sectionId: effectiveScope === "section" ? sectionId : undefined,
-          mode: effectiveMode,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Attempt start failed.");
-      }
-
-      const result = (await response.json()) as { attemptId: string };
-      const resumeToken = Date.now();
-      const href = test.type === "reading"
-        ? `/exam-preview/reading?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`
-        : `/exam-preview/listening?attemptId=${result.attemptId}&mode=${effectiveMode}&resume=${resumeToken}`;
-      emitNavigationStart(href);
-      router.push(href);
-    } finally {
-      setIsSubmitting(false);
-    }
+  function startAttempt() {
+    setIsSubmitting(true);
+    const href = buildExamStartHref({
+      testType: test.type,
+      testId: test.id,
+      scope: effectiveScope,
+      mode: effectiveMode,
+      sectionId: effectiveScope === "section" ? sectionId : undefined,
+    });
+    emitNavigationStart(href);
+    router.push(href);
   }
 
   return (
@@ -159,7 +141,7 @@ export function TestStartPage({ test }: TestStartPageProps) {
             >
               Back to detail
             </Button>
-            <Button disabled={isSubmitting} onClick={() => void startAttempt()} className="inline-flex items-center gap-2">
+            <Button disabled={isSubmitting} onClick={() => startAttempt()} className="inline-flex items-center gap-2">
               {isSubmitting ? "Starting..." : "Open attempt"}
               <ArrowRight className="h-4 w-4" />
             </Button>

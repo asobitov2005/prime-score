@@ -1,45 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Award, BookMarked, BookOpenText, ChevronDown, CreditCard, FileStack, FileText, Flame, Gauge, History, Medal, Menu, Newspaper, PenTool, PencilRuler, Podcast, Sparkles, Trophy, X, Settings2 } from "lucide-react";
+import { Award, BarChart3, BookMarked, BookOpenText, CreditCard, Flame, Gauge, History, Menu, PenTool, Podcast, Send, Sparkles, Trophy, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { createApiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useRouter } from "next/navigation";
-import { AppRouteLoadingFrame } from "@/components/layout/app-loading-placeholder";
+import { AppLoadingPlaceholder, AppRouteLoadingFrame, ExamRouteLoadingFrame } from "@/components/layout/app-loading-placeholder";
 import { trackNavigationClick, trackUiInteraction } from "@/lib/analytics";
-import { consumePendingPublicRedirect } from "@/lib/navigation-transition";
+import { consumePendingPublicRedirect, emitNavigationStart, PRIME_NAVIGATION_START_EVENT } from "@/lib/navigation-transition";
 import { SidebarPremiumCard } from "@/components/layout/sidebar-premium-card";
+import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import type { XpSummary } from "@/lib/types";
 
 interface AppShellProps {
   children: ReactNode;
 }
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge },
-  { href: "/tests", label: "Practice Tests", icon: BookOpenText },
-  { href: "/ielts-mock-test-online", label: "IELTS Mock", icon: FileText, soon: true },
-  { href: "/writing", label: "Writing", icon: PenTool },
-  { href: "/history", label: "History", icon: History },
-  { href: "/leaderboard", label: "Leaderboard", icon: Medal },
-  { href: "/achievements", label: "Achievements", icon: Award },
-  { href: "/subscription", label: "Subscription", icon: CreditCard },
-  { href: "/settings", label: "Settings", icon: Settings2 },
-  { href: "/speaking", label: "Speaking", icon: Podcast, soon: true },
-  { href: "/articles", label: "Articles", icon: Newspaper, soon: true }
-] as const;
-
-const testSourceItems = [
-  { href: "/tests?source=cambridge", label: "Cambridge Official", id: "cambridge", icon: BookMarked },
-  { href: "/tests?source=real_exam", label: "Recent Exam Papers", id: "real_exam", icon: FileStack },
-  { href: "/tests?source=custom", label: "Exam Practice Tests", id: "custom", icon: PencilRuler },
-] as const;
 
 function formatCompactNumber(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -50,15 +31,35 @@ function formatCompactNumber(value: number): string {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const { sidebar, toggleSidebar } = useUIStore();
-  const { isAuthenticated, hasHydrated } = useAuthStore();
+  const { sidebar } = useUIStore();
+  const { isAuthenticated, hasHydrated, isPremium } = useAuthStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isTestsSubmenuOpen, setIsTestsSubmenuOpen] = useState(false);
   const [xpSummary, setXpSummary] = useState<XpSummary | null>(null);
+  const [pendingNavigationHref, setPendingNavigationHref] = useState<string | null>(null);
+  const [showAnalyticsPremiumModal, setShowAnalyticsPremiumModal] = useState(false);
   const isPublicTestsRoute = pathname === "/tests" || pathname.startsWith("/tests/");
-  const activeSource = searchParams.get("source") ?? "";
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
+  const pendingNavigationPathname = pendingNavigationHref
+    ? new URL(pendingNavigationHref, "https://primescore.local").pathname
+    : null;
+  const isPendingExamPreview = Boolean(pendingNavigationPathname?.startsWith("/exam-preview/"));
+
+  const navItems = [
+    { href: "/dashboard", label: "Dashboard", icon: Gauge },
+    { href: "/tests", label: "Practice Tests", icon: BookOpenText },
+    { href: "/writing", label: "Writing Feedback", icon: PenTool },
+    { href: "/speaking", label: "Speaking", icon: Podcast, activePath: "/speaking" },
+    { href: "/history", label: "History", icon: History },
+    { href: "/bookmarks", label: "Bookmarks", icon: BookMarked },
+    { href: "/analytics", label: "Analytics", icon: BarChart3, badge: "Premium" },
+    { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
+    { href: "/achievements", label: "Achievements", icon: Award },
+    { href: "/subscription", label: "Subscription", icon: CreditCard },
+    { href: "/settings", label: "Settings", icon: Settings2 },
+    { href: "https://t.me/PrimeScoreSupport", label: "Support", subtitle: "@PrimeScoreSupport", icon: Send, external: true, iconClassName: "text-sky-500 dark:text-sky-400" },
+  ] as const;
 
   useEffect(() => {
     if (!hasHydrated) {
@@ -72,6 +73,39 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    setPendingNavigationHref(null);
+  }, [pathname]);
+
+  useEffect(() => {
+    const handleNavigationStart = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail?.href !== "string") {
+        return;
+      }
+
+      const targetUrl = new URL(event.detail.href, window.location.href);
+      const targetHref = `${targetUrl.pathname}${targetUrl.search}`;
+      const currentHref = `${window.location.pathname}${window.location.search}`;
+      if (targetUrl.origin !== window.location.origin || targetHref === currentHref) {
+        return;
+      }
+
+      setPendingNavigationHref(targetHref);
+    };
+
+    window.addEventListener(PRIME_NAVIGATION_START_EVENT, handleNavigationStart);
+    return () => window.removeEventListener(PRIME_NAVIGATION_START_EVENT, handleNavigationStart);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingNavigationHref) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setPendingNavigationHref(null), 10_000);
+    return () => window.clearTimeout(timeout);
+  }, [pendingNavigationHref]);
 
   useEffect(() => {
     if (pathname.startsWith("/tests")) {
@@ -138,152 +172,167 @@ export function AppShell({ children }: AppShellProps) {
     return <AppRouteLoadingFrame sidebar={sidebar} />;
   }
 
+  const SidebarBrand = () => (
+    <Link href="/" className="flex h-16 -translate-y-0.5 items-center gap-2 rounded-xl px-1">
+      <span className="relative flex h-7 items-center">
+        <img src="/logo-light.svg" alt="PrimeScore" className="h-7 w-auto object-contain dark:hidden" />
+        <img src="/logo.svg" alt="PrimeScore" className="hidden h-7 w-auto object-contain dark:block" />
+      </span>
+      <span className="flex h-8 items-center" aria-hidden="true">
+        <img src="/exam-logo-lightmode.svg" alt="" className="h-full w-auto object-contain dark:hidden" />
+        <img src="/exam-logo-darkmode.svg" alt="" className="hidden h-full w-auto object-contain dark:block" />
+      </span>
+    </Link>
+  );
+
   const SidebarNavigation = () => (
-    <Card className="p-3 border-border/50 shadow-sm bg-card/60 backdrop-blur-md rounded-xl">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3 pl-2">Main Menu</p>
-      <nav className="space-y-0.5">
+    <div className="bg-white dark:bg-slate-950">
+      <nav className="space-y-1">
         {navItems.map((item) => {
-          const active = pathname.startsWith(item.href);
+          const isExternal = "external" in item && item.external;
+          const disabled = Boolean(!isExternal && "disabled" in item && item.disabled);
+          const requiresPremium = !isExternal && item.href === "/analytics";
+          const activePath = !isExternal && "activePath" in item ? item.activePath : item.href;
+          const activeSourcePath = pendingNavigationPathname ?? pathname;
+          const active = !isExternal && !disabled && (
+            activeSourcePath === activePath
+            || activeSourcePath.startsWith(`${activePath}/`)
+          );
           const Icon = item.icon;
-          const isSoonItem = "soon" in item && item.soon;
-
-          return (
-            <div key={item.href} className="space-y-1">
-              <div className="relative">
-                {isSoonItem ? (
-                  <div
-                    aria-disabled="true"
-                    className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 pr-11 text-sm font-semibold text-muted-foreground/65"
-                  >
-                    <Icon className="h-4 w-4 opacity-60" />
-                    <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                      <span>{item.label}</span>
-                      <span className="rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/75">
-                        Soon
-                      </span>
-                    </span>
-                  </div>
-                ) : (
-                  <Link
-                    href={item.href}
-                    onClick={() => {
-                      trackNavigationClick({
-                        label: item.label,
-                        href: item.href,
-                        location: "app_sidebar",
-                        authState: isAuthenticated ? "authenticated" : "guest",
-                      });
-                      if (item.href === "/tests") {
-                        setIsTestsSubmenuOpen(true);
-                      }
-                    }}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-lg px-3 py-2 pr-11 text-sm font-semibold transition-all duration-200",
-                      active
-                        ? "bg-primary text-background shadow-sm"
-                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-95"
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "h-4 w-4",
-                        active ? "opacity-100" : "opacity-70"
-                      )}
-                    />
-                    <span className="flex min-w-0 flex-1 items-center gap-2">
-                      <span>{item.label}</span>
-                      {item.href === "/subscription" ? (
-                        <span
-                          className={cn(
-                            "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none",
-                            active ? "bg-red-500 text-white" : "bg-red-500/90 text-white"
-                          )}
-                        >
-                          1
-                        </span>
-                      ) : null}
-                    </span>
-                  </Link>
-                )}
-
-                {item.href === "/tests" && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      trackUiInteraction({
-                        action: "tests_submenu_toggle",
-                        component: "app_sidebar",
-                        value: !isTestsSubmenuOpen,
-                      });
-                      setIsTestsSubmenuOpen((current) => !current);
-                    }}
-                    className={cn(
-                      "absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-                      active
-                        ? "text-background hover:bg-background/15"
-                        : "text-foreground/80 hover:bg-muted/70 hover:text-foreground"
-                    )}
-                    aria-label="Toggle test sources"
-                    aria-expanded={isTestsSubmenuOpen}
-                  >
-                    <ChevronDown className={cn("h-[18px] w-[18px] stroke-[2.4] transition-transform", isTestsSubmenuOpen && "rotate-180")} />
-                  </button>
-                )}
-              </div>
-
-              {item.href === "/tests" && (
-                <div
+          const itemClassName = cn(
+            "flex items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors",
+            "subtitle" in item ? "min-h-12 py-2" : "min-h-10 py-2.5",
+            disabled
+              ? "cursor-not-allowed text-slate-400 opacity-55 grayscale dark:text-slate-600"
+              : active
+              ? "bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100"
+          );
+          const iconClassName = cn(
+            "h-4 w-4",
+            disabled
+              ? "text-slate-400 dark:text-slate-600"
+              : active
+              ? "text-orange-600 dark:text-orange-300"
+              : "iconClassName" in item
+                ? item.iconClassName
+                : "text-slate-400 dark:text-slate-500"
+          );
+          const content = (
+            <>
+              <Icon className={iconClassName} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{item.label}</span>
+                {"subtitle" in item ? (
+                  <span className="mt-0.5 block truncate text-[11px] font-medium leading-none text-slate-400 dark:text-slate-500">
+                    {item.subtitle}
+                  </span>
+                ) : null}
+              </span>
+              {"badge" in item ? (
+                <span
                   className={cn(
-                    "grid pl-5 transition-all duration-300 ease-out",
-                    isTestsSubmenuOpen ? "mt-1 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                    "shrink-0 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200",
+                    disabled && "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400",
                   )}
                 >
-                  <div className="relative space-y-1 overflow-hidden pl-3 before:absolute before:bottom-1 before:left-0 before:top-1 before:w-px before:rounded-full before:bg-slate-300 dark:before:bg-slate-600">
-                    {testSourceItems.map((sourceItem) => {
-                      const isSourceActive = active && activeSource === sourceItem.id;
-                      const SourceIcon = sourceItem.icon;
+                  {item.badge}
+                </span>
+              ) : null}
+            </>
+          );
 
-                      return (
-                        <Link
-                          key={sourceItem.id}
-                          href={sourceItem.href}
-                          onClick={() => {
-                            trackNavigationClick({
-                              label: sourceItem.label,
-                              href: sourceItem.href,
-                              location: "app_sidebar_test_sources",
-                              authState: isAuthenticated ? "authenticated" : "guest",
-                            });
-                          }}
-                          className={cn(
-                            "relative flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition-all before:absolute before:-left-3 before:top-1/2 before:h-px before:w-2 before:-translate-y-1/2 before:rounded-full before:bg-slate-300 dark:before:bg-slate-600",
-                            isSourceActive
-                              ? "border border-primary/25 bg-primary/10 text-primary shadow-sm"
-                              : "text-muted-foreground/85 hover:bg-muted/60 hover:text-foreground"
-                          )}
-                        >
-                          {isSourceActive && <span className="absolute inset-y-1.5 left-0 w-1 rounded-full bg-primary/80" />}
-                          <span
-                            className={cn(
-                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                              isSourceActive ? "bg-primary/15 text-primary" : "bg-muted/80"
-                            )}
-                          >
-                            <SourceIcon className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="whitespace-nowrap text-[13px]">{sourceItem.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+          if (isExternal) {
+            return (
+              <a
+                key={`${item.label}-${item.href}`}
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => {
+                  trackNavigationClick({
+                    label: item.label,
+                    href: item.href,
+                    location: "app_sidebar",
+                    authState: isAuthenticated ? "authenticated" : "guest",
+                  });
+                }}
+                className={itemClassName}
+              >
+                {content}
+              </a>
+            );
+          }
+
+          if (disabled) {
+            return (
+              <span
+                key={`${item.label}-${item.href}`}
+                aria-disabled="true"
+                title="Unavailable"
+                className={itemClassName}
+              >
+                {content}
+              </span>
+            );
+          }
+
+          if (requiresPremium) {
+            return (
+              <button
+                key={`${item.label}-${item.href}`}
+                type="button"
+                onClick={() => {
+                  trackNavigationClick({
+                    label: item.label,
+                    href: item.href,
+                    location: "app_sidebar",
+                    authState: isAuthenticated ? "authenticated" : "guest",
+                  });
+                  if (!isPremium) {
+                    setShowAnalyticsPremiumModal(true);
+                    setIsMobileOpen(false);
+                    return;
+                  }
+                  setIsMobileOpen(false);
+                  emitNavigationStart(item.href);
+                  router.push(item.href);
+                }}
+                className={cn(itemClassName, "w-full text-left")}
+              >
+                {content}
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={`${item.label}-${item.href}`}
+              href={item.href}
+              onClick={(event) => {
+                trackNavigationClick({
+                  label: item.label,
+                  href: item.href,
+                  location: "app_sidebar",
+                  authState: isAuthenticated ? "authenticated" : "guest",
+                });
+                if (requiresPremium && !isPremium) {
+                  event.preventDefault();
+                  setShowAnalyticsPremiumModal(true);
+                  setIsMobileOpen(false);
+                  return;
+                }
+                setIsMobileOpen(false);
+                emitNavigationStart(item.href);
+              }}
+              className={itemClassName}
+            >
+              {content}
+            </Link>
           );
         })}
       </nav>
-    </Card>
+    </div>
   );
 
   const SidebarXpCard = () => {
@@ -302,7 +351,7 @@ export function AppShell({ children }: AppShellProps) {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5 text-sky-500" />
-              PrimeScore XP
+              {"PrimeScore XP"}
             </div>
             <p className="mt-1 text-xl font-black tracking-tight text-foreground">
               {formatCompactNumber(xpSummary.totalXp)}
@@ -314,7 +363,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold">
           <div className="rounded-lg border border-border/50 bg-background/70 px-2.5 py-2">
-            <span className="text-muted-foreground">Level</span>
+            <span className="text-muted-foreground">{"Level"}</span>
             <span className="ml-1 text-foreground">{xpSummary.level}</span>
           </div>
           <div className="rounded-lg border border-border/50 bg-background/70 px-2.5 py-2">
@@ -342,7 +391,7 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   return (
-    <div className="flex-1 w-full max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-6 md:pt-4 md:pb-8 flex flex-col lg:flex-row gap-5 md:gap-6 items-start relative">
+    <div className="relative flex w-full flex-1 flex-col items-start bg-[#F8FAFC] px-4 pb-6 pt-3 transition-colors sm:px-6 md:pb-8 md:pt-4 lg:flex-row lg:gap-0 lg:px-0 lg:py-0 dark:bg-slate-950">
       {/* Mobile Sidebar Toggle Button - Floating because header is global */}
       <Button
         variant="outline"
@@ -354,7 +403,7 @@ export function AppShell({ children }: AppShellProps) {
           });
           setIsMobileOpen(true);
         }}
-        className="lg:hidden fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-primary text-background shadow-xl border-none hover:bg-primary/90 active:scale-95"
+        className="lg:hidden fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-blue-600 text-white shadow-xl border-none hover:bg-blue-700 active:scale-95"
         aria-label="Open Menu"
       >
         <Menu className="h-6 w-6" />
@@ -368,11 +417,11 @@ export function AppShell({ children }: AppShellProps) {
       )}
 
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-[17.5rem] bg-background p-5 shadow-2xl flex flex-col gap-5 lg:hidden transition-transform duration-300 ease-out",
+        "fixed inset-y-0 left-0 z-50 w-[17.5rem] bg-white p-5 shadow-2xl flex flex-col gap-5 lg:hidden transition-transform duration-300 ease-out dark:bg-slate-950 dark:text-slate-100",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex items-center justify-between pb-2">
-          <p className="font-bold text-base text-foreground">Menu</p>
+          <SidebarBrand />
           <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(false)} className="h-8 w-8 rounded-full hover:bg-muted/50 -mr-2">
             <X className="h-4 w-4" />
           </Button>
@@ -383,18 +432,14 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <aside className={cn(
-        "hidden lg:block w-[17.5rem] shrink-0 sticky",
+        "hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block w-[16.5rem] shrink-0 border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950",
         sidebar === "collapsed" ? "lg:hidden" : "lg:block"
-      )}
-      style={{ 
-        top: "calc(var(--app-shell-sticky-top, 4.5rem) + 1rem)",
-        height: "calc(100dvh - var(--app-shell-sticky-top, 4.5rem) - 2rem)"
-      }}>
-        <div className="flex flex-col gap-4 h-full">
+      )}>
+        <div className="flex h-full flex-col gap-4 p-4">
+          <SidebarBrand />
           <div
             className={cn(
-              "flex-1 min-h-0 overscroll-contain pr-2 scroll-smooth flex flex-col gap-4",
-              isTestsSubmenuOpen ? "overflow-y-auto sidebar-scrollbar" : "overflow-y-auto no-scrollbar"
+              "flex-1 min-h-0 overscroll-contain scroll-smooth flex flex-col gap-4 overflow-y-auto no-scrollbar",
             )}
             style={{
               scrollbarGutter: "stable"
@@ -402,15 +447,35 @@ export function AppShell({ children }: AppShellProps) {
           >
             <SidebarNavigation />
           </div>
-          <div className="shrink-0 pr-4">
+          <div className="shrink-0">
             <SidebarPremiumCard />
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 w-full animate-in fade-in duration-500 ease-out">
-        {children}
+      <main className="min-w-0 flex-1 w-full animate-in fade-in duration-500 ease-out lg:ml-[16.5rem] lg:px-5 lg:py-5 xl:px-6">
+        <div className="mx-auto w-full max-w-[82rem]">
+          {isPendingExamPreview ? (
+            <ExamRouteLoadingFrame />
+          ) : pendingNavigationHref ? (
+            <AppLoadingPlaceholder
+              pathname={pendingNavigationPathname ?? undefined}
+              className="min-h-[calc(100vh-7rem)] px-0 py-0"
+            />
+          ) : (
+            children
+          )}
+        </div>
       </main>
+
+      {showAnalyticsPremiumModal ? (
+        <PremiumUpgradeModal
+          title="Analytics is Premium"
+          description="Detailed analytics and skill insights are available for Premium users."
+          subscriptionHref={subscriptionHref}
+          onClose={() => setShowAnalyticsPremiumModal(false)}
+        />
+      ) : null}
     </div>
   );
 }

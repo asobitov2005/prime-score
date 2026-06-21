@@ -256,7 +256,7 @@ class AdminGiftCodeCreateRequest(BaseModel):
     plan_id: UUID
     quantity: int = Field(default=1, ge=1, le=50)
     prefix: str | None = Field(default=None, max_length=16)
-    custom_code: str | None = Field(default=None, min_length=4, max_length=50)
+    custom_code: str | None = Field(default=None, min_length=7, max_length=50)
     start_date: datetime | None = None
     end_date: datetime | None = None
     max_uses: int = Field(default=1, ge=1, le=5000)

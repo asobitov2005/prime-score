@@ -11,6 +11,7 @@ import {
   CreditCard as PlansIcon,
   Headphones,
   MessageSquareText,
+  Mic2,
   Settings,
   PenSquare
 } from "lucide-react";
@@ -59,6 +60,12 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/writing",
         description: "Manage IELTS writing tasks and submissions",
         icon: PenSquare
+      },
+      {
+        label: "Speaking",
+        href: "/speaking",
+        description: "Manage IELTS speaking topic cards for Part 1, 2, and 3",
+        icon: Mic2
       },
       {
         label: "Writing Prompts",

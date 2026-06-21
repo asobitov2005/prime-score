@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card, CardContent, CardHeader, CardTitle, SectionHeader, buttonClassName } from "@/components/ui";
+import { AdminDetailLoadingSkeleton } from "@/components/loading-skeletons";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
@@ -261,7 +262,7 @@ export default function UserDetailPage() {
     );
   };
 
-  if (loading) return <div className="space-y-4 animate-pulse"><div className="h-8 w-48 bg-muted rounded-lg" /><div className="h-40 bg-muted rounded-xl" /></div>;
+  if (loading) return <AdminDetailLoadingSkeleton />;
   if (error || !user) return (
     <div className="space-y-4">
       <Link href="/users" className={buttonClassName({ variant: "ghost", size: "sm" })}>← Orqaga</Link>

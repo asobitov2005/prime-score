@@ -16,10 +16,11 @@ class MeProfileUpdateRequest(BaseModel):
     username: str | None = None
     avatar_url: str | None = None
     show_on_leaderboard: bool | None = None
+    language: str | None = Field(default=None, pattern="^(en|ru|uz)$")
 
 
 class MeRedeemCodeRequest(BaseModel):
-    code: str = Field(min_length=4, max_length=50)
+    code: str = Field(min_length=7, max_length=50)
 
 
 class MeGenerateGiftCodeRequest(BaseModel):
@@ -96,6 +97,7 @@ class MeActivityPointRead(BaseModel):
     reading_time_sec: int = 0
     listening_time_sec: int = 0
     writing_time_sec: int = 0
+    speaking_time_sec: int = 0
 
 
 class MeAttemptSummaryRead(BaseModel):
@@ -144,6 +146,8 @@ class MeQuestionTypeComparisonItemRead(BaseModel):
     current_accuracy: float | None = None
     delta: float | None = None
     accuracies: list[float | None] = Field(default_factory=list)
+    current_worked_count: int = 0
+    current_error_count: int = 0
 
 
 class MeQuestionTypeComparisonTestRead(BaseModel):
@@ -172,6 +176,7 @@ class MeBandProgressPointRead(BaseModel):
     reading: float | None = None
     listening: float | None = None
     writing: float | None = None
+    speaking: float | None = None
 
 
 class MePerformanceStudyTimeRead(BaseModel):
@@ -179,6 +184,7 @@ class MePerformanceStudyTimeRead(BaseModel):
     reading_time_sec: int = 0
     listening_time_sec: int = 0
     writing_time_sec: int = 0
+    speaking_time_sec: int = 0
 
 
 class MePerformanceTestCountBucketRead(BaseModel):
@@ -194,6 +200,7 @@ class MePerformanceSummaryRead(BaseModel):
     reading: MePerformanceTestCountBucketRead = Field(default_factory=MePerformanceTestCountBucketRead)
     listening: MePerformanceTestCountBucketRead = Field(default_factory=MePerformanceTestCountBucketRead)
     writing: MePerformanceTestCountBucketRead | None = Field(default=None)
+    speaking: MePerformanceTestCountBucketRead | None = Field(default=None)
 
 
 class MeAccuracyTrendPointRead(BaseModel):
@@ -245,9 +252,45 @@ class MeWritingCriteriaRead(BaseModel):
     grammatical_range_accuracy: float | None = None
 
 
+class MeSpeakingCriteriaRead(BaseModel):
+    fluency: float | None = None
+    lexical_resource: float | None = None
+    grammar: float | None = None
+    pronunciation: float | None = None
+
+
+class MeSectionAnalysisItemRead(BaseModel):
+    section_number: int
+    label: str
+    worked_count: int = 0
+    correct_count: float = 0.0
+    accuracy: float = 0.0
+    attempts_count: int = 0
+    avg_time_sec: int | None = None
+
+
+class MeSkillFocusItemRead(BaseModel):
+    key: str
+    label: str
+    value: float | None = None
+    value_label: str
+    subtext: str | None = None
+    status: str | None = None
+
+
+class MeSkillTimeAnalysisRead(BaseModel):
+    avg_time_per_test_sec: int | None = None
+    recommended_time_sec: int | None = None
+    time_management_status: str = "No timing data"
+    slowest_section: MeSectionAnalysisItemRead | None = None
+    fastest_section: MeSectionAnalysisItemRead | None = None
+    unanswered_avg_percent: float | None = None
+
+
 class MeDashboardAnalyticsRead(BaseModel):
     performance_summary: MePerformanceSummaryRead = Field(default_factory=MePerformanceSummaryRead)
     writing_criteria: MeWritingCriteriaRead | None = Field(default=None)
+    speaking_criteria: MeSpeakingCriteriaRead | None = Field(default=None)
     question_type_analysis: list[MeQuestionTypeAnalysisItemRead] = Field(default_factory=list)
     comparison: MeQuestionTypeComparisonRead = Field(default_factory=MeQuestionTypeComparisonRead)
     error_distribution: list[MeErrorDistributionItemRead] = Field(default_factory=list)
@@ -258,6 +301,9 @@ class MeDashboardAnalyticsRead(BaseModel):
     personal_bests: MePersonalBestsRead = Field(default_factory=MePersonalBestsRead)
     speed_metrics: MeSpeedMetricsRead = Field(default_factory=MeSpeedMetricsRead)
     improvement_rate: MeImprovementRateRead = Field(default_factory=MeImprovementRateRead)
+    section_analysis: list[MeSectionAnalysisItemRead] = Field(default_factory=list)
+    skill_focus: list[MeSkillFocusItemRead] = Field(default_factory=list)
+    time_analysis: MeSkillTimeAnalysisRead = Field(default_factory=MeSkillTimeAnalysisRead)
 
 
 class MeLevelProgressRead(BaseModel):

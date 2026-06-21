@@ -32,6 +32,7 @@ class DebugPrincipal(BaseModel):
     show_on_leaderboard: bool = True
     telegram_id: int | None = None
     avatar_url: str | None = None
+    language: str = "en"
     created_at: datetime | None = None
 
     @property
@@ -50,6 +51,7 @@ class AdminPrincipal(BaseModel):
     email: str
     phone_number: str | None = None
     telegram_id: int | None = None
+    auth_version: int = 1
     role: UserRole
     is_active: bool = True
 

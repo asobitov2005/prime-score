@@ -13,7 +13,11 @@ export async function POST(
   }
 
   try {
-    await submitBackendAttempt(params.attemptId, payload.reason ?? "user_confirmed");
+    await submitBackendAttempt(
+      params.attemptId,
+      payload.reason ?? "user_confirmed",
+      request.headers.get("authorization")
+    );
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof ServerUserApiError) {

@@ -10,6 +10,7 @@ import { trackAttemptSubmit } from "@/lib/analytics";
 import { getMatchingOptionViewModel, shouldAutoLetterMatchingOptions } from "@/lib/matching-option-format";
 import { QuestionRenderer } from "@/components/question-renderer";
 import { emitNotificationRefresh } from "@/lib/notification-events";
+import { fetchInternalUserApi } from "@/lib/internal-user-api";
 import { useUIStore } from "@/store/ui-store";
 import type { AttemptWorkspaceMeta, ListeningPart, ReadingPassage, TestSectionSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -73,7 +74,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
       if (reason === "tab_switch") eventType = "violation_tab_switch";
       if (reason === "exit_fullscreen") eventType = "violation_exit_fullscreen";
       
-      void fetch(`/internal-api/attempts/${attemptId}/events`, {
+      void fetchInternalUserApi(`/internal-api/attempts/${attemptId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         keepalive: true,
@@ -123,7 +124,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${attemptApiBaseUrl}/${attemptId}/submit`, {
+      fetchInternalUserApi(`${attemptApiBaseUrl}/${attemptId}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
@@ -153,7 +154,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
     setSaveState("saving");
 
     try {
-      const response = await fetch(`/internal-api/attempts/${attemptId}/answer`, {
+      const response = await fetchInternalUserApi(`/internal-api/attempts/${attemptId}/answer`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json"
@@ -197,7 +198,7 @@ export function ReadingAttemptWorkspace({ attemptId, testTitle, mode, scope, pas
               onClick={async () => {
                 try {
                   setIsSubmitting(true);
-                  await fetch(`/internal-api/attempts/${attemptId}/submit`, {
+                  await fetchInternalUserApi(`/internal-api/attempts/${attemptId}/submit`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),
@@ -422,7 +423,7 @@ export function ListeningAttemptWorkspace({
       if (reason === "tab_switch") eventType = "violation_tab_switch";
       if (reason === "exit_fullscreen") eventType = "violation_exit_fullscreen";
       
-      void fetch(`/internal-api/attempts/${attemptId}/events`, {
+      void fetchInternalUserApi(`/internal-api/attempts/${attemptId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         keepalive: true,
@@ -471,7 +472,7 @@ export function ListeningAttemptWorkspace({
   useEffect(() => {
     if (mode === "exam" && meta.timeLimitSeconds > 0 && timeLeft === 0 && !isSubmitting) {
       setIsSubmitting(true);
-      fetch(`${attemptApiBaseUrl}/${attemptId}/submit`, {
+      fetchInternalUserApi(`${attemptApiBaseUrl}/${attemptId}/submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirm: true, reason: "time_up" }),
@@ -533,7 +534,7 @@ export function ListeningAttemptWorkspace({
     setSaveState("saving");
 
     try {
-      const response = await fetch(`/internal-api/attempts/${attemptId}/answer`, {
+      const response = await fetchInternalUserApi(`/internal-api/attempts/${attemptId}/answer`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json"
@@ -577,7 +578,7 @@ export function ListeningAttemptWorkspace({
               onClick={async () => {
                 try {
                   setIsSubmitting(true);
-                  await fetch(`/internal-api/attempts/${attemptId}/submit`, {
+                  await fetchInternalUserApi(`/internal-api/attempts/${attemptId}/submit`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ confirm: true, reason: "user_confirmed" }),

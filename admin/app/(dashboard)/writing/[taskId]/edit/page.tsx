@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { SectionHeader } from "@/components/ui";
+import { AdminFormLoadingSkeleton } from "@/components/loading-skeletons";
 import { WritingTaskForm } from "@/components/writing-task-form";
 import type { WritingTask } from "@/lib/writing-api";
 import { writingApi } from "@/lib/writing-api";
@@ -37,12 +38,7 @@ export default function EditWritingTaskPage({ params }: { params: { taskId: stri
   }, [params.taskId]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        Loading task…
-      </div>
-    );
+    return <AdminFormLoadingSkeleton />;
   }
 
   if (error || !task) {

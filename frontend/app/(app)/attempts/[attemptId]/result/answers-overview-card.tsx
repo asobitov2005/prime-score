@@ -26,7 +26,7 @@ export function AnswersOverviewCard({
   return (
     <div className="rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm">
       <div className="flex items-center justify-between gap-3 px-6 py-5">
-        <h3 className="text-2xl font-semibold tracking-tight">Answers overview</h3>
+        <h3 className="text-base font-semibold">Answers overview</h3>
         <button
           type="button"
           onClick={() => setShowAnswers((value) => !value)}

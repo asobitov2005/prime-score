@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,17 @@ interface PremiumUpgradeModalProps {
 }
 
 export function PremiumUpgradeModal({
-  title = "Premium Content",
-  description = "Unlock this test and get access to detailed analytics and premium study materials.",
-  actionLabel = "Upgrade to Premium",
+  title,
+  description,
+  actionLabel,
   subscriptionHref,
   onClose,
 }: PremiumUpgradeModalProps) {
+  const router = useRouter();
+  const modalTitle = title ?? "Premium Content";
+  const modalDescription = description ?? "Unlock this test and get access to detailed analytics and premium study materials.";
+  const modalActionLabel = actionLabel ?? "Upgrade to Premium";
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
       <div className="relative w-full max-w-[340px] overflow-hidden rounded-[1.5rem] border border-amber-500/30 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 duration-300" onClick={(event) => event.stopPropagation()}>
@@ -29,7 +34,7 @@ export function PremiumUpgradeModal({
         <button
           onClick={onClose}
           className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
-          aria-label="Close premium modal"
+          aria-label={"Close"}
           type="button"
         >
           <X className="h-4 w-4" />
@@ -40,25 +45,30 @@ export function PremiumUpgradeModal({
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10">
               <PrimePremiumIcon className="h-6 w-6 text-amber-500" />
             </div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">{title}</h2>
+            <h2 className="text-lg font-bold tracking-tight text-foreground">{modalTitle}</h2>
             <p className="mx-auto max-w-[260px] text-xs leading-relaxed text-muted-foreground">
-              {description}
+              {modalDescription}
             </p>
           </div>
 
           <div className="space-y-2 pt-2">
-            <Button asChild className="h-10 w-full rounded-xl bg-amber-500 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-amber-600 active:scale-95 dark:text-slate-950">
-              <Link href={subscriptionHref}>
-                <PrimePremiumIcon className="mr-1.5 h-3.5 w-3.5" />
-                {actionLabel}
-              </Link>
+            <Button
+              type="button"
+              onClick={() => {
+                onClose();
+                router.push(subscriptionHref);
+              }}
+              className="h-10 w-full rounded-xl bg-amber-500 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-amber-600 active:scale-95 dark:text-slate-950"
+            >
+              <PrimePremiumIcon className="mr-1.5 h-3.5 w-3.5" />
+              {modalActionLabel}
             </Button>
             <Button
               variant="ghost"
               onClick={onClose}
               className="h-10 w-full rounded-xl text-xs font-semibold text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground"
             >
-              Maybe later
+              {"Maybe later"}
             </Button>
           </div>
         </div>

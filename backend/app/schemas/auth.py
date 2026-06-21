@@ -87,6 +87,25 @@ class AdminAuthLoginRequest(BaseModel):
         return normalize_phone_number(value)
 
 
+class AdminPasswordResetRequest(BaseModel):
+    phone_number: str = Field(min_length=6, max_length=32)
+
+    @field_validator("phone_number")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        return normalize_phone_number(value)
+
+
+class AdminPasswordResetTokenStatusResponse(BaseModel):
+    valid: bool = True
+    expires_in_seconds: int
+
+
+class AdminPasswordResetCompleteRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=255)
+
+
 class AdminAuthChallengeResponse(BaseModel):
     challenge_id: UUID
     expires_in_seconds: int = ADMIN_LOGIN_OTP_TTL_SECONDS

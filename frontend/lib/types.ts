@@ -1,4 +1,4 @@
-export type TestType = "reading" | "listening" | "writing";
+export type TestType = "reading" | "listening" | "writing" | "speaking";
 export type TestScope = "full" | "section";
 export type AttemptMode = "practice" | "exam";
 export type AccessType = "public" | "premium";
@@ -146,6 +146,13 @@ export interface DashboardWritingCriteria {
   grammaticalRangeAccuracy: number | null;
 }
 
+export interface DashboardSpeakingCriteria {
+  fluency: number | null;
+  lexicalResource: number | null;
+  grammar: number | null;
+  pronunciation: number | null;
+}
+
 export interface DashboardQuestionTypeAnalysisItem {
   label: string;
   workedCount: number;
@@ -160,6 +167,8 @@ export interface DashboardQuestionTypeComparisonItem {
   currentAccuracy: number | null;
   delta: number | null;
   accuracies: Array<number | null>;
+  currentWorkedCount: number;
+  currentErrorCount: number;
 }
 
 export interface DashboardQuestionTypeComparisonTest {
@@ -188,6 +197,7 @@ export interface DashboardBandProgressPoint {
   reading: number | null;
   listening: number | null;
   writing?: number | null;
+  speaking?: number | null;
 }
 
 export interface DashboardPerformanceStudyTime {
@@ -195,6 +205,7 @@ export interface DashboardPerformanceStudyTime {
   readingTimeSec: number;
   listeningTimeSec: number;
   writingTimeSec?: number;
+  speakingTimeSec?: number;
   thisWeekMinutes?: number;
   dailyGoalMinutes?: number;
 }
@@ -212,11 +223,13 @@ export interface DashboardPerformanceSummary {
   reading: DashboardPerformanceTestCountBucket;
   listening: DashboardPerformanceTestCountBucket;
   writing?: DashboardPerformanceTestCountBucket;
+  speaking?: DashboardPerformanceTestCountBucket;
 }
 
 export interface DashboardAnalytics {
   performanceSummary: DashboardPerformanceSummary;
   writingCriteria?: DashboardWritingCriteria | null;
+  speakingCriteria?: DashboardSpeakingCriteria | null;
   questionTypeAnalysis: DashboardQuestionTypeAnalysisItem[];
   comparison: DashboardQuestionTypeComparison;
   errorDistribution: DashboardErrorDistributionItem[];
@@ -227,6 +240,9 @@ export interface DashboardAnalytics {
   personalBests: DashboardPersonalBests;
   speedMetrics: DashboardSpeedMetrics;
   improvementRate: DashboardImprovementRate;
+  sectionAnalysis: DashboardSectionAnalysisItem[];
+  skillFocus: DashboardSkillFocusItem[];
+  timeAnalysis: DashboardSkillTimeAnalysis;
 }
 
 export interface DashboardAccuracyTrendPoint {
@@ -249,6 +265,7 @@ export interface DashboardActivityPoint {
   readingTimeSec: number;
   listeningTimeSec: number;
   writingTimeSec: number;
+  speakingTimeSec?: number;
 }
 
 export interface DashboardScoreDistribution {
@@ -278,6 +295,34 @@ export interface DashboardImprovementRate {
   prev5AvgBand: number | null;
   delta: number | null;
   percentChange: number | null;
+}
+
+export interface DashboardSectionAnalysisItem {
+  sectionNumber: number;
+  label: string;
+  workedCount: number;
+  correctCount: number;
+  accuracy: number;
+  attemptsCount: number;
+  avgTimeSec: number | null;
+}
+
+export interface DashboardSkillFocusItem {
+  key: string;
+  label: string;
+  value: number | null;
+  valueLabel: string;
+  subtext: string | null;
+  status: string | null;
+}
+
+export interface DashboardSkillTimeAnalysis {
+  avgTimePerTestSec: number | null;
+  recommendedTimeSec: number | null;
+  timeManagementStatus: string;
+  slowestSection: DashboardSectionAnalysisItem | null;
+  fastestSection: DashboardSectionAnalysisItem | null;
+  unansweredAvgPercent: number | null;
 }
 
 export interface AttemptRow {

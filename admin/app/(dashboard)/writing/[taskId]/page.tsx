@@ -27,6 +27,7 @@ import {
   buttonClassName,
   cn
 } from "@/components/ui";
+import { AdminDetailLoadingSkeleton } from "@/components/loading-skeletons";
 import type { WritingSubmission, WritingTask } from "@/lib/writing-api";
 import {
   formatImageSummaryStatus,
@@ -126,12 +127,7 @@ export default function WritingTaskDetailPage({ params }: { params: { taskId: st
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        Loading task…
-      </div>
-    );
+    return <AdminDetailLoadingSkeleton />;
   }
 
   if (error || !task) {

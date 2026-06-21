@@ -178,6 +178,24 @@ def upload_test_audio_asset(*, content: bytes, filename: str, content_type: str)
     )
 
 
+def upload_speaking_audio_asset(*, content: bytes, filename: str, content_type: str, session_id: str, speaker_role: str) -> str:
+    settings = get_settings()
+    bucket_name = settings.minio_bucket_test_assets
+    now = datetime.now(UTC)
+    suffix = _guess_suffix(content_type, filename)
+    safe_role = "".join(character if character.isalnum() or character in {"-", "_"} else "-" for character in speaker_role).strip("-") or "audio"
+    object_name = (
+        f"speaking-audio/{now:%Y/%m/%d}/"
+        f"{session_id}/{safe_role}-{uuid4().hex}{suffix}"
+    )
+    return _upload_with_fallback(
+        bucket_name=bucket_name,
+        object_name=object_name,
+        content=content,
+        content_type=content_type,
+    )
+
+
 def fetch_storage_object(*, bucket_name: str, object_name: str) -> tuple[bytes, str]:
     if PurePosixPath(object_name).parts[:1] == (LOCAL_STORAGE_PREFIX,):
         return _read_local_storage_asset(bucket_name=bucket_name, object_name=object_name)

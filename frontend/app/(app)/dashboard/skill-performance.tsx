@@ -1,11 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpenText, Headphones, PenSquare, Mic } from "lucide-react";
+import { DashboardTrendLineChart } from "@/components/dashboard/dashboard-trend-line-chart";
+import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 import type { AttemptRow, DashboardAnalytics } from "@/lib/types";
 import type { WritingHistoryItem } from "@/lib/server-writing";
 import { getAverageBand } from "@/components/charts/use-dashboard-analytics";
+import { getDayTrendPoints, type DashboardTrendPoint } from "@/lib/dashboard-trend";
+import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth-store";
 
 interface SkillPerformanceProps {
   analytics: DashboardAnalytics;
@@ -26,8 +33,7 @@ interface SkillCardData {
   badgeText: string;
   badgeClass: string;
   sparklineColor: string;
-  sparklineGradientId: string;
-  sparkPoints: number[];
+  sparkPoints: DashboardTrendPoint[];
   lastTestText: string;
   xpText: string;
   href: string;
@@ -65,143 +71,57 @@ function getDaysAgoText(dateStr: string | null | undefined): string {
   return `${daysDiff} days ago`;
 }
 
-// Helper to generate a beautiful sparkline progress curve if data is minimal
-function generateProgressSparkPoints(rawPoints: number[], defaultPoints: number[]): number[] {
-  if (rawPoints.length === 0) {
-    return defaultPoints;
-  }
-  const clean = rawPoints.filter(p => p > 0);
-  if (clean.length === 0) {
-    return defaultPoints;
-  }
-  
-  // If we have less than 5 points, pad elegantly so it renders beautifully
-  const lastVal = clean[clean.length - 1];
-  if (clean.length === 1) {
-    return [
-      Math.max(1, lastVal - 1.0),
-      Math.max(1, lastVal - 0.5),
-      Math.max(1, lastVal - 0.5),
-      lastVal,
-      lastVal
-    ];
-  }
-  if (clean.length === 2) {
-    const [p1, p2] = clean;
-    const avg = (p1 + p2) / 2;
-    return [p1, p1, avg, p2, p2];
-  }
-  if (clean.length === 3) {
-    const [p1, p2, p3] = clean;
-    return [p1, p1, p2, p3, p3];
-  }
-  if (clean.length === 4) {
-    const [p1, p2, p3, p4] = clean;
-    return [p1, p2, p3, p4, p4];
-  }
-  
-  // Keep last 5
-  return clean.slice(-5);
-}
-
-// Sparkline SVG Component
-function Sparkline({ points, strokeColor, gradientId }: { points: number[]; strokeColor: string; gradientId: string }) {
-  const width = 140;
-  const height = 30;
-  
-  if (points.length < 2) {
-    points = [3.0, 3.0, 3.0, 3.0, 3.0];
-  }
-  
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1.0;
-  const yMin = min - range * 0.15;
-  const yMax = max + range * 0.15;
-  const yRange = yMax - yMin;
-  
-  const linePoints = points.map((val, index) => {
-    const x = 2 + (index / (points.length - 1)) * (width - 4);
-    const normalized = (val - yMin) / yRange;
-    const y = height - 2 - normalized * (height - 4);
-    return { x, y };
-  });
-  
-  const dPath = linePoints.map((pt, i) => `${i === 0 ? "M" : "L"} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(" ");
-  const areaPath = `${dPath} L ${linePoints[linePoints.length - 1].x.toFixed(1)} ${height} L ${linePoints[0].x.toFixed(1)} ${height} Z`;
-  
-  return (
-    <svg className="w-full h-8 overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={strokeColor} stopOpacity="0.0" />
-        </linearGradient>
-      </defs>
-      
-      {/* Area under the line */}
-      <path d={areaPath} fill={`url(#${gradientId})`} />
-      
-      {/* Path line */}
-      <path
-        d={dPath}
-        fill="none"
-        stroke={strokeColor}
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      
-      {/* Data dots */}
-      {linePoints.map((pt, i) => (
-        <circle
-          key={i}
-          cx={pt.x}
-          cy={pt.y}
-          r="2.2"
-          fill="#FFFFFF"
-          stroke={strokeColor}
-          strokeWidth="1.2"
-          className="transition-transform duration-300 hover:scale-150"
-        />
-      ))}
-    </svg>
-  );
-}
-
 export function SkillPerformance({ analytics, attempts, writingHistory }: SkillPerformanceProps) {
+  const router = useRouter();
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const { isPremium, isAuthenticated } = useAuthStore();
+  const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const handleAnalyticsClick = (href: string) => {
+    if (isPremium) {
+      router.push(href);
+      return;
+    }
+
+    setShowPremiumModal(true);
+  };
+
   // 1. Reading calculations
   const avgReading = getAverageBand(analytics, "reading");
-  const readingPointsRaw = analytics.progressSeries
-    .map(p => p.reading)
-    .filter((v): v is number => v !== null && v !== undefined);
+  const readingTrendPoints = getDayTrendPoints(analytics, "reading", 5);
   const readingHasScore = avgReading !== null && avgReading > 0;
-  const readingPoints = readingHasScore ? generateProgressSparkPoints(readingPointsRaw, [0, 0, 0, 0, 0]) : [0, 0, 0, 0, 0];
   const readingAttempts = attempts.filter(a => a.type === "reading" && (a.status === "completed" || a.status === "submitted"));
   const lastReadingDate = readingAttempts.length > 0 ? readingAttempts[0].lastSavedAt : null;
   const readingThisWeekCount = readingAttempts.filter(a => isWithinLast7Days(a.lastSavedAt)).length;
   
   // 2. Listening calculations
   const avgListening = getAverageBand(analytics, "listening");
-  const listeningPointsRaw = analytics.progressSeries
-    .map(p => p.listening)
-    .filter((v): v is number => v !== null && v !== undefined);
+  const listeningTrendPoints = getDayTrendPoints(analytics, "listening", 5);
   const listeningHasScore = avgListening !== null && avgListening > 0;
-  const listeningPoints = listeningHasScore ? generateProgressSparkPoints(listeningPointsRaw, [0, 0, 0, 0, 0]) : [0, 0, 0, 0, 0];
   const listeningAttempts = attempts.filter(a => a.type === "listening" && (a.status === "completed" || a.status === "submitted"));
   const lastListeningDate = listeningAttempts.length > 0 ? listeningAttempts[0].lastSavedAt : null;
   const listeningThisWeekCount = listeningAttempts.filter(a => isWithinLast7Days(a.lastSavedAt)).length;
 
   // 3. Writing calculations
   const avgWriting = getAverageBand(analytics, "writing");
-  const writingPointsRaw = analytics.progressSeries
-    .map(p => p.writing)
-    .filter((v): v is number => v !== null && v !== undefined);
+  const writingTrendPoints = getDayTrendPoints(analytics, "writing", 5);
   const writingHasScore = avgWriting !== null && avgWriting > 0;
-  const writingPoints = writingHasScore ? generateProgressSparkPoints(writingPointsRaw, [0, 0, 0, 0, 0]) : [0, 0, 0, 0, 0];
   const writingSubmissions = writingHistory.items.filter(w => String(w.status).toLowerCase() === "completed");
   const lastWritingDate = writingSubmissions.length > 0 ? (writingSubmissions[0].graded_at ?? writingSubmissions[0].submitted_at) : null;
   const writingThisWeekCount = writingHistory.items.filter(w => isWithinLast7Days(w.submitted_at)).length;
+
+  // 4. Speaking calculations
+  const avgSpeaking = getAverageBand(analytics, "speaking");
+  const speakingTrendPoints = getDayTrendPoints(analytics, "speaking", 5);
+  const speakingHasScore = avgSpeaking !== null && avgSpeaking > 0;
+  const speakingProgressPoints = analytics.progressSeries.filter((point) => point.speaking !== null && point.speaking !== undefined);
+  const lastSpeakingDate = speakingProgressPoints.length > 0 ? speakingProgressPoints[speakingProgressPoints.length - 1].occurredAt : null;
+  const speakingThisWeekCount = speakingProgressPoints.filter((point) => isWithinLast7Days(point.occurredAt)).length;
 
   // Render status helper
   const getSkillBadge = (score: number | null) => {
@@ -232,6 +152,7 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const readingBadge = getSkillBadge(avgReading);
   const listeningBadge = getSkillBadge(avgListening);
   const writingBadge = getSkillBadge(avgWriting);
+  const speakingBadge = getSkillBadge(avgSpeaking);
   const notStartedBadge = getSkillBadge(null);
 
   const skills: SkillCardData[] = [
@@ -245,8 +166,7 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       badgeText: readingHasScore ? readingBadge.text : notStartedBadge.text,
       badgeClass: readingHasScore ? readingBadge.badgeClass : notStartedBadge.badgeClass,
       sparklineColor: "#6366F1", // Indigo
-      sparklineGradientId: "spark-reading",
-      sparkPoints: readingPoints,
+      sparkPoints: readingTrendPoints,
       lastTestText: lastReadingDate ? `Last test: ${getDaysAgoText(lastReadingDate)}` : "Last test: Never",
       xpText: `+${readingThisWeekCount * 20} XP this week`,
       href: "/analytics/reading"
@@ -261,8 +181,7 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       badgeText: listeningHasScore ? listeningBadge.text : notStartedBadge.text,
       badgeClass: listeningHasScore ? listeningBadge.badgeClass : notStartedBadge.badgeClass,
       sparklineColor: "#10B981", // Emerald
-      sparklineGradientId: "spark-listening",
-      sparkPoints: listeningPoints,
+      sparkPoints: listeningTrendPoints,
       lastTestText: lastListeningDate ? `Last test: ${getDaysAgoText(lastListeningDate)}` : "Last test: Never",
       xpText: `+${listeningThisWeekCount * 20} XP this week`,
       href: "/analytics/listening"
@@ -277,8 +196,7 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       badgeText: writingHasScore ? writingBadge.text : notStartedBadge.text,
       badgeClass: writingHasScore ? writingBadge.badgeClass : notStartedBadge.badgeClass,
       sparklineColor: "#8B5CF6", // Violet
-      sparklineGradientId: "spark-writing",
-      sparkPoints: writingPoints,
+      sparkPoints: writingTrendPoints,
       lastTestText: lastWritingDate ? `Last test: ${getDaysAgoText(lastWritingDate)}` : "Last test: Never",
       xpText: `+${writingThisWeekCount * 30} XP this week`,
       href: "/analytics/writing"
@@ -289,32 +207,32 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       icon: Mic,
       iconBg: "bg-sky-50 dark:bg-sky-950/40 border border-sky-100/50 dark:border-sky-900/30",
       iconColor: "text-sky-600 dark:text-sky-400",
-      score: "—",
-      badgeText: notStartedBadge.text,
-      badgeClass: notStartedBadge.badgeClass,
+      score: speakingHasScore ? avgSpeaking.toFixed(1) : "—",
+      badgeText: speakingHasScore ? speakingBadge.text : notStartedBadge.text,
+      badgeClass: speakingHasScore ? speakingBadge.badgeClass : notStartedBadge.badgeClass,
       sparklineColor: "#F59E0B", // Amber/Orange
-      sparklineGradientId: "spark-speaking",
-      sparkPoints: [0, 0, 0, 0, 0],
-      lastTestText: "Last test: Never",
-      xpText: "+0 XP this week",
+      sparkPoints: speakingTrendPoints,
+      lastTestText: lastSpeakingDate ? `Last test: ${getDaysAgoText(lastSpeakingDate)}` : "Last test: Never",
+      xpText: `+${speakingThisWeekCount * 90} XP this week`,
       href: "/analytics/speaking"
     }
   ];
 
   return (
     <section className="space-y-4">
-      {/* Header section with view details link */}
+      {/* Header section with analytics overview link */}
       <div className="flex items-center justify-between px-1">
         <h2 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
           Skill Performance
         </h2>
-        <Link
-          href="/analytics/reading"
+        <button
+          type="button"
+          onClick={() => handleAnalyticsClick("/analytics")}
           className="group inline-flex items-center gap-1 text-[13px] font-bold text-indigo-600 transition-colors duration-200 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
-          View Details
+          View Analytics
           <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
-        </Link>
+        </button>
       </div>
 
       {/* Grid of skill cards */}
@@ -322,9 +240,9 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
         {skills.map((skill) => {
           const Icon = skill.icon;
           return (
-            <Link key={skill.key} href={skill.href} className="block group">
-              <div className="relative h-full overflow-hidden rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm transition-colors duration-150 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-950/5 dark:border-slate-800/80 dark:bg-slate-950/40 dark:hover:border-indigo-500/20 dark:hover:shadow-black/20">
-                <div className="flex flex-col gap-3.5">
+            <button key={skill.key} type="button" onClick={() => handleAnalyticsClick(skill.href)} className="block h-full w-full text-left group">
+              <div className="relative h-full overflow-hidden rounded-[1.25rem] border border-slate-100 bg-white px-6 py-4 shadow-sm transition-colors duration-150 hover:border-indigo-100 hover:shadow-md hover:shadow-indigo-950/5 dark:border-slate-800/80 dark:bg-slate-950/40 dark:hover:border-indigo-500/20 dark:hover:shadow-black/20">
+                <div className="flex flex-col gap-2.5">
                   {/* Card Header (Icon & Label) */}
                   <div className="flex items-center gap-3">
                     <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] shadow-sm", skill.iconBg)}>
@@ -345,20 +263,23 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
                     </span>
                   </div>
 
-                  {/* SVG Sparkline Graph */}
-                  <div className="mt-1 h-8 w-full">
-                    <Sparkline
+                  {/* Trend graph */}
+                  <div className="h-[52px] w-full overflow-visible px-0.5">
+                    <DashboardTrendLineChart
                       points={skill.sparkPoints}
                       strokeColor={skill.sparklineColor}
-                      gradientId={skill.sparklineGradientId}
+                      seriesLabel={skill.label}
+                      variant="compact"
+                      height={52}
+                      stopCardClick
                     />
                   </div>
 
                   {/* Divider line */}
-                  <div className="h-[1px] w-full bg-slate-100 dark:bg-slate-800/60 my-0.5" />
+                  <div className="h-px w-full bg-slate-100 dark:bg-slate-800/60" />
 
                   {/* Footer metadata */}
-                  <div className="space-y-1">
+                  <div className="space-y-0.5 pt-0.5">
                     <p className="text-[11.5px] font-medium text-slate-400 dark:text-slate-500">
                       {skill.lastTestText}
                     </p>
@@ -368,10 +289,22 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
                   </div>
                 </div>
               </div>
-            </Link>
+            </button>
           );
         })}
       </div>
+
+      {mounted && showPremiumModal
+        ? createPortal(
+            <PremiumUpgradeModal
+              title="Analytics is Premium"
+              description="Detailed analytics and skill-by-skill insights are available for Premium users."
+              subscriptionHref={subscriptionHref}
+              onClose={() => setShowPremiumModal(false)}
+            />,
+            document.body,
+          )
+        : null}
     </section>
   );
 }

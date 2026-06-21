@@ -18,6 +18,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     username: Mapped[str | None] = mapped_column(String(50), nullable=True)
     telegram_contact_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    language: Mapped[str] = mapped_column(String(2), default="en", server_default="en")
     name_is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     username_is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     avatar_is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

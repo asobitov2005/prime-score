@@ -54,6 +54,15 @@ class SpeakingTopic(UUIDMixin, TimestampMixin, Base):
     topic_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
 
 
+class SpeakingCategory(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "speaking_categories"
+
+    slug: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    scope: Mapped[str] = mapped_column(String(32), default="custom", index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
 class SpeakingTopicQuestionItem(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "speaking_topic_question_items"
 

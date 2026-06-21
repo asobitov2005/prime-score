@@ -28,7 +28,7 @@ class ReviewSubmissionResponse(BaseModel):
 
 
 class LandingLiveStatsRead(BaseModel):
-    online_count: int
+    total_users: int
     refreshed_at: datetime
 
 

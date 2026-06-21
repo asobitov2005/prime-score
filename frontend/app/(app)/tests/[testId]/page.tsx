@@ -3,17 +3,38 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Clock3, FileText, FolderOpen, ArrowLeft } from "lucide-react";
+import { BookmarkToggleButton } from "@/components/bookmark-toggle-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StartTestModal } from "@/components/start-test-modal";
 import { getCatalogTestDetail } from "@/lib/server-data";
+import { getTestSourceLabel } from "@/lib/test-source";
 import { absoluteUrl } from "@/lib/seo";
 import { cn } from "@/lib/utils";
+import type { TestCatalogItem } from "@/lib/types";
 
 interface TestDetailPageProps {
   params: {
     testId: string;
+  };
+}
+
+function getDetailBookmarkItem(test: TestCatalogItem) {
+  return {
+    id: test.id,
+    slug: test.slug,
+    title: test.title,
+    type: test.type,
+    format: test.format,
+    accessType: test.accessType,
+    source: test.source,
+    sourceLabel: getTestSourceLabel(test.source),
+    description: test.description,
+    questionCount: test.questionCount,
+    estimatedMinutes: test.estimatedMinutes,
+    href: `/tests/${test.slug || test.id}`,
+    actionLabel: test.accessType === "premium" ? "Unlock" : "Open Test",
   };
 }
 
@@ -105,13 +126,14 @@ export default async function TestDetailPage({ params }: TestDetailPageProps) {
             <CardDescription className="max-w-2xl text-muted-foreground text-sm font-medium leading-relaxed">{test.description}</CardDescription>
           </div>
           
-          <div className="pt-4">
+          <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center">
             <StartTestModal test={test} />
+            <BookmarkToggleButton item={getDetailBookmarkItem(test)} showLabel className="h-11 rounded-xl border-border/60 px-4" iconClassName="h-4 w-4" />
           </div>
         </CardHeader>
       </Card>
 
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-4">
         <Metric icon={<Clock3 className="h-4 w-4" />} label="Duration" value={`${test.estimatedMinutes} min`} />
         <Metric icon={<FileText className="h-4 w-4" />} label="Questions" value={`${test.questionCount}`} />
         <Metric icon={<FolderOpen className="h-4 w-4" />} label="Source" value={test.source} />

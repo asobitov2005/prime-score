@@ -9,3 +9,11 @@ export type LandingFeaturedTest = {
   isPremiumLocked: boolean;
   createdAt: string;
 };
+
+export interface ReviewItem {
+  id: string;
+  name: string;
+  band: string;
+  text: string;
+  date: string;
+}

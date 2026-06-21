@@ -304,6 +304,13 @@ export interface DashboardAnalyticsWritingCriteriaRead {
   grammatical_range_accuracy?: number | null;
 }
 
+export interface DashboardAnalyticsSpeakingCriteriaRead {
+  fluency?: number | null;
+  lexical_resource?: number | null;
+  grammar?: number | null;
+  pronunciation?: number | null;
+}
+
 export interface DashboardAnalyticsQuestionTypeAnalysisRead {
   label: string;
   worked_count: number;
@@ -318,6 +325,8 @@ export interface DashboardAnalyticsQuestionTypeComparisonItemRead {
   current_accuracy?: number | null;
   delta?: number | null;
   accuracies?: Array<number | null>;
+  current_worked_count?: number;
+  current_error_count?: number;
 }
 
 export interface DashboardAnalyticsQuestionTypeComparisonTestRead {
@@ -346,6 +355,7 @@ export interface DashboardAnalyticsBandProgressRead {
   reading?: number | null;
   listening?: number | null;
   writing?: number | null;
+  speaking?: number | null;
 }
 
 export interface DashboardAnalyticsPerformanceStudyTimeRead {
@@ -353,6 +363,7 @@ export interface DashboardAnalyticsPerformanceStudyTimeRead {
   reading_time_sec: number;
   listening_time_sec: number;
   writing_time_sec?: number;
+  speaking_time_sec?: number;
 }
 
 export interface DashboardAnalyticsPerformanceTestCountBucketRead {
@@ -368,11 +379,41 @@ export interface DashboardAnalyticsPerformanceSummaryRead {
   reading: DashboardAnalyticsPerformanceTestCountBucketRead;
   listening: DashboardAnalyticsPerformanceTestCountBucketRead;
   writing?: DashboardAnalyticsPerformanceTestCountBucketRead;
+  speaking?: DashboardAnalyticsPerformanceTestCountBucketRead;
+}
+
+export interface DashboardAnalyticsSectionAnalysisRead {
+  section_number: number;
+  label: string;
+  worked_count: number;
+  correct_count: number;
+  accuracy: number;
+  attempts_count: number;
+  avg_time_sec?: number | null;
+}
+
+export interface DashboardAnalyticsSkillFocusRead {
+  key: string;
+  label: string;
+  value?: number | null;
+  value_label: string;
+  subtext?: string | null;
+  status?: string | null;
+}
+
+export interface DashboardAnalyticsTimeAnalysisRead {
+  avg_time_per_test_sec?: number | null;
+  recommended_time_sec?: number | null;
+  time_management_status: string;
+  slowest_section?: DashboardAnalyticsSectionAnalysisRead | null;
+  fastest_section?: DashboardAnalyticsSectionAnalysisRead | null;
+  unanswered_avg_percent?: number | null;
 }
 
 export interface DashboardAnalyticsResponse {
   performance_summary: DashboardAnalyticsPerformanceSummaryRead;
   writing_criteria?: DashboardAnalyticsWritingCriteriaRead | null;
+  speaking_criteria?: DashboardAnalyticsSpeakingCriteriaRead | null;
   question_type_analysis: DashboardAnalyticsQuestionTypeAnalysisRead[];
   comparison: DashboardAnalyticsQuestionTypeComparisonRead;
   error_distribution: DashboardAnalyticsErrorDistributionRead[];
@@ -383,4 +424,7 @@ export interface DashboardAnalyticsResponse {
   personal_bests?: { best_band?: number | null; best_accuracy?: number | null; longest_streak: number; current_streak: number; fastest_full_test_sec?: number | null };
   speed_metrics?: { avg_time_per_question_sec?: number | null; reading_avg_sec_per_question?: number | null; listening_avg_sec_per_question?: number | null };
   improvement_rate?: { last_5_avg_band?: number | null; prev_5_avg_band?: number | null; delta?: number | null; percent_change?: number | null };
+  section_analysis?: DashboardAnalyticsSectionAnalysisRead[];
+  skill_focus?: DashboardAnalyticsSkillFocusRead[];
+  time_analysis?: DashboardAnalyticsTimeAnalysisRead | null;
 }

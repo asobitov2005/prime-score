@@ -24,28 +24,25 @@ interface FilterItem {
   value: WritingQuestionSubtype;
   label: string;
   icon: React.ElementType;
-  gradient: string;
-  border: string;
+  iconClassName: string;
 }
 
 const TASK_1_FILTERS: FilterItem[] = [
-  { value: "bar_chart", label: "Bar Chart", icon: BarChart3, gradient: "from-sky-500 to-sky-600", border: "border-sky-500/40" },
-  { value: "line_graph", label: "Line Graph", icon: LineChart, gradient: "from-violet-500 to-violet-600", border: "border-violet-500/40" },
-  { value: "pie_chart", label: "Pie Chart", icon: PieChart, gradient: "from-amber-500 to-amber-600", border: "border-amber-500/40" },
-  { value: "table", label: "Table", icon: Table2, gradient: "from-emerald-500 to-emerald-600", border: "border-emerald-500/40" },
-  { value: "process", label: "Process", icon: FileText, gradient: "from-rose-500 to-rose-600", border: "border-rose-500/40" },
-  { value: "map", label: "Map", icon: Globe2, gradient: "from-blue-500 to-blue-600", border: "border-blue-500/40" },
-  { value: "two_charts", label: "Two Charts", icon: TrendingUp, gradient: "from-teal-500 to-teal-600", border: "border-teal-500/40" },
+  { value: "bar_chart", label: "Bar Chart", icon: BarChart3, iconClassName: "text-sky-500" },
+  { value: "line_graph", label: "Line Graph", icon: LineChart, iconClassName: "text-violet-500" },
+  { value: "pie_chart", label: "Pie Chart", icon: PieChart, iconClassName: "text-amber-500" },
+  { value: "table", label: "Table", icon: Table2, iconClassName: "text-emerald-500" },
+  { value: "process", label: "Process", icon: FileText, iconClassName: "text-rose-500" },
+  { value: "map", label: "Map", icon: Globe2, iconClassName: "text-blue-500" },
+  { value: "two_charts", label: "Two Charts", icon: TrendingUp, iconClassName: "text-teal-500" },
 ];
 
 const TASK_2_FILTERS: FilterItem[] = [
-  { value: "opinion", label: "Opinion Essay", icon: MessageSquare, gradient: "from-violet-500 to-violet-600", border: "border-violet-500/40" },
-  { value: "advantages_disadvantages", label: "Advantages & Disadvantages", icon: Scale, gradient: "from-sky-500 to-sky-600", border: "border-sky-500/40" },
-  { value: "discussion", label: "Discussion Essay", icon: BookOpen, gradient: "from-emerald-500 to-emerald-600", border: "border-emerald-500/40" },
-  { value: "problem_solution", label: "Problem & Solution", icon: HelpCircle, gradient: "from-amber-500 to-amber-600", border: "border-amber-500/40" },
-  { value: "two_part", label: "Two-Part Question", icon: Sparkles, gradient: "from-rose-500 to-rose-600", border: "border-rose-500/40" },
-  { value: "causes_effects", label: "Causes & Effects", icon: TrendingUp, gradient: "from-pink-500 to-pink-600", border: "border-pink-500/40" },
-  { value: "direct_question", label: "Direct Question", icon: FileText, gradient: "from-indigo-500 to-indigo-600", border: "border-indigo-500/40" },
+  { value: "opinion", label: "Opinion", icon: MessageSquare, iconClassName: "text-violet-500" },
+  { value: "discussion", label: "Discussion", icon: BookOpen, iconClassName: "text-emerald-500" },
+  { value: "advantages_disadvantages", label: "Advantage / Disadvantage", icon: Scale, iconClassName: "text-sky-500" },
+  { value: "problem_solution", label: "Problem / Solution", icon: HelpCircle, iconClassName: "text-amber-500" },
+  { value: "two_part", label: "Two-part Question", icon: Sparkles, iconClassName: "text-rose-500" },
 ];
 
 export function WritingQuestionFilters({
@@ -60,6 +57,7 @@ export function WritingQuestionFilters({
   const searchParams = useSearchParams();
   const activeSubtype = searchParams.get("question_subtype") || null;
   const filters = activeTaskType === "task_1" ? TASK_1_FILTERS : TASK_2_FILTERS;
+  const allLabel = activeTaskType === "task_1" ? "All Types" : "All Topics";
 
   function buildHref(subtype: string | null): string {
     const params = new URLSearchParams();
@@ -70,22 +68,22 @@ export function WritingQuestionFilters({
 
   return (
     <div className="space-y-2 pt-1">
-      <p className="px-1 text-[10px] font-bold uppercase tracking-[2px] text-muted-foreground">
+      <p className="px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
         Question type
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {/* All types chip */}
         <Link
           href={buildHref(null)}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-200",
+            "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-all duration-200",
             !activeSubtype
-              ? "border-primary/50 bg-gradient-to-r from-primary to-primary/80 text-white dark:text-slate-950 shadow-sm shadow-primary/20"
-              : "border-border/60 bg-background/70 text-muted-foreground hover:border-border hover:text-foreground dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
+              ? "border-orange-500 bg-orange-500 text-white shadow-sm shadow-orange-500/20"
+              : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-orange-200 hover:bg-orange-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:shadow-none dark:hover:border-orange-500/35 dark:hover:bg-orange-500/10 dark:hover:text-orange-200"
           )}
         >
           <Circle className="h-3 w-3" />
-          All types ({totalCount})
+          {allLabel} ({totalCount})
         </Link>
 
         {filters.map((filter) => {
@@ -96,13 +94,13 @@ export function WritingQuestionFilters({
               key={filter.value}
               href={buildHref(isActive ? null : filter.value)}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-200",
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-all duration-200",
                 isActive
-                  ? `${filter.border} bg-gradient-to-r ${filter.gradient} text-white dark:text-slate-950 shadow-sm`
-                  : "border-border/60 bg-background/70 text-muted-foreground hover:border-border hover:text-foreground dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
+                  ? "border-orange-500 bg-orange-500 text-white shadow-sm shadow-orange-500/20"
+                  : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-orange-200 hover:bg-orange-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:shadow-none dark:hover:border-orange-500/35 dark:hover:bg-orange-500/10 dark:hover:text-orange-200"
               )}
             >
-              <Icon className="h-3 w-3" />
+              <Icon className={cn("h-3 w-3", isActive ? "text-white" : filter.iconClassName)} />
               {filter.label} ({counts?.[filter.value] ?? 0})
             </Link>
           );

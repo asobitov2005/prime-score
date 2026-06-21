@@ -14,6 +14,14 @@ type AdminJwtPayload = {
   telegram_id?: number;
 };
 
+type AdminMeResponse = {
+  id: string;
+  username: string;
+  email: string;
+  role: "super_admin" | "admin";
+  is_active: boolean;
+};
+
 function decodeJwtPayload(token: string): AdminJwtPayload | null {
   const parts = token.split(".");
   if (parts.length < 2) {
@@ -76,20 +84,27 @@ export async function getAuthenticatedAdmin(): Promise<AdminIdentity | null> {
     return null;
   }
 
-  const payload = decodeJwtPayload(token);
-  if (!payload || payload.scope !== "admin" || !payload.sub) {
+  try {
+    const response = await fetch(`${getAdminServerApiBaseUrl()}/auth/me`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as AdminMeResponse;
+    return {
+      id: payload.id,
+      username: payload.username,
+      email: payload.email,
+      role: payload.role === "super_admin" ? "super_admin" : "admin",
+      isActive: payload.is_active,
+    };
+  } catch {
     return null;
   }
-
-  if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
-    return null;
-  }
-
-  return {
-    id: payload.sub,
-    username: payload.username ?? "admin",
-    email: payload.email ?? "admin@primescore.local",
-    role: payload.role === "super_admin" ? "super_admin" : "admin",
-    isActive: true,
-  };
 }

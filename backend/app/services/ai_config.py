@@ -8,12 +8,14 @@ from uuid import UUID
 
 import httpx
 from google import genai
+from google.oauth2 import service_account
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.ai import AiProviderConfig, AiProviderModel, AiUseCaseBinding
 from app.models.enums import AiProvider, AiUseCase
+from app.services.speaking_roast_prompt import UZBEK_ROAST_MODE_INSTRUCTION
 
 try:
     from cerebras.cloud.sdk import Cerebras
@@ -83,14 +85,21 @@ def _normalize_groq_family(model_id: str) -> str:
 
 
 def _google_capabilities_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    model_id = _strip_model_prefix(str(payload.get("name") or payload.get("model") or ""))
+    lowered_model_id = model_id.lower()
     supported = payload.get("supported_actions") or payload.get("supportedActions") or []
     input_modalities = payload.get("input_modalities") or payload.get("inputModalities") or []
     output_modalities = payload.get("output_modalities") or payload.get("outputModalities") or []
+    supported_lower = {str(item).lower() for item in supported}
+    is_live_model = "live" in lowered_model_id or "native-audio" in lowered_model_id
+    has_bidi = any("bidigeneratecontent" in item for item in supported_lower)
     return {
-        "generate_content": any("generatecontent" in str(item).lower() for item in supported),
-        "vision": "IMAGE" in {str(item).upper() for item in input_modalities},
-        "audio_input": "AUDIO" in {str(item).upper() for item in input_modalities},
-        "audio_output": "AUDIO" in {str(item).upper() for item in output_modalities},
+        "generate_content": any("generatecontent" in item for item in supported_lower),
+        "bidi_generate_content": has_bidi,
+        "live_audio": has_bidi or is_live_model,
+        "vision": "IMAGE" in {str(item).upper() for item in input_modalities} or "image" in lowered_model_id,
+        "audio_input": "AUDIO" in {str(item).upper() for item in input_modalities} or is_live_model or "audio" in lowered_model_id,
+        "audio_output": "AUDIO" in {str(item).upper() for item in output_modalities} or is_live_model or "tts" in lowered_model_id,
     }
 
 
@@ -107,6 +116,12 @@ def supports_use_case_binding(capabilities: dict[str, Any], use_case: AiUseCase,
         return bool(capabilities.get("vision")) and provider == AiProvider.GOOGLE
     if use_case == AiUseCase.AUDIO_TRANSCRIPTION:
         return bool(capabilities.get("audio_input")) and provider == AiProvider.GOOGLE
+    if use_case == AiUseCase.SPEAKING_EXAMINER:
+        return bool(capabilities.get("live_audio") or capabilities.get("bidi_generate_content")) and provider == AiProvider.GOOGLE
+    if use_case == AiUseCase.SPEAKING_GRADER:
+        return provider in {AiProvider.GOOGLE, AiProvider.CEREBRAS, AiProvider.GROQ} and bool(
+            capabilities.get("generate_content", True)
+        )
     return False
 
 
@@ -119,7 +134,27 @@ def _google_fallback_for_use_case(use_case: AiUseCase) -> str:
         AiUseCase.WRITING_IMAGE_SUMMARY,
     }:
         return (settings.gemini_writing_model or settings.gemini_model).strip()
+    if use_case == AiUseCase.SPEAKING_EXAMINER:
+        return settings.gemini_speaking_live_model.strip()
+    if use_case == AiUseCase.SPEAKING_GRADER:
+        return settings.gemini_speaking_grader_model.strip()
     return settings.gemini_model.strip()
+
+
+def _vertex_location_for_config(config: ResolvedAiUseCaseConfig) -> str:
+    settings = get_settings()
+    default_location = (settings.google_cloud_location or "global").strip()
+    live_location = (settings.google_cloud_live_location or "us-central1").strip()
+    if config.use_case == AiUseCase.SPEAKING_EXAMINER:
+        return live_location
+    model_id = (config.model_id or "").lower()
+    if "live" in model_id or "native-audio" in model_id:
+        return live_location
+    return default_location
+
+
+def _is_vertex_google_enabled() -> bool:
+    return bool(get_settings().google_genai_use_vertexai)
 
 
 async def resolve_ai_use_case_config(
@@ -131,26 +166,33 @@ async def resolve_ai_use_case_config(
     if cached and cached[0] > time.monotonic():
         return cached[1]
 
+    settings = get_settings()
     binding = await session.scalar(
         select(AiUseCaseBinding).where(AiUseCaseBinding.use_case == use_case)
     )
     if binding is not None:
         provider_config = await session.get(AiProviderConfig, binding.provider_config_id)
         provider_model = await session.get(AiProviderModel, binding.provider_model_id)
+        has_provider_credentials = bool(((provider_config.api_key if provider_config else "") or "").strip())
+        can_use_vertex = (
+            provider_config is not None
+            and provider_config.provider == AiProvider.GOOGLE
+            and settings.google_genai_use_vertexai
+        )
         if (
             provider_config is not None
             and provider_model is not None
             and provider_config.is_enabled
             and provider_model.is_selectable
             and provider_model.is_accessible
-            and (provider_config.api_key or "").strip()
+            and (has_provider_credentials or can_use_vertex)
         ):
             resolved = ResolvedAiUseCaseConfig(
                 use_case=use_case,
                 provider=provider_config.provider,
                 provider_config_id=provider_config.id,
                 provider_label=provider_config.label,
-                api_key=provider_config.api_key.strip(),
+                api_key=(provider_config.api_key or "").strip(),
                 base_url=(provider_config.base_url or "").strip() or None,
                 model_id=provider_model.model_id,
                 model_record_id=provider_model.id,
@@ -161,15 +203,14 @@ async def resolve_ai_use_case_config(
             _resolver_cache[cache_key] = (time.monotonic() + RESOLVER_TTL_SECONDS, resolved)
             return resolved
 
-    settings = get_settings()
     api_key = (settings.gemini_api_key or "").strip()
-    if not api_key:
+    if not api_key and not settings.google_genai_use_vertexai:
         raise RuntimeError(f"No active AI binding is configured for {use_case.value}.")
     resolved = ResolvedAiUseCaseConfig(
         use_case=use_case,
         provider=AiProvider.GOOGLE,
         provider_config_id=None,
-        provider_label="Google (env fallback)",
+        provider_label="Google Vertex AI (env fallback)" if settings.google_genai_use_vertexai else "Google (env fallback)",
         api_key=api_key,
         base_url=None,
         model_id=_google_fallback_for_use_case(use_case),
@@ -183,10 +224,38 @@ async def resolve_ai_use_case_config(
 
 
 def build_google_client(config: ResolvedAiUseCaseConfig) -> genai.Client:
+    settings = get_settings()
     timeout = (config.settings_json or {}).get("http_timeout_ms")
-    if timeout:
-        return genai.Client(api_key=config.api_key, http_options={"timeout": int(timeout)})
-    return genai.Client(api_key=config.api_key)
+    http_options = {"timeout": int(timeout)} if timeout else None
+    binding_auth_mode = str((config.settings_json or {}).get("auth_mode") or "").strip().lower()
+    api_key = (config.api_key or settings.gemini_api_key or "").strip()
+    use_ai_studio_for_speaking = (
+        config.use_case == AiUseCase.SPEAKING_EXAMINER
+        and binding_auth_mode == "ai_studio"
+        and bool(api_key)
+    )
+    if use_ai_studio_for_speaking:
+        return genai.Client(api_key=api_key, vertexai=False, http_options=http_options)
+    if settings.google_genai_use_vertexai:
+        project = (settings.google_cloud_project or "").strip()
+        location = _vertex_location_for_config(config)
+        if not project:
+            raise RuntimeError("GOOGLE_CLOUD_PROJECT is required when GOOGLE_GENAI_USE_VERTEXAI=True.")
+        credentials = None
+        credentials_path = (settings.google_application_credentials or "").strip()
+        if credentials_path:
+            credentials = service_account.Credentials.from_service_account_file(
+                credentials_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+        return genai.Client(
+            vertexai=True,
+            credentials=credentials,
+            project=project,
+            location=location,
+            http_options=http_options,
+        )
+    return genai.Client(api_key=config.api_key, http_options=http_options)
 
 
 def build_cerebras_client(config: ResolvedAiUseCaseConfig) -> Any:
@@ -214,10 +283,23 @@ async def validate_provider_credentials(
     base_url: str | None = None,
 ) -> dict[str, Any]:
     key = (api_key or "").strip()
-    if not key:
+    if not key and not (provider == AiProvider.GOOGLE and _is_vertex_google_enabled()):
         raise RuntimeError("API key is required.")
     if provider == AiProvider.GOOGLE:
-        client = genai.Client(api_key=key)
+        client = build_google_client(
+            ResolvedAiUseCaseConfig(
+                use_case=AiUseCase.ADMIN_CHAT,
+                provider=provider,
+                provider_config_id=None,
+                provider_label=provider.value,
+                api_key=key,
+                base_url=None,
+                model_id="",
+                model_record_id=None,
+                context_window=None,
+                settings_json={},
+            )
+        )
         pager = client.models.list(config={"page_size": 1, "query_base": True})
         first_page = list(pager)[:1]
         return {"ok": True, "provider": provider.value, "models_seen": len(first_page)}
@@ -329,7 +411,20 @@ async def sync_provider_models(
 
 
 async def _sync_google_models(provider_config: AiProviderConfig) -> list[dict[str, Any]]:
-    client = genai.Client(api_key=provider_config.api_key.strip())
+    client = build_google_client(
+        ResolvedAiUseCaseConfig(
+            use_case=AiUseCase.ADMIN_CHAT,
+            provider=AiProvider.GOOGLE,
+            provider_config_id=provider_config.id,
+            provider_label=provider_config.label,
+            api_key=(provider_config.api_key or "").strip(),
+            base_url=(provider_config.base_url or "").strip() or None,
+            model_id="",
+            model_record_id=None,
+            context_window=None,
+            settings_json={},
+        )
+    )
     rows: list[dict[str, Any]] = []
     for raw_model in client.models.list(config={"query_base": True, "page_size": 100}):
         payload = raw_model.model_dump(exclude_none=True) if hasattr(raw_model, "model_dump") else dict(raw_model)
@@ -345,7 +440,7 @@ async def _sync_google_models(provider_config: AiProviderConfig) -> list[dict[st
                 "capabilities": capabilities,
                 "context_window": payload.get("input_token_limit") or payload.get("inputTokenLimit"),
                 "is_accessible": True,
-                "is_selectable": bool(capabilities.get("generate_content", True)),
+                "is_selectable": bool(capabilities.get("generate_content") or capabilities.get("bidi_generate_content")),
             }
         )
     return rows
@@ -452,21 +547,25 @@ async def ensure_provider_configs_seeded(
     cerebras_api_key: str | None,
     groq_api_key: str | None = None,
 ) -> None:
+    settings = get_settings()
     defaults = [
         {
             "provider": AiProvider.GOOGLE,
             "label": "Google",
             "api_key": (google_api_key or "").strip(),
+            "is_enabled": bool((google_api_key or "").strip() or settings.google_genai_use_vertexai),
         },
         {
             "provider": AiProvider.CEREBRAS,
             "label": "Cerebras",
             "api_key": (cerebras_api_key or "").strip(),
+            "is_enabled": bool((cerebras_api_key or "").strip()),
         },
         {
             "provider": AiProvider.GROQ,
             "label": "Groq",
             "api_key": (groq_api_key or "").strip(),
+            "is_enabled": bool((groq_api_key or "").strip()),
         },
     ]
     for item in defaults:
@@ -477,13 +576,15 @@ async def ensure_provider_configs_seeded(
             if item["api_key"] and not (existing.api_key or "").strip():
                 existing.api_key = item["api_key"]
                 existing.is_enabled = True
+            elif item["provider"] == AiProvider.GOOGLE and settings.google_genai_use_vertexai:
+                existing.is_enabled = True
             continue
         session.add(
             AiProviderConfig(
                 provider=item["provider"],
                 label=item["label"],
                 api_key=item["api_key"],
-                is_enabled=bool(item["api_key"]),
+                is_enabled=bool(item["is_enabled"]),
             )
         )
     await session.flush()
@@ -508,22 +609,90 @@ async def seed_default_use_case_bindings(session: AsyncSession) -> None:
     ).all()
     if not google_models:
         return
-    default_model = google_models[0]
+    def choose_model_for_use_case(use_case: AiUseCase) -> AiProviderModel:
+        for model in google_models:
+            if supports_use_case_binding(dict(model.capabilities or {}), use_case, google.provider):
+                return model
+        return google_models[0]
+
     for use_case in AiUseCase:
         existing = await session.scalar(
             select(AiUseCaseBinding).where(AiUseCaseBinding.use_case == use_case)
         )
         if existing is not None:
             continue
+        default_model = choose_model_for_use_case(use_case)
         session.add(
             AiUseCaseBinding(
                 use_case=use_case,
                 provider_config_id=google.id,
                 provider_model_id=default_model.id,
-                settings_json={},
+                settings_json=default_settings_for_use_case(use_case),
             )
         )
     await session.flush()
+
+
+def default_settings_for_use_case(use_case: AiUseCase) -> dict[str, Any]:
+    if use_case == AiUseCase.SPEAKING_EXAMINER:
+        return {
+            "response_modalities": ["AUDIO"],
+            "prompt_cache": {
+                "enabled": True,
+                "ttl_seconds": 3600,
+                "cache_key": "ielts-speaking-examiner-v3-admin-modes",
+            },
+            "cost_controls": {
+                "max_session_minutes": 15,
+                "max_live_reconnects": 1,
+                "send_only_active_part_context": True,
+            },
+            "system_instruction": (
+                "You are the PrimeScore IELTS Speaking examiner. Run one IELTS Speaking part at a time. "
+                "Sound like a real human examiner: warm, calm, professional, lightly expressive, and naturally curious. "
+                "Ask concise examiner questions, use brief natural acknowledgements, and do not reveal band scores."
+            ),
+            "mode_instructions": {
+                "strict_exam": (
+                    "Mode: strict exam. Behave like a real IELTS Speaking examiner: professional, calm, human, and lightly encouraging. "
+                    "Ask one question at a time, do not coach, do not reveal scores, and keep timing/control exam-like."
+                ),
+                "free_talk": (
+                    "Mode: free talk. This is not an IELTS exam. Have an open, natural conversation about any topic the candidate chooses. "
+                    "Match the candidate's language when reasonable, keep the flow relaxed, ask curious follow-up questions, and let the topic move naturally. "
+                    "Do not grade, do not follow IELTS timing, and do not force the conversation back to exam structure unless the candidate asks."
+                ),
+                "uzbek_roast": UZBEK_ROAST_MODE_INSTRUCTION,
+            },
+            "part_instructions": {
+                "part_1": "Ask short familiar-topic questions, acknowledge answers naturally, and keep follow-ups brief.",
+                "part_2": "Give the cue card, allow preparation time, then prompt the candidate to speak with calm human timing.",
+                "part_3": "Ask abstract follow-up questions connected to the Part 2 topic, with natural curiosity and smooth transitions.",
+            },
+        }
+    if use_case == AiUseCase.SPEAKING_GRADER:
+        return {
+            "rubric_version": "ielts-speaking-v1",
+            "prompt_cache": {
+                "enabled": True,
+                "ttl_seconds": 86400,
+                "cache_key": "ielts-speaking-grader-rubric-v1",
+            },
+            "cost_controls": {
+                "call_policy": "final_transcript_only",
+                "soft_total_token_budget": 12000,
+                "max_output_tokens": 1800,
+            },
+            "system_prompt": (
+                "You are a strict IELTS Speaking examiner. Score only from the transcript and return valid JSON."
+            ),
+            "user_prompt_template": (
+                "Evaluate this IELTS Speaking session transcript. Return overall_band, fluency_band, "
+                "lexical_band, grammar_band, pronunciation_band, summary_feedback, strengths, critical_issues, "
+                "pronunciation_issues, grammar_issues, lexical_issues, and improvement_actions.\n\n{transcript}"
+            ),
+        }
+    return {}
 
 
 def mask_secret(value: str | None) -> str | None:

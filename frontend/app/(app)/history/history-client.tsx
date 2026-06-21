@@ -443,7 +443,12 @@ function AttemptHistoryGroup({ group }: { group: HistoryGroup }) {
           </div>
 
           <div className="flex items-center md:justify-end">
-            <HistoryRetakeButton testId={latestAttempt.testId} testType={latestAttempt.type} mode={latestAttempt.mode} />
+            <HistoryRetakeButton
+              testId={latestAttempt.testId}
+              testType={latestAttempt.type}
+              mode={latestAttempt.mode}
+              testFormat={latestAttempt.testFormat}
+            />
           </div>
         </div>
       </summary>

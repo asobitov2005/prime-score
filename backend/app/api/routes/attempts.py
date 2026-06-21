@@ -35,7 +35,7 @@ from app.schemas.tests import TestSnapshotRead
 from app.services.attempt_repo import get_attempt_from_db, save_answer_in_db, save_progress_in_db, submit_attempt_in_db
 from app.services.object_storage import normalize_storage_asset_path
 from app.services.scoring import mc_multiple_question_weight
-from app.services.runtime_store import band_for_raw_score, get_attempt, save_answer, save_progress, submit_attempt
+from app.services.attempt_runtime import band_for_raw_score
 from app.services.test_content_repo import build_test_snapshot_from_db
 
 router = APIRouter()
@@ -338,18 +338,17 @@ async def _require_attempt_owner(
 ):
     try:
         attempt = await get_attempt_from_db(session, attempt_id=attempt_id, user_id=current_user.id)
-    except Exception:
+    except Exception as exc:
         try:
             await session.rollback()
         except Exception:
             pass
-        attempt = None
-    if attempt is None:
-        attempt = get_attempt(attempt_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load attempt.",
+        ) from exc
     if attempt is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.")
-    if attempt.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Attempt does not belong to user.")
     return attempt
 
 
@@ -383,6 +382,10 @@ async def get_attempt_view(
         started_at=attempt.started_at,
         completed_at=attempt.completed_at,
         time_spent_sec=attempt.time_spent_sec,
+        section_time_spent_sec={
+            str(section_id): max(0, int(seconds or 0))
+            for section_id, seconds in dict(attempt.metadata.get("section_time_spent_sec") or {}).items()
+        },
         total_questions=attempt.total_questions,
         answers_count=_count_answered_values(attempt.answers),
         raw_score=attempt.raw_score,
@@ -426,12 +429,21 @@ async def save_attempt_answer(
             question_id=payload.question_id,
             value=payload.value,
         )
-    except Exception:
+    except KeyError as exc:
         try:
             await session.rollback()
         except Exception:
             pass
-        attempt, question_number = save_answer(attempt_id, payload.question_id, payload.value)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found.") from exc
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save answer.",
+        ) from exc
     return AttemptAnswerResponse(
         attempt_id=attempt.attempt_id,
         question_id=payload.question_id,
@@ -455,6 +467,7 @@ async def save_attempt_progress(
             session,
             attempt_id=attempt_id,
             time_spent_sec=payload.time_spent_sec,
+            section_time_spent_sec=payload.section_time_spent_sec,
             active_question_id=payload.active_question_id,
             text_highlights=(
                 {
@@ -466,25 +479,21 @@ async def save_attempt_progress(
             ),
             ui_state=payload.ui_state.model_dump(exclude_none=True) if payload.ui_state is not None else None,
         )
-    except Exception:
+    except KeyError as exc:
         try:
             await session.rollback()
         except Exception:
             pass
-        attempt = save_progress(
-            attempt_id,
-            time_spent_sec=payload.time_spent_sec,
-            active_question_id=payload.active_question_id,
-            text_highlights=(
-                {
-                    block_key: [item.model_dump() for item in items]
-                    for block_key, items in payload.text_highlights.items()
-                }
-                if payload.text_highlights is not None
-                else None
-            ),
-            ui_state=payload.ui_state.model_dump(exclude_none=True) if payload.ui_state is not None else None,
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.") from exc
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save progress.",
+        ) from exc
     return AttemptProgressResponse(
         attempt_id=attempt.attempt_id,
         saved_at=datetime.now(timezone.utc),
@@ -531,12 +540,21 @@ async def submit_attempt_view(
     _ = await _require_attempt_owner(attempt_id, current_user, session)
     try:
         attempt = await submit_attempt_in_db(session, attempt_id=attempt_id)
-    except Exception:
+    except KeyError as exc:
         try:
             await session.rollback()
         except Exception:
             pass
-        attempt = submit_attempt(attempt_id)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.") from exc
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to submit attempt.",
+        ) from exc
     return AttemptSubmitResponse(
         attempt_id=attempt.attempt_id,
         test_id=attempt.test_id,

@@ -37,6 +37,8 @@ class AiUseCase(StrEnum):
     WRITING_ROAST = "writing_roast"
     WRITING_IMAGE_SUMMARY = "writing_image_summary"
     AUDIO_TRANSCRIPTION = "audio_transcription"
+    SPEAKING_EXAMINER = "speaking_examiner"
+    SPEAKING_GRADER = "speaking_grader"
 
 
 class AccessType(StrEnum):
@@ -124,6 +126,7 @@ class TestType(StrEnum):
     READING = "reading"
     LISTENING = "listening"
     WRITING = "writing"
+    SPEAKING = "speaking"
 
 
 class WritingTaskType(StrEnum):

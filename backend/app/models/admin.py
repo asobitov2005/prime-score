@@ -17,6 +17,7 @@ class Admin(UUIDMixin, TimestampMixin, Base):
     phone_number: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True)
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    auth_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     role: Mapped[AdminRole] = mapped_column(Enum(AdminRole, native_enum=False))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

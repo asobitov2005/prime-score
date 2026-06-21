@@ -74,7 +74,7 @@ export function CustomTaskCard({ activeTaskType, limitStatus }: { activeTaskType
   );
 }
 
-function CustomTaskDialog({
+export function CustomTaskDialog({
   taskType,
   open,
   onOpenChange,
@@ -179,6 +179,7 @@ function CustomTaskDialog({
       imageDataUrl: config.requiresImage ? imageDataUrl : null,
       started: true,
       timeSpentSeconds: 0,
+      updatedAt: new Date().toISOString(),
     };
 
     const draftKey = createCustomTaskDraftKey(taskType);

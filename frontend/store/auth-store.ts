@@ -131,7 +131,7 @@ export const useAuthStore = create<AuthSessionState>()(
             isPremium: false,
             premiumUntil: null,
             createdAt: null,
-            welcomeBonusDays: 0,
+                  welcomeBonusDays: 0,
             isAuthenticated: false
           };
         })

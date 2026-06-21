@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Bell, PanelLeft } from "lucide-react";
@@ -13,7 +13,10 @@ import type { AdminIdentity } from "@/lib/types";
 
 function resolvePageLabel(pathname: string): string {
   const allItems = adminNavGroups.flatMap((group) => group.items);
-  const match = allItems.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+  const match = allItems.find((item) => {
+    const hrefPath = item.href.split("?")[0];
+    return pathname === hrefPath || pathname.startsWith(`${hrefPath}/`);
+  });
   return match?.label ?? "Dashboard";
 }
 
@@ -30,6 +33,7 @@ export function AdminShell({
   const initials = admin.username.slice(0, 2).toUpperCase();
   const roleLabel = admin.role === "super_admin" ? "Super Admin" : "Admin";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isWideWorkspacePage =
     pathname === "/tests/new"
     || /^\/tests\/[^/]+\/edit$/.test(pathname)
@@ -46,19 +50,37 @@ export function AdminShell({
     window.localStorage.setItem("admin-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
   }, [sidebarCollapsed]);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  function toggleNavigation() {
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      setSidebarCollapsed((current) => !current);
+      return;
+    }
+    setMobileNavOpen((current) => !current);
+  }
+
   return (
     <div className="flex min-h-screen bg-background bg-[radial-gradient(circle_at_top_left,hsl(var(--accent)/0.26),transparent_42%)]">
       <AdminSessionGuard />
-      <SidebarNav collapsed={sidebarCollapsed} />
+      <Suspense fallback={null}>
+        <SidebarNav
+          collapsed={sidebarCollapsed}
+          mobileOpen={mobileNavOpen}
+          onNavigate={() => setMobileNavOpen(false)}
+        />
+      </Suspense>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/85 px-6 backdrop-blur-md">
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => setSidebarCollapsed((current) => !current)}
+              onClick={toggleNavigation}
               className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={mobileNavOpen || !sidebarCollapsed ? "Close navigation" : "Open navigation"}
+              title={mobileNavOpen || !sidebarCollapsed ? "Close navigation" : "Open navigation"}
             >
               <PanelLeft className="h-[18px] w-[18px]" />
             </button>

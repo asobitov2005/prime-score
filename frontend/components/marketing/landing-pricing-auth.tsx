@@ -125,6 +125,8 @@ export function LandingPricingPlanAction({
   currency,
   isFeatured,
   plans,
+  label,
+  buttonClassName,
 }: {
   planId: string;
   planName: string;
@@ -133,6 +135,8 @@ export function LandingPricingPlanAction({
   currency: string;
   isFeatured: boolean;
   plans: PlanSummary[];
+  label?: string;
+  buttonClassName?: string;
 }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isPremium = useAuthStore((state) => state.isPremium);
@@ -146,19 +150,19 @@ export function LandingPricingPlanAction({
   if (viewerState === "premium" && isCurrentPlan) {
     return (
       <div className="flex h-12 w-full items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-sm font-semibold text-primary">
-        Current plan
+        {"Current plan"}
       </div>
     );
   }
 
   const href = viewerState === "premium" ? SUBSCRIPTION_PATH : subscriptionHref;
-  const label = viewerState === "premium" ? "Upgrade" : viewerState === "member" ? "Upgrade now" : "Login to upgrade";
+  const actionLabel = label ?? "Get Started";
 
   return (
     <Button
       asChild
       variant={isFeatured ? "default" : "outline"}
-      className={!isFeatured ? "h-12 w-full rounded-xl border-border/60 bg-muted/20 text-sm font-medium transition-colors hover:bg-muted/40" : "h-12 w-full rounded-xl text-sm font-semibold transition-colors"}
+      className={buttonClassName ?? (!isFeatured ? "h-12 w-full rounded-xl border-border/60 bg-muted/20 text-sm font-medium transition-colors hover:bg-muted/40" : "h-12 w-full rounded-xl text-sm font-semibold transition-colors")}
     >
       <Link
         href={href}
@@ -174,7 +178,7 @@ export function LandingPricingPlanAction({
           });
         }}
       >
-        {label}
+        {actionLabel}
         <ArrowRight className="ml-2 h-4 w-4" />
       </Link>
     </Button>

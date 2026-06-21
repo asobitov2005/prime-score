@@ -45,6 +45,7 @@ export function RedeemCodePanel({ buttonClassName }: RedeemCodePanelProps) {
 
   const premiumUntilLabel = formatPremiumDate(premiumUntil);
   const isReady = Boolean(userId && accessToken);
+  const normalizedCodeLength = code.trim().replace(/\s+/g, "").length;
 
   async function handleRedeem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,7 +137,7 @@ export function RedeemCodePanel({ buttonClassName }: RedeemCodePanelProps) {
               </p>
               <Button
                 type="submit"
-                disabled={!isReady || isSubmitting || code.trim().length < 4}
+                disabled={!isReady || isSubmitting || normalizedCodeLength < 7}
                 className="h-12 rounded-xl px-5 text-sm font-black shadow-sm sm:min-w-32"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}

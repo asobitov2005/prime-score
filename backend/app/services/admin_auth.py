@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import logging
 import re
 import secrets
 from functools import lru_cache
 from datetime import datetime, timezone
+from urllib.parse import urlencode, urlparse
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -14,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import UserRole
 from app.core.security import hash_password, verify_password
-from app.models.admin import Admin
+from app.models.admin import Admin, AdminLoginOtp
 from app.models.enums import AdminRole
 from app.models.user import User
 from app.schemas.common import AdminPrincipal
@@ -22,11 +24,23 @@ from app.schemas.common import AdminPrincipal
 logger = logging.getLogger(__name__)
 
 ADMIN_LOGIN_OTP_PURPOSE = "admin_login"
+ADMIN_PASSWORD_RESET_PURPOSE = "admin_password_reset"
 ADMIN_LOGIN_OTP_TTL_SECONDS = 60
+ADMIN_PASSWORD_RESET_TTL_SECONDS = 10 * 60
 ADMIN_LOGIN_OTP_MAX_ATTEMPTS = 5
+ADMIN_PASSWORD_RESET_MAX_ATTEMPTS = 5
+ADMIN_PASSWORD_MIN_LENGTH = 8
 ADMIN_CREDENTIAL_MAX_FAILURES = 5
 ADMIN_CREDENTIAL_FAILURE_WINDOW_SECONDS = 5 * 60
 ADMIN_OTP_ISSUE_MAX_PER_MINUTE = 3
+ADMIN_PASSWORD_RESET_PHONE_SHORT_MAX = 3
+ADMIN_PASSWORD_RESET_PHONE_SHORT_WINDOW_SECONDS = 15 * 60
+ADMIN_PASSWORD_RESET_PHONE_DAILY_MAX = 10
+ADMIN_PASSWORD_RESET_PHONE_DAILY_WINDOW_SECONDS = 24 * 60 * 60
+ADMIN_PASSWORD_RESET_IP_SHORT_MAX = 10
+ADMIN_PASSWORD_RESET_IP_SHORT_WINDOW_SECONDS = 15 * 60
+ADMIN_PASSWORD_RESET_IP_DAILY_MAX = 30
+ADMIN_PASSWORD_RESET_IP_DAILY_WINDOW_SECONDS = 24 * 60 * 60
 _ADMIN_AUTH_THROTTLE_PFX = "primescore:admin_auth:"
 
 
@@ -56,6 +70,62 @@ def build_admin_otp_message(code: str) -> str:
         "This code expires in <b>60 seconds</b>. "
         "If you did not request admin access, ignore this message."
     )
+
+
+def build_admin_password_reset_message(reset_url: str | None = None) -> str:
+    minutes = ADMIN_PASSWORD_RESET_TTL_SECONDS // 60
+    message = (
+        "🔐 <b>PrimeScore admin password reset</b>\n\n"
+        "A password reset request was received. If this was you, tap the button below.\n\n"
+        f"This link expires in <b>{minutes} minutes</b>. "
+        "If you did not request this, ignore this message."
+    )
+    if reset_url and _is_local_admin_reset_url(reset_url):
+        message += f"\n\nReset link:\n<code>{html.escape(reset_url)}</code>"
+    return message
+
+
+def build_admin_password_reset_success_message() -> str:
+    return "✅ <b>Your admin password was changed successfully.</b>"
+
+
+def build_admin_password_reset_url(token: UUID | str) -> str:
+    from app.core.config import get_settings
+
+    base_url = get_settings().admin_public_url.strip().rstrip("/") or "http://localhost:3001"
+    return f"{base_url}/reset-password?{urlencode({'token': str(token)})}"
+
+
+def _is_local_admin_reset_url(reset_url: str) -> bool:
+    try:
+        parsed = urlparse(reset_url)
+    except ValueError:
+        return False
+    return parsed.hostname in {"localhost", "127.0.0.1", "0.0.0.0"}
+
+
+def build_admin_password_reset_reply_markup(reset_url: str) -> dict:
+    if _is_local_admin_reset_url(reset_url):
+        return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "Copy reset link",
+                        "copy_text": {"text": reset_url},
+                    }
+                ]
+            ]
+        }
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Reset password",
+                    "url": reset_url,
+                }
+            ]
+        ]
+    }
 
 
 class AdminOtpFailure(ValueError):
@@ -126,6 +196,57 @@ class AdminAuthThrottle:
         if int(count) > ADMIN_OTP_ISSUE_MAX_PER_MINUTE:
             raise AdminOtpFailure("rate_limited")
 
+    async def _increment_window(self, scope: str, identifier: str, window_seconds: int) -> int:
+        key = self._key(scope, identifier)
+        count = await self._r.incr(key)
+        if int(count) == 1:
+            await self._r.expire(key, window_seconds)
+        return int(count)
+
+    async def enforce_password_reset_issue_limit(self, *, phone_number: str, ip_address: str) -> None:
+        normalized_phone = normalize_phone_number(phone_number)
+        normalized_ip = ip_address.strip() or "unknown"
+        try:
+            limits = [
+                (
+                    await self._increment_window(
+                        "password_reset_phone_15m",
+                        normalized_phone,
+                        ADMIN_PASSWORD_RESET_PHONE_SHORT_WINDOW_SECONDS,
+                    ),
+                    ADMIN_PASSWORD_RESET_PHONE_SHORT_MAX,
+                ),
+                (
+                    await self._increment_window(
+                        "password_reset_phone_24h",
+                        normalized_phone,
+                        ADMIN_PASSWORD_RESET_PHONE_DAILY_WINDOW_SECONDS,
+                    ),
+                    ADMIN_PASSWORD_RESET_PHONE_DAILY_MAX,
+                ),
+                (
+                    await self._increment_window(
+                        "password_reset_ip_15m",
+                        normalized_ip,
+                        ADMIN_PASSWORD_RESET_IP_SHORT_WINDOW_SECONDS,
+                    ),
+                    ADMIN_PASSWORD_RESET_IP_SHORT_MAX,
+                ),
+                (
+                    await self._increment_window(
+                        "password_reset_ip_24h",
+                        normalized_ip,
+                        ADMIN_PASSWORD_RESET_IP_DAILY_WINDOW_SECONDS,
+                    ),
+                    ADMIN_PASSWORD_RESET_IP_DAILY_MAX,
+                ),
+            ]
+        except Exception as exc:
+            logger.warning("Admin password reset throttle failed: %s", exc)
+            return
+        if any(count > max_count for count, max_count in limits):
+            raise AdminOtpFailure("rate_limited")
+
 
 @lru_cache(maxsize=1)
 def _admin_auth_redis_client() -> aioredis.Redis:
@@ -145,6 +266,7 @@ def build_admin_principal(admin: Admin) -> AdminPrincipal:
         email=admin.email,
         phone_number=admin.phone_number,
         telegram_id=admin.telegram_id,
+        auth_version=admin.auth_version or 1,
         role=UserRole(admin.role.value),
         is_active=admin.is_active,
     )
@@ -189,6 +311,72 @@ async def authenticate_admin_by_phone_number(session: AsyncSession, phone_number
 
 async def get_admin_by_id(session: AsyncSession, admin_id: UUID) -> Admin | None:
     return await session.get(Admin, admin_id)
+
+
+def parse_admin_password_reset_token(token: str) -> UUID:
+    try:
+        return UUID(str(token))
+    except (TypeError, ValueError) as exc:
+        raise AdminOtpFailure("invalid_token") from exc
+
+
+async def get_admin_password_reset_challenge(
+    session: AsyncSession,
+    *,
+    token: str,
+    now: datetime | None = None,
+) -> AdminLoginOtp:
+    current_time = now or datetime.now(timezone.utc)
+    challenge = await session.get(AdminLoginOtp, parse_admin_password_reset_token(token))
+    if challenge is None:
+        raise AdminOtpFailure("invalid_token")
+    if challenge.purpose != ADMIN_PASSWORD_RESET_PURPOSE:
+        raise AdminOtpFailure("invalid_token")
+    if challenge.used_at is not None:
+        raise AdminOtpFailure("used")
+    if challenge.expires_at <= current_time:
+        challenge.used_at = current_time
+        await session.commit()
+        raise AdminOtpFailure("expired")
+    return challenge
+
+
+async def consume_admin_password_reset_token(
+    session: AsyncSession,
+    *,
+    token: str,
+    new_password: str,
+    now: datetime | None = None,
+) -> Admin:
+    current_time = now or datetime.now(timezone.utc)
+    challenge = await get_admin_password_reset_challenge(session, token=token, now=current_time)
+
+    attempts = challenge.attempts or 0
+    if attempts >= ADMIN_PASSWORD_RESET_MAX_ATTEMPTS:
+        challenge.used_at = current_time
+        await session.commit()
+        raise AdminOtpFailure("locked")
+
+    password = new_password.strip()
+    if len(password) < ADMIN_PASSWORD_MIN_LENGTH:
+        challenge.attempts = attempts + 1
+        if challenge.attempts >= ADMIN_PASSWORD_RESET_MAX_ATTEMPTS:
+            challenge.used_at = current_time
+        await session.commit()
+        raise AdminOtpFailure("weak_password")
+
+    admin = await session.get(Admin, challenge.admin_id)
+    if admin is None or not admin.is_active or admin.telegram_id != challenge.telegram_id:
+        challenge.used_at = current_time
+        await session.commit()
+        raise AdminOtpFailure("admin_unavailable")
+
+    admin.password_hash = hash_password(password)
+    admin.auth_version = (admin.auth_version or 1) + 1
+    challenge.used_at = current_time
+    await session.commit()
+    await session.refresh(admin)
+    return admin
 
 
 async def update_admin_security_settings(

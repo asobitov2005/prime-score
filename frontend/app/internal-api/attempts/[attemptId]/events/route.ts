@@ -12,6 +12,9 @@ export async function POST(
 
     await requestServerUserApi(`/attempts/${params.attemptId}/events`, {
       method: "POST",
+      headers: request.headers.get("authorization")
+        ? { Authorization: request.headers.get("authorization") as string }
+        : undefined,
       body: JSON.stringify(payload),
     });
 

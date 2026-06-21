@@ -1,18 +1,31 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Flame, Minus, Sparkles, Trophy, XCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  CheckCircle2,
+  CircleHelp,
+  Clock3,
+  Lightbulb,
+  ListChecks,
+  MinusCircle,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  XCircle,
+} from "lucide-react";
 import { HistoryRetakeButton } from "@/app/(app)/history/retake-button";
 import { AnswersOverviewCard } from "./answers-overview-card";
 import { ResultBackGuard } from "./result-back-guard";
 import { ResultViewTracker } from "./result-view-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCompletedAtLabel, formatTime } from "@/lib/date-time";
-import { getLeaderboardRank } from "@/lib/server-me";
-import { getBackendAttempt, getBackendAttemptResult, getBackendAttemptReview } from "@/lib/server-attempts";
+import { APP_TIME_ZONE } from "@/lib/date-time";
+import { getBackendAttempt, getBackendAttemptResult, getBackendAttemptReview, type BackendAttemptEvent, type BackendAttemptSnapshot } from "@/lib/server-attempts";
 import { getTestSourceDetail } from "@/lib/test-source";
 import type { TestType } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface AttemptResultPageProps {
   params: {
@@ -20,30 +33,78 @@ interface AttemptResultPageProps {
   };
 }
 
+type BreakdownItem = {
+  label: string;
+  correct: number;
+  total: number;
+};
+
+type SectionBreakdownItem = BreakdownItem & {
+  title: string;
+  reviewLabel: string;
+  percent: number;
+  href: string;
+};
+
+type QuestionTypeBreakdownItem = BreakdownItem & {
+  title: string;
+  reviewLabel: string;
+  percent: number;
+  href: string;
+};
+
+type ReviewTarget = {
+  sectionId?: string;
+  questionId?: string;
+  questionType?: string;
+};
+
+type IntegrityViolationItem = {
+  key: string;
+  label: string;
+  time: string;
+};
+
 export default async function AttemptResultPage({ params }: AttemptResultPageProps) {
   const result = await getBackendAttemptResult(params.attemptId).catch(() => null);
   if (!result) {
     notFound();
   }
+
   const attempt = await getBackendAttempt(params.attemptId).catch(() => null);
   const review = await getBackendAttemptReview(params.attemptId).catch(() => null);
-  const leaderboardRank = await getLeaderboardRank(result.test_type).catch(() => null);
-
-  const formatLabel = formatTestFormat(result.test_format);
-  const sourceLabel = getTestSourceDetail(result.source, result.source_detail);
-  const completedLabel = formatCompletedAtLabel(result.completed_at);
+  const answerItems = (review?.items ?? []).map((item) => ({
+    question_id: item.question_id,
+    question_number: item.question_number,
+    question_label: item.question_label,
+    answer_value: item.answer_value,
+    is_correct: item.is_correct,
+    correct_answers: item.correct_answers,
+  }));
+  const totalQuestions = Math.max(0, result.total_questions ?? 0);
   const correctCount = Math.max(0, result.raw_score ?? 0);
   const answeredCount = Math.max(0, result.answered_slots_count ?? result.answers_count ?? 0);
-  const totalQuestions = Math.max(0, result.total_questions ?? 0);
   const incorrectCount = Math.max(0, answeredCount - correctCount);
   const notAnsweredCount = Math.max(0, totalQuestions - answeredCount);
   const scorePercent = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
   const estimatedScore = formatBandScore(result.band_score, result.raw_score, result.test_type);
-  const percentile = formatPercentile(result.band_score, result.raw_score, result.test_type, scorePercent);
+  const formatLabel = formatTestFormat(result.test_format);
+  const sourceLabel = getTestSourceDetail(result.source, result.source_detail);
+  const completedDate = formatCompletedDate(result.completed_at);
+  const completedLabel = completedDate ? `Completed on ${completedDate}` : null;
   const reviewHref = `/exam-preview/${result.test_type === "listening" ? "listening" : "reading"}?attemptId=${params.attemptId}&mode=review&resume=${Date.now()}`;
+  const skillLabel = result.test_type === "listening" ? "Listening" : "Reading";
+  const sectionTargets = buildSectionReviewTargets(attempt?.test_snapshot ?? null);
+  const sectionItems = buildSectionBreakdown(result.section_breakdown, result.test_type, totalQuestions, reviewHref, sectionTargets);
+  const questionTypeItems = buildQuestionTypeBreakdown(result.question_type_breakdown, reviewHref);
+  const scoreStatus = getScoreStatus(scorePercent);
+  const xpEarned = formatXpAmount(result.xp_awarded_total ?? 0);
+  const levelAfter = result.xp_level_after ?? 1;
+  const currentStreak = result.xp_current_streak ?? 0;
+  const integrityViolations = buildIntegrityViolationItems(result.events ?? []);
 
   return (
-    <div className="space-y-3">
+    <div className="mx-auto w-full max-w-[82rem] pb-1">
       <ResultBackGuard testType={result.test_type} />
       <ResultViewTracker
         attemptId={params.attemptId}
@@ -55,148 +116,601 @@ export default async function AttemptResultPage({ params }: AttemptResultPagePro
         totalQuestions={result.total_questions}
         bandScore={result.band_score}
       />
-      <Card className="border-0 bg-transparent shadow-none">
-        <CardHeader className="space-y-0.5 px-0 pb-0 pt-0">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <CardTitle className="text-3xl text-foreground">{result.test_title}</CardTitle>
-              <Badge tone="outline" className="border-border/70 bg-muted/40 text-foreground">
+
+      <div className="space-y-6">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="min-w-0 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50 sm:text-[2rem]">
+                {result.test_title ?? "Unknown test"}
+              </h1>
+              <Badge tone="outline" className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                 {formatLabel}
               </Badge>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button asChild size="sm">
-                <Link href={reviewHref}>
-                  Review Answers
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <HistoryRetakeButton
-                testId={result.test_id}
-                testType={result.test_type}
-                mode={attempt?.mode ?? "exam"}
-                idleLabel="Try Again"
-              />
-            </div>
-          </div>
-          <CardDescription className="-mt-2 flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
-            <span>
+            <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">
               {sourceLabel}
-              {completedLabel ? <span>{` • ${completedLabel}`}</span> : null}
-            </span>
-          </CardDescription>
-        </CardHeader>
-      </Card>
+              {completedLabel ? <span>{` · ${completedLabel}`}</span> : null}
+            </p>
+          </div>
 
-      <div className="-mt-[110px] grid gap-4 xl:grid-cols-[minmax(0,0.62fr)_minmax(0,1.38fr)]">
-        <ScoreCard
-          correctCount={correctCount}
-          totalQuestions={totalQuestions}
-          scorePercent={scorePercent}
-        />
-        <PerformanceOverviewCard
-          correctCount={correctCount}
-          incorrectCount={incorrectCount}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
+            <Button
+              asChild
+              className="h-11 rounded-[10px] bg-orange-500 px-5 text-sm font-semibold text-white shadow-[0_12px_24px_-16px_rgba(249,115,22,0.75)] hover:bg-orange-600 dark:text-white"
+            >
+              <Link href={reviewHref}>
+                {"Review Mistakes"}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <HistoryRetakeButton
+              testId={result.test_id}
+              testType={result.test_type}
+              mode="practice"
+              showModeChooser={!result.test_format || result.test_format === "full"}
+              testTitle={result.test_title}
+              testFormat={result.test_format}
+              idleLabel={"Try Again"}
+              className="h-11 rounded-[10px] border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 shadow-none hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            />
+          </div>
+        </header>
+
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+          <ScoreSummaryCard
+            correctCount={correctCount}
+            totalQuestions={totalQuestions}
+            estimatedScore={estimatedScore}
+            reviewHref={reviewHref}
+            statusLabel={scoreStatus.label}
+            statusClassName={scoreStatus.className}
+            statusIcon={scoreStatus.icon}
+          />
+          <PerformanceOverviewCard
+            correctCount={correctCount}
+            incorrectCount={incorrectCount}
+            notAnsweredCount={notAnsweredCount}
+            timeTaken={formatTimeTaken(result.time_spent_sec ?? 0)}
+            insight={buildInsightText(correctCount, incorrectCount, notAnsweredCount)}
+            xpStrip={`+${xpEarned.toLocaleString("en-US")} XP earned · Level ${levelAfter} · ${currentStreak} day streak`}
+          />
+        </section>
+
+        {integrityViolations.length > 0 ? (
+          <ExamIntegrityViolationsCard items={integrityViolations} />
+        ) : null}
+
+        <SectionBreakdownCard items={sectionItems} />
+
+        {questionTypeItems.length > 0 ? (
+          <QuestionTypeBreakdownCard items={questionTypeItems} />
+        ) : null}
+
+        <AnswersOverviewCard items={answerItems} />
+
+        <RecommendedNextSteps
+          reviewHref={reviewHref}
+          testType={result.test_type}
+          skillLabel={skillLabel}
           notAnsweredCount={notAnsweredCount}
-          timeTaken={formatTimeTaken(result.time_spent_sec ?? 0)}
-          estimatedScore={estimatedScore}
-          percentile={percentile}
-          leaderboardRank={leaderboardRank}
-          awardedTotal={result.xp_awarded_total ?? 0}
-          breakdown={result.xp_breakdown ?? {}}
-          levelAfter={result.xp_level_after ?? null}
-          currentStreak={result.xp_current_streak ?? null}
         />
       </div>
-
-      <SectionBreakdownCard
-        items={result.section_breakdown}
-        testType={result.test_type}
-      />
-
-      {result.events && result.events.length > 0 ? (
-        <Card className="overflow-hidden border-rose-500/20 bg-rose-500/5 shadow-none">
-          <CardHeader className="border-b border-rose-500/10 bg-rose-500/10 pb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400">
-                <XCircle className="h-5 w-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-lg text-rose-600 dark:text-rose-400">
-                    Exam Integrity Violations
-                  </CardTitle>
-                  <Badge variant="outline" className="shrink-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold uppercase tracking-widest text-[10px]">
-                    {result.events.length} Violation{result.events.length > 1 ? "s" : ""}
-                  </Badge>
-                </div>
-                <CardDescription className="mt-0.5 text-rose-600/70 dark:text-rose-400/70">
-                  These actions would result in disqualification in a real exam environment.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="rounded-xl border border-rose-500/15 bg-background/50 divide-y divide-rose-500/10">
-              {[...result.events].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((event, index) => {
-                let message = "Unknown violation";
-                if (event.event_type === "violation_exit_fullscreen") message = "Exited full screen mode";
-                if (event.event_type === "violation_tab_switch") message = "Switched to another tab or window";
-                if (event.event_type === "violation_window_blur") message = "Lost focus (another app opened or overlay)";
-                if (event.event_type === "violation_devtools") message = "Opened developer tools";
-                
-                return (
-                  <div key={index} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                    <span className="text-sm font-semibold text-foreground">
-                      {message}
-                    </span>
-                    <Badge variant="outline" className="shrink-0 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-mono text-sm px-3 py-1">
-                      {formatTime(event.created_at)}
-                    </Badge>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-6">
-        <BreakdownCard
-          title="Question type breakdown"
-          items={result.question_type_breakdown}
-        />
-      </div>
-
-      <AnswersOverviewCard items={review?.items ?? []} />
-
-      {result.diagram_groups.length > 0 ? (
-        <div className="space-y-4">
-          {result.diagram_groups.map((diagram) => (
-            <Card key={diagram.group_id}>
-              <CardHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="secondary">Q{diagram.question_start}-{diagram.question_end}</Badge>
-                  <Badge tone="outline">{diagram.section_title}</Badge>
-                </div>
-                <CardTitle className="text-lg">{diagram.diagram_title ?? diagram.group_title}</CardTitle>
-                <CardDescription>{diagram.group_title}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/15 p-3">
-                  <img
-                    src={diagram.diagram_image_url}
-                    alt={diagram.diagram_title ?? diagram.group_title}
-                    className="max-h-[420px] w-full object-contain"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
+}
+
+function ScoreSummaryCard({
+  correctCount,
+  totalQuestions,
+  estimatedScore,
+  reviewHref,
+  statusLabel,
+  statusClassName,
+  statusIcon: StatusIcon,
+}: {
+  correctCount: number;
+  totalQuestions: number;
+  estimatedScore: string;
+  reviewHref: string;
+  statusLabel: string;
+  statusClassName: string;
+  statusIcon: LucideIcon;
+}) {
+  return (
+    <article className="overflow-hidden rounded-[18px] border border-orange-100 bg-[linear-gradient(135deg,rgba(255,247,237,0.96),rgba(255,255,255,0.92)_52%,rgba(254,243,199,0.72))] p-5 shadow-[0_18px_42px_-34px_rgba(154,52,18,0.5)] dark:border-orange-500/20 dark:bg-[linear-gradient(135deg,rgba(67,20,7,0.5),rgba(15,23,42,0.92)_58%,rgba(67,20,7,0.35))]">
+      <div className="rounded-2xl border border-white/80 bg-white/78 p-5 shadow-[0_12px_28px_-24px_rgba(154,52,18,0.45)] backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/50">
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{"Reading Score"}</p>
+        <div className="mt-4 flex items-end gap-2">
+          <span className="text-7xl font-semibold leading-none tracking-[-0.05em] text-slate-950 dark:text-slate-50">
+            {correctCount}
+          </span>
+          <span className="pb-2 text-2xl font-semibold text-slate-400 dark:text-slate-500">
+            / {totalQuestions}
+          </span>
+        </div>
+        <p className="mt-3 text-base font-semibold text-slate-700 dark:text-slate-200">
+          {"Estimated Band"}: {estimatedScore}
+        </p>
+
+        <div className={cn("mt-4 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold", statusClassName)}>
+          <StatusIcon className="h-3.5 w-3.5" />
+          {statusLabel}
+        </div>
+
+        <Button
+          asChild
+          className="mt-6 h-11 w-full rounded-[10px] bg-orange-500 text-sm font-semibold text-white shadow-[0_14px_26px_-18px_rgba(249,115,22,0.8)] hover:bg-orange-600 dark:text-white"
+        >
+          <Link href={reviewHref}>
+            {"Review Mistakes"}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+function PerformanceOverviewCard({
+  correctCount,
+  incorrectCount,
+  notAnsweredCount,
+  timeTaken,
+  insight,
+  xpStrip,
+}: {
+  correctCount: number;
+  incorrectCount: number;
+  notAnsweredCount: number;
+  timeTaken: string;
+  insight: string;
+  xpStrip: string;
+}) {
+  const metrics = [
+    {
+      label: "Correct",
+      value: String(correctCount),
+      icon: CheckCircle2,
+      iconClassName: "bg-emerald-50 text-emerald-600 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20",
+    },
+    {
+      label: "Incorrect",
+      value: String(incorrectCount),
+      icon: XCircle,
+      iconClassName: "bg-rose-50 text-rose-600 ring-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/20",
+    },
+    {
+      label: "Not answered",
+      value: String(notAnsweredCount),
+      icon: MinusCircle,
+      iconClassName: "bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700",
+    },
+    {
+      label: "Time taken",
+      value: timeTaken,
+      icon: Clock3,
+      iconClassName: "bg-sky-50 text-sky-600 ring-sky-100 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/20",
+    },
+  ] as const;
+
+  return (
+    <article className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_18px_42px_-34px_rgba(15,23,42,0.4)] dark:border-slate-800 dark:bg-slate-900/70">
+      <h2 className="text-base font-semibold text-slate-950 dark:text-slate-50">{"Performance Overview"}</h2>
+      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {metrics.map((metric) => (
+          <MetricBlock
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            icon={metric.icon}
+            iconClassName={metric.iconClassName}
+          />
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-4 text-sm leading-6 text-sky-900 dark:border-sky-500/15 dark:bg-sky-500/10 dark:text-sky-100">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sky-600 ring-1 ring-sky-100 dark:bg-slate-950/60 dark:text-sky-300 dark:ring-sky-500/20">
+          <Lightbulb className="h-4 w-4" />
+        </span>
+        <p className="font-medium">{insight}</p>
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,rgba(255,247,237,0.9),rgba(254,243,199,0.6))] p-4 text-sm font-semibold text-orange-900 dark:border-orange-500/20 dark:bg-[linear-gradient(135deg,rgba(67,20,7,0.35),rgba(15,23,42,0.4))] dark:text-orange-100">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-orange-500 ring-1 ring-orange-100 dark:bg-slate-950/60 dark:text-orange-300 dark:ring-orange-500/20">
+          <Sparkles className="h-4 w-4" />
+        </span>
+        <span>{xpStrip}</span>
+      </div>
+    </article>
+  );
+}
+
+function MetricBlock({
+  label,
+  value,
+  icon: Icon,
+  iconClassName,
+}: {
+  label: string;
+  value: string;
+  icon: LucideIcon;
+  iconClassName: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/55 p-4 dark:border-slate-800 dark:bg-slate-950/35">
+      <div className="flex items-center gap-3">
+        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", iconClassName)}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xl font-semibold leading-none text-slate-950 dark:text-slate-50">{value}</p>
+          <p className="mt-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExamIntegrityViolationsCard({ items }: { items: IntegrityViolationItem[] }) {
+  return (
+    <section className="overflow-hidden rounded-[18px] border border-red-200 bg-white shadow-[0_18px_42px_-34px_rgba(127,29,29,0.45)] dark:border-red-500/25 dark:bg-slate-900/70">
+      <div className="flex flex-col gap-3 border-b border-red-100 bg-red-50/65 px-5 py-4 dark:border-red-500/15 dark:bg-red-500/10 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 ring-1 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/25">
+            <ShieldAlert className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-red-950 dark:text-red-100">Exam Integrity Violations</h2>
+            <p className="mt-1 text-sm font-medium leading-6 text-red-700/80 dark:text-red-200/75">
+              These actions would result in disqualification in a real exam environment.
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex w-fit shrink-0 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
+          {items.length} Violation{items.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      <div className="divide-y divide-red-100 dark:divide-red-500/15">
+        {items.map((item) => (
+          <div key={item.key} className="flex items-center justify-between gap-4 px-5 py-3.5">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+              <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{item.label}</p>
+            </div>
+            <time className="shrink-0 font-mono text-sm font-semibold text-slate-500 dark:text-slate-400">
+              {item.time}
+            </time>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SectionBreakdownCard({ items }: { items: SectionBreakdownItem[] }) {
+  return (
+    <section className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_18px_42px_-34px_rgba(15,23,42,0.4)] dark:border-slate-800 dark:bg-slate-900/70">
+      <h2 className="text-base font-semibold text-slate-950 dark:text-slate-50">{"Section breakdown"}</h2>
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        {items.map((item) => (
+          <div key={item.title} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/30">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-50">{item.title}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  {`${item.correct} / ${item.total} correct`}
+                </p>
+              </div>
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{item.percent}%</span>
+            </div>
+            <ProgressBar value={item.percent} className="mt-4" tone={item.percent > 0 ? "green" : "gray"} />
+            <Link
+              href={item.href}
+              className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200"
+            >
+              {item.reviewLabel}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function QuestionTypeBreakdownCard({ items }: { items: QuestionTypeBreakdownItem[] }) {
+  return (
+    <section className="rounded-[18px] border border-slate-200 bg-white shadow-[0_18px_42px_-34px_rgba(15,23,42,0.4)] dark:border-slate-800 dark:bg-slate-900/70">
+      <div className="px-6 py-5">
+        <h2 className="text-base font-semibold text-slate-950 dark:text-slate-50">Question type breakdown</h2>
+      </div>
+      <div className="px-6 pb-6">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {items.map((item) => (
+              <div
+                key={item.title}
+                className="grid gap-3 px-5 py-4 transition-colors hover:bg-orange-50/25 dark:hover:bg-orange-500/5 md:grid-cols-[minmax(0,1fr)_7rem_30rem_auto] md:items-center"
+              >
+                <div className="min-w-0">
+                  <span className="min-w-0 truncate text-sm font-semibold text-slate-950 dark:text-slate-50">{item.title}</span>
+                </div>
+
+                <span className={cn(
+                  "inline-flex w-[4.75rem] justify-center rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ring-1 md:justify-self-center",
+                  item.correct === item.total
+                    ? "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20"
+                    : item.correct > 0
+                      ? "bg-orange-50 text-orange-700 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20"
+                      : "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+                )}>
+                  {item.correct} / {item.total}
+                </span>
+
+                <div className="grid gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:items-center">
+                  <span className="min-w-10 text-right text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                    {item.percent}%
+                  </span>
+                  <ProgressBar value={item.percent} tone={item.percent > 0 ? "orange" : "gray"} className="h-2.5" />
+                </div>
+
+                <Link
+                  href={item.href}
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-300 dark:hover:text-orange-200 md:justify-end"
+                >
+                  Review
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RecommendedNextSteps({
+  reviewHref,
+  testType,
+  skillLabel,
+  notAnsweredCount,
+}: {
+  reviewHref: string;
+  testType: TestType;
+  skillLabel: string;
+  notAnsweredCount: number;
+}) {
+  const testsHref = `/tests?type=${testType}`;
+  const recommendations = [
+    {
+      title: "Review unanswered questions",
+      text: `You left ${notAnsweredCount} questions unanswered.`,
+      href: reviewHref,
+      icon: ListChecks,
+      className: "bg-orange-50 text-orange-600 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20",
+    },
+    {
+      title: "Practice test timing",
+      text: "Try completing each passage within the time limit.",
+      href: testsHref,
+      icon: Clock3,
+      className: "bg-indigo-50 text-indigo-600 ring-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20",
+    },
+    {
+      title: `Try another ${skillLabel} test`,
+      text: "Build consistency with a similar test.",
+      href: testsHref,
+      icon: BookOpen,
+      className: "bg-sky-50 text-sky-600 ring-sky-100 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/20",
+    },
+  ] as const;
+
+  return (
+    <section className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_18px_42px_-34px_rgba(15,23,42,0.4)] dark:border-slate-800 dark:bg-slate-900/70">
+      <h2 className="text-base font-semibold text-slate-950 dark:text-slate-50">{"Recommended next steps"}</h2>
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        {recommendations.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.title}
+              href={item.href}
+              className="group flex min-h-[8rem] items-start gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-orange-200 hover:bg-orange-50/30 dark:border-slate-800 dark:bg-slate-950/30 dark:hover:border-orange-500/25 dark:hover:bg-orange-500/5"
+            >
+              <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1", item.className)}>
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-slate-950 dark:text-slate-50">{item.title}</span>
+                <span className="mt-1.5 block text-sm leading-6 text-slate-500 dark:text-slate-400">{item.text}</span>
+              </span>
+              <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-orange-500" />
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ProgressBar({
+  value,
+  tone,
+  className,
+}: {
+  value: number;
+  tone: "green" | "orange" | "gray";
+  className?: string;
+}) {
+  const progress = Math.min(100, Math.max(0, value));
+  const fillClassName = tone === "green"
+    ? "bg-emerald-500"
+    : tone === "orange"
+      ? "bg-orange-500"
+      : "bg-slate-300 dark:bg-slate-700";
+
+  return (
+    <div className={cn("h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800", className)}>
+      <div className={cn("h-full rounded-full transition-all", fillClassName)} style={{ width: `${progress}%` }} />
+    </div>
+  );
+}
+
+function buildInsightText(correctCount: number, incorrectCount: number, notAnsweredCount: number): string {
+  if (notAnsweredCount > Math.max(correctCount, incorrectCount)) {
+    return "Most questions were left unanswered. Focus on completing the test before improving accuracy.";
+  }
+  if (incorrectCount > correctCount) {
+    return "Accuracy is the main issue. Review the question types where you lost the most marks.";
+  }
+  return "You completed most of the test. Keep reviewing mistakes to build consistency.";
+}
+
+function buildSectionBreakdown(
+  items: BreakdownItem[],
+  testType: TestType,
+  totalQuestions: number,
+  reviewHref: string,
+  targets: ReviewTarget[],
+): SectionBreakdownItem[] {
+  const sectionPrefix = testType === "listening" ? "Part" : "Passage";
+  const fallbackTotals = testType === "listening" ? [10, 10, 10, 10] : [13, 13, 14];
+  const sourceItems = items.length > 0
+    ? items
+    : fallbackTotals.map((total, index) => ({
+        label: `${sectionPrefix} ${index + 1}`,
+        correct: 0,
+        total,
+      }));
+
+  const targetItems = testType === "reading" ? sourceItems.slice(0, 3) : sourceItems;
+  const normalizedItems = targetItems.length > 0
+    ? targetItems
+    : fallbackTotals.map((total, index) => ({ label: `${sectionPrefix} ${index + 1}`, correct: 0, total }));
+
+  return normalizedItems.map((item, index) => {
+    const total = Math.max(0, item.total || fallbackTotals[index] || Math.ceil(totalQuestions / normalizedItems.length) || 0);
+    const correct = Math.max(0, item.correct || 0);
+    const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const title = `${sectionPrefix} ${index + 1}`;
+
+    return {
+      label: item.label,
+      title,
+      reviewLabel: `Review ${title}`,
+      correct,
+      total,
+      percent,
+      href: withReviewTarget(reviewHref, targets[index] ?? {}),
+    };
+  });
+}
+
+function buildQuestionTypeBreakdown(
+  items: BreakdownItem[],
+  reviewHref: string,
+): QuestionTypeBreakdownItem[] {
+  return items
+    .filter((item) => item.total > 0)
+    .map((item) => {
+      const total = Math.max(0, item.total || 0);
+      const correct = Math.max(0, item.correct || 0);
+      const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
+      const title = formatQuestionTypeLabel(item.label);
+
+      return {
+        ...item,
+        title,
+        reviewLabel: `Review ${title}`,
+        correct,
+        total,
+        percent,
+        href: withReviewTarget(reviewHref, { questionType: item.label }),
+      };
+    });
+}
+
+function formatQuestionTypeLabel(value: string): string {
+  return String(value || "Question type")
+    .replace(/^(reading|listening)[_\s-]+/i, "")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (lower === "mc") return "MC";
+      if (lower === "tfng") return "TFNG";
+      if (lower === "ynng") return "YNNG";
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+function buildSectionReviewTargets(snapshot: BackendAttemptSnapshot | null): ReviewTarget[] {
+  return (snapshot?.sections ?? []).map((section) => ({ sectionId: section.section_id }));
+}
+
+function withReviewTarget(baseHref: string, target: ReviewTarget): string {
+  const params = new URLSearchParams();
+
+  if (target.sectionId) {
+    params.set("sectionId", target.sectionId);
+  }
+  if (target.questionId) {
+    params.set("questionId", target.questionId);
+  }
+  if (target.questionType) {
+    params.set("questionType", normalizeQuestionTypeKey(target.questionType));
+  }
+
+  const query = params.toString();
+  if (!query) {
+    return baseHref;
+  }
+
+  return `${baseHref}${baseHref.includes("?") ? "&" : "?"}${query}`;
+}
+
+function normalizeQuestionTypeKey(value: string | null | undefined): string {
+  const normalized = String(value ?? "")
+    .replace(/^(reading|listening)_/i, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+
+  if (normalized === "tfng") return "true_false_not_given";
+  if (normalized === "ynng") return "yes_no_not_given";
+  if (normalized === "mcq" || normalized === "mc") return "multiple_choice";
+  return normalized;
+}
+
+function getScoreStatus(scorePercent: number): {
+  label: string;
+  icon: LucideIcon;
+  className: string;
+} {
+  if (scorePercent >= 80) {
+    return {
+      label: "Strong result",
+      icon: CheckCircle2,
+      className: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20",
+    };
+  }
+  if (scorePercent >= 50) {
+    return {
+      label: "Developing",
+      icon: Target,
+      className: "bg-sky-50 text-sky-700 ring-1 ring-sky-100 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/20",
+    };
+  }
+  return {
+    label: "Needs more practice",
+    icon: CircleHelp,
+    className: "bg-orange-50 text-orange-700 ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20",
+  };
 }
 
 function formatXpAmount(value: unknown): number {
@@ -204,17 +718,71 @@ function formatXpAmount(value: unknown): number {
   return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : 0;
 }
 
-function formatXpLabel(key: string): string {
-  const labels: Record<string, string> = {
-    activity_xp: "Activity XP",
-    score_bonus: "Score bonus",
-    accuracy_bonus: "Accuracy bonus",
-    improvement_bonus: "Improvement bonus",
-    streak_bonus: "Streak bonus",
-  };
-  return labels[key] ?? key.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+function formatCompletedDate(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: APP_TIME_ZONE,
+  }).format(parsed);
 }
 
+function formatViolationTime(value: string | null | undefined): string {
+  if (!value) {
+    return "--:--:--";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "--:--:--";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: APP_TIME_ZONE,
+  }).format(parsed);
+}
+
+function formatViolationLabel(eventType: string): string {
+  switch (eventType) {
+    case "violation_window_blur":
+      return "Lost focus (another app opened or overlay)";
+    case "violation_exit_fullscreen":
+      return "Exited full screen mode";
+    case "violation_tab_switch":
+      return "Switched tab or browser was hidden";
+    case "violation_devtools":
+      return "Developer tools were opened";
+    default:
+      return "Exam integrity violation";
+  }
+}
+
+function buildIntegrityViolationItems(events: BackendAttemptEvent[]): IntegrityViolationItem[] {
+  return events
+    .filter((event) => event.event_type.startsWith("violation_"))
+    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+    .map((event, index) => ({
+      key: `${event.event_type}-${event.created_at}-${index}`,
+      label: formatViolationLabel(event.event_type),
+      time: formatViolationTime(event.created_at),
+    }));
+}
 
 function formatTestFormat(value: string | null | undefined): string {
   if (!value || value === "full") {
@@ -292,570 +860,15 @@ function formatBandScore(
   return derivedBandScore.toFixed(1);
 }
 
-function formatPercentile(
-  value: number | string | null | undefined,
-  rawScore: number | null | undefined,
-  testType: TestType,
-  scorePercent: number
-): string {
-  const numericValue = deriveBandScore(value, rawScore, testType);
-  if (numericValue === null) {
-    return `${Math.max(1, Math.min(99, scorePercent))}th`;
-  }
-
-  const band = numericValue;
-  const lookup = [
-    { band: 9.0, percentile: 99 },
-    { band: 8.5, percentile: 97 },
-    { band: 8.0, percentile: 95 },
-    { band: 7.5, percentile: 90 },
-    { band: 7.0, percentile: 84 },
-    { band: 6.5, percentile: 76 },
-    { band: 6.0, percentile: 68 },
-    { band: 5.5, percentile: 58 },
-    { band: 5.0, percentile: 48 },
-    { band: 4.5, percentile: 38 },
-    { band: 4.0, percentile: 28 },
-    { band: 3.5, percentile: 20 },
-    { band: 3.0, percentile: 14 },
-    { band: 2.5, percentile: 9 },
-    { band: 2.0, percentile: 5 },
-    { band: 1.5, percentile: 3 },
-    { band: 1.0, percentile: 1 },
-  ] as const;
-
-  const closest = lookup.reduce((best, item) =>
-    Math.abs(item.band - band) < Math.abs(best.band - band) ? item : best
-  );
-
-  return `${closest.percentile}th`;
-}
-
-function ScoreCard({
-  correctCount,
-  totalQuestions,
-  scorePercent,
-}: {
-  correctCount: number;
-  totalQuestions: number;
-  scorePercent: number;
-}) {
-  const progress = Math.min(100, Math.max(0, scorePercent));
-  const scoreLabel = `${correctCount}/${totalQuestions}`;
-  const scoreTheme = getScoreTheme(scorePercent);
-
-  return (
-    <Card
-      className="overflow-hidden border-border/70"
-      style={{
-        backgroundImage: `linear-gradient(180deg, ${scoreTheme.cardTintStrong}, ${scoreTheme.cardTintSoft} 34%, transparent 100%)`,
-      }}
-    >
-      <CardContent className="flex flex-col items-center gap-0.5 px-0 py-5 text-center">
-        <div className="text-xl font-bold tracking-tight text-foreground">Your Score</div>
-        <div className="relative mt-0.5 w-full max-w-[17.5rem]">
-          <div
-            className="pointer-events-none absolute inset-x-10 top-5 h-16 rounded-full blur-3xl"
-            style={{ backgroundColor: scoreTheme.glowTint }}
-          />
-          <svg viewBox="0 0 240 148" className="relative z-10 w-full overflow-visible">
-            <defs>
-              <linearGradient id="scoreGaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor={scoreTheme.gradientStart} />
-                <stop offset="55%" stopColor={scoreTheme.gradientMid} />
-                <stop offset="100%" stopColor={scoreTheme.gradientEnd} />
-              </linearGradient>
-              <filter id="scoreGaugeGlow" x="-20%" y="-20%" width="140%" height="160%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            <path
-              d="M42 118 A78 78 0 0 1 198 118"
-              pathLength="100"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="15"
-              strokeLinecap="round"
-              className="text-border/70"
-            />
-            <path
-              d="M42 118 A78 78 0 0 1 198 118"
-              pathLength="100"
-              fill="none"
-              stroke="url(#scoreGaugeGradient)"
-              strokeWidth="15"
-              strokeLinecap="round"
-              strokeDasharray={`${progress} 100`}
-              filter="url(#scoreGaugeGlow)"
-            >
-              <animate attributeName="stroke-dasharray" from={`0 100`} to={`${progress} 100`} dur="1.2s" fill="freeze" />
-            </path>
-            <g className="text-muted-foreground">
-              <text x="42" y="136" fontSize="12" textAnchor="middle" fill="currentColor">0</text>
-              <text x="198" y="136" fontSize="12" textAnchor="middle" fill="currentColor">100</text>
-            </g>
-            <g opacity="0">
-              <animate attributeName="opacity" from="0" to="1" begin="0.95s" dur="0.32s" fill="freeze" />
-              <animateTransform
-                attributeName="transform"
-                type="translate"
-                from="0 8"
-                to="0 0"
-                begin="0.95s"
-                dur="0.32s"
-                fill="freeze"
-              />
-              <text
-                x="120"
-                y="94"
-                fontSize="26"
-                fontWeight="700"
-                textAnchor="middle"
-                fill="currentColor"
-                className="text-foreground"
-              >
-                {scoreLabel}
-              </text>
-              <text
-                x="120"
-                y="118"
-                fontSize="13"
-                fontWeight="600"
-                letterSpacing="0.2em"
-                textAnchor="middle"
-                fill="currentColor"
-                className="text-muted-foreground"
-              >
-                {scorePercent}%
-              </text>
-            </g>
-          </svg>
-        </div>
-        <div
-          className="mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-2 text-left transition-colors"
-          style={{
-            borderColor: scoreTheme.borderTint,
-            backgroundColor: scoreTheme.activeBg,
-            color: scoreTheme.textColor,
-          }}
-        >
-          <span
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: scoreTheme.dotColor, boxShadow: `0 0 0 4px ${scoreTheme.ringGlow}` }}
-          />
-          <span className="text-[11px] font-bold leading-tight tracking-[0.04em]">{scoreTheme.label}</span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function getScoreTheme(scorePercent: number) {
-  const themes = [
-    {
-      label: "Needs Improvement",
-      min: 0,
-      max: 39,
-      gradientStart: "rgb(244 63 94)",
-      gradientMid: "rgb(249 115 22)",
-      gradientEnd: "rgb(251 191 36)",
-      cardTintStrong: "rgba(244,63,94,0.14)",
-      cardTintSoft: "rgba(244,63,94,0.03)",
-      glowTint: "rgba(244,63,94,0.18)",
-      borderTint: "rgba(244,63,94,0.22)",
-      dotColor: "rgb(244 63 94)",
-      activeBg: "rgba(244,63,94,0.12)",
-      textColor: "rgb(159 18 57)",
-      ringGlow: "rgba(244,63,94,0.16)",
-    },
-    {
-      label: "Developing",
-      min: 40,
-      max: 59,
-      gradientStart: "rgb(245 158 11)",
-      gradientMid: "rgb(249 115 22)",
-      gradientEnd: "rgb(251 191 36)",
-      cardTintStrong: "rgba(245,158,11,0.14)",
-      cardTintSoft: "rgba(245,158,11,0.03)",
-      glowTint: "rgba(245,158,11,0.18)",
-      borderTint: "rgba(245,158,11,0.22)",
-      dotColor: "rgb(245 158 11)",
-      activeBg: "rgba(245,158,11,0.12)",
-      textColor: "rgb(146 64 14)",
-      ringGlow: "rgba(245,158,11,0.16)",
-    },
-    {
-      label: "Strong",
-      min: 60,
-      max: 79,
-      gradientStart: "rgb(59 130 246)",
-      gradientMid: "rgb(99 102 241)",
-      gradientEnd: "rgb(14 165 233)",
-      cardTintStrong: "rgba(59,130,246,0.14)",
-      cardTintSoft: "rgba(59,130,246,0.03)",
-      glowTint: "rgba(59,130,246,0.18)",
-      borderTint: "rgba(59,130,246,0.22)",
-      dotColor: "rgb(59 130 246)",
-      activeBg: "rgba(59,130,246,0.12)",
-      textColor: "rgb(30 64 175)",
-      ringGlow: "rgba(59,130,246,0.16)",
-    },
-    {
-      label: "Excellent",
-      min: 80,
-      max: 100,
-      gradientStart: "rgb(16 185 129)",
-      gradientMid: "rgb(6 182 212)",
-      gradientEnd: "rgb(14 165 233)",
-      cardTintStrong: "rgba(16,185,129,0.14)",
-      cardTintSoft: "rgba(16,185,129,0.03)",
-      glowTint: "rgba(16,185,129,0.18)",
-      borderTint: "rgba(16,185,129,0.22)",
-      dotColor: "rgb(16 185 129)",
-      activeBg: "rgba(16,185,129,0.12)",
-      textColor: "rgb(6 95 70)",
-      ringGlow: "rgba(16,185,129,0.16)",
-    },
-  ] as const;
-  return themes.find((theme) => scorePercent >= theme.min && scorePercent <= theme.max) ?? themes[0];
-}
-
-function PerformanceOverviewCard({
-  correctCount,
-  incorrectCount,
-  notAnsweredCount,
-  timeTaken,
-  estimatedScore,
-  percentile,
-  leaderboardRank,
-  awardedTotal,
-  breakdown,
-  levelAfter,
-  currentStreak,
-}: {
-  correctCount: number;
-  incorrectCount: number;
-  notAnsweredCount: number;
-  timeTaken: string;
-  estimatedScore: string;
-  percentile: string;
-  leaderboardRank: number | null;
-  awardedTotal: number;
-  breakdown: Record<string, unknown>;
-  levelAfter: number | null;
-  currentStreak: number | null;
-}) {
-  const items = [
-    {
-      label: "Correct",
-      value: String(correctCount),
-      icon: CheckCircle2,
-      tone: "text-emerald-500",
-      bg: "bg-emerald-500/10 dark:bg-emerald-500/15",
-      shadow: "shadow-[0_10px_28px_-14px_rgba(16,185,129,0.7)]",
-    },
-    {
-      label: "Incorrect",
-      value: String(incorrectCount),
-      icon: XCircle,
-      tone: "text-rose-500",
-      bg: "bg-rose-500/10 dark:bg-rose-500/15",
-      shadow: "shadow-[0_10px_28px_-14px_rgba(244,63,94,0.7)]",
-    },
-    {
-      label: "Not Answered",
-      value: String(notAnsweredCount),
-      icon: Minus,
-      tone: "text-slate-400 dark:text-slate-300",
-      bg: "bg-slate-400/10 dark:bg-slate-300/10",
-      shadow: "shadow-[0_10px_28px_-14px_rgba(148,163,184,0.55)]",
-    },
-    {
-      label: "Time Taken",
-      value: timeTaken,
-      icon: Clock3,
-      tone: "text-sky-500",
-      bg: "bg-sky-500/10 dark:bg-sky-500/15",
-      shadow: "shadow-[0_10px_28px_-14px_rgba(14,165,233,0.7)]",
-    },
-  ] as const;
-
-  const breakdownItems = ["activity_xp", "score_bonus", "accuracy_bonus", "improvement_bonus", "streak_bonus"]
-    .map((key) => ({ key, label: formatXpLabel(key), value: formatXpAmount(breakdown[key]) }))
-    .filter((item) => item.value > 0);
-  const repeatMultiplier = typeof breakdown.repeat_multiplier === "number" ? breakdown.repeat_multiplier : null;
-  const capApplied = Boolean(breakdown.cap_applied);
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardDescription className="text-xl font-bold tracking-tight text-foreground">
-          Performance Overview
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pt-0 space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-          {items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.label} className="rounded-2xl bg-muted/20 px-4 py-4 text-center">
-                <div className="flex flex-col items-center">
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${item.bg} ${item.shadow}`}>
-                    <Icon className={`h-5.5 w-5.5 ${item.tone}`} />
-                  </div>
-                  <p className="mt-3 text-xl font-semibold tracking-tight text-foreground">{item.value}</p>
-                  <p className="mt-1 whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    {item.label}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-sky-500/15 bg-sky-500/[0.06] px-4 py-3 text-center shadow-sm">
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Estimated Score
-            </p>
-            <p className="mt-1 text-xl font-semibold tracking-tight text-foreground">{estimatedScore}</p>
-          </div>
-          <div className="rounded-2xl border border-violet-500/15 bg-violet-500/[0.06] px-4 py-3 text-center shadow-sm">
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Percentile
-            </p>
-            <p className="mt-1 text-xl font-semibold tracking-tight text-foreground">{percentile}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.06] px-4 py-3 text-center shadow-sm">
-            <div className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              <span>Leaderboard</span>
-              <Link
-                href="/leaderboard"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-amber-500/20 bg-background/70 text-foreground transition-colors hover:bg-background"
-                aria-label="Open full leaderboard"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-            <p className="mt-1 text-xl font-semibold tracking-tight text-foreground">
-              {leaderboardRank ? `#${leaderboardRank}` : "Hidden"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent px-4 py-4 shadow-sm">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-black tracking-tight text-foreground">
-                  +{awardedTotal.toLocaleString("en-US")}
-                </span>
-                <span className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
-                  XP Earned
-                </span>
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                {breakdownItems.length > 0 ? breakdownItems.map((item) => (
-                  <div key={item.key} className="flex items-center gap-1 rounded-md border border-amber-500/20 bg-background/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground shadow-sm">
-                    <span>{item.label}</span>
-                    <span className="font-bold text-foreground">+{item.value}</span>
-                  </div>
-                )) : (
-                  <div className="flex items-center gap-1 rounded-md border border-border/40 bg-background/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
-                    No eligible XP
-                  </div>
-                )}
-                {repeatMultiplier !== null && repeatMultiplier < 1 ? (
-                  <div className="flex items-center gap-1 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 shadow-sm dark:text-amber-300">
-                    Repeat multiplier {Math.round(repeatMultiplier * 100)}%
-                  </div>
-                ) : null}
-                {capApplied ? (
-                  <div className="flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700 shadow-sm dark:text-sky-300">
-                    Daily cap applied
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="flex w-full items-center gap-2 rounded-xl border border-border/50 bg-background/50 px-3 py-2 shadow-sm sm:w-auto">
-              <Trophy className="h-4 w-4 text-amber-500" />
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">Level</span>
-                <span className="text-sm font-bold text-foreground leading-tight mt-0.5">{levelAfter ?? "1"}</span>
-              </div>
-            </div>
-            <div className="flex w-full items-center gap-2 rounded-xl border border-border/50 bg-background/50 px-3 py-2 shadow-sm sm:w-auto">
-              <Flame className="h-4 w-4 text-orange-500" />
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">Streak</span>
-                <span className="text-sm font-bold text-foreground leading-tight mt-0.5">{currentStreak ?? 0}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function formatTimeTaken(value: number): string {
-  const totalSeconds = Math.max(0, value);
+  const totalSeconds = Math.max(0, Math.floor(value));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return `${String(hours).padStart(2, "0")} : ${String(minutes).padStart(2, "0")} : ${String(seconds).padStart(2, "0")}`;
-}
 
-function BreakdownCard({
-  title,
-  items
-}: {
-  title: string;
-  items: Array<{ label: string; correct: number; total: number }>;
-}) {
-  return (
-    <Card className="border-border/80">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {items.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {items.map((item) => (
-              <div key={item.label} className="rounded-xl border border-border/80 bg-muted/[0.16] p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">{formatQuestionFamilyLabel(item.label)}</p>
-                  <Badge tone={item.correct === item.total ? "success" : item.correct > 0 ? "warning" : "danger"}>
-                    {item.correct}/{item.total}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Breakdown will appear once the backend has finished scoring.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function formatQuestionFamilyLabel(value: string): string {
-  return value
-    .replace(/^(reading|listening)_/i, "")
-    .split("_")
-    .filter(Boolean)
-    .map((part) => {
-      const lower = part.toLowerCase();
-      if (lower === "mc") {
-        return "MC";
-      }
-      if (lower === "tfng") {
-        return "TFNG";
-      }
-      if (lower === "ynng") {
-        return "YNNG";
-      }
-      return lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join(" ");
-}
-
-function getProgressTheme(progress: number) {
-  if (progress >= 80) {
-    return {
-      bar: "rgb(16 185 129)",
-      border: "rgba(16,185,129,0.26)",
-      cardBg: "rgba(16,185,129,0.06)",
-    };
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
-  if (progress >= 60) {
-    return {
-      bar: "rgb(59 130 246)",
-      border: "rgba(59,130,246,0.24)",
-      cardBg: "rgba(59,130,246,0.06)",
-    };
-  }
-  if (progress >= 40) {
-    return {
-      bar: "rgb(245 158 11)",
-      border: "rgba(245,158,11,0.24)",
-      cardBg: "rgba(245,158,11,0.06)",
-    };
-  }
-  return {
-    bar: "rgb(244 63 94)",
-    border: "rgba(244,63,94,0.24)",
-    cardBg: "rgba(244,63,94,0.06)",
-  };
-}
 
-function SectionBreakdownCard({
-  items,
-  testType,
-}: {
-  items: Array<{ label: string; correct: number; total: number }>;
-  testType: string;
-}) {
-  const sectionPrefix = testType === "listening" ? "Part" : "Passage";
-
-  return (
-    <Card className="border-border/80">
-      <CardHeader className="pb-1.5">
-        <CardTitle>Section breakdown</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {items.length > 0 ? (
-          <div className="grid gap-1.5 xl:grid-cols-3">
-            {items.map((item, index) => {
-              const progress = item.total > 0 ? Math.round((item.correct / item.total) * 100) : 0;
-              const progressTheme = getProgressTheme(progress);
-              return (
-                <div
-                  key={`${item.label}-${index}`}
-                  className="rounded-2xl border p-2"
-                  style={{
-                    borderColor: progressTheme.border,
-                    backgroundColor: progressTheme.cardBg,
-                  }}
-                >
-                  <div className="space-y-0.5">
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold tracking-tight text-foreground">
-                        {sectionPrefix} {index + 1}
-                      </p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="h-1.5 overflow-hidden rounded-full bg-border/60">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${progress}%`, backgroundColor: progressTheme.bar }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
-                        <span>{item.correct}/{item.total} correct</span>
-                        <span>{progress}%</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Breakdown will appear once the backend has finished scoring.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }

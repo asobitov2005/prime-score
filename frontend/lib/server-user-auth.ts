@@ -50,7 +50,33 @@ async function refreshServerAccessToken(refreshToken: string): Promise<string | 
   }
 }
 
-async function getServerAccessToken(): Promise<string | null> {
+function getHeaderValue(headers: HeadersInit | undefined, name: string): string | null {
+  if (!headers) {
+    return null;
+  }
+
+  return new Headers(headers).get(name);
+}
+
+function getBearerTokenFromAuthorizationHeader(headers: HeadersInit | undefined): string | null {
+  const authorization = getHeaderValue(headers, "Authorization");
+  if (!authorization) {
+    return null;
+  }
+
+  const [scheme, token] = authorization.trim().split(/\s+/, 2);
+  if (scheme.toLowerCase() !== "bearer" || !token) {
+    return null;
+  }
+
+  return token;
+}
+
+async function getServerAccessToken(fallbackAccessToken?: string | null): Promise<string | null> {
+  if (fallbackAccessToken) {
+    return fallbackAccessToken;
+  }
+
   const cookieStore = cookies();
   const accessToken = cookieStore.get(USER_ACCESS_TOKEN_COOKIE)?.value ?? null;
   if (accessToken) {
@@ -59,10 +85,10 @@ async function getServerAccessToken(): Promise<string | null> {
 
   const refreshToken = cookieStore.get(USER_REFRESH_TOKEN_COOKIE)?.value ?? null;
   if (!refreshToken) {
-    return null;
+    return fallbackAccessToken ?? null;
   }
 
-  return refreshServerAccessToken(refreshToken);
+  return (await refreshServerAccessToken(refreshToken)) ?? fallbackAccessToken ?? null;
 }
 
 function isUserAuthFailureStatus(status: number): boolean {
@@ -89,7 +115,8 @@ export async function requestServerUserApi<T>(path: string, init?: RequestInit):
     }
   };
 
-  let accessToken = await getServerAccessToken();
+  const forwardedAccessToken = getBearerTokenFromAuthorizationHeader(init?.headers);
+  let accessToken = await getServerAccessToken(forwardedAccessToken);
   if (!accessToken) {
     throw new ServerUserApiError("Authentication is required.", 401);
   }

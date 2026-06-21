@@ -1100,14 +1100,66 @@ function getQuestionStartOffset(
   return 1;
 }
 
+function getQuestionStartForSection(
+  draftType: AdminTestDraftState["metadata"]["type"],
+  format: AdminTestDraftState["metadata"]["format"],
+  sectionIndex: number,
+) {
+  if (format !== "full") {
+    return getQuestionStartOffset(draftType, format);
+  }
+
+  if (draftType === "listening") {
+    return sectionIndex * 10 + 1;
+  }
+
+  if (sectionIndex <= 0) {
+    return 1;
+  }
+  if (sectionIndex === 1) {
+    return 14;
+  }
+  if (sectionIndex === 2) {
+    return 27;
+  }
+  return 1;
+}
+
+const STRUCTURAL_GROUP_UPDATE_KEYS = new Set([
+  "typeId",
+  "sectionId",
+  "questionBlock",
+  "answerBlock",
+  "secondaryBlock",
+  "sharedOptions",
+  "questions",
+  "questionStart",
+  "questionEnd",
+]);
+
+function isStructuralGroupUpdate(updates: Partial<AdminTestDraftQuestionGroup>) {
+  return Object.keys(updates).some((key) => STRUCTURAL_GROUP_UPDATE_KEYS.has(key));
+}
+
 function normalizeQuestionGroups(
   groups: AdminTestDraftQuestionGroup[],
   draftType: AdminTestDraftState["metadata"]["type"] = "reading",
   format: AdminTestDraftState["metadata"]["format"] = "full",
+  sections: AdminTestDraftContentSection[] = [],
 ) {
+  const sectionOrder = new Map(sections.map((section, index) => [section.id, index]));
+  let activeSectionId: string | null = null;
   let nextQuestionStart = getQuestionStartOffset(draftType, format);
 
   return groups.map((group) => {
+    if (format === "full" && sections.length > 0) {
+      const sectionIndex = sectionOrder.get(group.sectionId);
+      if (sectionIndex !== undefined && group.sectionId !== activeSectionId) {
+        activeSectionId = group.sectionId;
+        nextQuestionStart = getQuestionStartForSection(draftType, format, sectionIndex);
+      }
+    }
+
     let cursor = nextQuestionStart;
     const normalizedQuestions = group.questions.map((question) => {
       const slotCount = questionSlotCount(group, question);
@@ -3330,6 +3382,7 @@ function QuestionsPanel({
         ),
         current.metadata.type,
         current.metadata.format,
+        current.content.sections,
       )
     }));
   };
@@ -3347,6 +3400,7 @@ function QuestionsPanel({
         ),
         current.metadata.type,
         current.metadata.format,
+        current.content.sections,
       ),
     }));
   };
@@ -3392,10 +3446,8 @@ function QuestionsPanel({
   };
 
   const updateGroup = (groupId: string, updates: Partial<AdminTestDraftQuestionGroup>) => {
-    setDraft((current) => ({
-      ...current,
-      questionGroups: normalizeQuestionGroups((() => {
-        const nextGroups = (current.questionGroups ?? []).map((g) => {
+    setDraft((current) => {
+      let nextGroups = (current.questionGroups ?? []).map((g) => {
           if (g.id !== groupId) return g;
 
           let newGroup = { ...g, ...updates };
@@ -3556,25 +3608,39 @@ function QuestionsPanel({
           return newGroup;
         });
 
-        if (updates.sectionId) {
-          return reorderQuestionGroupsForDrop(
-            nextGroups,
-            current.content.sections,
-            groupId,
-            updates.sectionId,
-            null,
-          );
-        }
+      if (updates.sectionId) {
+        nextGroups = reorderQuestionGroupsForDrop(
+          nextGroups,
+          current.content.sections,
+          groupId,
+          updates.sectionId,
+          null,
+        );
+      }
 
-        return nextGroups;
-      })(), current.metadata.type, current.metadata.format)
-    }));
+      return {
+        ...current,
+        questionGroups: isStructuralGroupUpdate(updates)
+          ? normalizeQuestionGroups(
+              nextGroups,
+              current.metadata.type,
+              current.metadata.format,
+              current.content.sections,
+            )
+          : nextGroups,
+      };
+    });
   };
 
   const removeGroup = (groupId: string) => {
     setDraft((current) => ({
       ...current,
-      questionGroups: normalizeQuestionGroups((current.questionGroups ?? []).filter((g) => g.id !== groupId), current.metadata.type, current.metadata.format)
+      questionGroups: normalizeQuestionGroups(
+        (current.questionGroups ?? []).filter((g) => g.id !== groupId),
+        current.metadata.type,
+        current.metadata.format,
+        current.content.sections,
+      )
     }));
   };
 
@@ -3587,7 +3653,7 @@ function QuestionsPanel({
           ...g,
           questions: g.questions.map((q) => q.id === questionId ? { ...q, ...updates } : q)
         };
-      }), current.metadata.type, current.metadata.format)
+      }), current.metadata.type, current.metadata.format, current.content.sections)
     }));
   };
 
@@ -3600,7 +3666,7 @@ function QuestionsPanel({
           ...g,
           questions: g.questions.filter((q) => q.id !== questionId)
         };
-      }), current.metadata.type, current.metadata.format)
+      }), current.metadata.type, current.metadata.format, current.content.sections)
     }));
   };
 
@@ -3646,7 +3712,12 @@ function QuestionsPanel({
 
   useEffect(() => {
     setDraft((current) => {
-      const normalized = normalizeQuestionGroups(current.questionGroups ?? [], current.metadata.type, current.metadata.format);
+      const normalized = normalizeQuestionGroups(
+        current.questionGroups ?? [],
+        current.metadata.type,
+        current.metadata.format,
+        current.content.sections,
+      );
       if (JSON.stringify(normalized) === JSON.stringify(current.questionGroups ?? [])) {
         return current;
       }

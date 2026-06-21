@@ -1,6 +1,8 @@
 import { ExamPreviewAccessGate } from "@/components/exam/exam-preview-access-gate";
 import { ReadingExamPreview, type ReadingExamPreviewData } from "@/components/exam/reading-exam-preview";
-import { getBackendAttempt, getBackendAttemptReview } from "@/lib/server-attempts";
+import { getBackendAttempt, getBackendAttemptReview, startBackendAttempt } from "@/lib/server-attempts";
+import { normalizeExamStart } from "@/lib/exam-start";
+import { sanitizeQuestionGroupOptionFields } from "@/lib/question-group-options";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -11,6 +13,12 @@ interface ReadingExamPreviewPageProps {
     mode?: string;
     attemptId?: string;
     testId?: string;
+    sectionId?: string;
+    questionId?: string;
+    questionType?: string;
+    start?: string;
+    scope?: string;
+    forceNew?: string;
   };
 }
 
@@ -149,7 +157,10 @@ function offsetQuestionReferences(text: string | null | undefined, offset: numbe
   });
 }
 
-async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPreviewData | null> {
+async function buildAttemptPreviewData(
+  attemptId: string,
+  initialReviewTarget?: ReadingExamPreviewData["initialReviewTarget"]
+): Promise<ReadingExamPreviewData | null> {
   const attempt = await getBackendAttempt(attemptId).catch(() => null);
   const snapshot = attempt?.test_snapshot;
 
@@ -229,7 +240,7 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
         ? adjustedGroupQuestionEnd
         : Math.max(lastQuestionNumber, adjustedGroupQuestionEnd);
 
-      questionGroups.push({
+      questionGroups.push(sanitizeQuestionGroupOptionFields({
         id: group.group_id,
         title: offsetQuestionReferences(group.group_title, sectionQuestionOffset) ?? group.group_title,
         instruction: offsetQuestionReferences(group.questions[0]?.instructions ?? group.group_title, sectionQuestionOffset) ?? group.group_title,
@@ -254,7 +265,7 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
           instruction: question.instructions,
           options: question.options ?? [],
         })),
-      });
+      }));
     });
   });
 
@@ -288,12 +299,14 @@ async function buildAttemptPreviewData(attemptId: string): Promise<ReadingExamPr
     initialAnswers: attempt.answers ?? {},
     initialTextHighlights: attempt.text_highlights ?? {},
     initialTimeSpentSeconds: attempt.time_spent_sec ?? 0,
+    initialSectionTimeSpentSeconds: attempt.section_time_spent_sec ?? {},
     initialUiState: {
       theme: attempt.ui_state?.theme ?? undefined,
       splitRatio: attempt.ui_state?.split_ratio ?? undefined,
       fontScale: attempt.ui_state?.font_scale ?? undefined,
       activeQuestionId: attempt.active_question_id ?? undefined,
     },
+    initialReviewTarget,
     reviewItems,
   };
 }
@@ -378,7 +391,7 @@ async function buildGuestPreviewData(testId: string): Promise<ReadingExamPreview
         ? adjustedGroupQuestionEnd
         : Math.max(lastQuestionNumber, adjustedGroupQuestionEnd);
 
-      questionGroups.push({
+      questionGroups.push(sanitizeQuestionGroupOptionFields({
         id: group.group_id,
         title: offsetQuestionReferences(group.group_title, sectionQuestionOffset) ?? group.group_title,
         instruction: offsetQuestionReferences(group.questions[0]?.instructions ?? group.group_title, sectionQuestionOffset) ?? group.group_title,
@@ -403,7 +416,7 @@ async function buildGuestPreviewData(testId: string): Promise<ReadingExamPreview
           instruction: question.instructions,
           options: question.options ?? [],
         })),
-      });
+      }));
     });
   });
 
@@ -424,6 +437,7 @@ async function buildGuestPreviewData(testId: string): Promise<ReadingExamPreview
     initialAnswers: {},
     initialTextHighlights: {},
     initialTimeSpentSeconds: 0,
+    initialSectionTimeSpentSeconds: {},
     initialUiState: {},
     reviewItems: {},
   };
@@ -440,20 +454,54 @@ export default async function ReadingExamPreviewPage({ searchParams }: ReadingEx
         
   const attemptId = searchParams?.attemptId;
   const testId = searchParams?.testId;
+  const isStart = searchParams?.start === "1";
+  const initialReviewTarget: ReadingExamPreviewData["initialReviewTarget"] = {
+    sectionId: searchParams?.sectionId,
+    questionId: searchParams?.questionId,
+    questionType: searchParams?.questionType,
+  };
 
-  if (mode === "guest" && testId) {
+  // Instant-start: the attempt is created on the server here so the user enters
+  // the exam immediately on click (with the loading skeleton) instead of waiting
+  // on the catalog page while the start request resolves.
+  if (isStart && testId && mode !== "review" && mode !== "guest") {
+    const normalized = normalizeExamStart({
+      scope: searchParams?.scope,
+      mode: searchParams?.mode,
+      sectionId: searchParams?.sectionId,
+      forceNew: searchParams?.forceNew === "1",
+    });
+
+    try {
+      const started = await startBackendAttempt({
+        testId,
+        scope: normalized.scope,
+        sectionId: normalized.sectionId,
+        mode: normalized.mode,
+        forceNew: normalized.forceNew,
+      });
+      const data = await buildAttemptPreviewData(started.attemptId, initialReviewTarget);
+      if (data) {
+        return <ReadingExamPreview mode={normalized.mode} data={data} />;
+      }
+    } catch {
+      // Fall through to the guest/access-gate handling below.
+    }
+  }
+
+  if (testId && mode !== "review") {
     const data = await buildGuestPreviewData(testId);
     if (!data) {
       return <ExamPreviewAccessGate kind="reading" backHref="/tests?type=reading" />;
     }
-    return <ReadingExamPreview mode="guest" data={data} />;
+    return <ReadingExamPreview mode={mode} data={data} />;
   }
 
   if (!attemptId) {
     return <ExamPreviewAccessGate kind="reading" backHref="/tests?type=reading" />;
   }
 
-  const data = await buildAttemptPreviewData(attemptId);
+  const data = await buildAttemptPreviewData(attemptId, initialReviewTarget);
   if (!data) {
     return <ExamPreviewAccessGate kind="reading" backHref="/tests?type=reading" />;
   }

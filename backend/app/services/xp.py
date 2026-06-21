@@ -13,7 +13,7 @@ from app.models.gamification import LeaderboardEntry, Streak, XPTransaction
 from app.models.speaking import SpeakingEvaluation, SpeakingSession, SpeakingTest
 from app.models.user import User
 from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
-from app.services.runtime_store import band_for_raw_score
+from app.services.attempt_runtime import band_for_raw_score
 
 TX_TEST_COMPLETION = "TEST_COMPLETION"
 TX_SCORE_BONUS = "SCORE_BONUS"

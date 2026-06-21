@@ -22,6 +22,7 @@ import {
   buttonClassName,
   cn
 } from "@/components/ui";
+import { AdminTableLoadingSkeleton } from "@/components/loading-skeletons";
 import type { WritingSubmission } from "@/lib/writing-api";
 import {
   describeSubmissionStatus,
@@ -306,10 +307,7 @@ export default function WritingSubmissionsPage() {
       <Card className="rounded-2xl overflow-hidden">
         <CardContent className="overflow-x-auto p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              Loading submissions…
-            </div>
+            <AdminTableLoadingSkeleton rows={6} columns={8} />
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
               <div className="rounded-full bg-primary/10 p-5">

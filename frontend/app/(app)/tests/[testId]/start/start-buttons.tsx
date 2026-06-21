@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { trackTestStart } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { emitNavigationStart } from "@/lib/navigation-transition";
+import { buildExamStartHref } from "@/lib/exam-start";
 
 export function StartTestButton({
   testId,
@@ -38,41 +39,19 @@ export function StartTestButton({
       variant={variant}
       disabled={isSubmitting}
       className={cn("w-full h-12 font-bold shadow-sm transition-all", className)}
-      onClick={async () => {
-        try {
-          setIsSubmitting(true);
-          const response = await fetch("/internal-api/attempts/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              testId,
-              scope,
-              mode,
-              sectionId
-            })
-          });
-
-          if (!response.ok) throw new Error("Failed to start.");
-          const result = (await response.json()) as { attemptId: string };
-          trackTestStart({
-            attemptId: result.attemptId,
-            testId,
-            testTitle,
-            testType,
-            mode,
-            scope,
-            sectionId,
-          });
-          const resumeToken = Date.now();
-          const href = testType === "reading"
-            ? "/exam-preview/reading?attemptId=" + result.attemptId + "&mode=" + mode + "&resume=" + resumeToken
-            : "/exam-preview/listening?attemptId=" + result.attemptId + "&mode=" + mode + "&resume=" + resumeToken;
-          emitNavigationStart(href);
-          router.push(href);
-        } catch (err) {
-           console.error(err);
-           setIsSubmitting(false);
-        }
+      onClick={() => {
+        setIsSubmitting(true);
+        trackTestStart({
+          testId,
+          testTitle,
+          testType,
+          mode,
+          scope,
+          sectionId,
+        });
+        const href = buildExamStartHref({ testType, testId, scope, mode, sectionId });
+        emitNavigationStart(href);
+        router.push(href);
       }}
     >
       {isSubmitting ? (

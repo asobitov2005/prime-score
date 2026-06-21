@@ -65,3 +65,17 @@ export function getFrontendServerApiBaseUrl(): string {
 
   return resolved;
 }
+
+export function getFrontendClientWebSocketApiBaseUrl(): string {
+  const httpBaseUrl = getFrontendClientApiBaseUrl();
+  if (typeof window !== "undefined" && httpBaseUrl.startsWith("/")) {
+    const isLocalHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (process.env.NODE_ENV !== "production" && isLocalHost) {
+      return `ws://127.0.0.1:8000${httpBaseUrl}`;
+    }
+  }
+  const origin = typeof window === "undefined" ? getFrontendServerApiBaseUrl() : window.location.origin;
+  const url = new URL(httpBaseUrl, origin);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString().replace(/\/$/, "");
+}

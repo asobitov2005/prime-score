@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState, useEffect, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, CalendarDays, Headphones, LayoutDashboard, Radar, ShieldCheck, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell, PenSquare, Mic2 } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Suspense, useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { BookOpen, CalendarDays, LayoutDashboard, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell, Headphones, PenSquare, Mic2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -23,29 +22,6 @@ interface SiteShellProps {
   children: ReactNode;
 }
 
-const highlights = [
-  { 
-    title: "Telegram-only auth", 
-    desc: "Quick and secure sign in with your Telegram account.",
-    icon: ShieldCheck 
-  },
-  { 
-    title: "Strict IELTS scoring", 
-    desc: "Get results based on a realistic IELTS-style scoring system.",
-    icon: Radar 
-  },
-  { 
-    title: "All IELTS skills", 
-    desc: "Practice Reading, Listening, Writing, and Speaking preparation online.",
-    icon: LayoutDashboard 
-  },
-  { 
-    title: "Detailed answer review", 
-    desc: "Check correct answers with highlighted text after finishing the test.",
-    icon: Headphones 
-  }
-];
-
 export function SiteShell({ children }: SiteShellProps) {
   // This shell owns the authenticated navigation frame for the user-facing app.
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -64,8 +40,10 @@ export function SiteShell({ children }: SiteShellProps) {
     || currentPath.startsWith("/tests")
     || currentPath.startsWith("/attempts")
     || currentPath.startsWith("/history")
+    || currentPath.startsWith("/bookmarks")
     || currentPath.startsWith("/leaderboard")
     || currentPath.startsWith("/achievements")
+    || currentPath.startsWith("/analytics")
     || currentPath.startsWith("/subscription")
     || currentPath.startsWith("/settings")
     || currentPath.startsWith("/writing")
@@ -102,17 +80,16 @@ export function SiteShell({ children }: SiteShellProps) {
     const savedTheme = localStorage.getItem("prime-theme") as "light" | "dark" | null;
     const initialTheme = savedTheme || "light";
     setTheme(initialTheme);
+    document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(initialTheme);
-    // Ensure the other one is removed
-    document.documentElement.classList.remove(initialTheme === "light" ? "dark" : "light");
   }, []);
 
   const toggleTheme = () => {
     setTheme(prev => {
       const newTheme = prev === "light" ? "dark" : "light";
       localStorage.setItem("prime-theme", newTheme);
+      document.documentElement.classList.remove("light", "dark");
       document.documentElement.classList.add(newTheme);
-      document.documentElement.classList.remove(prev);
       trackUiInteraction({
         action: "theme_toggle",
         component: "site_shell",
@@ -257,6 +234,7 @@ export function SiteShell({ children }: SiteShellProps) {
 
   useEffect(() => {
     setIsMobileNavOpen(false);
+    setIsMockTestsOpen(false);
   }, [currentPath]);
 
   useEffect(() => {
@@ -290,14 +268,16 @@ export function SiteShell({ children }: SiteShellProps) {
 
   return (
     <div
-      className="min-h-screen bg-background selection:bg-primary/20 selection:text-primary text-left flex flex-col relative"
+      className={cn(
+        "min-h-screen selection:bg-blue-100 selection:text-blue-700 text-left flex flex-col relative",
+        isAppRoute
+          ? "bg-[#F8FAFC] dark:bg-slate-950 dark:text-slate-100"
+          : "bg-white text-slate-950 dark:bg-slate-950 dark:text-slate-100"
+      )}
       style={{
         "--app-shell-sticky-top": "4.5rem",
       } as CSSProperties}
     >
-      {/* Global Grid Background Added here */}
-      <div className="fixed inset-0 z-0 bg-grid pointer-events-none" />
-
       <Suspense fallback={null}>
         <NavigationTransitionOverlay />
       </Suspense>
@@ -323,13 +303,13 @@ export function SiteShell({ children }: SiteShellProps) {
                     +{welcomeBonusDays} day{welcomeBonusDays === 1 ? "" : "s"} of premium
                   </h3>
                   <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                    Complete a full Reading or Listening test to earn 2 more premium days.
+                    Complete a Full Test in Reading or Listening to earn 2 more premium days.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
               <div className="rounded-lg border border-border/70 bg-muted/30 p-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
@@ -348,7 +328,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">Next bonus</p>
-                    <p className="text-xs text-muted-foreground">Finish a full Reading or Listening test and get +2 days.</p>
+                    <p className="text-xs text-muted-foreground">Finish a Full Test in Reading or Listening and get +2 days.</p>
                   </div>
                 </div>
               </div>
@@ -357,7 +337,7 @@ export function SiteShell({ children }: SiteShellProps) {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild className="h-11 flex-1 rounded-lg bg-amber-500 font-semibold text-black hover:bg-amber-400">
                 <Link href="/tests?type=reading" onClick={closeWelcomeBonusModal}>
-                  Start Reading
+                  {"Start Reading"}
                 </Link>
               </Button>
               <Button
@@ -366,7 +346,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 className="h-11 flex-1 rounded-lg"
                 onClick={closeWelcomeBonusModal}
               >
-                Continue
+                {"Continue"}
               </Button>
             </div>
           </div>
@@ -374,150 +354,72 @@ export function SiteShell({ children }: SiteShellProps) {
       ) : null}
 
       <header 
-        className="sticky top-0 z-50 border-b border-primary/10 bg-background/95 shadow-[0_1px_0_hsl(var(--primary)/0.07),0_14px_36px_rgba(0,0,0,0.08)] flex items-center shrink-0 h-14 md:h-16"
+        className={cn(
+          "sticky top-0 z-50 flex h-14 shrink-0 items-center md:h-16",
+          isAppRoute
+            ? "border-b border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/95 lg:ml-[16.5rem] lg:w-[calc(100%-16.5rem)]"
+            : "border-b border-slate-200/60 bg-white/70 shadow-[0_8px_32px_-18px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-950/70"
+        )}
       >
-        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2 group focus-visible:outline-none rounded-xl">
-            <div className="relative flex items-center justify-center h-9 md:h-10 transition-transform duration-300 group-hover:scale-105">
-              <img src={theme === "light" ? "/logo-light.svg" : "/logo.svg"} alt="PrimeScore" className="relative z-10 h-full w-auto object-contain drop-shadow-sm" />
-            </div>
-          </Link>
+        <div
+          className={cn(
+            "flex w-full items-center justify-between",
+            isAppRoute ? "mx-auto max-w-[77rem] px-4 sm:px-6 lg:px-6" : "mx-auto max-w-[90rem] px-2 sm:px-3 lg:px-3",
+          )}
+        >
+          {isAppRoute ? (
+            <>
+              <Link href="/" className="flex h-10 min-w-0 shrink -translate-y-0.5 items-center gap-2 rounded-xl lg:hidden">
+                <img src="/logo-light.svg" alt="PrimeScore" className="h-6 w-auto shrink-0 object-contain dark:hidden" />
+                <img src="/logo.svg" alt="PrimeScore" className="hidden h-6 w-auto shrink-0 object-contain dark:block" />
+                <span className="flex h-6 min-w-0 items-center" aria-hidden="true">
+                  <img src="/exam-logo-lightmode.svg" alt="" className="h-full w-auto max-w-full object-contain dark:hidden" />
+                  <img src="/exam-logo-darkmode.svg" alt="" className="hidden h-full w-auto max-w-full object-contain dark:block" />
+                </span>
+              </Link>
+            </>
+          ) : (
+            <Link href="/" className="flex min-w-0 shrink -translate-y-0.5 items-center gap-2 rounded-xl group focus-visible:outline-none sm:gap-2.5">
+              <div className="relative flex h-6 shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-105 md:h-8">
+                <img src="/logo-light.svg" alt="PrimeScore" className="relative z-10 h-full w-auto object-contain drop-shadow-sm dark:hidden" />
+                <img src="/logo.svg" alt="PrimeScore" className="relative z-10 hidden h-full w-auto object-contain drop-shadow-sm dark:block" />
+              </div>
+              <span className="flex h-6 min-w-0 items-center md:h-9" aria-hidden="true">
+                <img src="/exam-logo-lightmode.svg" alt="" className="h-full w-auto max-w-full object-contain dark:hidden" />
+                <img src="/exam-logo-darkmode.svg" alt="" className="hidden h-full w-auto max-w-full object-contain dark:block" />
+              </span>
+            </Link>
+          )}
 
           {!isAppRoute ? (
-          <nav className="hidden items-center md:flex ml-auto mr-6 gap-5">
-            <div 
-              className="relative group py-3"
-              onClick={(e) => e.stopPropagation()}
-              onMouseEnter={() => setIsMockTestsOpen(true)}
-              onMouseLeave={() => {
-                setTimeout(() => {
-                  const isStillHovering = document.querySelector(".practice-tests-dropdown:hover");
-                  const isStillHoveringParent = document.querySelector(".practice-tests-parent:hover");
-                  if (!isStillHovering && !isStillHoveringParent) {
-                    setIsMockTestsOpen(false);
-                  }
-                }, 100);
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setIsMockTestsOpen((current) => !current)}
-                className={cn(
-                  "practice-tests-parent flex items-center gap-1 rounded-lg px-3 py-1.5 text-[14px] font-semibold transition-all hover:bg-muted/30 active:scale-95 outline-none",
-                  currentPath.startsWith("/tests") ? "text-primary bg-primary/5" : "text-muted-foreground/80 hover:text-foreground"
-                )}
-              >
-                Practice Tests <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform duration-200", isMockTestsOpen && "rotate-180")} />
-              </button>
-
-              <div className={cn(
-                "practice-tests-dropdown absolute top-full left-1/2 -translate-x-1/2 mt-1 w-[620px] rounded-2xl border border-border bg-card p-2 shadow-2xl transition-all duration-300 z-[60] grid grid-cols-2 gap-2",
-                isMockTestsOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
-              )}>
-                <Link 
-                  href="/tests?type=reading" 
-                  onClick={() => {
-                    trackNavigationClick({
-                      label: "Reading",
-                      href: "/tests?type=reading",
-                      location: "practice_tests_dropdown",
-                      authState: isAuthenticated ? "authenticated" : "guest",
-                    });
-                    setIsMockTestsOpen(false);
-                  }}
-                  className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
-                >
-                  <div className="w-10 h-10 shrink-0 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                  </div>
-                  <div className="space-y-0.5 text-left">
-                    <p className="text-sm font-bold text-foreground">Reading</p>
-                    <p className="text-[10px] font-medium text-muted-foreground/70 leading-none">Academic IELTS</p>
-                  </div>
-                </Link>
-                <Link 
-                  href="/tests?type=listening" 
-                  onClick={() => {
-                    trackNavigationClick({
-                      label: "Listening",
-                      href: "/tests?type=listening",
-                      location: "practice_tests_dropdown",
-                      authState: isAuthenticated ? "authenticated" : "guest",
-                    });
-                    setIsMockTestsOpen(false);
-                  }}
-                  className="flex-1 flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
-                >
-                  <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
-                    <Headphones className="h-5 w-5" />
-                  </div>
-                  <div className="space-y-0.5 text-left">
-                    <p className="text-sm font-bold text-foreground">Listening</p>
-                    <p className="text-[10px] font-medium text-muted-foreground/70 leading-none">Academic IELTS</p>
-                  </div>
-                </Link>
-                <Link
-                  href="/writing"
-                  onClick={() => {
-                    trackNavigationClick({
-                      label: "Writing",
-                      href: "/writing",
-                      location: "practice_tests_dropdown",
-                      authState: isAuthenticated ? "authenticated" : "guest",
-                    });
-                    setIsMockTestsOpen(false);
-                  }}
-                  className="flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
-                >
-                  <div className="w-10 h-10 shrink-0 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
-                    <PenSquare className="h-5 w-5" />
-                  </div>
-                  <div className="space-y-0.5 text-left">
-                    <p className="text-sm font-bold text-foreground">Writing</p>
-                    <p className="text-[10px] font-medium text-muted-foreground/70 leading-none">Task 1 + Task 2</p>
-                  </div>
-                </Link>
-                <Link
-                  href="/ielts-speaking-mock-online"
-                  onClick={() => {
-                    trackNavigationClick({
-                      label: "Speaking",
-                      href: "/ielts-speaking-mock-online",
-                      location: "practice_tests_dropdown",
-                      authState: isAuthenticated ? "authenticated" : "guest",
-                    });
-                    setIsMockTestsOpen(false);
-                  }}
-                  className="flex items-center gap-3 px-3.5 py-3.5 rounded-xl border border-border/50 bg-background/50 hover:bg-muted/50 transition-all group/item"
-                >
-                  <div className="w-10 h-10 shrink-0 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover/item:scale-110 transition-transform shadow-inner">
-                    <Mic2 className="h-5 w-5" />
-                  </div>
-                  <div className="space-y-0.5 text-left">
-                    <p className="text-sm font-bold text-foreground">Speaking</p>
-                    <p className="text-[10px] font-medium text-muted-foreground/70 leading-none">Mock online</p>
-                  </div>
-                </Link>
-              </div>
-            </div>
-
-            <NavLink href="/#features" label="Features" />
-            <NavLink href="/pricing" label="Pricing" />
-            <NavLink href="/#reviews" label="Reviews" />
-            <NavLink href="/#about" label="About" />
+          <nav className="ml-auto mr-4 hidden items-center gap-1 md:flex">
+            <PracticeTestsMenu
+              isOpen={isMockTestsOpen}
+              currentPath={currentPath}
+              isAuthenticated={isAuthenticated}
+              onOpenChange={setIsMockTestsOpen}
+              variant="marketing"
+            />
+            <NavLink href="/#features" label={"Features"} variant="marketing" />
+            <NavLink href="/#pricing" label={"Pricing"} variant="marketing" />
+            <NavLink href="/#reviews" label={"Reviews"} variant="marketing" />
+            <NavLink href="/#about" label={"About"} variant="marketing" />
           </nav>
           ) : null}
 
-          <div className={cn("relative flex items-center gap-2 sm:gap-3", isAppRoute && "ml-auto")}>
+          <div className={cn("relative flex shrink-0 items-center gap-2 sm:gap-3", isAppRoute && "ml-auto")}>
+            {!isAppRoute ? (
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="hidden md:inline-flex h-10 w-10 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all active:scale-95"
-              title="Toggle Light/Dark Mode"
+              className="hidden h-10 w-10 rounded-xl text-slate-500 transition-all hover:bg-orange-50 hover:text-orange-500 active:scale-95 dark:text-slate-300 dark:hover:bg-orange-500/10 dark:hover:text-orange-300 md:inline-flex"
+              title={"Toggle Light/Dark Mode"}
+              aria-label={"Toggle Light/Dark Mode"}
             >
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
+            ) : null}
 
             {!isAppRoute ? (
               <button
@@ -526,34 +428,77 @@ export function SiteShell({ children }: SiteShellProps) {
                   e.stopPropagation();
                   setIsMobileNavOpen((v) => !v);
                 }}
-                className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/40 transition-all hover:bg-muted active:scale-95 md:hidden"
-                aria-label="Toggle navigation menu"
+                className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-950 shadow-sm backdrop-blur transition-all hover:border-orange-200 hover:bg-orange-50 active:scale-95 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-orange-500/10 md:hidden"
+                aria-label={"Menu"}
                 aria-expanded={isMobileNavOpen}
               >
-                <span className="sr-only">Menu</span>
+                <span className="sr-only">{"Menu"}</span>
                 <span
                   className={cn(
                     "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                    !isAppRoute && "bg-slate-950 dark:bg-slate-100",
                     isMobileNavOpen ? "rotate-45 translate-y-0" : "-translate-y-[5px]"
                   )}
                 />
                 <span
                   className={cn(
                     "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                    !isAppRoute && "bg-slate-950 dark:bg-slate-100",
                     isMobileNavOpen ? "opacity-0" : "translate-y-0 opacity-100"
                   )}
                 />
                 <span
                   className={cn(
                     "absolute left-1/2 top-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-foreground transition-all duration-300",
+                    !isAppRoute && "bg-slate-950 dark:bg-slate-100",
                     isMobileNavOpen ? "-rotate-45 translate-y-0" : "translate-y-[5px]"
                   )}
                 />
               </button>
             ) : null}
             
+            {isAppRoute && isAuthenticated && isPremium ? (
+              <span className="hidden h-10 cursor-default select-none items-center gap-2 rounded-full border border-amber-200 bg-[#FEF3C7] px-4 text-sm font-semibold text-amber-800 shadow-none dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200 md:inline-flex">
+                <PrimePremiumIcon className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+                {"Premium"}
+              </span>
+            ) : null}
+
+
+            {isAppRoute ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="hidden h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-500 shadow-none transition-all hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600 active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10 dark:hover:text-orange-300 md:inline-flex"
+                title={"Toggle Light/Dark Mode"}
+                aria-label={"Toggle Light/Dark Mode"}
+              >
+                {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </Button>
+            ) : null}
+
             {!mounted || !hasHydrated ? (
-              <div className="hidden md:block h-11 w-24 bg-muted animate-pulse rounded-xl" />
+              isAppRoute ? (
+                <div className="hidden md:block h-11 w-24 bg-muted animate-pulse rounded-xl" />
+              ) : (
+                <Button asChild size="lg" className="hidden md:inline-flex h-11 rounded-full border-none bg-orange-500 px-8 text-sm font-semibold text-white shadow-[0_20px_40px_-18px_rgba(249,115,22,0.85)] transition-all hover:-translate-y-0.5 hover:bg-orange-600 hover:shadow-xl">
+                  <Link
+                    href="/login"
+                    onClick={() => {
+                      trackCtaClick({
+                        ctaName: "header_login",
+                        ctaLabel: "Login",
+                        ctaLocation: "desktop_header",
+                        destination: "/login",
+                        authState: "guest",
+                      });
+                    }}
+                  >
+                    {"Login"}
+                  </Link>
+                </Button>
+              )
             ) : isAuthenticated ? (
               <div className="hidden md:flex items-center gap-3">
               {/* Notification Bell */}
@@ -572,16 +517,16 @@ export function SiteShell({ children }: SiteShellProps) {
                 {notifOpen && (
                   <div className="absolute top-full right-0 mt-3 w-80 max-h-96 rounded-2xl border border-border bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200 z-[60] overflow-hidden">
                     <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
-                      <p className="text-sm font-bold text-foreground">Notifications</p>
+                      <p className="text-sm font-bold text-foreground">{"Notifications"}</p>
                       {unreadCount > 0 && (
                         <button onClick={markAllRead} className="text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 transition-colors">
-                          Mark all read
+                          {"Mark all read"}
                         </button>
                       )}
                     </div>
                     <div className="max-h-72 overflow-y-auto overscroll-contain">
                       {notifications.length === 0 ? (
-                        <div className="px-4 py-8 text-center text-sm text-muted-foreground">No notifications yet</div>
+                        <div className="px-4 py-8 text-center text-sm text-muted-foreground">{"No notifications yet"}</div>
                       ) : (
                         notifications.map((n) => (
                           <div key={n.id} className={cn("px-4 py-3 border-b border-border/30 transition-colors", !n.is_read && "bg-primary/5")}>
@@ -625,7 +570,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 {isMenuOpen && (
                   <div className="absolute top-full right-0 mt-3 w-56 rounded-2xl border border-border bg-card p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-200 z-[60]">
                     <div className="px-3 py-3 border-b border-border/50 mb-1">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Authenticated via</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">{"Authenticated via"}</p>
                       <div className="flex items-center gap-2">
                         <div className="bg-[#2AABEE]/10 p-1.5 rounded-md">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#2AABEE]"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -639,7 +584,7 @@ export function SiteShell({ children }: SiteShellProps) {
                       onClick={() => setIsMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                     >
-                       <LayoutDashboard className="h-4 w-4" /> Dashboard
+                       <LayoutDashboard className="h-4 w-4" /> {"Dashboard"}
                     </Link>
 
                     <Link
@@ -647,21 +592,21 @@ export function SiteShell({ children }: SiteShellProps) {
                       onClick={() => setIsMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                     >
-                       <Settings2 className="h-4 w-4" /> Settings
+                       <Settings2 className="h-4 w-4" /> {"Settings"}
                     </Link>
 
                     <button
                       onClick={handleSignOut}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/10 transition-colors mt-1"
                     >
-                       <LogOut className="h-4 w-4" /> Sign Out
+                       <LogOut className="h-4 w-4" /> {"Sign Out"}
                     </button>
                   </div>
                 )}
               </div>
               </div>
             ) : (
-              <Button asChild size="lg" className="hidden md:inline-flex rounded-xl h-11 px-8 text-sm font-medium shadow-lg shadow-primary/20 hover:shadow-xl transition-all hover:-translate-y-0.5 bg-primary text-background border-none">
+              <Button asChild size="lg" className={cn("hidden md:inline-flex h-11 rounded-full px-8 text-sm font-semibold transition-all hover:-translate-y-0.5 hover:shadow-xl border-none", isAppRoute ? "bg-primary text-background shadow-lg shadow-primary/20" : "bg-orange-500 text-white shadow-[0_20px_40px_-18px_rgba(249,115,22,0.85)] hover:bg-orange-600")}>
                 <Link
                   href="/login"
                   onClick={() => {
@@ -674,7 +619,7 @@ export function SiteShell({ children }: SiteShellProps) {
                     });
                   }}
                 >
-                  Login
+                  {"Login"}
                 </Link>
               </Button>
             )}
@@ -684,146 +629,83 @@ export function SiteShell({ children }: SiteShellProps) {
 
       {isMobileNavOpen && !isAppRoute && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-background/70 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-md animate-in fade-in duration-200 md:hidden"
           onClick={() => setIsMobileNavOpen(false)}
         >
           <div
-            className="absolute left-3 right-3 rounded-2xl border border-border bg-card shadow-2xl p-3 animate-in slide-in-from-top-4 duration-200 top-[4.25rem]"
+            className="absolute left-3 right-3 top-[4.25rem] rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_40px_80px_-30px_rgba(15,23,42,0.35)] backdrop-blur-xl animate-in slide-in-from-top-4 duration-200 dark:border-slate-800 dark:bg-slate-900/95"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col gap-1">
-              <p className="px-3 pt-1 pb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Practice</p>
-              <Link
-                href="/ielts-reading-mock-online"
-                onClick={() => {
-                  trackNavigationClick({
-                    label: "Reading",
-                    href: "/ielts-reading-mock-online",
-                    location: "mobile_nav",
-                    authState: isAuthenticated ? "authenticated" : "guest",
-                  });
-                  setIsMobileNavOpen(false);
-                }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                </div>
-                <span className="text-sm font-semibold text-foreground">Reading</span>
-              </Link>
-              <Link
-                href="/ielts-listening-mock-online"
-                onClick={() => {
-                  trackNavigationClick({
-                    label: "Listening",
-                    href: "/ielts-listening-mock-online",
-                    location: "mobile_nav",
-                    authState: isAuthenticated ? "authenticated" : "guest",
-                  });
-                  setIsMobileNavOpen(false);
-                }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                  <Headphones className="h-[18px] w-[18px]" />
-                </div>
-                <span className="text-sm font-semibold text-foreground">Listening</span>
-              </Link>
-              <Link
+              <p className="px-3 pt-1 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-orange-500">{"Practice"}</p>
+              <MobilePracticeLink
+                href="/tests?type=reading"
+                label="Reading"
+                description={"Academic IELTS"}
+                icon={<BookOpen className="h-[18px] w-[18px]" />}
+                isAuthenticated={isAuthenticated}
+                onClose={() => setIsMobileNavOpen(false)}
+              />
+              <MobilePracticeLink
+                href="/tests?type=listening"
+                label="Listening"
+                description={"Academic IELTS"}
+                icon={<Headphones className="h-[18px] w-[18px]" />}
+                isAuthenticated={isAuthenticated}
+                onClose={() => setIsMobileNavOpen(false)}
+              />
+              <MobilePracticeLink
                 href="/writing"
-                onClick={() => {
-                  trackNavigationClick({
-                    label: "Writing",
-                    href: "/writing",
-                    location: "mobile_nav",
-                    authState: isAuthenticated ? "authenticated" : "guest",
-                  });
-                  setIsMobileNavOpen(false);
-                }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
-                  <PenSquare className="h-[18px] w-[18px]" />
-                </div>
-                <span className="text-sm font-semibold text-foreground">Writing</span>
-              </Link>
-              <Link
+                label="Writing"
+                description={"Task 1 + Task 2"}
+                icon={<PenSquare className="h-[18px] w-[18px]" />}
+                isAuthenticated={isAuthenticated}
+                onClose={() => setIsMobileNavOpen(false)}
+              />
+              <MobilePracticeLink
                 href="/ielts-speaking-mock-online"
-                onClick={() => {
-                  trackNavigationClick({
-                    label: "Speaking",
-                    href: "/ielts-speaking-mock-online",
-                    location: "mobile_nav",
-                    authState: isAuthenticated ? "authenticated" : "guest",
-                  });
-                  setIsMobileNavOpen(false);
-                }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
-              >
-                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                  <Mic2 className="h-[18px] w-[18px]" />
-                </div>
-                <span className="text-sm font-semibold text-foreground">Speaking</span>
-              </Link>
+                label="Speaking"
+                description={"Mock online"}
+                icon={<Mic2 className="h-[18px] w-[18px]" />}
+                isAuthenticated={isAuthenticated}
+                onClose={() => setIsMobileNavOpen(false)}
+              />
 
-              <div className="h-px bg-border/50 my-2" />
+              <div className="my-2 h-px bg-slate-200 dark:bg-slate-800" />
 
-              <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Explore</p>
-              <Link href="/#features" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                Features
-              </Link>
-              <Link href="/pricing" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                Pricing
-              </Link>
-              <Link href="/ielts-mock-test-online" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                IELTS Mock Online
-              </Link>
-              <Link href="/#reviews" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                Reviews
-              </Link>
-              <Link href="/#about" onClick={() => setIsMobileNavOpen(false)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                About
-              </Link>
+              <p className="px-3 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{"Explore"}</p>
+              <MobileNavLink href="/#features" label={"Features"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
+              <MobileNavLink href="/#pricing" label={"Pricing"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
+              <MobileNavLink href="/#reviews" label={"Reviews"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
+              <MobileNavLink href="/#about" label={"About"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
 
-              <div className="h-px bg-border/50 my-2" />
+              <div className="my-2 h-px bg-slate-200 dark:bg-slate-800" />
 
-              <button
-                onClick={() => {
-                  toggleTheme();
-                }}
-                className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-              >
-                <span>Appearance</span>
-                <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  {theme === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                  {theme === "dark" ? "Dark" : "Light"}
-                </span>
-              </button>
 
               {mounted && hasHydrated && isAuthenticated ? (
                 <>
                   <Link
                     href="/dashboard"
                     onClick={() => setIsMobileNavOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                    className="flex items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-orange-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-orange-500/10 dark:hover:text-slate-50"
                   >
-                    <LayoutDashboard className="h-4 w-4" /> Dashboard
+                    <LayoutDashboard className="h-4 w-4" /> {"Dashboard"}
                   </Link>
                   <Link
                     href="/settings"
                     onClick={() => setIsMobileNavOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                    className="flex items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-orange-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-orange-500/10 dark:hover:text-slate-50"
                   >
-                    <Settings2 className="h-4 w-4" /> Settings
+                    <Settings2 className="h-4 w-4" /> {"Settings"}
                   </Link>
                   <button
                     onClick={() => {
                       setIsMobileNavOpen(false);
                       handleSignOut();
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-sm font-bold text-red-500 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                   >
-                    <LogOut className="h-4 w-4" /> Sign Out
+                    <LogOut className="h-4 w-4" /> {"Sign Out"}
                   </button>
                 </>
               ) : mounted && hasHydrated ? (
@@ -839,9 +721,9 @@ export function SiteShell({ children }: SiteShellProps) {
                     });
                     setIsMobileNavOpen(false);
                   }}
-                  className="mt-1 flex items-center justify-center px-3 h-11 rounded-xl bg-primary text-background text-sm font-medium shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
+                  className="mt-1 flex h-11 items-center justify-center rounded-full bg-orange-500 px-3 text-sm font-semibold text-white shadow-[0_20px_40px_-18px_rgba(249,115,22,0.85)] transition-all active:scale-[0.98]"
                 >
-                  Login
+                  {"Login"}
                 </Link>
               ) : null}
             </div>
@@ -851,20 +733,23 @@ export function SiteShell({ children }: SiteShellProps) {
 
       <main className="flex-1">{children}</main>
 
-      {currentPath === "/" && (
-        <footer className="border-t border-border/40 bg-muted/30 shrink-0 pt-6 pb-8 mt-auto relative z-20">
-          <div className="w-full mx-auto px-4 text-center">
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
-              © 2026 PrimeScore · IELTS Mock Test Online Platform
-            </p>
-          </div>
-        </footer>
-      )}
     </div>
   );
 }
 
-function NavLink({ href, label, active }: { href: string; label: string; active?: boolean }) {
+function NavLink({
+  href,
+  label,
+  active,
+  variant,
+}: {
+  href: string;
+  label: string;
+  active?: boolean;
+  variant?: "marketing";
+}) {
+  const isMarketing = variant === "marketing";
+
   return (
     <Link
       href={href}
@@ -876,9 +761,269 @@ function NavLink({ href, label, active }: { href: string; label: string; active?
         });
       }}
       className={cn(
-        "rounded-lg px-3 py-1.5 text-[14px] font-semibold transition-all hover:bg-muted/30 active:scale-95",
-        active ? "text-primary bg-primary/5" : "text-muted-foreground/80 hover:text-foreground"
+        "text-[13px] font-semibold transition-all active:scale-95",
+        isMarketing
+          ? "rounded-full px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800/70"
+          : "rounded-lg px-3 py-1.5 hover:bg-orange-50 dark:hover:bg-orange-500/10",
+        active
+          ? isMarketing
+            ? "bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300"
+            : "bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-300"
+          : isMarketing
+            ? "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50"
+            : "text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-50",
       )}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function PracticeTestsMenu({
+  isOpen,
+  currentPath,
+  isAuthenticated,
+  onOpenChange,
+  variant,
+}: {
+  isOpen: boolean;
+  currentPath: string;
+  isAuthenticated: boolean;
+  onOpenChange: (value: boolean) => void;
+  variant?: "marketing";
+}) {
+  const isMarketing = variant === "marketing";
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isActive = currentPath.startsWith("/tests")
+    || currentPath.startsWith("/writing")
+    || currentPath.startsWith("/speaking")
+    || currentPath.startsWith("/ielts-");
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const openMenu = () => {
+    clearCloseTimer();
+    onOpenChange(true);
+  };
+
+  const scheduleClose = () => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => {
+      onOpenChange(false);
+      closeTimerRef.current = null;
+    }, 180);
+  };
+
+  useEffect(() => {
+    return () => clearCloseTimer();
+  }, []);
+
+  return (
+    <div
+      className="relative py-3"
+      onClick={(event) => event.stopPropagation()}
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleClose}
+      onFocus={openMenu}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          clearCloseTimer();
+          onOpenChange(!isOpen);
+        }}
+        className={cn(
+          "flex items-center gap-1 text-[13px] font-semibold transition-all active:scale-95",
+          isMarketing
+            ? "rounded-full px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800/70"
+            : "rounded-lg px-3 py-1.5 hover:bg-orange-50 dark:hover:bg-orange-500/10",
+          isActive
+            ? isMarketing
+              ? "bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300"
+              : "bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-300"
+            : isMarketing
+              ? "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50"
+              : "text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-50",
+        )}
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+      >
+        {"Practice Tests"}
+        <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform duration-200", isOpen && "rotate-180")} />
+      </button>
+
+      {/* Hover bridge: spans from the trigger's bottom edge down to the menu so
+          cursor movement never crosses a non-hoverable dead zone. Hover handlers
+          live only on the outer wrapper; since this menu is a DOM descendant,
+          moving between the trigger and the menu never fires the wrapper's
+          mouseleave, so the menu stays open. */}
+      <div
+        className={cn(
+          "absolute left-1/2 top-full z-[60] w-[620px] -translate-x-1/2 -translate-y-3 pt-3",
+          isOpen ? "pointer-events-auto" : "pointer-events-none"
+        )}
+      >
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.48)] transition-all duration-200 dark:border-slate-800 dark:bg-slate-900 dark:shadow-[0_24px_60px_-34px_rgba(0,0,0,0.85)]",
+            isOpen ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
+          )}
+          role="menu"
+        >
+          <PracticeDropdownLink
+            href="/tests?type=reading"
+            label="Reading"
+            description={"Academic IELTS"}
+            icon={<BookOpen className="h-4 w-4" />}
+            accentClassName="bg-blue-500/10 text-blue-500 dark:bg-blue-400/10 dark:text-blue-300"
+            isAuthenticated={isAuthenticated}
+            onClose={() => onOpenChange(false)}
+          />
+          <PracticeDropdownLink
+            href="/tests?type=listening"
+            label="Listening"
+            description={"Academic IELTS"}
+            icon={<Headphones className="h-4 w-4" />}
+            accentClassName="bg-emerald-500/10 text-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-300"
+            isAuthenticated={isAuthenticated}
+            onClose={() => onOpenChange(false)}
+          />
+          <PracticeDropdownLink
+            href="/writing"
+            label="Writing"
+            description={"Task 1 + Task 2"}
+            icon={<PenSquare className="h-4 w-4" />}
+            accentClassName="bg-violet-500/10 text-violet-500 dark:bg-violet-400/10 dark:text-violet-300"
+            isAuthenticated={isAuthenticated}
+            onClose={() => onOpenChange(false)}
+          />
+          <PracticeDropdownLink
+            href="/ielts-speaking-mock-online"
+            label="Speaking"
+            description={"Mock online"}
+            icon={<Mic2 className="h-4 w-4" />}
+            accentClassName="bg-orange-500/10 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300"
+            isAuthenticated={isAuthenticated}
+            onClose={() => onOpenChange(false)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PracticeDropdownLink({
+  href,
+  label,
+  description,
+  icon,
+  accentClassName,
+  isAuthenticated,
+  onClose,
+}: {
+  href: string;
+  label: string;
+  description: string;
+  icon: ReactNode;
+  accentClassName: string;
+  isAuthenticated: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={() => {
+        trackNavigationClick({
+          label,
+          href,
+          location: "practice_tests_dropdown",
+          authState: isAuthenticated ? "authenticated" : "guest",
+        });
+        onClose();
+      }}
+      className="group/item flex items-center gap-3 rounded-xl border border-slate-200/75 bg-white px-3.5 py-3 transition-all hover:border-orange-200 hover:bg-orange-50/55 dark:border-slate-800 dark:bg-slate-950/35 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10"
+      role="menuitem"
+    >
+      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-inner transition-transform group-hover/item:scale-105", accentClassName)}>
+        {icon}
+      </div>
+      <div className="space-y-0.5 text-left">
+        <p className="text-sm font-bold text-slate-950 dark:text-slate-50">{label}</p>
+        <p className="text-[10px] font-medium leading-none text-slate-500 dark:text-slate-400">{description}</p>
+      </div>
+    </Link>
+  );
+}
+
+function MobilePracticeLink({
+  href,
+  label,
+  description,
+  icon,
+  isAuthenticated,
+  onClose,
+}: {
+  href: string;
+  label: string;
+  description: string;
+  icon: ReactNode;
+  isAuthenticated: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={() => {
+        trackNavigationClick({
+          label,
+          href,
+          location: "mobile_nav",
+          authState: isAuthenticated ? "authenticated" : "guest",
+        });
+        onClose();
+      }}
+      className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-orange-50 dark:hover:bg-orange-500/10"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-bold leading-5 text-slate-800 dark:text-slate-100">{label}</p>
+        <p className="text-xs font-medium leading-4 text-slate-500 dark:text-slate-400">{description}</p>
+      </div>
+    </Link>
+  );
+}
+
+function MobileNavLink({
+  href,
+  label,
+  isAuthenticated,
+  onClose,
+}: {
+  href: string;
+  label: string;
+  isAuthenticated: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={() => {
+        trackNavigationClick({
+          label,
+          href,
+          location: "mobile_nav",
+          authState: isAuthenticated ? "authenticated" : "guest",
+        });
+        onClose();
+      }}
+      className="rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-orange-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-orange-500/10 dark:hover:text-slate-50"
     >
       {label}
     </Link>

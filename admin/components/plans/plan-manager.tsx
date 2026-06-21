@@ -531,7 +531,7 @@ export function PlanManager({ initialPlans }: PlanManagerProps) {
                   className="min-h-[180px]"
                   value={draft.perksText}
                   onChange={(event) => setDraft((current) => current ? { ...current, perksText: event.target.value } : current)}
-                  placeholder={"Full access to all IELTS mock tests\nDetailed test analysis after each test"}
+                  placeholder={"Enter one visible perk per line"}
                 />
                 <p className="text-xs font-medium text-muted-foreground">
                   One perk per line. These lines render directly under the plan price on the user-facing cards.

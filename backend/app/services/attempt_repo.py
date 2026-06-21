@@ -18,8 +18,7 @@ from app.models.enums import AttemptStatus as ModelAttemptStatus
 from app.models.enums import TestType as ModelTestType
 from app.models.user import User
 from app.services.premium_bonus import grant_premium_bonus
-from app.services.fixtures import build_test_snapshot, get_question_fixture
-from app.services.runtime_store import AttemptRuntime, _band_for_raw_score
+from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score
 from app.services.scoring import score_answer
 from app.services.snapshots import freeze_test_snapshot
 from app.services.test_content_repo import build_test_snapshot_from_db
@@ -115,12 +114,55 @@ def _normalized_attempt_time_spent(
     time_limit_seconds: int | None,
 ) -> int:
     normalized = max(0, int(saved_time_spent_sec or 0))
-    if normalized <= 0:
-        normalized = max(0, int(elapsed_fallback_sec))
+    elapsed = max(0, int(elapsed_fallback_sec))
+    if str(mode) in {ModelAttemptMode.EXAM.value, TestMode.exam.value}:
+        normalized = max(normalized, elapsed)
+    elif normalized <= 0:
+        normalized = elapsed
 
     if str(mode) in {ModelAttemptMode.EXAM.value, TestMode.exam.value} and int(time_limit_seconds or 0) > 0:
         normalized = min(normalized, int(time_limit_seconds or 0))
 
+    return normalized
+
+
+def _elapsed_attempt_seconds(attempt: Attempt, *, now: datetime | None = None) -> int:
+    if attempt.status != ModelAttemptStatus.IN_PROGRESS:
+        return 0
+    current_time = now or datetime.now(timezone.utc)
+    return max(0, int((current_time - attempt.created_at).total_seconds()))
+
+
+def _normalize_section_time_spent_sec(
+    raw: dict[str, object] | None,
+    *,
+    snapshot: dict[str, object],
+    time_limit_seconds: int | None = None,
+) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+
+    valid_section_ids = {
+        str(section.get("section_id") or section.get("id") or "").strip()
+        for section in snapshot.get("sections", [])
+        if isinstance(section, dict)
+    }
+    valid_section_ids.discard("")
+    max_section_seconds = max(0, int(time_limit_seconds or 0))
+    normalized: dict[str, int] = {}
+    for section_id, value in raw.items():
+        normalized_section_id = str(section_id).strip()
+        if not normalized_section_id:
+            continue
+        if valid_section_ids and normalized_section_id not in valid_section_ids:
+            continue
+        try:
+            normalized_value = max(0, int(value or 0))
+        except (TypeError, ValueError):
+            continue
+        if max_section_seconds:
+            normalized_value = min(normalized_value, max_section_seconds)
+        normalized[normalized_section_id] = normalized_value
     return normalized
 
 
@@ -179,6 +221,7 @@ def _to_runtime(
     attempt: Attempt,
     *,
     answers: list[UserAnswer],
+    elapsed_fallback_sec: int = 0,
 ) -> AttemptRuntime:
     snapshot = dict(attempt.test_snapshot or {})
     metadata = dict(attempt.attempt_metadata or {})
@@ -217,7 +260,7 @@ def _to_runtime(
         updated_at=attempt.updated_at or attempt.created_at,
         time_spent_sec=_normalized_attempt_time_spent(
             saved_time_spent_sec=int(metadata.get("time_spent_sec", 0) or 0),
-            elapsed_fallback_sec=0,
+            elapsed_fallback_sec=elapsed_fallback_sec,
             mode=attempt.mode,
             time_limit_seconds=attempt.time_limit_seconds,
         ),
@@ -318,8 +361,6 @@ async def start_attempt_in_db(
         section_id=section_id,
     )
     if snapshot is None:
-        snapshot = build_test_snapshot(test_id=test_id, scope=scope, mode=mode.value, section_id=section_id)
-    if snapshot is None:
         raise KeyError("test_not_found")
 
     frozen_snapshot = freeze_test_snapshot(snapshot)
@@ -375,7 +416,7 @@ async def get_attempt_from_db(
     if attempt is None:
         return None
     answers = await _load_answers(session, attempt.id)
-    return _to_runtime(attempt, answers=answers)
+    return _to_runtime(attempt, answers=answers, elapsed_fallback_sec=_elapsed_attempt_seconds(attempt))
 
 
 async def iter_user_attempts_from_db(session: AsyncSession, *, user_id: UUID) -> list[AttemptRuntime]:
@@ -411,7 +452,7 @@ async def save_answer_in_db(
 
     snapshot = dict(attempt.test_snapshot or {})
     snapshot_question = _snapshot_questions(snapshot).get(str(question_id))
-    if snapshot_question is None and get_question_fixture(attempt.test_id, question_id) is None:
+    if snapshot_question is None:
         raise KeyError("question_not_found")
 
     existing_answers = list(
@@ -439,7 +480,7 @@ async def save_answer_in_db(
         for duplicate in existing_answers[1:]:
             await session.delete(duplicate)
 
-    question_number = int(snapshot_question["question_number"]) if snapshot_question is not None else int(get_question_fixture(attempt.test_id, question_id)["question_number"])
+    question_number = int(snapshot_question["question_number"])
     await session.flush()
     persisted_answers = list(
         (
@@ -476,6 +517,7 @@ async def save_progress_in_db(
     *,
     attempt_id: UUID,
     time_spent_sec: int | None = None,
+    section_time_spent_sec: dict[str, object] | None = None,
     active_question_id: str | None = None,
     text_highlights: dict[str, list[dict[str, object]]] | None = None,
     ui_state: dict[str, object] | None = None,
@@ -488,9 +530,18 @@ async def save_progress_in_db(
 
     if time_spent_sec is not None:
         normalized_time_spent = max(0, int(time_spent_sec))
+        if attempt.mode == ModelAttemptMode.EXAM:
+            normalized_time_spent = max(normalized_time_spent, _elapsed_attempt_seconds(attempt))
         if attempt.mode == ModelAttemptMode.EXAM and attempt.time_limit_seconds:
             normalized_time_spent = min(normalized_time_spent, int(attempt.time_limit_seconds))
         metadata["time_spent_sec"] = normalized_time_spent
+
+    if section_time_spent_sec is not None:
+        metadata["section_time_spent_sec"] = _normalize_section_time_spent_sec(
+            section_time_spent_sec,
+            snapshot=dict(attempt.test_snapshot or {}),
+            time_limit_seconds=attempt.time_limit_seconds,
+        )
 
     if active_question_id is not None:
         normalized_active_question_id = str(active_question_id).strip()
@@ -544,6 +595,7 @@ async def save_progress_in_db(
             event_type="progress_saved",
             payload={
                 "time_spent_sec": metadata.get("time_spent_sec", 0),
+                "has_section_time": section_time_spent_sec is not None,
                 "has_highlights": text_highlights is not None,
                 "has_ui_state": ui_state is not None,
             },
@@ -599,13 +651,6 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
             ),
         }
         answer_key = db_answer_key.get(str(question_id)) or snapshot_answer_key.get(str(question_id))
-        fixture = get_question_fixture(attempt.test_id, question_id)
-        if answer_key is None and fixture is not None:
-            answer_key = {
-                "accepted_answers": list(fixture.get("accepted_answers", [])),
-                "explanation": fixture.get("explanation"),
-                "explanation_reference": fixture.get("explanation_reference", {}),
-            }
         if answer_key is None:
             continue
         answer_value = answer_map.get(str(question_id))
@@ -667,6 +712,13 @@ async def submit_attempt_in_db(session: AsyncSession, *, attempt_id: UUID) -> At
     metadata["answers_count"] = _count_non_empty_answer_values(list(answer_map.values()))
     metadata["score_status"] = "ready"
     metadata["time_spent_sec"] = time_spent_sec
+    metadata["section_time_spent_sec"] = _normalize_section_time_spent_sec(
+        metadata.get("section_time_spent_sec") if isinstance(metadata.get("section_time_spent_sec"), dict) else None,
+        snapshot=snapshot,
+        time_limit_seconds=attempt.time_limit_seconds,
+    )
+    if not metadata["section_time_spent_sec"] and attempt.scope == ModelAttemptScope.SECTION and attempt.section_id:
+        metadata["section_time_spent_sec"] = {str(attempt.section_id): time_spent_sec}
     metadata["scoring_items"] = freeze_test_snapshot(sorted(scoring_items, key=lambda item: item["question_number"]))
     metadata["section_breakdown"] = freeze_test_snapshot(list(section_counts.values()))
     metadata["question_type_breakdown"] = freeze_test_snapshot(list(type_counts.values()))

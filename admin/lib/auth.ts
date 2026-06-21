@@ -13,6 +13,7 @@ export type AdminAuthResponse = {
     email: string;
     phone_number?: string | null;
     telegram_id?: number | null;
+    auth_version?: number;
     role: "super_admin" | "admin";
     is_active: boolean;
   };

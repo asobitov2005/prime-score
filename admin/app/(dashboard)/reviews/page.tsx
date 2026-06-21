@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff, MessageSquarePlus, RefreshCw, Search, Sparkles, UserRound } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, SectionHeader, Select, Textarea, cn } from "@/components/ui";
+import { AdminReviewLoadingSkeleton } from "@/components/loading-skeletons";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 
@@ -364,9 +365,7 @@ export default function ReviewsAdminPage() {
 
           <CardContent className="space-y-4 pt-6">
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-border/60 px-6 py-16 text-center text-sm text-muted-foreground">
-                Loading reviews...
-              </div>
+              <AdminReviewLoadingSkeleton rows={4} />
             ) : filteredReviews.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border/60 px-6 py-16 text-center">
                 <p className="text-sm font-semibold text-foreground">No reviews matched the current filters.</p>

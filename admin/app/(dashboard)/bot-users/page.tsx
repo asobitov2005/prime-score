@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Card, CardContent, SectionHeader, buttonClassName, formatDate } from "@/components/ui";
+import { AdminTableLoadingSkeleton } from "@/components/loading-skeletons";
 import { getClientAdminAccessToken } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { cn } from "@/lib/utils";
@@ -164,7 +165,7 @@ export default function BotUsersPage() {
       <Card>
         <CardContent className="overflow-x-auto p-0">
           {loading ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">Loading...</div>
+            <AdminTableLoadingSkeleton rows={6} columns={7} />
           ) : (
             <table className="min-w-full border-separate border-spacing-0">
               <thead>

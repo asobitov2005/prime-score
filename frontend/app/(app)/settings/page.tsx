@@ -236,25 +236,24 @@ export default function SettingsPage() {
               <Settings2 className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">Account Settings</CardTitle>
+              <CardTitle className="text-xl md:text-2xl font-bold tracking-tight text-foreground">{"Account Settings"}</CardTitle>
               <CardDescription className="text-muted-foreground text-sm font-medium">
-                Manage your profile, preferences, and active sessions.
+                {"Manage your profile, preferences, and active sessions."}
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         
         <CardContent className="p-4 lg:p-5 space-y-4">
-          {/* Profile Info */}
           <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
             <CardHeader className="p-4 border-b border-border/40 bg-muted/5">
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <User className="h-4 w-4 text-primary" /> Profile Information
+                  <User className="h-4 w-4 text-primary" /> {"Profile Information"}
                 </CardTitle>
                 <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/5 px-3 py-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-600">Telegram Connected</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-600">{"Telegram Connected"}</span>
                 </div>
               </div>
             </CardHeader>
@@ -288,28 +287,28 @@ export default function SettingsPage() {
                       onClick={() => avatarInputRef.current?.click()}
                     >
                       {isSavingAvatar ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
-                      Change
+                      {"Change"}
                     </Button>
                     {avatarUrl ? (
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-8 gap-1.5 text-xs font-bold text-red-500 hover:bg-red-50 hover:text-red-600"
+                        className="h-8 gap-1.5 text-xs font-bold text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-300"
                         disabled={isSavingAvatar}
                         onClick={() => {
                           void handleRemoveAvatar();
                         }}
                       >
                         <ImageOff className="h-3.5 w-3.5" />
-                        Remove
+                        {"Remove"}
                       </Button>
                     ) : null}
                   </div>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Full Name</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{"Full Name"}</p>
                     {!isEditing && (
                       <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditing(true)}>
                         <Pencil className="h-3 w-3" />
@@ -329,7 +328,7 @@ export default function SettingsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600"
+                        className="h-8 w-8 text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
                         onClick={() => {
                           void handleSave();
                         }}
@@ -340,7 +339,7 @@ export default function SettingsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-300"
                         onClick={handleCancel}
                         disabled={isSavingProfile}
                       >
@@ -353,46 +352,57 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-1 md:border-l md:border-border/40 md:pl-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Phone Number</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{"Phone Number"}</p>
                   <p className="font-bold text-foreground">{phoneNumber || "No number attached"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Active Sessions */}
+
           <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
             <CardHeader className="p-4 border-b border-border/40 bg-muted/5 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Monitor className="h-4 w-4 text-primary" /> Active Sessions
+                <Monitor className="h-4 w-4 text-primary" /> {"Active Sessions"}
               </CardTitle>
               {sessions.length > 1 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-50"
+                  className="h-7 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:hover:text-red-300"
                   disabled={isSigningOutOthers}
                   onClick={() => {
                     void handleSignOutOthers();
                   }}
                 >
                   {isSigningOutOthers ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                  Sign out all others
+                  {"Sign out all others"}
                 </Button>
               )}
             </CardHeader>
             <CardContent className="p-0">
               {isLoadingSessions ? (
-                <div className="p-6 flex flex-col items-center justify-center space-y-2">
-                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <div className="divide-y divide-border/40">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="flex items-center justify-between gap-3 p-3.5">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="h-10 w-10 shrink-0 rounded-xl bg-muted animate-pulse" />
+                        <div className="min-w-0 space-y-2">
+                          <div className="h-4 w-32 rounded-md bg-muted animate-pulse" />
+                          <div className="h-3 w-64 max-w-full rounded-full bg-muted animate-pulse" />
+                        </div>
+                      </div>
+                      <div className="h-8 w-8 rounded-lg bg-muted animate-pulse" />
+                    </div>
+                  ))}
                 </div>
               ) : sessions.length === 0 ? (
                 <div className="p-4">
                   <EmptyState
                     compact
                     icon="monitor"
-                    title="No active sessions found"
-                    description="Your signed-in devices will appear here."
+                    title={"No active sessions found"}
+                    description={"Your signed-in devices will appear here."}
                     className="border-dashed bg-muted/15 shadow-none"
                   />
                 </div>
@@ -414,7 +424,7 @@ export default function SettingsPage() {
                             <div className="flex items-center gap-2">
                               <p className="font-bold text-sm text-foreground">{sessionMeta.primaryLabel}</p>
                               {session.id === currentSessionId && (
-                                <span className="text-[9px] font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded">Current</span>
+                                <span className="text-[9px] font-black uppercase tracking-tighter bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded">{"Current"}</span>
                               )}
                             </div>
                             <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
@@ -422,7 +432,7 @@ export default function SettingsPage() {
                               <span>•</span>
                               <span className="flex items-center gap-1"><Globe className="h-3 w-3 opacity-60" /> {session.ip_address || "Unknown IP"}</span>
                               <span>•</span>
-                              <span>Active {formatLastUsed(session.last_used_at)}</span>
+                              <span>{`Active ${formatLastUsed(session.last_used_at)}`}</span>
                             </div>
                           </div>
                         </div>
@@ -430,7 +440,7 @@ export default function SettingsPage() {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                          className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 dark:hover:text-red-300"
                           disabled={session.id === currentSessionId || revokingId === session.id} // Don't allow revoking current session
                           onClick={() => handleRevokeSession(session.id)}
                         >
@@ -448,17 +458,16 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Subscription Plan */}
           <Card className="border-border/60 bg-card/40 shadow-sm rounded-xl overflow-hidden">
             <CardHeader className="p-4 border-b border-border/40 bg-muted/5">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-primary" /> Subscription Plan
+                <CreditCard className="h-4 w-4 text-primary" /> {"Subscription Plan"}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="font-bold text-sm text-foreground">Current Plan:</p>
+                  <p className="font-bold text-sm text-foreground">{"Current Plan:"}</p>
                   <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${isPremium ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                     {isPremium ? "Premium" : "Free Basic"}
                   </span>
@@ -466,7 +475,7 @@ export default function SettingsPage() {
               </div>
               {!isPremium && (
                 <Button asChild size="sm" className="h-9 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm transition-transform active:scale-95">
-                  <Link href={subscriptionHref}>Upgrade Plan</Link>
+                  <Link href={subscriptionHref}>{"Upgrade Plan"}</Link>
                 </Button>
               )}
             </CardContent>

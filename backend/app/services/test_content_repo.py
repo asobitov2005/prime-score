@@ -342,18 +342,25 @@ def _serialize_admin_test(test: Test) -> dict[str, object]:
 
 def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: str) -> dict[str, object]:
     questions = sorted(group.questions, key=lambda item: item.number)
+    type_id = str(group.question_type.value)
+    secondary_block, options_title, shared_options = _sanitize_group_option_payload(
+        type_id,
+        secondary_block=group.shared_content.get("secondary_block"),
+        options_title=group.shared_content.get("options_title"),
+        shared_options=group.shared_options,
+    )
     return {
         "group_id": group.id,
         "group_title": group.title,
         "question_type": group.question_type.value,
         "question_start": group.question_start,
         "question_end": group.question_end,
-        "shared_options": list(group.shared_options),
+        "shared_options": shared_options,
         "shared_content": {
             "question_block": str(group.shared_content.get("question_block") or ""),
             "answer_block": str(group.shared_content.get("answer_block") or ""),
-            "secondary_block": str(group.shared_content.get("secondary_block") or ""),
-            "options_title": str(group.shared_content.get("options_title") or ""),
+            "secondary_block": secondary_block,
+            "options_title": options_title,
             "diagram_title": str(group.shared_content.get("diagram_title") or ""),
             "diagram_image_url": normalize_storage_asset_path(group.shared_content.get("diagram_image_url")),
         },
@@ -369,7 +376,7 @@ def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: s
                 "prompt": question.prompt,
                 "instructions": group.instructions or group.title,
                 "label": str(question.question_metadata.get("label") or f"Q{question.number}"),
-                "options": list(question.question_metadata.get("variants", [])) or list(group.shared_options),
+                "options": list(question.question_metadata.get("variants", [])) or list(shared_options),
                 "selection_limit": question.question_metadata.get("selection_limit"),
                 "word_limit": question.word_limit,
             }
@@ -523,7 +530,14 @@ def _serialize_snapshot_from_test(
                 "prompt": question.prompt,
                 "instructions": group.instructions or group.title,
                 "label": str(question.question_metadata.get("label") or f"Q{question.number}"),
-                "options": list(question.question_metadata.get("variants", [])) or list(group.shared_options),
+                "options": list(question.question_metadata.get("variants", [])) or list(
+                    _sanitize_group_option_payload(
+                        str(group.question_type.value),
+                        secondary_block=group.shared_content.get("secondary_block"),
+                        options_title=group.shared_content.get("options_title"),
+                        shared_options=group.shared_options,
+                    )[2]
+                ),
                 "selection_limit": question.question_metadata.get("selection_limit"),
                 "word_limit": question.word_limit,
             }
@@ -536,11 +550,21 @@ def _serialize_snapshot_from_test(
 
 
 async def ensure_fixture_tests_seeded(session: AsyncSession) -> None:
-    count = await session.scalar(select(func.count()).select_from(Test))
-    if count and count > 0:
+    fixture_ids = [UUID(str(fixture["id"])) for fixture in TEST_CATALOG_FIXTURES]
+    existing_ids = set(
+        (
+            await session.scalars(select(Test.id).where(Test.id.in_(fixture_ids)))
+        ).all()
+    )
+    missing_fixtures = [
+        fixture
+        for fixture in TEST_CATALOG_FIXTURES
+        if UUID(str(fixture["id"])) not in existing_ids
+    ]
+    if not missing_fixtures:
         return
 
-    for fixture in TEST_CATALOG_FIXTURES:
+    for fixture in missing_fixtures:
         test = Test(
             id=fixture["id"],
             slug=str(fixture["slug"]),
@@ -808,6 +832,54 @@ async def get_test_by_identifier_from_db(session: AsyncSession, identifier: str)
 def _question_number(label: str, fallback: int) -> int:
     match = re.search(r"\d+", label)
     return int(match.group(0)) if match else fallback
+
+
+def _group_type_uses_option_bank(type_id: str) -> bool:
+    type_str = str(type_id).lower()
+    if "matching_information" in type_str or "plan_map_labeling" in type_str:
+        return False
+    if "wordbank" in type_str:
+        return True
+    if "listening_matching" in type_str:
+        return True
+    if "matching_headings" in type_str:
+        return True
+    if "matching_features" in type_str:
+        return True
+    if "matching_sentence_endings" in type_str:
+        return True
+    if "matching" in type_str:
+        return True
+    return False
+
+
+def _sanitize_group_option_payload(
+    type_id: str,
+    *,
+    secondary_block: object,
+    options_title: object,
+    shared_options: object,
+) -> tuple[str, str, list[str]]:
+    normalized_shared_options = (
+        [str(option) for option in shared_options]
+        if isinstance(shared_options, list)
+        else []
+    )
+    type_str = str(type_id).lower()
+
+    if _group_type_uses_option_bank(type_id):
+        return (
+            str(secondary_block or ""),
+            str(options_title or ""),
+            normalized_shared_options,
+        )
+
+    cleared_secondary = ""
+    cleared_title = ""
+    if "matching_information" in type_str or "plan_map_labeling" in type_str:
+        return cleared_secondary, cleared_title, normalized_shared_options
+
+    return cleared_secondary, cleared_title, []
 
 
 def _matching_option_value(option: str) -> str:
@@ -1142,6 +1214,12 @@ async def save_test_draft_to_db(
             if preserve_existing_version
             else (UUID(str(group["id"])) if group.get("id") else uuid4())
         )
+        secondary_block, options_title, shared_options = _sanitize_group_option_payload(
+            str(group["type_id"]),
+            secondary_block=group.get("secondary_block"),
+            options_title=group.get("options_title"),
+            shared_options=group.get("shared_options", []),
+        )
         group_model = QuestionGroup(
             id=group_id,
             section_id=section_id,
@@ -1153,12 +1231,12 @@ async def save_test_draft_to_db(
             shared_content={
                 "question_block": str(group.get("question_block") or ""),
                 "answer_block": str(group.get("answer_block") or ""),
-                "secondary_block": str(group.get("secondary_block") or ""),
-                "options_title": str(group.get("options_title") or ""),
+                "secondary_block": secondary_block,
+                "options_title": options_title,
                 "diagram_title": str(group.get("diagram_title") or ""),
                 "diagram_image_url": normalize_storage_asset_path(group.get("diagram_image_url")),
             },
-            shared_options=list(group.get("shared_options", [])),
+            shared_options=shared_options,
         )
         session.add(group_model)
         await session.flush()
@@ -1353,15 +1431,21 @@ async def quick_fix_published_test_in_db(
 
         group_model.title = str(group_payload.get("title") or "").strip()
         group_model.instructions = str(group_payload["instructions"])
+        secondary_block, options_title, shared_options = _sanitize_group_option_payload(
+            str(group_payload["type_id"]),
+            secondary_block=group_payload.get("secondary_block"),
+            options_title=group_payload.get("options_title"),
+            shared_options=group_payload.get("shared_options", []),
+        )
         group_model.shared_content = {
             "question_block": str(group_payload.get("question_block") or ""),
             "answer_block": str(group_payload.get("answer_block") or ""),
-            "secondary_block": str(group_payload.get("secondary_block") or ""),
-            "options_title": str(group_payload.get("options_title") or ""),
+            "secondary_block": secondary_block,
+            "options_title": options_title,
             "diagram_title": str(group_payload.get("diagram_title") or ""),
             "diagram_image_url": normalize_storage_asset_path(group_payload.get("diagram_image_url")),
         }
-        group_model.shared_options = list(group_payload.get("shared_options", []))
+        group_model.shared_options = shared_options
 
         group_question_map = {str(question.id): question for question in group_model.questions}
         payload_questions = list(group_payload.get("questions", []))
@@ -1373,15 +1457,6 @@ async def quick_fix_published_test_in_db(
             question_id = str(question_payload.get("id") or "")
             question_model = group_question_map.get(question_id)
             if question_model is None:
-                raise ValueError("quick_fix_requires_new_version")
-
-            raw_question_label = str(question_payload.get("label") or "").strip()
-            question_number = (
-                _question_number(raw_question_label, group_model.question_start)
-                if raw_question_label
-                else int(question_model.number)
-            )
-            if int(question_model.number) != int(question_number):
                 raise ValueError("quick_fix_requires_new_version")
 
             question_model.prompt = str(question_payload["prompt"])
@@ -1493,16 +1568,22 @@ async def build_admin_draft_state_from_db(
                 group_questions.append(q_row)
                 all_questions_flat.append({**q_row, "section_id": section.id, "type_id": str(group.question_type.value)})
             
+            secondary_block, options_title, shared_options = _sanitize_group_option_payload(
+                str(group.question_type.value),
+                secondary_block=group.shared_content.get("secondary_block"),
+                options_title=group.shared_content.get("options_title"),
+                shared_options=group.shared_options,
+            )
             question_groups.append({
                 "id": group.id,
                 "section_id": section.id,
                 "title": group.title,
                 "instructions": group.instructions or "",
-                "options_title": str(group.shared_content.get("options_title") or ""),
+                "options_title": options_title,
                 "type_id": str(group.question_type.value),
                 "question_start": group.question_start,
                 "question_end": group.question_end,
-                "shared_options": list(group.shared_options),
+                "shared_options": shared_options,
                 "question_block": str(group.shared_content.get("question_block") or ""),
                 "answer_block": str(
                     group.shared_content.get("answer_block")
@@ -1512,11 +1593,7 @@ async def build_admin_draft_state_from_db(
                         else ""
                     )
                 ),
-                "secondary_block": str(
-                    group.shared_content.get("secondary_block")
-                    or "\n".join(str(option) for option in group.shared_options)
-                ),
-                "options_title": str(group.shared_content.get("options_title") or ""),
+                "secondary_block": secondary_block,
                 "diagram_title": str(group.shared_content.get("diagram_title") or ""),
                 "diagram_image_url": normalize_storage_asset_path(group.shared_content.get("diagram_image_url")),
                 "questions": group_questions

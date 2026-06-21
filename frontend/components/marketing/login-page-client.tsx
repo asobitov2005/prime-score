@@ -4,13 +4,14 @@ import {
   Loader2,
   ArrowLeft,
   ArrowRight,
+  Check,
   Send,
   ShieldCheck,
   Smartphone,
   KeyRound,
-  Fingerprint,
 } from "lucide-react";
 import Link from "next/link";
+import { Sora } from "next/font/google";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,12 @@ import { useAuthStore } from "@/store/auth-store";
 import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
 import { trackCtaClick, trackLogin } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
+
+const display = Sora({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
+});
 
 export function LoginPageClient() {
   const router = useRouter();
@@ -43,17 +50,29 @@ export function LoginPageClient() {
 
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const verifyInFlightRef = useRef(false);
+  const isLoginBusy = isLoading || isRedirecting;
 
   const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "primescorebot";
 
   const handleVerify = async () => {
+    if (verifyInFlightRef.current || isRedirecting) {
+      return;
+    }
+    const normalizedCode = code.trim();
+    if (normalizedCode.length !== 6) {
+      return;
+    }
+    verifyInFlightRef.current = true;
     setIsLoading(true);
     setErrorMsg("");
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+    let didStartRedirect = false;
 
     try {
       const apiUrl = getFrontendClientApiBaseUrl();
@@ -63,7 +82,7 @@ export function LoginPageClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           telegram_id: 0,
-          code,
+          code: normalizedCode,
         }),
         signal: controller.signal,
       });
@@ -98,6 +117,8 @@ export function LoginPageClient() {
         isPremium: Boolean(userData.is_premium),
       });
 
+      didStartRedirect = true;
+      setIsRedirecting(true);
       window.setTimeout(() => {
         window.location.assign(safeReturnUrl);
       }, 0);
@@ -110,7 +131,10 @@ export function LoginPageClient() {
       }
     } finally {
       window.clearTimeout(timeoutId);
-      setIsLoading(false);
+      if (!didStartRedirect) {
+        verifyInFlightRef.current = false;
+        setIsLoading(false);
+      }
     }
   };
 
@@ -126,254 +150,301 @@ export function LoginPageClient() {
   const digits = code.padEnd(6, " ").split("");
 
   return (
-    <div className="fixed inset-0 w-full h-full bg-background overflow-hidden flex items-center justify-center">
-      {/* ── Animated mesh background ── */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/2 -left-1/4 w-[800px] h-[800px] rounded-full bg-gradient-to-br from-orange-500/[0.08] to-transparent blur-3xl" />
-        <div className="absolute -bottom-1/3 -right-1/4 w-[600px] h-[600px] rounded-full bg-gradient-to-tl from-blue-500/[0.06] to-transparent blur-3xl" />
-        <div className="absolute top-1/4 right-1/3 w-[400px] h-[400px] rounded-full bg-gradient-to-b from-violet-500/[0.05] to-transparent blur-3xl" />
-        {/* Grid overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(120,119,198,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(120,119,198,0.04)_1px,transparent_1px)] bg-[size:30px_30px] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)]" />
-      </div>
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-white dark:bg-slate-950 lg:grid lg:grid-cols-2">
+      {/* ════ LEFT: brand panel (lg+) ════ */}
+      <aside className="relative hidden overflow-hidden bg-slate-950 lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="animate-aurora absolute -left-24 -top-24 h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.4),transparent_62%)]" />
+          <div className="animate-aurora-slow absolute -bottom-24 -right-16 h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.28),transparent_62%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:28px_28px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+        </div>
 
-      {/* ── Close / Back to home ── */}
-      <Link
-        href="/"
-        className="absolute top-6 left-6 z-20 flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group"
-      >
-        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-        <span>Home</span>
-      </Link>
+        <Link href="/" className="relative flex items-center gap-2.5">
+          {/* brand panel is always dark → use dark-mode logo assets */}
+          <img src="/logo.svg" alt="PrimeScore" className="h-8 w-auto object-contain" />
+          <span className="flex h-9 items-center" aria-hidden="true">
+            <img src="/exam-logo-darkmode.svg" alt="" className="h-full w-auto object-contain" />
+          </span>
+        </Link>
 
-      {/* ── Main container ── */}
-      <div className="relative z-10 w-full max-w-[360px] px-6 mt-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+        <div className="relative">
+          <h2 className={cn(display.className, "max-w-md text-4xl font-extrabold leading-[1.05] tracking-[-0.02em] text-white xl:text-5xl")}>
+            {"Turn Practice Into\u00a0"}
+            <span className="text-orange-400">{"Results."}</span>
+          </h2>
+          <p className="mt-3 max-w-sm text-lg font-semibold leading-7 text-orange-400">
+            {"Practice. Score. Succeed."}
+          </p>
 
-        {/* ── STEP: GUIDE ── */}
-        {step === "guide" && (
-          <div className="space-y-4">
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500/20 via-orange-500/10 to-transparent border border-orange-500/20 mb-1">
-                <Fingerprint className="h-7 w-7 text-orange-500" />
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                Welcome back
-              </h1>
-              <p className="text-sm text-muted-foreground max-w-[280px] mx-auto leading-relaxed">
-                Sign in with your Telegram account to access your IELTS practice dashboard
-              </p>
-            </div>
+          <ul className="mt-8 space-y-3">
+            {[
+              "AI Band Estimate on every test",
+              "Practice that targets weak skills",
+              "Progress synced across devices",
+            ].map((item) => (
+              <li key={item} className="flex items-center gap-3 text-[15px] text-slate-300">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/15 text-orange-400">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
 
-            {/* Steps */}
-            <div className="space-y-1.5">
-              {[
-                {
-                  icon: Send,
-                  title: "Open the bot",
-                  desc: (
-                    <>
-                      Go to{" "}
-                      <a
-                        href={`https://t.me/${BOT_USERNAME}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-orange-500 hover:text-orange-600 transition-colors"
-                      >
-                        @{BOT_USERNAME}
-                      </a>{" "}
-                      in Telegram
-                    </>
-                  ),
-                  color: "from-orange-500/15 to-orange-500/5",
-                  iconColor: "text-orange-500",
-                  borderColor: "border-orange-500/10",
-                },
-                {
-                  icon: Smartphone,
-                  title: "Share your number",
-                  desc: "Press Start and send your phone number",
-                  color: "from-sky-500/15 to-sky-500/5",
-                  iconColor: "text-sky-500",
-                  borderColor: "border-sky-500/10",
-                },
-                {
-                  icon: KeyRound,
-                  title: "Get your code",
-                  desc: "Receive a 6-digit verification code",
-                  color: "from-violet-500/15 to-violet-500/5",
-                  iconColor: "text-violet-500",
-                  borderColor: "border-violet-500/10",
-                },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center gap-3 p-3.5 rounded-xl border transition-all hover:bg-muted/50",
-                    item.borderColor
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
-                      item.color
-                    )}
-                  >
-                    <item.icon className={cn("h-4 w-4", item.iconColor)} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <p className="relative text-[13px] text-slate-500">© {new Date().getFullYear()} PrimeScore — IELTS mock platform</p>
+      </aside>
 
-            {/* Actions */}
-            <div className="space-y-3 pt-1">
-              <a
-                href={`https://t.me/${BOT_USERNAME}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  trackCtaClick({
-                    ctaName: "open_telegram_bot",
-                    ctaLabel: "Open Telegram Bot",
-                    ctaLocation: "login_page",
-                    destination: `https://t.me/${BOT_USERNAME}`,
-                    authState: "guest",
-                  });
-                }}
-                className="flex items-center justify-center gap-2.5 w-full h-11 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-semibold shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 hover:from-orange-500 hover:to-orange-500 transition-all active:scale-[0.98]"
-              >
-                <Send className="h-4 w-4 text-white" />
-                Open Telegram Bot
-                <ArrowRight className="h-4 w-4 text-white/80 opacity-80" />
-              </a>
+      {/* ════ RIGHT: form ════ */}
+      <main className="relative flex min-h-[100dvh] flex-col px-5 py-6 sm:px-8 lg:min-h-0 lg:py-12">
+        {/* soft background for mobile/standalone */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden lg:hidden">
+          <div className="animate-aurora absolute -right-20 -top-24 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.16),transparent_65%)]" />
+        </div>
 
-              <button
-                onClick={() => {
-                  trackCtaClick({
-                    ctaName: "open_code_verify",
-                    ctaLabel: "I have a code",
-                    ctaLocation: "login_page",
-                    destination: "/login#verify",
-                    authState: "guest",
-                  });
-                  setStep("verify");
-                }}
-                className="flex items-center justify-center gap-2 w-full h-10 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-              >
-                <KeyRound className="h-3.5 w-3.5" />
-                I already have a code
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── STEP: VERIFY ── */}
-        {step === "verify" && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (code.length === 6 && !isLoading) {
-                void handleVerify();
-              }
-            }}
-            className="space-y-8 animate-in fade-in slide-in-from-right-6 duration-500"
+        {/* top bar */}
+        <div className="relative flex items-center justify-between gap-3">
+          <Link
+            href="/"
+            className="group flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3.5 py-2 text-[13px] font-semibold text-slate-600 backdrop-blur transition-colors hover:border-orange-200 hover:text-orange-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:text-orange-300"
           >
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500/20 via-sky-500/10 to-transparent border border-sky-500/20 mb-1">
-                <ShieldCheck className="h-7 w-7 text-sky-500" />
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                Verification
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Enter the 6-digit code from Telegram
-              </p>
-            </div>
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+            {"Home"}
+          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2 lg:hidden">
+              <img src="/logo-light.svg" alt="PrimeScore" className="h-7 w-auto object-contain dark:hidden" />
+              <img src="/logo.svg" alt="PrimeScore" className="hidden h-7 w-auto object-contain dark:block" />
+              <span className="flex h-7 items-center" aria-hidden="true">
+                <img src="/exam-logo-lightmode.svg" alt="" className="h-full w-auto object-contain dark:hidden" />
+                <img src="/exam-logo-darkmode.svg" alt="" className="hidden h-full w-auto object-contain dark:block" />
+              </span>
+            </Link>
+          </div>
+        </div>
 
-            {/* Code Input — split digit display */}
-            <div className="space-y-4">
-              <div className="relative">
-                <div className="flex justify-center gap-2">
-                  {digits.map((d, i) => (
+        {/* centered content */}
+        <div className="relative flex flex-1 items-center justify-center py-8">
+          <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-6 duration-700">
+
+            {/* ── STEP: GUIDE ── */}
+            {step === "guide" && (
+              <div className="space-y-6">
+                <div className="space-y-2.5">
+                  <h1 className={cn(display.className, "text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl")}>
+                    {"Welcome back"}
+                  </h1>
+                  <p className="max-w-md text-[15px] leading-7 text-slate-500 dark:text-slate-400">
+                    {"Sign in with your Telegram account to reach your IELTS practice dashboard."}
+                  </p>
+                </div>
+
+                {/* Steps */}
+                <div className="space-y-2">
+                  {[
+                    {
+                      icon: Send,
+                      title: "Open the bot",
+                      desc: (
+                        <>
+                          Go to 
+                          <a
+                            href={`https://t.me/${BOT_USERNAME}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-orange-500 hover:text-orange-600"
+                          >
+                            @{BOT_USERNAME}
+                          </a>{" "}
+                          in Telegram
+                        </>
+                      ),
+                    },
+                    {
+                      icon: Smartphone,
+                      title: "Share your number",
+                      desc: "Press Start and send your phone number",
+                    },
+                    {
+                      icon: KeyRound,
+                      title: "Get your code",
+                      desc: "Receive a 6-digit verification code",
+                    },
+                  ].map((item, i) => (
                     <div
                       key={i}
-                      onClick={() => inputRef.current?.focus()}
-                      className={cn(
-                        "w-11 h-13 rounded-lg border flex items-center justify-center text-xl font-semibold transition-all cursor-text",
-                        d.trim()
-                          ? "border-orange-500/40 bg-orange-500/5 text-foreground shadow-sm shadow-orange-500/10"
-                          : i === code.length
-                          ? "border-sky-500/50 bg-sky-500/5 text-muted-foreground/30 animate-pulse"
-                          : "border-border bg-muted/30 text-muted-foreground/20"
-                      )}
+                      className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 transition-colors hover:border-orange-200 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-orange-500/30"
                     >
-                      {d.trim() || "·"}
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-300">
+                        <item.icon className="h-[18px] w-[18px]" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">{item.title}</p>
+                        <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">{item.desc}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
-                {/* Hidden real input underneath */}
-                <Input
-                  ref={inputRef}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  className="absolute inset-0 opacity-0 h-14"
-                  maxLength={6}
-                  autoFocus
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                />
-              </div>
 
-              {errorMsg && (
-                <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 px-4 py-2.5 rounded-lg border border-red-500/15">
-                  <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-red-400" />
-                  {errorMsg}
+                {/* Actions */}
+                <div className="space-y-2.5">
+                  <button
+                    onClick={() => {
+                      trackCtaClick({
+                        ctaName: "open_code_verify",
+                        ctaLabel: "I have a code",
+                        ctaLocation: "login_page",
+                        destination: "/login#verify",
+                        authState: "guest",
+                      });
+                      setStep("verify");
+                    }}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-orange-500 text-sm font-semibold text-white shadow-[0_16px_32px_-18px_rgba(249,115,22,0.85)] transition-all hover:-translate-y-0.5 hover:bg-orange-600 active:scale-[0.99]"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    {"I already have a code"}
+                    <ArrowRight className="h-4 w-4 opacity-80" />
+                  </button>
+
+                  <a
+                    href={`https://t.me/${BOT_USERNAME}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      trackCtaClick({
+                        ctaName: "open_telegram_bot",
+                        ctaLabel: "Open Telegram Bot",
+                        ctaLocation: "login_page",
+                        destination: `https://t.me/${BOT_USERNAME}`,
+                        authState: "guest",
+                      });
+                    }}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-orange-200 hover:text-orange-600 active:scale-[0.99] dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-orange-500/30 dark:hover:text-orange-300"
+                  >
+                    <Send className="h-4 w-4 text-orange-500" />
+                    {"Open Telegram Bot"}
+                    <ArrowRight className="h-4 w-4 opacity-50" />
+                  </a>
                 </div>
-              )}
+              </div>
+            )}
 
-              <p className="text-center text-[11px] text-muted-foreground/50">
-                Code expires in 3 minutes
-              </p>
-            </div>
+            {/* ── STEP: VERIFY ── */}
+            {step === "verify" && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (code.length === 6 && !isLoginBusy) {
+                    void handleVerify();
+                  }
+                }}
+                className="space-y-8 animate-in fade-in slide-in-from-right-6 duration-500"
+              >
+                <div className="space-y-3">
+                  <h1 className={cn(display.className, "text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl")}>
+                    {"Enter your code"}
+                  </h1>
+                  <p className="text-[15px] leading-7 text-slate-500 dark:text-slate-400">
+                    {"Type the 6-digit code you received from the Telegram bot."}
+                  </p>
+                </div>
 
-            {/* Actions */}
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => { setStep("guide"); setCode(""); setErrorMsg(""); }}
-                disabled={isLoading}
-                className="flex items-center justify-center gap-1.5 flex-[0.35] h-11 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-40"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading || code.length < 6}
-                className={cn(
-                  "flex items-center justify-center gap-2 flex-[0.65] h-11 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]",
-                  code.length === 6
-                    ? "bg-sky-500/15 text-sky-500 border border-sky-500/25 hover:bg-sky-500/20 hover:border-sky-500/35 shadow-sm shadow-sky-500/5"
-                    : "bg-muted/50 text-muted-foreground/30 cursor-not-allowed border border-border"
-                )}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <ShieldCheck className="h-4 w-4" />
-                    Verify & Sign In
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
+                {/* Code Input — bigger split-digit boxes */}
+                <div className="space-y-4">
+                  <div className="relative">
+                    <div className="flex justify-start gap-2 sm:gap-3">
+                      {digits.map((d, i) => (
+                        <div
+                          key={i}
+                          onClick={() => inputRef.current?.focus()}
+                          className={cn(
+                            "flex h-14 max-w-[3rem] flex-1 cursor-text items-center justify-center rounded-xl border-2 text-xl font-semibold transition-all sm:h-16 sm:max-w-[3.4rem] sm:text-2xl",
+                            d.trim()
+                              ? "border-orange-400 bg-orange-50 text-slate-900 shadow-[0_10px_30px_-15px_rgba(249,115,22,0.6)] dark:border-orange-500/60 dark:bg-orange-500/10 dark:text-white"
+                              : i === code.length
+                              ? "border-orange-300 bg-orange-50/40 text-slate-300 animate-pulse dark:border-orange-500/40 dark:bg-orange-500/5"
+                              : "border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-700"
+                          )}
+                        >
+                          {d.trim() || "•"}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Hidden real input underneath */}
+                    <Input
+                      ref={inputRef}
+                      value={code}
+                      onChange={(e) => {
+                        if (isLoginBusy) return;
+                        setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                      }}
+                      className="absolute inset-0 h-full w-full opacity-0"
+                      maxLength={6}
+                      autoFocus
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      disabled={isLoginBusy}
+                    />
+                  </div>
+
+                  {isLoginBusy ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-orange-500/15 bg-orange-500/10 px-4 py-2.5 text-[13px] font-medium text-orange-700 dark:text-orange-300">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {isRedirecting ? "Signing you in..." : "Verifying your code..."}
+                    </div>
+                  ) : null}
+
+                  {errorMsg && (
+                    <div className="flex items-center gap-2 rounded-xl border border-red-500/15 bg-red-500/10 px-4 py-2.5 text-[13px] text-red-500 dark:text-red-400">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  <p className="text-center text-[12px] text-slate-400 dark:text-slate-500">
+                    {"Code expires in 3 minutes"}
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setStep("guide"); setCode(""); setErrorMsg(""); }}
+                    disabled={isLoginBusy}
+                    className="flex h-12 flex-[0.4] items-center justify-center gap-1.5 rounded-full border border-slate-200 text-sm font-semibold text-slate-600 transition-all hover:bg-slate-100 disabled:opacity-40 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-900"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    {"Back"}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoginBusy || code.length < 6}
+                    className={cn(
+                      "flex h-12 flex-[0.6] items-center justify-center gap-2 rounded-full text-sm font-semibold transition-all active:scale-[0.99]",
+                      code.length === 6 && !isLoginBusy
+                        ? "bg-orange-500 text-white shadow-[0_20px_40px_-18px_rgba(249,115,22,0.85)] hover:-translate-y-0.5 hover:bg-orange-600"
+                        : "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-600"
+                    )}
+                  >
+                    {isLoginBusy ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {isRedirecting ? "Signing in" : "Verifying"}
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-4 w-4" />
+                        {"Verify & Sign In"}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

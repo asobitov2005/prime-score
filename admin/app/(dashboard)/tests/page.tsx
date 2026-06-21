@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Badge, Card, CardContent, CardHeader, CardTitle, SectionHeader, buttonClassName, formatDate } from "@/components/ui";
+import { AdminTableLoadingSkeleton } from "@/components/loading-skeletons";
 import { adminApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -379,7 +380,7 @@ export default function TestsPage() {
       <Card>
         <CardContent className="overflow-x-auto p-0">
           {loading ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">Loading...</div>
+            <AdminTableLoadingSkeleton rows={6} columns={7} />
           ) : (
             <table className="min-w-full border-separate border-spacing-0">
               <thead>

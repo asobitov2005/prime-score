@@ -46,6 +46,24 @@ function progressPercent(achievement: Achievement): number {
   return Math.max(0, Math.min((achievement.progress.current / achievement.progress.target) * 100, 100));
 }
 
+function progressMetricLabel(achievement: Achievement): string | null {
+  const progress = achievement.progress;
+  if (!progress) {
+    return null;
+  }
+
+  const isXpProgress = achievement.category === "level" || achievement.requiredXp || /\bXP\b/i.test(progress.label);
+  if (isXpProgress) {
+    return `${formatNumber(progress.current)} of ${formatNumber(achievement.requiredXp ?? progress.target)} XP`;
+  }
+
+  if (achievement.category === "streak" || achievement.streakDays) {
+    return `${formatNumber(progress.current)} of ${formatNumber(achievement.streakDays ?? progress.target)} days`;
+  }
+
+  return progress.label;
+}
+
 function xpToGo(achievement: Achievement): number | null {
   if (!achievement.requiredXp) {
     return null;
@@ -75,6 +93,7 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
   const isUnlocked = achievement.status === "unlocked";
   const isInProgress = achievement.status === "in_progress";
   const progress = progressPercent(achievement);
+  const progressLabel = progressMetricLabel(achievement);
   const remainingXp = xpToGo(achievement);
   const remainingStreakDays = streakDaysToGo(achievement);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -95,7 +114,7 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
           onClick={() => setIsModalOpen(true)}
           onKeyDown={handleCardKeyDown}
           className={cn(
-            "group relative flex min-h-[210px] cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
+            "group relative flex min-h-[210px] cursor-pointer select-none flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
             rarity.glow,
             isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90 dark:bg-emerald-950/25 dark:shadow-emerald-950/20",
           )}
@@ -107,7 +126,10 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
                 alt={achievement.title}
                 width={120}
                 height={120}
-                className="h-[4.5rem] w-auto max-w-[4.75rem] object-contain drop-shadow-lg transition duration-300 group-hover:scale-105"
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                onContextMenu={(event) => event.preventDefault()}
+                className="h-[4.5rem] w-auto max-w-[4.75rem] select-none object-contain drop-shadow-lg transition duration-300 group-hover:scale-105"
               />
             </div>
 
@@ -132,7 +154,7 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
               {isInProgress && achievement.progress ? (
                 <div className="w-full space-y-1.5">
                   <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
-                    <span>{achievement.progress.label}</span>
+                    <span>{progressLabel}</span>
                     <span>{Math.round(progress)}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted shadow-inner">
@@ -176,7 +198,7 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
         onClick={() => setIsModalOpen(true)}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "group relative flex min-h-[210px] cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-2.5 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
+          "group relative flex min-h-[210px] cursor-pointer select-none flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-2.5 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
           rarity.glow,
           isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90 dark:bg-emerald-950/25 dark:shadow-emerald-950/20",
         )}
@@ -198,8 +220,11 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
               alt={achievement.title}
               width={192}
               height={120}
+              draggable={false}
+              onDragStart={(event) => event.preventDefault()}
+              onContextMenu={(event) => event.preventDefault()}
               className={cn(
-                "relative z-10 h-16 w-auto max-w-[8rem] object-contain drop-shadow-lg transition duration-300 group-hover:scale-105",
+                "relative z-10 h-16 w-auto max-w-[8rem] select-none object-contain drop-shadow-lg transition duration-300 group-hover:scale-105",
               )}
             />
           </div>
@@ -223,7 +248,7 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
               {isInProgress && achievement.progress ? (
                 <div className="w-full space-y-1.5">
                   <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
-                    <span>{achievement.progress.label}</span>
+                    <span>{progressLabel}</span>
                     <span>{Math.round(progress)}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted shadow-inner">

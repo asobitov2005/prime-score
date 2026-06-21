@@ -12,7 +12,7 @@ export default function ArticlesPage() {
           <Newspaper className="h-3.5 w-3.5" />
           Articles Library
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Articles</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[1.85rem]">Articles</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           This section is reserved for article-based study content, reading support material, and guidance content inside PrimeScore.
         </p>

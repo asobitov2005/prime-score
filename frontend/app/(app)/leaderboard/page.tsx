@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Flame, Loader2, Medal, Trophy } from "lucide-react";
+import { Flame, Medal, Trophy } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { createApiClient } from "@/lib/api/client";
@@ -232,6 +232,42 @@ function EntryRow({ entry, isCurrentUser = false, onClick }: { entry: Leaderboar
   );
 }
 
+function LeaderboardRowsSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div
+          key={index}
+          className="grid grid-cols-[48px_minmax(0,1.4fr)_88px_78px] gap-3 px-4 py-4 md:grid-cols-[56px_minmax(0,1.6fr)_110px_88px_110px_138px] md:px-6"
+        >
+          <div className="flex items-center justify-center">
+            <div className="h-5 w-7 rounded-md bg-muted animate-pulse" />
+          </div>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="h-10 w-10 shrink-0 rounded-full bg-muted animate-pulse" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-4 w-44 max-w-full rounded-full bg-muted animate-pulse" />
+              <div className="h-3 w-32 max-w-full rounded-full bg-muted animate-pulse" />
+            </div>
+          </div>
+          <div className="flex items-center justify-end md:justify-center">
+            <div className="h-5 w-16 rounded-md bg-muted animate-pulse" />
+          </div>
+          <div className="flex items-center justify-end md:justify-center">
+            <div className="h-7 w-16 rounded-full bg-muted animate-pulse" />
+          </div>
+          <div className="hidden items-center justify-center md:flex">
+            <div className="h-5 w-12 rounded-md bg-muted animate-pulse" />
+          </div>
+          <div className="hidden items-center justify-center md:flex">
+            <div className="h-10 w-16 rounded-xl bg-muted animate-pulse" />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function LeaderboardPage() {
   const [period, setPeriod] = useState<LeaderboardPeriod>("all_time");
   const [selectedEntry, setSelectedEntry] = useState<LeaderboardEntry | null>(null);
@@ -290,7 +326,7 @@ export default function LeaderboardPage() {
           <div className="relative z-10 space-y-4 p-5 lg:p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Leaderboard</h1>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[1.85rem]">Leaderboard</h1>
               </div>
               <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground md:flex">
                 <Trophy className="h-5 w-5" />
@@ -332,9 +368,7 @@ export default function LeaderboardPage() {
 
           <div className="divide-y divide-border/40">
             {query.isLoading ? (
-              <div className="flex justify-center p-8 text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
+              <LeaderboardRowsSkeleton />
             ) : query.isError ? (
               <div className="p-4">
                 <EmptyState

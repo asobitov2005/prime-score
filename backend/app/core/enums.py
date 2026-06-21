@@ -13,6 +13,7 @@ class TestType(StrEnum):
     reading = "reading"
     listening = "listening"
     writing = "writing"
+    speaking = "speaking"
 
 class TestFormat(StrEnum):
     full = "full"

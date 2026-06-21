@@ -54,6 +54,58 @@ const rarityConfig: Record<Rarity, { color: string; glow: string; pillBg: string
   Common: { color: "from-slate-400 to-slate-500", glow: "shadow-slate-500/30", pillBg: "bg-slate-100 dark:bg-slate-500/10 border-slate-200 dark:border-slate-500/20", text: "text-slate-600 dark:text-slate-300" },
 };
 
+function ProfileModalLoadingSkeleton() {
+  return (
+    <div className="space-y-8 animate-pulse">
+      <div className="flex flex-col items-center text-center">
+        <div className="mb-5 mt-2 h-24 w-24 rounded-full bg-slate-100 dark:bg-white/10 sm:h-28 sm:w-28" />
+        <div className="h-7 w-44 rounded-lg bg-slate-100 dark:bg-white/10" />
+        <div className="mt-4 flex justify-center gap-3">
+          <div className="h-8 w-28 rounded-full bg-slate-100 dark:bg-white/10" />
+          <div className="h-8 w-24 rounded-full bg-slate-100 dark:bg-white/10" />
+        </div>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <div className="h-6 w-20 rounded-full bg-slate-100 dark:bg-white/10" />
+          <div className="h-6 w-24 rounded-full bg-slate-100 dark:bg-white/10" />
+          <div className="h-6 w-16 rounded-full bg-slate-100 dark:bg-white/10" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-5 px-2">
+        <div className="h-16 w-16 shrink-0 rounded-2xl bg-slate-100 dark:bg-white/10 sm:h-[72px] sm:w-[72px]" />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="h-5 w-40 rounded-md bg-slate-100 dark:bg-white/10" />
+            <div className="h-5 w-16 rounded-md bg-slate-100 dark:bg-white/10" />
+          </div>
+          <div className="h-3 w-full max-w-56 rounded-full bg-slate-100 dark:bg-white/10" />
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-3 h-3 w-24 rounded-full bg-slate-100 dark:bg-white/10" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="h-24 rounded-2xl bg-slate-100 dark:bg-white/10 sm:h-28" />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-3 h-3 w-44 rounded-full bg-slate-100 dark:bg-white/10" />
+        <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, index) => (
+            <div key={index} className="flex flex-col items-center gap-2">
+              <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-white/10 sm:h-16 sm:w-16" />
+              <div className="h-2.5 w-12 rounded-full bg-slate-100 dark:bg-white/10" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LeaderboardUserProfileModal({
   isOpen,
   onClose,
@@ -101,12 +153,16 @@ export function LeaderboardUserProfileModal({
               
               {/* Header Info Row (Online & Close) */}
               <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <div className={`w-2 h-2 rounded-full ${user?.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-slate-400 dark:bg-slate-500"}`} />
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    {user?.isOnline ? "Online" : "Offline"}
-                  </span>
-                </div>
+                {isLoading ? (
+                  <div className="h-7 w-20 rounded-full bg-slate-100 dark:bg-white/10 animate-pulse" />
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                    <div className={`w-2 h-2 rounded-full ${user?.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] dark:shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-slate-400 dark:bg-slate-500"}`} />
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {user?.isOnline ? "Online" : "Offline"}
+                    </span>
+                  </div>
+                )}
                 
                 <button
                   onClick={onClose}
@@ -117,9 +173,7 @@ export function LeaderboardUserProfileModal({
               </div>
 
               {isLoading ? (
-                <div className="flex min-h-[360px] items-center justify-center text-sm font-semibold text-slate-500 dark:text-slate-300">
-                  Loading profile...
-                </div>
+                <ProfileModalLoadingSkeleton />
               ) : user ? (
                 <>
 

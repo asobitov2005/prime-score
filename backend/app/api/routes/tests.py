@@ -9,12 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user
 from app.core.enums import AccessType, TestMode, TestScope, TestStatus, TestType
 from app.db.session import get_db_session
-from app.schemas.common import DebugPrincipal, MessageResponse
+from app.schemas.common import DebugPrincipal
 from app.schemas.tests import TestCatalogItemRead, TestDetailRead, TestSnapshotRead, TestStartRequest, TestStartResponse
-from app.services.fixtures import build_test_snapshot, get_test_catalog, get_test_fixture
 from app.services.attempt_repo import start_attempt_in_db
-from app.services.runtime_store import start_attempt
-from app.services.test_content_repo import build_test_snapshot_from_db, get_test_by_identifier_from_db, get_test_from_db, list_tests_from_db
+from app.services.test_content_repo import (
+    build_test_snapshot_from_db,
+    ensure_fixture_tests_seeded,
+    get_test_by_identifier_from_db,
+    get_test_from_db,
+    list_tests_from_db,
+)
 
 router = APIRouter()
 
@@ -74,8 +78,6 @@ async def _build_effective_snapshot(
         scope=TestScope.full,
         mode=mode,
     )
-    if snapshot is None:
-        snapshot = build_test_snapshot(test_id=test_id, scope=TestScope.full, mode=mode.value)
 
     if not test_format or test_format == "full":
         return snapshot, TestScope.full, None
@@ -91,13 +93,6 @@ async def _build_effective_snapshot(
         mode=TestMode.practice,
         section_id=section_id,
     )
-    if section_snapshot is None:
-        section_snapshot = build_test_snapshot(
-            test_id=test_id,
-            scope=TestScope.section,
-            mode=TestMode.practice.value,
-            section_id=section_id,
-        )
 
     return section_snapshot or snapshot, TestScope.section, section_id
 
@@ -112,6 +107,7 @@ async def list_tests(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[TestCatalogItemRead]:
     try:
+        await ensure_fixture_tests_seeded(session)
         raw_items = await list_tests_from_db(
             session,
             test_type=test_type,
@@ -127,13 +123,10 @@ async def list_tests(
             await session.rollback()
         except Exception:
             pass
-        if test_type == TestType.listening:
-            return []
-        raw_items = get_test_catalog(test_type=test_type, access_type=access_type, status=status_filter)
-        if test_format and test_format != "all":
-            raw_items = [item for item in raw_items if item.get("format") == test_format]
-        if source and source != "":
-            raw_items = [item for item in raw_items if item.get("source") == source]
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load tests from database.",
+        ) from e
 
     items = [TestCatalogItemRead(**item) for item in raw_items]
     return items
@@ -142,44 +135,34 @@ async def list_tests(
 @router.get("/{test_identifier}", response_model=TestDetailRead)
 async def get_test(test_identifier: str, session: AsyncSession = Depends(get_db_session)) -> TestDetailRead:
     snapshot: dict[str, object] | None = None
-    fixture: dict[str, object] | None = None
+    test_detail: dict[str, object] | None = None
     resolved_test_id: UUID | None = None
     try:
-        fixture = await get_test_by_identifier_from_db(session, test_identifier)
-        resolved_test_id = UUID(str(fixture["id"])) if fixture else None
+        await ensure_fixture_tests_seeded(session)
+        test_detail = await get_test_by_identifier_from_db(session, test_identifier)
+        resolved_test_id = UUID(str(test_detail["id"])) if test_detail else None
         if resolved_test_id is not None:
             snapshot, _, _ = await _build_effective_snapshot(
                 session,
                 test_id=resolved_test_id,
-                test_format=str(fixture.get("format") or "full") if fixture else "full",
+                test_format=str(test_detail.get("format") or "full") if test_detail else "full",
                 mode=TestMode.practice,
             )
-    except Exception:
+    except Exception as exc:
         try:
             await session.rollback()
         except Exception:
             pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load test from database.",
+        ) from exc
 
-    try:
-        fixture_test_id = UUID(test_identifier)
-    except ValueError:
-        fixture_test_id = None
-
-    if fixture is None and fixture_test_id is not None and fixture_test_id != UUID("22222222-2222-2222-2222-222222222222"):
-        fixture = get_test_fixture(fixture_test_id)
-        if fixture is not None:
-            snapshot, _, _ = await _build_effective_snapshot(
-                session,
-                test_id=fixture_test_id,
-                test_format=str(fixture.get("format") or "full"),
-                mode=TestMode.practice,
-            )
-
-    if fixture is None or snapshot is None:
+    if test_detail is None or snapshot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
 
     return TestDetailRead(
-        **fixture,
+        **test_detail,
         payment_paused=bool(snapshot["payment_paused"]),
         question_bank_enabled=bool(snapshot["question_bank_enabled"]),
         sections=snapshot["sections"],
@@ -193,6 +176,18 @@ async def start_test(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> TestStartResponse:
+    try:
+        await ensure_fixture_tests_seeded(session)
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to prepare test catalog.",
+        ) from exc
+
     effective_scope = payload.scope
     effective_section_id = payload.section_id
     effective_mode = payload.mode
@@ -212,30 +207,26 @@ async def start_test(
             effective_mode = TestMode.practice
 
     try:
-        try:
-            attempt = await start_attempt_in_db(
-                session,
-                principal=current_user,
-                test_id=test_id,
-                scope=effective_scope,
-                section_id=effective_section_id,
-                mode=effective_mode,
-                force_new=payload.force_new,
-            )
-        except Exception:
-            try:
-                await session.rollback()
-            except Exception:
-                pass
-            attempt = start_attempt(
-                user_id=current_user.id,
-                test_id=test_id,
-                scope=effective_scope,
-                section_id=effective_section_id,
-                mode=effective_mode,
-            )
+        attempt = await start_attempt_in_db(
+            session,
+            principal=current_user,
+            test_id=test_id,
+            scope=effective_scope,
+            section_id=effective_section_id,
+            mode=effective_mode,
+            force_new=payload.force_new,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.") from exc
+    except Exception as exc:
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start test attempt.",
+        ) from exc
 
     snapshot = TestSnapshotRead(**attempt.test_snapshot)
     return TestStartResponse(
