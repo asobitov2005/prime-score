@@ -706,6 +706,12 @@ def _live_config(settings: dict[str, Any], system_instruction: str, *, mode: str
         "realtime_input_config": {
             "automatic_activity_detection": {"disabled": True},
         },
+        # Without compression a live audio session hits a hard duration limit and Gemini
+        # sends GoAway, then force-closes with 1008. Sliding-window context compression
+        # lets a full IELTS interview run past that limit instead of being cut off.
+        "context_window_compression": {"sliding_window": {}},
+        # Issue resumption handles so a dropped session can be reconnected/continued.
+        "session_resumption": {},
     }
     speech_config = settings.get("speech_config")
     if isinstance(speech_config, dict) and speech_config:
@@ -1067,10 +1073,23 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
                         break
 
             async def send_google() -> None:
-                nonlocal session_turn_count
+                nonlocal session_turn_count, stopped_normally
                 turn_index = 0
                 try:
                     async for response in live.receive():
+                        # Gemini warns it is about to end the session (duration limit /
+                        # server drain). Acknowledge it and close from our side cleanly;
+                        # ignoring it makes Gemini force-close the socket with 1008.
+                        go_away = getattr(response, "go_away", None)
+                        if go_away is not None:
+                            time_left = getattr(go_away, "time_left", None)
+                            await websocket.send_json({
+                                "type": "session_ending",
+                                "reason": "time_limit",
+                                "time_left": str(time_left) if time_left is not None else None,
+                            })
+                            stopped_normally = True
+                            break
                         server_content = getattr(response, "server_content", None)
                         if not server_content:
                             continue

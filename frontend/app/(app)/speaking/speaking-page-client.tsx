@@ -1431,6 +1431,18 @@ export function useSpeakingLiveSession({
         }
         return;
       }
+      if (message.type === "session_ending") {
+        // Server is wrapping up gracefully (e.g. Gemini session time limit). Finalize
+        // like a normal end instead of surfacing it as a dropped connection.
+        stoppedRef.current = true;
+        hasStartedInterviewRef.current = false;
+        handlers().releaseAudioRuntime();
+        handlers().setLiveStatus("finalizing");
+        if (aiModeRef.current !== "uzbek_roast") {
+          void handlers().fetchResult();
+        }
+        return;
+      }
       if (message.type === "error") {
         setError(getLiveMessageString(message, "message") || "Speaking AI returned an error.");
         handlers().setLiveStatus("error");
