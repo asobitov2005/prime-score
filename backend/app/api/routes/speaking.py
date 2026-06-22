@@ -989,6 +989,7 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
     transcript_state = {"candidate": "", "examiner": ""}
     transcript_fragments: list[dict[str, Any]] = []
     session_audio_segments: list[tuple[bytes, int]] = []
+    candidate_audio_segments: list[tuple[bytes, int]] = []
     stopped_normally = False
     session_turn_count = 0
     planned_question_count = _resolve_planned_question_count(entry_mode, part)
@@ -1046,6 +1047,7 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
                                 await live.send_realtime_input(activity_start=types.ActivityStart())
                                 user_activity_open = True
                             session_audio_segments.append((data, LIVE_INPUT_RATE))
+                            candidate_audio_segments.append((data, LIVE_INPUT_RATE))
                             await live.send_realtime_input(
                                 audio=types.Blob(data=data, mime_type=f"audio/pcm;rate={LIVE_INPUT_RATE}")
                             )
@@ -1130,6 +1132,7 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
                 full_transcript = _build_full_transcript(candidate_text, examiner_text)
                 metadata = dict(speaking_session.session_metadata or {})
                 session_audio_asset: SpeakingAudioAsset | None = None
+                candidate_audio_asset: SpeakingAudioAsset | None = None
                 try:
                     session_audio_asset = await _persist_speaking_audio_asset(
                         db,
@@ -1137,6 +1140,17 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
                         speaker_role="session",
                         channel_kind="session_audio",
                         pcm_chunks=_combine_pcm16_segments(session_audio_segments, LIVE_INPUT_RATE),
+                        sample_rate=LIVE_INPUT_RATE,
+                        source_mime_type=f"audio/pcm;rate={LIVE_INPUT_RATE}",
+                    )
+                    # Candidate-only track so the candidate turn plays back just the
+                    # candidate's voice, not the full two-speaker conversation.
+                    candidate_audio_asset = await _persist_speaking_audio_asset(
+                        db,
+                        session_id=session_id,
+                        speaker_role="candidate",
+                        channel_kind="candidate_input",
+                        pcm_chunks=_combine_pcm16_segments(candidate_audio_segments, LIVE_INPUT_RATE),
                         sample_rate=LIVE_INPUT_RATE,
                         source_mime_type=f"audio/pcm;rate={LIVE_INPUT_RATE}",
                     )
@@ -1192,7 +1206,13 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
                                 text_raw=candidate_text,
                                 text_normalized=candidate_text,
                                 language_code="en",
-                                audio_asset_id=session_audio_asset.id if session_audio_asset is not None else None,
+                                audio_asset_id=(
+                                    candidate_audio_asset.id
+                                    if candidate_audio_asset is not None
+                                    else session_audio_asset.id
+                                    if session_audio_asset is not None
+                                    else None
+                                ),
                                 turn_metadata={"source": "gemini_live_input_transcription"},
                             )
                         )
