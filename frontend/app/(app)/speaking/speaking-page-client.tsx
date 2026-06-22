@@ -211,6 +211,7 @@ const MIN_SPEECH_MS_BEFORE_SILENCE_END = 700;
 const ROAST_SPEECH_END_SILENCE_MS = 4500;
 const NORMAL_NO_ANSWER_MS = 12000;
 const PART_TWO_PREP_NO_ANSWER_MS = 65000;
+const PART_TWO_PREP_COMPLETE_NO_ANSWER_MS = 3000;
 
 export function SpeakingPageClient() {
   const searchParams = useSearchParams();
@@ -221,17 +222,19 @@ export function SpeakingPageClient() {
       return;
     }
     const entryMode = normalizeSpeakingEntryMode(searchParams.get("mode"));
-    if (entryMode !== "part_1") {
+    if (entryMode !== "part_1" && entryMode !== "part_2") {
       return;
     }
     const params = new URLSearchParams(searchParams.toString());
     params.delete("start");
-    router.replace(`/speaking/part-1/live?${params.toString()}`);
+    params.delete("prepComplete");
+    const livePath = entryMode === "part_1" ? "/speaking/part-1/live" : "/speaking/part-2/live";
+    router.replace(`${livePath}?${params.toString()}`);
   }, [router, searchParams]);
 
   if (searchParams.get("start") === "mock") {
     const entryMode = normalizeSpeakingEntryMode(searchParams.get("mode"));
-    if (entryMode === "part_1") {
+    if (entryMode === "part_1" || entryMode === "part_2") {
       return (
         <div className="flex min-h-[320px] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-[#7C3AED]" />
@@ -407,6 +410,7 @@ function LiveSpeakingMockPage() {
   const topicLabel = topics.length > 0 ? topics.join(", ") : topic;
   const randomTopic = searchParams.get("randomTopic") !== "0";
   const aiMode = normalizeAiMode(searchParams.get("aiMode"));
+  const prepComplete = searchParams.get("prepComplete") === "1";
   const isRoastMode = aiMode === "uzbek_roast";
   const api = useMemo(() => createApiClient(), []);
   const [resolvedSessionId, setResolvedSessionId] = useState<string | null>(sessionIdFromUrl);
@@ -511,6 +515,7 @@ function LiveSpeakingMockPage() {
       topicLabel={topicLabel}
       randomTopic={randomTopic}
       isRoastMode={isRoastMode}
+      prepComplete={prepComplete}
     />
   );
 }
@@ -524,6 +529,7 @@ function LiveSpeakingSessionView({
   topicLabel,
   randomTopic,
   isRoastMode,
+  prepComplete,
 }: {
   sessionId: string;
   entryMode: SpeakingEntryMode;
@@ -533,6 +539,7 @@ function LiveSpeakingSessionView({
   topicLabel: string | null;
   randomTopic: boolean;
   isRoastMode: boolean;
+  prepComplete: boolean;
 }) {
   const router = useRouter();
   const live = useSpeakingLiveSession({
@@ -542,6 +549,7 @@ function LiveSpeakingSessionView({
     part,
     topics,
     randomTopic,
+    prepComplete,
   });
 
   const handleDiscard = useCallback(async () => {
@@ -789,6 +797,7 @@ export function useSpeakingLiveSession({
   part,
   topics,
   randomTopic,
+  prepComplete = false,
 }: {
   sessionId: string | null;
   entryMode: SpeakingEntryMode;
@@ -796,6 +805,7 @@ export function useSpeakingLiveSession({
   part: number;
   topics: string[];
   randomTopic: boolean;
+  prepComplete?: boolean;
 }) {
   const api = useMemo(() => createApiClient(), []);
   const [status, setStatus] = useState<LiveStatus>("idle");
@@ -831,6 +841,8 @@ export function useSpeakingLiveSession({
   const examinerTranscriptRef = useRef("");
   const liveConfigRef = useRef({ entryMode, aiMode, part, topics, randomTopic });
   liveConfigRef.current = { entryMode, aiMode, part, topics, randomTopic };
+  const prepCompleteRef = useRef(prepComplete);
+  prepCompleteRef.current = prepComplete;
   const aiModeRef = useRef(aiMode);
   aiModeRef.current = aiMode;
 
@@ -922,12 +934,15 @@ export function useSpeakingLiveSession({
   const scheduleNoAnswerPrompt = useCallback(() => {
     clearNoAnswerTimer();
     const examinerText = examinerTranscriptRef.current;
+    const delay = prepCompleteRef.current && isPartTwoPreparationPrompt(examinerText)
+      ? PART_TWO_PREP_COMPLETE_NO_ANSWER_MS
+      : getNoAnswerDelayMs(examinerText);
     noAnswerTimerRef.current = window.setTimeout(() => {
       if (statusRef.current !== "listening" || !hasStartedInterviewRef.current || !isInputTurnOpenRef.current) {
         return;
       }
       closeInputTurn(buildNoAnswerExaminerPrompt(examinerText));
-    }, getNoAnswerDelayMs(examinerText));
+    }, delay);
   }, [clearNoAnswerTimer, closeInputTurn]);
 
   const finishAnswer = useCallback(() => {
@@ -2031,7 +2046,14 @@ function getAudioContextConstructor(): typeof AudioContext {
 
 function startOutputRuntime(): LiveOutputRuntime {
   const AudioContextCtor = getAudioContextConstructor();
-  const outputContext = new AudioContextCtor();
+  // Gemini Live streams 24kHz PCM. Pin the context rate to match so playback math
+  // and buffering stay correct instead of depending on the device's native rate.
+  let outputContext: AudioContext;
+  try {
+    outputContext = new AudioContextCtor({ sampleRate: 24000 });
+  } catch {
+    outputContext = new AudioContextCtor();
+  }
   void outputContext.resume().catch(() => undefined);
   return {
     outputContext,
@@ -2060,7 +2082,12 @@ async function startAudioRuntime(
     audio: {
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: true,
+      // Auto gain control dynamically normalizes loudness, which keeps the input
+      // level above SPEECH_SILENCE_LEVEL during pauses and prevents the client-side
+      // end-of-turn detection from firing. Keep it off so the fixed VAD thresholds
+      // stay meaningful (the server now relies on the client to mark turn ends).
+      autoGainControl: false,
+      channelCount: 1,
     },
   });
   if (!shouldKeepRuntime()) {
@@ -2212,8 +2239,21 @@ async function playPcmAudio(base64Audio: string, mimeType: string, runtimeRef: R
   source.start(startAt);
   runtime.nextPlaybackAt = startAt + audioBuffer.duration;
   await new Promise<void>((resolve) => {
-    source.onended = () => resolve();
-    window.setTimeout(resolve, Math.ceil(audioBuffer.duration * 1000) + 120);
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(fallbackTimer);
+      resolve();
+    };
+    source.onended = finish;
+    // Fallback measured from when this chunk actually *ends* (it may be queued behind
+    // earlier audio), not from now. A timeout fired from "now" could resolve while the
+    // examiner is still speaking and prematurely open the candidate's turn.
+    const remainingMs = Math.max(0, (startAt + audioBuffer.duration - runtime.outputContext.currentTime) * 1000);
+    const fallbackTimer = window.setTimeout(finish, Math.ceil(remainingMs) + 250);
   });
 }
 
@@ -2286,6 +2326,23 @@ function resampleFloat32(input: Float32Array, inputRate: number, outputRate: num
   const ratio = inputRate / outputRate;
   const outputLength = Math.floor(input.length / ratio);
   const output = new Float32Array(outputLength);
+  if (ratio > 1) {
+    // Downsampling (e.g. 48kHz -> 16kHz): average each window of input samples so
+    // high-frequency content is low-passed instead of point-sampled. Plain decimation
+    // aliases speech harmonics into the voice band and degrades transcription quality.
+    for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
+      const start = Math.floor(outputIndex * ratio);
+      const end = Math.min(input.length, Math.floor((outputIndex + 1) * ratio));
+      let sum = 0;
+      let count = 0;
+      for (let i = start; i < end; i += 1) {
+        sum += input[i];
+        count += 1;
+      }
+      output[outputIndex] = count > 0 ? sum / count : input[Math.min(input.length - 1, start)];
+    }
+    return output;
+  }
   for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
     const inputIndex = outputIndex * ratio;
     const leftIndex = Math.floor(inputIndex);

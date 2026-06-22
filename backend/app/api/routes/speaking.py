@@ -288,6 +288,15 @@ def _build_live_system_instruction(
             "one question at a time. Do not ask a ninth question. After the candidate answers the 8th question, give one brief "
             "spoken closing such as 'That is the end of Part 1. Thank you.' and stop asking questions."
         )
+    part_two_delivery = ""
+    if entry_mode == "part_2" or part == 2:
+        part_two_delivery = (
+            "Part 2 delivery: announce that this is Part 2 and the long turn. "
+            "Say 'Here is your topic' immediately before you read the cue card prompt and bullet points aloud. "
+            "Then tell the candidate they have one minute to prepare and may make notes. "
+            "Do not mention pencil, pen, or paper. "
+            "After preparation, invite them to speak for one to two minutes and stop them politely when time is up."
+        )
     exam_protocol = (
         "Official IELTS interview protocol: begin every session with one brief procedural instruction before the first identity question, then give a short greeting, introduce yourself as the examiner, "
         "ask the candidate for their full name, and ask to see or confirm identification before the first test question. "
@@ -325,6 +334,7 @@ def _build_live_system_instruction(
         return "\n".join(
             item
             for item in (
+                base,
                 UZBEK_ROAST_ROAST_BASE_INSTRUCTION,
                 mode_text,
                 topic_policy,
@@ -343,6 +353,7 @@ def _build_live_system_instruction(
             natural_voice,
             turn_style,
             part_one_question_plan,
+            part_two_delivery,
             f"Current part: IELTS Speaking Part {part}.",
             part_text,
             topic_policy,
@@ -689,6 +700,12 @@ def _live_config(settings: dict[str, Any], system_instruction: str, *, mode: str
         "system_instruction": system_instruction,
         "output_audio_transcription": {},
         "input_audio_transcription": {},
+        # The client drives turn boundaries explicitly via activity_start/activity_end
+        # signals. Disable server-side automatic VAD so the two detectors do not fight
+        # each other (double turn-ends, premature cut-offs, missed barge-in).
+        "realtime_input_config": {
+            "automatic_activity_detection": {"disabled": True},
+        },
     }
     speech_config = settings.get("speech_config")
     if isinstance(speech_config, dict) and speech_config:
@@ -1036,7 +1053,6 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
                         if user_activity_open:
                             await live.send_realtime_input(activity_end=types.ActivityEnd())
                             user_activity_open = False
-                        await live.send_realtime_input(audio_stream_end=True)
                     elif message_type == "text":
                         text = str(message.get("text") or "").strip()
                         if text:
@@ -1045,51 +1061,47 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
                         if user_activity_open:
                             await live.send_realtime_input(activity_end=types.ActivityEnd())
                             user_activity_open = False
-                        await live.send_realtime_input(audio_stream_end=True)
                         stopped_normally = True
                         break
 
             async def send_google() -> None:
                 nonlocal session_turn_count
                 turn_index = 0
-                while True:
-                    try:
-                        async for response in live.receive():
-                            server_content = getattr(response, "server_content", None)
-                            if not server_content:
-                                continue
-                            input_transcription = getattr(server_content, "input_transcription", None)
-                            if input_transcription and getattr(input_transcription, "text", None):
-                                remember_fragment("candidate", input_transcription.text)
-                                await websocket.send_json({"type": "input_transcript", "text": input_transcription.text})
-                            output_transcription = getattr(server_content, "output_transcription", None)
-                            if output_transcription and getattr(output_transcription, "text", None):
-                                remember_fragment("examiner", output_transcription.text)
-                                await websocket.send_json({"type": "transcript", "text": output_transcription.text})
-                            model_turn = getattr(server_content, "model_turn", None)
-                            if model_turn and getattr(model_turn, "parts", None):
-                                for item in model_turn.parts:
-                                    inline_data = getattr(item, "inline_data", None)
-                                    if inline_data and getattr(inline_data, "data", None):
-                                        mime_type = getattr(inline_data, "mime_type", "audio/pcm;rate=24000")
-                                        audio_payload = bytes(inline_data.data)
-                                        session_audio_segments.append((audio_payload, _parse_audio_sample_rate(mime_type, LIVE_OUTPUT_RATE)))
-                                        await websocket.send_json({
-                                            "type": "audio",
-                                            "mimeType": mime_type,
-                                            "data": base64.b64encode(audio_payload).decode("ascii"),
-                                        })
-                            if getattr(server_content, "turn_complete", False):
-                                turn_index += 1
-                                session_turn_count = turn_index
-                                await websocket.send_json({"type": "turn_complete", "turn": turn_index})
-                                await websocket.send_json({"type": "your_turn", "turn": turn_index})
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as exc:  # noqa: BLE001
-                        await websocket.send_json({"type": "error", "message": str(exc)})
-                        break
-                    await asyncio.sleep(0.05)
+                try:
+                    async for response in live.receive():
+                        server_content = getattr(response, "server_content", None)
+                        if not server_content:
+                            continue
+                        input_transcription = getattr(server_content, "input_transcription", None)
+                        if input_transcription and getattr(input_transcription, "text", None):
+                            remember_fragment("candidate", input_transcription.text)
+                            await websocket.send_json({"type": "input_transcript", "text": input_transcription.text})
+                        output_transcription = getattr(server_content, "output_transcription", None)
+                        if output_transcription and getattr(output_transcription, "text", None):
+                            remember_fragment("examiner", output_transcription.text)
+                            await websocket.send_json({"type": "transcript", "text": output_transcription.text})
+                        model_turn = getattr(server_content, "model_turn", None)
+                        if model_turn and getattr(model_turn, "parts", None):
+                            for item in model_turn.parts:
+                                inline_data = getattr(item, "inline_data", None)
+                                if inline_data and getattr(inline_data, "data", None):
+                                    mime_type = getattr(inline_data, "mime_type", "audio/pcm;rate=24000")
+                                    audio_payload = bytes(inline_data.data)
+                                    session_audio_segments.append((audio_payload, _parse_audio_sample_rate(mime_type, LIVE_OUTPUT_RATE)))
+                                    await websocket.send_json({
+                                        "type": "audio",
+                                        "mimeType": mime_type,
+                                        "data": base64.b64encode(audio_payload).decode("ascii"),
+                                    })
+                        if getattr(server_content, "turn_complete", False):
+                            turn_index += 1
+                            session_turn_count = turn_index
+                            await websocket.send_json({"type": "turn_complete", "turn": turn_index})
+                            await websocket.send_json({"type": "your_turn", "turn": turn_index})
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    await websocket.send_json({"type": "error", "message": str(exc)})
 
             receiver = asyncio.create_task(receive_browser())
             sender = asyncio.create_task(send_google())

@@ -69,7 +69,18 @@ export function buildSpeakingLiveSessionHref(
     return `/speaking/part-1/live?${params.toString()}`;
   }
 
+  if (session.entryMode === "part_2") {
+    return `/speaking/part-2/live?${params.toString()}`;
+  }
+
   params.set("start", "mock");
+  return `/speaking?${params.toString()}`;
+}
+
+export function buildPart2SpeakingLiveHref(searchParams: Pick<URLSearchParams, "toString">): string {
+  const params = new URLSearchParams(searchParams.toString());
+  params.set("start", "mock");
+  params.set("prepComplete", "1");
   return `/speaking?${params.toString()}`;
 }
 

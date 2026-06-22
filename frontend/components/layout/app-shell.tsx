@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Award, BarChart3, BookMarked, BookOpenText, CreditCard, Flame, Gauge, History, Menu, PenTool, Podcast, Send, Sparkles, Trophy, X, Settings2 } from "lucide-react";
+import { Award, BarChart3, BookMarked, BookOpenText, CreditCard, Flame, Gauge, History, Menu, Mic, PenTool, Sparkles, Trophy, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createApiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -49,8 +49,8 @@ export function AppShell({ children }: AppShellProps) {
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: Gauge },
     { href: "/tests", label: "Practice Tests", icon: BookOpenText },
-    { href: "/writing", label: "Writing Feedback", icon: PenTool },
-    { href: "/speaking", label: "Speaking", icon: Podcast, activePath: "/speaking" },
+    { href: "/writing", label: "Writing", icon: PenTool },
+    { href: "/speaking", label: "Speaking", icon: Mic, activePath: "/speaking" },
     { href: "/history", label: "History", icon: History },
     { href: "/bookmarks", label: "Bookmarks", icon: BookMarked },
     { href: "/analytics", label: "Analytics", icon: BarChart3, badge: "Premium" },
@@ -58,7 +58,6 @@ export function AppShell({ children }: AppShellProps) {
     { href: "/achievements", label: "Achievements", icon: Award },
     { href: "/subscription", label: "Subscription", icon: CreditCard },
     { href: "/settings", label: "Settings", icon: Settings2 },
-    { href: "https://t.me/PrimeScoreSupport", label: "Support", subtitle: "@PrimeScoreSupport", icon: Send, external: true, iconClassName: "text-sky-500 dark:text-sky-400" },
   ] as const;
 
   useEffect(() => {
@@ -200,8 +199,7 @@ export function AppShell({ children }: AppShellProps) {
           );
           const Icon = item.icon;
           const itemClassName = cn(
-            "flex items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors",
-            "subtitle" in item ? "min-h-12 py-2" : "min-h-10 py-2.5",
+            "flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
             disabled
               ? "cursor-not-allowed text-slate-400 opacity-55 grayscale dark:text-slate-600"
               : active
@@ -214,21 +212,12 @@ export function AppShell({ children }: AppShellProps) {
               ? "text-slate-400 dark:text-slate-600"
               : active
               ? "text-orange-600 dark:text-orange-300"
-              : "iconClassName" in item
-                ? item.iconClassName
-                : "text-slate-400 dark:text-slate-500"
+              : "text-slate-400 dark:text-slate-500"
           );
           const content = (
             <>
               <Icon className={iconClassName} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{item.label}</span>
-                {"subtitle" in item ? (
-                  <span className="mt-0.5 block truncate text-[11px] font-medium leading-none text-slate-400 dark:text-slate-500">
-                    {item.subtitle}
-                  </span>
-                ) : null}
-              </span>
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {"badge" in item ? (
                 <span
                   className={cn(

@@ -159,7 +159,7 @@ async def create_speaking_topic(
         bullet_points=data["bullet_points"],
         followup_group_key=followup_group_key,
         difficulty_label=data["difficulty_label"],
-        category_tags=[],
+        category_tags=data["category_tags"],
         source_kind=data["source_kind"],
         source_note=data["source_note"],
         active=data["active"],
@@ -267,7 +267,7 @@ async def update_speaking_topic(
     topic.topic_title = topic_title
     topic.prompt_text = prompt_text
     topic.bullet_points = data["bullet_points"]
-    topic.category_tags = []
+    topic.category_tags = data["category_tags"]
     topic.active = data["active"]
     topic.followup_group_key = followup_group_key
     topic.topic_metadata = _apply_topic_metadata(

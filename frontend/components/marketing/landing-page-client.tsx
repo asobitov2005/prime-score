@@ -20,6 +20,7 @@ import {
   Star,
 } from "lucide-react";
 import { LandingPricingPlanAction } from "@/components/marketing/landing-pricing-auth";
+import { LandingFooter } from "@/components/marketing/landing-footer";
 import { MarketingAuthCta } from "@/components/marketing/marketing-auth-cta";
 import { CountUp, DeviceShowcase, Reveal } from "@/components/marketing/landing-motion";
 import type { LandingFeaturedTest, ReviewItem } from "@/components/marketing/landing-types";
@@ -255,7 +256,7 @@ function Steps() {
   const steps = getSteps();
 
   return (
-    <section className="relative overflow-hidden bg-[#fffaf5] px-2 py-24 dark:bg-slate-900 sm:px-3 sm:py-32">
+    <section id="how-it-works" className="relative overflow-hidden bg-[#fffaf5] px-2 py-24 dark:bg-slate-900 sm:px-3 sm:py-32">
       <div className="mx-auto max-w-[86rem]">
         <Reveal className="mx-auto max-w-2xl text-center">
           <Eyebrow no="02">{"How it works"}</Eyebrow>
@@ -717,6 +718,7 @@ export function LandingPageClient({ plans, reviews, totalUsers, initialTests = [
       <Pricing plans={plans} />
       <Reviews reviews={reviews} />
       <FinalCta />
+      <LandingFooter />
     </main>
   );
 }

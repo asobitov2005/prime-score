@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, CalendarDays, LayoutDashboard, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell, Headphones, PenSquare, Mic2 } from "lucide-react";
+import { BookOpen, CalendarDays, LayoutDashboard, Moon, Sun, User, LogOut, ChevronDown, Settings2, Bell, Headphones, PenSquare, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -663,10 +663,10 @@ export function SiteShell({ children }: SiteShellProps) {
                 onClose={() => setIsMobileNavOpen(false)}
               />
               <MobilePracticeLink
-                href="/ielts-speaking-mock-online"
+                href="/speaking"
                 label="Speaking"
                 description={"Mock online"}
-                icon={<Mic2 className="h-[18px] w-[18px]" />}
+                icon={<Mic className="h-[18px] w-[18px]" />}
                 isAuthenticated={isAuthenticated}
                 onClose={() => setIsMobileNavOpen(false)}
               />
@@ -903,10 +903,10 @@ function PracticeTestsMenu({
             onClose={() => onOpenChange(false)}
           />
           <PracticeDropdownLink
-            href="/ielts-speaking-mock-online"
+            href="/speaking"
             label="Speaking"
             description={"Mock online"}
-            icon={<Mic2 className="h-4 w-4" />}
+            icon={<Mic className="h-4 w-4" />}
             accentClassName="bg-orange-500/10 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300"
             isAuthenticated={isAuthenticated}
             onClose={() => onOpenChange(false)}
