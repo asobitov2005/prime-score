@@ -465,15 +465,22 @@ function typedOptionLines(group: PreviewGroup) {
     : normalizeOptionList(group.sharedOptions ?? []);
 }
 
+function sharedOrQuestionOptions(group: PreviewGroup, question: PreviewQuestion) {
+  // sharedOptions arrives as an array (never undefined), so `??` would never fall
+  // through to question.options. Pick whichever list actually has entries.
+  const shared = normalizeOptionList(group.sharedOptions ?? []);
+  return shared.length > 0 ? shared : normalizeOptionList(question.options ?? []);
+}
+
 function typedQuestionOptionLines(group: PreviewGroup, question: PreviewQuestion, matchingInformationOptions: string[]) {
   if (question.type.includes("matching_information")) {
     return matchingInformationOptions.length > 0
       ? matchingInformationOptions
-      : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
+      : sharedOrQuestionOptions(group, question);
   }
 
   if (question.type.includes("plan_map_labeling")) {
-    return normalizeOptionList(group.sharedOptions ?? question.options ?? []);
+    return sharedOrQuestionOptions(group, question);
   }
 
   if (!groupUsesOptionBank(question.type)) {
@@ -482,7 +489,7 @@ function typedQuestionOptionLines(group: PreviewGroup, question: PreviewQuestion
 
   return group.secondaryBlock?.trim()
     ? splitOptionLines(group.secondaryBlock)
-    : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
+    : sharedOrQuestionOptions(group, question);
 }
 
 function typedOptionView(option: string, index: number, type: PreviewGroup["type"] | PreviewQuestion["type"]) {
@@ -1308,7 +1315,9 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     setFontScale(nextFontScale);
     setActiveQuestionId(nextActiveQuestionId);
     setActiveSectionId(nextSectionId);
-    setShowPassageQuestionNav(hasInitialReviewTarget || isReviewMode || previewSections.length <= 1);
+    // Open the active passage's question navigator automatically on first entry,
+    // instead of requiring the user to click the passage tab first.
+    setShowPassageQuestionNav(true);
     resetWallClockTimer(nextTimeSpentSeconds);
     sectionTimeSpentSecondsRef.current = nextSectionTimeSpentSeconds;
     activeSectionTimerRef.current = nextSectionId ? { sectionId: nextSectionId, startedAtMs: Date.now() } : null;

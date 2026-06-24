@@ -23,10 +23,10 @@ def upgrade() -> None:
             shared_content = COALESCE(shared_content, '{}'::jsonb)
                 || jsonb_build_object('secondary_block', '', 'options_title', ''),
             shared_options = '[]'::jsonb
-        WHERE question_type NOT LIKE '%wordbank%'
-          AND question_type NOT LIKE '%matching%'
-          AND question_type NOT LIKE '%listening_matching%'
-          AND question_type NOT LIKE '%plan_map_labeling%'
+        WHERE question_type NOT ILIKE '%wordbank%'
+          AND question_type NOT ILIKE '%matching%'
+          AND question_type NOT ILIKE '%listening_matching%'
+          AND question_type NOT ILIKE '%plan_map_labeling%'
           AND (
             COALESCE(shared_content->>'secondary_block', '') <> ''
             OR COALESCE(shared_content->>'options_title', '') <> ''

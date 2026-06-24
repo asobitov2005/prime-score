@@ -73,3 +73,6 @@ backend/primescore-frontend@0.1.0
 backend/force_db_init.py
 backend/seed_admin_manual.py
 backend/seed_realistic_tests.py
+
+# GCP service account key (secret)
+vertex-key.json
