@@ -36,7 +36,8 @@ interface WritingPageProps {
 }
 
 export default async function WritingPage({ searchParams }: WritingPageProps) {
-  const activeTaskType = searchParams?.task_type === "task_2" ? "task_2" : "task_1";
+  const explicitTaskType: WritingTaskType | null =
+    searchParams?.task_type === "task_2" ? "task_2" : searchParams?.task_type === "task_1" ? "task_1" : null;
   const [summary, history, task1TaskList, task2TaskList, limitStatus] = await Promise.all([
     getWritingDashboardSummary().catch(() => null as WritingDashboardSummary | null),
     getWritingHistory().catch(() => ({ items: [] as WritingHistoryItem[], total: 0 })),
@@ -44,6 +45,14 @@ export default async function WritingPage({ searchParams }: WritingPageProps) {
     listWritingTasks({ task_type: "task_2", page_size: 100 }).catch(() => ({ items: [] as WritingTaskListItem[], total: 0 })),
     getWritingLimits().catch(() => null as WritingLimitStatus | null),
   ]);
+
+  // When no tab is explicitly requested, open the task type that actually has
+  // graded results so the performance stats aren't blank for users who only
+  // practised one task type. Task 1 stays the default when both are empty.
+  const task1HasData = summary?.task_1_average != null;
+  const task2HasData = summary?.task_2_average != null;
+  const activeTaskType: WritingTaskType =
+    explicitTaskType ?? (!task1HasData && task2HasData ? "task_2" : "task_1");
 
   const task1Tasks = task1TaskList.items.map((task) => ({
     ...task,
@@ -163,20 +172,24 @@ function PerformanceStrip({
     const band = typeof item.overall_band === "number" ? item.overall_band : Number(item.overall_band);
     return status === "completed" && Number.isFinite(band);
   });
-  const averageBandValue = activeTaskType === "task_1" ? summary?.task_1_average : summary?.task_2_average;
-  const averageBand = formatBand(
-    averageBandValue ?? (
-      gradedTaskItems.length > 0
-        ? gradedTaskItems.reduce((sum, item) => sum + Number(item.overall_band), 0) / gradedTaskItems.length
-        : null
-    ),
-  );
-  const bestBand = formatBand(
+  // Prefer the dashboard summary, which is computed across ALL of the user's
+  // submissions. The history list is only a paginated slice, so it can miss the
+  // real best/last band; use it purely as a fallback when the summary is absent.
+  const summaryAverage = activeTaskType === "task_1" ? summary?.task_1_average : summary?.task_2_average;
+  const summaryBest = activeTaskType === "task_1" ? summary?.task_1_best : summary?.task_2_best;
+  const summaryLast = activeTaskType === "task_1" ? summary?.task_1_last : summary?.task_2_last;
+  const historyAverage =
+    gradedTaskItems.length > 0
+      ? gradedTaskItems.reduce((sum, item) => sum + Number(item.overall_band), 0) / gradedTaskItems.length
+      : null;
+  const historyBest =
     gradedTaskItems.length > 0
       ? Math.max(...gradedTaskItems.map((item) => Number(item.overall_band)))
-      : null,
-  );
-  const lastBand = formatBand(taskItems[0]?.overall_band ?? null);
+      : null;
+  const historyLast = taskItems[0]?.overall_band ?? null;
+  const averageBand = formatBand(summaryAverage ?? historyAverage);
+  const bestBand = formatBand(summaryBest ?? historyBest);
+  const lastBand = formatBand(summaryLast ?? historyLast);
   const freeChecks = limitStatus
     ? limitStatus.daily_limit === null
       ? "Unlimited"

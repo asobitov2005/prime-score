@@ -367,6 +367,10 @@ class WritingDashboardSummary(BaseModel):
     last_submitted_at: datetime | None = None
     task_1_average: float | None = None
     task_2_average: float | None = None
+    task_1_best: float | None = None
+    task_2_best: float | None = None
+    task_1_last: float | None = None
+    task_2_last: float | None = None
 
 
 class WritingLimitRead(BaseModel):

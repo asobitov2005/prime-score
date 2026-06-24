@@ -1266,16 +1266,40 @@ async def dashboard_summary(
     last_band = float(last_row[0]) if last_row else None
     last_submitted_at = last_row[1] if last_row else None
 
-    task_1_avg = await session.scalar(
-        select(func.avg(WritingEvaluation.overall_band))
-        .join(WritingSubmission, WritingSubmission.id == WritingEvaluation.submission_id)
-        .where(*completed_filter, WritingSubmission.task_type == WritingTaskType.TASK_1)
-    )
-    task_2_avg = await session.scalar(
-        select(func.avg(WritingEvaluation.overall_band))
-        .join(WritingSubmission, WritingSubmission.id == WritingEvaluation.submission_id)
-        .where(*completed_filter, WritingSubmission.task_type == WritingTaskType.TASK_2)
-    )
+    # Per-task averages/best/last across ALL completed submissions (not a
+    # paginated slice), so the dashboard reflects the user's true stats. We must
+    # filter via the `== WritingTaskType.X` comparator (not GROUP BY) because the
+    # EnumValueString comparator transparently matches legacy mixed-case rows
+    # ('task_1' and 'TASK_1'); a raw GROUP BY would split those into two groups.
+    async def _task_stats(
+        task_type: WritingTaskType,
+    ) -> tuple[float | None, float | None, float | None]:
+        task_filter = [*completed_filter, WritingSubmission.task_type == task_type]
+        avg_value, best_value = (
+            await session.execute(
+                select(
+                    func.avg(WritingEvaluation.overall_band),
+                    func.max(WritingEvaluation.overall_band),
+                )
+                .join(WritingSubmission, WritingSubmission.id == WritingEvaluation.submission_id)
+                .where(*task_filter)
+            )
+        ).one()
+        last_value = await session.scalar(
+            select(WritingEvaluation.overall_band)
+            .join(WritingSubmission, WritingSubmission.id == WritingEvaluation.submission_id)
+            .where(*task_filter)
+            .order_by(WritingSubmission.submitted_at.desc())
+            .limit(1)
+        )
+        return (
+            float(avg_value) if avg_value is not None else None,
+            float(best_value) if best_value is not None else None,
+            float(last_value) if last_value is not None else None,
+        )
+
+    task_1_average, task_1_best, task_1_last = await _task_stats(WritingTaskType.TASK_1)
+    task_2_average, task_2_best, task_2_last = await _task_stats(WritingTaskType.TASK_2)
 
     return WritingDashboardSummary(
         total_submissions=int(total),
@@ -1283,6 +1307,10 @@ async def dashboard_summary(
         best_band=float(best_band) if best_band is not None else None,
         last_band=last_band,
         last_submitted_at=last_submitted_at,
-        task_1_average=float(task_1_avg) if task_1_avg is not None else None,
-        task_2_average=float(task_2_avg) if task_2_avg is not None else None,
+        task_1_average=task_1_average,
+        task_2_average=task_2_average,
+        task_1_best=task_1_best,
+        task_2_best=task_2_best,
+        task_1_last=task_1_last,
+        task_2_last=task_2_last,
     )

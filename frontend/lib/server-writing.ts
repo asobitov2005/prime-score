@@ -262,6 +262,10 @@ export interface WritingDashboardSummary {
   last_submitted_at?: string | null;
   task_1_average?: number | null;
   task_2_average?: number | null;
+  task_1_best?: number | null;
+  task_2_best?: number | null;
+  task_1_last?: number | null;
+  task_2_last?: number | null;
 }
 
 export interface WritingLimitStatus {
