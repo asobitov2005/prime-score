@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Float, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Float, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,6 +11,12 @@ from app.models.enums import AttemptMode, AttemptScope, AttemptStatus, TestType
 
 class Attempt(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "attempts"
+    __table_args__ = (
+        # Hot path: per-user completed-attempt lookups (leaderboard, stats, history).
+        Index("ix_attempts_user_id_status", "user_id", "status"),
+        # ORDER BY created_at DESC for admin/user listings and daily trends.
+        Index("ix_attempts_created_at", "created_at"),
+    )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
     test_id: Mapped[UUID] = mapped_column(ForeignKey("tests.id"), index=True)

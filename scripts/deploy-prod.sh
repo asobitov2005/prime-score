@@ -281,4 +281,12 @@ PY
 fi
 
 docker-compose -f "$COMPOSE_FILE" ps
+
+# Reclaim disk from old images and stale build cache. The `until` filters keep
+# recent images around so the rollback path above can still restore them.
+echo "[cleanup] Pruning dangling images and stale build cache"
+docker image prune -f || true
+docker image prune -a -f --filter "until=168h" || true
+docker builder prune -f --filter "until=168h" || true
+
 trap - ERR

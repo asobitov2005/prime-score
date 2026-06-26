@@ -15,7 +15,9 @@ from app.models.base import TimestampMixin, UUIDPrimaryKeyMixin, Base
 class Notification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "notifications"
 
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     type: Mapped[NotificationType] = mapped_column(
         Enum(NotificationType, name="notification_type"), nullable=False
     )
@@ -30,7 +32,9 @@ class Notification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class AuditLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "audit_log"
 
-    admin_id: Mapped[UUID] = mapped_column(ForeignKey("admins.id", ondelete="CASCADE"), nullable=False)
+    admin_id: Mapped[UUID] = mapped_column(
+        ForeignKey("admins.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
     entity_id: Mapped[UUID] = mapped_column(nullable=False)

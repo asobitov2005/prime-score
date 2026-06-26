@@ -6,10 +6,19 @@ x-prime-score-hosts: &prime_score_hosts
   - "frontend:172.28.100.11"
   - "admin:172.28.100.12"
 
+# Cap per-container log growth. The default json-file driver is unbounded —
+# one container log had grown to 2.1GB on the server.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-primescore}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -28,6 +37,7 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    logging: *default-logging
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
@@ -43,6 +53,7 @@ services:
   minio:
     image: minio/minio:latest
     restart: unless-stopped
+    logging: *default-logging
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
@@ -56,6 +67,7 @@ services:
   api:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    logging: *default-logging
     extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
@@ -104,6 +116,7 @@ services:
   worker:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    logging: *default-logging
     extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
@@ -147,6 +160,7 @@ services:
   beat:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    logging: *default-logging
     extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
@@ -190,6 +204,7 @@ services:
   bot:
     image: ghcr.io/asobitov2005/prime-score-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    logging: *default-logging
     extra_hosts: *prime_score_hosts
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-primescore}
@@ -231,6 +246,7 @@ services:
   frontend:
     image: ghcr.io/asobitov2005/prime-score-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    logging: *default-logging
     extra_hosts: *prime_score_hosts
     depends_on:
       api:
@@ -251,6 +267,7 @@ services:
   admin:
     image: ghcr.io/asobitov2005/prime-score-admin:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    logging: *default-logging
     extra_hosts: *prime_score_hosts
     depends_on:
       api:
