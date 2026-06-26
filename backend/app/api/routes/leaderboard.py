@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from math import ceil
 from uuid import UUID
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import get_settings
 
 from app.core.deps import get_current_user
 from app.db.session import get_db_session
@@ -715,6 +720,55 @@ def _serialize_row(
     )
 
 
+_LEADERBOARD_CACHE_TTL = 45  # seconds
+
+
+@lru_cache(maxsize=1)
+def _leaderboard_cache_redis() -> aioredis.Redis:
+    return aioredis.from_url(get_settings().redis_url, decode_responses=True)
+
+
+async def _cached_board_entries(
+    session: AsyncSession, *, period_type: str
+) -> list[LeaderboardEntryRead]:
+    """Ranked leaderboard board, cached in Redis for a short window.
+
+    The board is identical for every user, so the expensive full-table
+    aggregation in ``leaderboard_rows`` runs at most once per
+    ``_LEADERBOARD_CACHE_TTL``; callers personalise (``is_current_user``) on
+    top of the returned entries. Any Redis error degrades to a live compute.
+    """
+    cache_key = f"leaderboard:board:v1:{period_type}"
+    client = _leaderboard_cache_redis()
+
+    try:
+        cached = await client.get(cache_key)
+    except Exception:
+        cached = None
+    if cached is not None:
+        try:
+            return [LeaderboardEntryRead.model_validate(item) for item in json.loads(cached)]
+        except Exception:
+            pass  # corrupt/incompatible cache → fall through and recompute
+
+    rows = await leaderboard_rows(session, period_type=period_type)
+    sorted_rows = sorted(rows, key=_sort_key, reverse=True)
+    entries = [
+        _serialize_row(row=row, user=user, rank=index, is_current_user=False)
+        for index, (row, user) in enumerate(sorted_rows, start=1)
+    ]
+
+    try:
+        await client.set(
+            cache_key,
+            json.dumps([entry.model_dump(mode="json") for entry in entries]),
+            ex=_LEADERBOARD_CACHE_TTL,
+        )
+    except Exception:
+        pass
+    return entries
+
+
 @router.get("", response_model=LeaderboardResponse)
 async def get_leaderboard(
     period: str = Query(default="all_time"),
@@ -727,28 +781,22 @@ async def get_leaderboard(
     if internal_period is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported leaderboard period.")
 
-    rows = await leaderboard_rows(session, period_type=internal_period)
-    sorted_rows = sorted(rows, key=_sort_key, reverse=True)
+    entries = await _cached_board_entries(session, period_type=internal_period)
 
     visible_items: list[LeaderboardEntryRead] = []
     current_user_entry: LeaderboardEntryRead | None = None
 
-    for index, (row, user) in enumerate(sorted_rows, start=1):
-        entry = _serialize_row(
-            row=row,
-            user=user,
-            rank=index,
-            is_current_user=user.id == current_user.id,
-        )
-        if user.id == current_user.id:
+    for entry in entries:
+        if entry.user_id == current_user.id:
+            entry = entry.model_copy(update={"is_current_user": True})
             current_user_entry = entry
-        if bool(user.show_on_leaderboard):
+        if entry.show_on_leaderboard:
             visible_items.append(entry)
 
     if current_user_entry is None:
         user = await session.get(User, current_user.id)
         if user is not None:
-            fallback_rank = len(sorted_rows) + 1
+            fallback_rank = len(entries) + 1
             period_xp = (
                 int(user.total_xp or 0)
                 if internal_period == PERIOD_ALL_TIME
@@ -794,13 +842,11 @@ async def get_leaderboard_user_profile(
     if user.id != current_user.id and not bool(user.show_on_leaderboard):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
-    rows = await leaderboard_rows(session, period_type=PERIOD_ALL_TIME)
-    sorted_rows = sorted(rows, key=_sort_key, reverse=True)
-    rank = next((index for index, (_, row_user) in enumerate(sorted_rows, start=1) if row_user.id == user.id), 0)
-    leaderboard_size = len(sorted_rows)
-    weekly_rows = await leaderboard_rows(session, period_type=PERIOD_WEEKLY)
-    weekly_sorted_rows = sorted(weekly_rows, key=_sort_key, reverse=True)
-    weekly_rank = next((index for index, (_, row_user) in enumerate(weekly_sorted_rows, start=1) if row_user.id == user.id), None)
+    all_entries = await _cached_board_entries(session, period_type=PERIOD_ALL_TIME)
+    rank = next((entry.rank for entry in all_entries if entry.user_id == user.id), 0)
+    leaderboard_size = len(all_entries)
+    weekly_entries = await _cached_board_entries(session, period_type=PERIOD_WEEKLY)
+    weekly_rank = next((entry.rank for entry in weekly_entries if entry.user_id == user.id), None)
 
     completed_statuses = {AttemptStatus.COMPLETED, AttemptStatus.AUTO_SUBMITTED}
     attempts = list(

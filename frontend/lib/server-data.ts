@@ -90,7 +90,7 @@ async function requestCachedApi<T>(path: string, revalidateSeconds: number, tag:
   if (!response.ok) {
     const text = await response.text().catch(() => "no body");
     console.error(`Frontend cached API request failed for ${path} with status ${response.status}: ${text}`);
-    throw new Error(`Frontend cached API request failed for ${path}`);
+    throw new ServerDataRequestError(`Frontend cached API request failed for ${path}`, response.status);
   }
 
   return (await response.json()) as T;
@@ -158,7 +158,13 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
   search.set("status", "published");
 
   try {
-    const items = await requestApi<BackendTestCatalogItem[]>(`/tests${search.size ? `?${search.toString()}` : ""}`);
+    // Published catalog is public and identical for every user; cache it so the
+    // backend /tests query isn't re-run on every request (revalidate every 5 min).
+    const items = await requestCachedApi<BackendTestCatalogItem[]>(
+      `/tests${search.size ? `?${search.toString()}` : ""}`,
+      300,
+      "catalog-tests",
+    );
     return items.map(mapCatalogItem);
   } catch {
     return [];
@@ -183,7 +189,12 @@ export async function getLandingFeaturedTests(): Promise<TestCatalogItem[]> {
 
 export async function getCatalogTestDetail(testId: string): Promise<TestCatalogItem | null> {
   try {
-    const item = await requestApi<BackendTestDetail>(`/tests/${testId}`);
+    // Published test structure is static/public; cache per test (revalidate 5 min).
+    const item = await requestCachedApi<BackendTestDetail>(
+      `/tests/${testId}`,
+      300,
+      `test-detail-${testId}`,
+    );
     return mapTestDetail(item);
   } catch (error) {
     if (error instanceof ServerDataRequestError && error.status === 404) {
@@ -195,7 +206,12 @@ export async function getCatalogTestDetail(testId: string): Promise<TestCatalogI
 
 export async function getGuestTestSnapshot(testId: string): Promise<BackendTestDetail | null> {
   try {
-    return await requestApi<BackendTestDetail>(`/tests/${testId}`);
+    // Same public, static /tests/{id} payload — cache it (shares the per-test tag).
+    return await requestCachedApi<BackendTestDetail>(
+      `/tests/${testId}`,
+      300,
+      `test-detail-${testId}`,
+    );
   } catch {
     return null;
   }
