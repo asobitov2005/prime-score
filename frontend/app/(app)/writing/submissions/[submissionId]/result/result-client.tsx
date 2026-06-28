@@ -35,14 +35,11 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   WritingActionPlan,
-  WritingBandBoundary,
   WritingChecklistItem,
   WritingCriterionEvaluation,
   WritingErrorPattern,
   WritingInlineAnnotation,
-  WritingSentenceFix,
   WritingRoastFeedback,
-  WritingScoreBooster,
   WritingSubmissionResult,
   WritingSubmissionStatus,
   WritingTargetAction,
@@ -446,28 +443,6 @@ function getTargetBandActions({
   }));
 }
 
-function checklistTone(status: string) {
-  if (status === "met") {
-    return {
-      icon: CheckCircle2,
-      label: "Done",
-      className: "border-emerald-500/25 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300",
-    };
-  }
-  if (status === "missing") {
-    return {
-      icon: AlertTriangle,
-      label: "Missing",
-      className: "border-rose-500/25 bg-rose-500/5 text-rose-700 dark:text-rose-300",
-    };
-  }
-  return {
-    icon: Target,
-    label: "Improve",
-    className: "border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-300",
-  };
-}
-
 function ScoreGauge({ band }: { band: number }) {
   const tone = bandTone(band);
   const radius = 72;
@@ -571,205 +546,28 @@ function TargetActionPlanPanel({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-hidden rounded-xl border border-border/50">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-semibold">#</th>
-                <th className="px-3 py-2 font-semibold">Action</th>
-                <th className="px-3 py-2 font-semibold">Why</th>
-                <th className="px-3 py-2 font-semibold">Do this</th>
-                <th className="px-3 py-2 font-semibold">Impact</th>
-              </tr>
-            </thead>
-            <tbody>
-              {targetActions.map((action, index) => (
-                <tr key={`${action.title}-${index}`} className="border-t border-border/40">
-                  <td className="px-3 py-3 align-top text-xs font-semibold text-muted-foreground">{action.priority || index + 1}</td>
-                  <td className="px-3 py-3 align-top font-semibold text-foreground">{action.title}</td>
-                  <td className="px-3 py-3 align-top text-muted-foreground">{action.why}</td>
-                  <td className="px-3 py-3 align-top text-foreground/90">{action.how}</td>
-                  <td className="px-3 py-3 align-top text-sky-700 dark:text-sky-300">{action.band_impact || `${currentBand.toFixed(1)} -> ${nextTarget.toFixed(1)}`}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChecklistPanel({ items }: { items: WritingChecklistItem[] }) {
-  if (!items.length) return null;
-  return (
-    <Card className="rounded-3xl border-border/60 bg-card/40">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">IELTS task checklist</CardTitle>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Task-specific requirements that usually decide whether the essay can move to the next band.
-        </p>
-      </CardHeader>
-      <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-        {items.map((item) => {
-          const tone = checklistTone(item.status);
-          const Icon = tone.icon;
-          return (
-            <div key={item.label} className={cn("rounded-2xl border p-3", tone.className)}>
-              <div className="flex items-center justify-between gap-2">
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider">{tone.label}</span>
+      <CardContent className="space-y-2.5">
+        {targetActions.map((action, index) => (
+          <div
+            key={`${action.title}-${index}`}
+            className="flex gap-3 rounded-2xl border border-border/50 bg-background/40 p-3.5"
+          >
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/12 text-sm font-bold text-violet-700 dark:text-violet-300">
+              {action.priority || index + 1}
+            </div>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold text-foreground">{action.title}</p>
+                <span className="shrink-0 rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                  {action.band_impact || `${currentBand.toFixed(1)} → ${nextTarget.toFixed(1)}`}
+                </span>
               </div>
-              <div className="mt-2 text-sm font-semibold text-foreground">{item.label}</div>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.detail}</p>
-              {item.how_to_fix ? (
-                <p className="mt-1 text-xs leading-5 text-foreground/80">{item.how_to_fix}</p>
+              {action.how ? (
+                <p className="text-sm leading-relaxed text-muted-foreground">{action.how}</p>
               ) : null}
             </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ErrorPatternPanel({
-  current,
-  history,
-}: {
-  current: WritingErrorPattern[];
-  history: WritingErrorPattern[];
-}) {
-  if (!current.length && !history.length) return null;
-  return (
-    <Card className="rounded-3xl border-border/60 bg-card/40">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Error patterns</CardTitle>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Current essay issues plus your recent writing trend.
-        </p>
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-2">
-        <PatternList title="This essay" patterns={current} empty="No repeated issue pattern found in this essay." />
-        <PatternList title="Recent trend" patterns={history} empty="Submit more essays to build a reliable trend." />
-      </CardContent>
-    </Card>
-  );
-}
-
-function BandBoundaryPanel({ items }: { items: WritingBandBoundary[] }) {
-  if (!items.length) return null;
-  return (
-    <Card className="rounded-2xl border-border/60 bg-card/50">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">Band boundary</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-hidden rounded-xl border border-border/50">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-semibold">Criterion</th>
-                <th className="px-3 py-2 font-semibold">Now</th>
-                <th className="px-3 py-2 font-semibold">Next</th>
-                <th className="px-3 py-2 font-semibold">Why now</th>
-                <th className="px-3 py-2 font-semibold">Needed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.criterion} className="border-t border-border/40">
-                  <td className="px-3 py-3 align-top font-semibold">{item.criterion}</td>
-                  <td className="px-3 py-3 align-top tabular-nums">{toBandNumber(item.current_band).toFixed(1)}</td>
-                  <td className="px-3 py-3 align-top tabular-nums text-emerald-700 dark:text-emerald-300">{toBandNumber(item.next_band).toFixed(1)}</td>
-                  <td className="px-3 py-3 align-top text-muted-foreground">{item.why_current}</td>
-                  <td className="px-3 py-3 align-top text-foreground/90">{item.required_for_next}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ScoreBoostersPanel({ items }: { items: WritingScoreBooster[] }) {
-  if (!items.length) return null;
-  return (
-    <Card className="rounded-2xl border-border/60 bg-card/50">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">What already scores well</CardTitle>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Keep these original patterns. They are helping your band.
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-hidden rounded-xl border border-border/50">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-semibold">Original</th>
-                <th className="px-3 py-2 font-semibold">Why it scores</th>
-                <th className="px-3 py-2 font-semibold">Keep doing</th>
-                <th className="px-3 py-2 font-semibold">Score effect</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.slice(0, 6).map((item, index) => (
-                <tr key={`${item.original}-${index}`} className="border-t border-border/40">
-                  <td className="px-3 py-3 align-top">
-                    <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{item.criterion}</div>
-                    <div className="mt-1 rounded-md bg-emerald-500/10 px-2 py-1 text-foreground/90">{item.original}</div>
-                  </td>
-                  <td className="px-3 py-3 align-top text-muted-foreground">{item.why_it_scores}</td>
-                  <td className="px-3 py-3 align-top text-foreground/90">{item.keep_doing}</td>
-                  <td className="px-3 py-3 align-top text-emerald-700 dark:text-emerald-300">{item.band_value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SentenceFixPanel({
-  fixes,
-}: {
-  fixes: WritingSentenceFix[];
-}) {
-  if (!fixes.length) return null;
-  return (
-    <Card className="rounded-2xl border-border/60 bg-card/50">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">Sentence fixes</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-hidden rounded-xl border border-border/50">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-muted/30 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-semibold">#</th>
-                <th className="px-3 py-2 font-semibold">Original</th>
-                <th className="px-3 py-2 font-semibold">Improved</th>
-                <th className="px-3 py-2 font-semibold">Why</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fixes.slice(0, 8).map((fix, index) => (
-                <tr key={`${fix.original}-${index}`} className="border-t border-border/40">
-                  <td className="px-3 py-3 align-top text-xs font-semibold text-muted-foreground">{fix.priority || index + 1}</td>
-                  <td className="px-3 py-3 align-top text-rose-700 line-through decoration-rose-500 dark:text-rose-300">{fix.original}</td>
-                  <td className="px-3 py-3 align-top text-emerald-700 dark:text-emerald-300">{fix.corrected_sentence || fix.replacement}</td>
-                  <td className="px-3 py-3 align-top text-muted-foreground">{fix.why || fix.band_impact}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
@@ -796,40 +594,6 @@ function ImprovedDiffView({ original, improved }: { original: string; improved: 
         }
         return <span key={index}>{part.text}</span>;
       })}
-    </div>
-  );
-}
-
-function PatternList({ title, patterns, empty }: { title: string; patterns: WritingErrorPattern[]; empty: string }) {
-  return (
-    <div className="rounded-2xl border border-border/40 bg-muted/15 p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</div>
-      {patterns.length ? (
-        <div className="mt-3 space-y-2">
-          {patterns.map((pattern) => (
-            <div key={`${title}-${pattern.category}-${pattern.subcategory || pattern.label}`} className="space-y-1.5">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-semibold text-foreground">{pattern.label}</span>
-                <span className="text-xs tabular-nums text-muted-foreground">{pattern.count} · {pattern.percentage.toFixed(0)}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-sky-500"
-                  style={{ width: `${Math.max(6, Math.min(100, pattern.percentage))}%` }}
-                />
-              </div>
-              {pattern.examples?.[0] ? (
-                <p className="text-xs leading-5 text-muted-foreground">{pattern.examples[0]}</p>
-              ) : null}
-              {pattern.fix ? (
-                <p className="text-xs leading-5 text-foreground/80">{pattern.fix}</p>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-muted-foreground">{empty}</p>
-      )}
     </div>
   );
 }
@@ -1431,10 +1195,6 @@ export function WritingResultClient({
   const vocabularySuggestions = result.vocabulary_suggestions ?? [];
   const checklist = result.checklist ?? [];
   const errorPatterns = result.error_patterns ?? [];
-  const historyErrorTrends = result.history_error_trends ?? [];
-  const bandBoundaries = result.band_boundaries ?? [];
-  const scoreBoosters = result.score_boosters ?? [];
-  const sentenceFixes = result.sentence_fixes ?? [];
   const selectedBenchmarks = result.selected_benchmarks ?? [];
   const confidence = result.confidence || "Medium";
   const possibleScoreRange = result.possible_score_range || `${overall.toFixed(1)}-${overall.toFixed(1)}`;
@@ -1649,16 +1409,6 @@ export function WritingResultClient({
         desiredScore={effectiveDesiredScore}
         targetActions={targetActions}
       />
-
-      <ScoreBoostersPanel items={scoreBoosters} />
-
-      <BandBoundaryPanel items={bandBoundaries} />
-
-      <ChecklistPanel items={checklist} />
-
-      <ErrorPatternPanel current={errorPatterns} history={historyErrorTrends} />
-
-      <SentenceFixPanel fixes={sentenceFixes} />
 
       <Card className="rounded-3xl border-border/60 bg-card/40 mt-2">
         <CardHeader className="pb-3">
