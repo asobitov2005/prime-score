@@ -31,6 +31,7 @@ function normalizeTranscriptSegments(
         start_sec?: number;
         end_sec?: number;
         text?: string;
+        speaker?: string | null;
       }>
     | null
     | undefined
@@ -42,6 +43,7 @@ function normalizeTranscriptSegments(
       startSec: Math.max(0, Number(segment.start_sec ?? 0)),
       endSec: Math.max(0, Number(segment.end_sec ?? segment.start_sec ?? 0)),
       text: String(segment.text ?? "").trim(),
+      speaker: segment.speaker ? String(segment.speaker).trim() : undefined,
     }));
 }
 

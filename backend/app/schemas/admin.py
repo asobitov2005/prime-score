@@ -448,6 +448,7 @@ class AdminAudioTranscriptSegmentRead(BaseModel):
     start_sec: float
     end_sec: float
     text: str
+    speaker: str | None = None
     confidence: float | None = None
     drift_start_sec: float | None = None
     drift_end_sec: float | None = None

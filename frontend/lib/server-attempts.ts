@@ -12,6 +12,7 @@ export type BackendTranscriptSegment = {
   start_sec: number;
   end_sec: number;
   text: string;
+  speaker?: string | null;
 };
 
 export type BackendTranscriptQuestionLocation = {

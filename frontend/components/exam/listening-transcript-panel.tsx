@@ -14,6 +14,7 @@ export interface ListeningTranscriptSegment {
   startSec: number;
   endSec: number;
   text: string;
+  speaker?: string;
 }
 
 export interface ListeningTranscriptQuestionLocation {
@@ -436,6 +437,8 @@ export function ListeningTranscriptPanel({
           const isActive = index === activeIndex;
           const segmentLocations = locationsBySegmentId.get(segment.id) ?? [];
           const hasAnswerLocation = showAnswerLocations && segmentLocations.length > 0;
+          const speaker = segment.speaker?.trim();
+          const showSpeaker = Boolean(speaker) && speaker !== segments[index - 1]?.speaker?.trim();
 
           return (
             <button
@@ -454,6 +457,11 @@ export function ListeningTranscriptPanel({
                     : "bg-transparent hover:bg-amber-50/45 dark:hover:bg-amber-300/6",
               )}
             >
+              {showSpeaker ? (
+                <span className="mb-1 inline-flex items-center rounded-md bg-sky-500/14 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-400/16 dark:text-sky-200">
+                  {speaker}
+                </span>
+              ) : null}
               <p
                 className={cn(
                   "leading-[1.7] text-foreground transition-colors",

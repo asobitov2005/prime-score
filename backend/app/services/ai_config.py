@@ -138,6 +138,8 @@ def _google_fallback_for_use_case(use_case: AiUseCase) -> str:
         return settings.gemini_speaking_live_model.strip()
     if use_case == AiUseCase.SPEAKING_GRADER:
         return settings.gemini_speaking_grader_model.strip()
+    if use_case == AiUseCase.AUDIO_TRANSCRIPTION:
+        return (settings.gemini_transcription_model or settings.gemini_model).strip()
     return settings.gemini_model.strip()
 
 

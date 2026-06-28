@@ -20,7 +20,11 @@ from google.genai import types as genai_types
 
 from app.db.session import get_session_maker
 from app.models.enums import AiProvider, AiUseCase
-from app.services.ai_config import ResolvedAiUseCaseConfig, resolve_ai_use_case_config
+from app.services.ai_config import (
+    ResolvedAiUseCaseConfig,
+    build_google_client,
+    resolve_ai_use_case_config,
+)
 from app.services.object_storage import fetch_storage_object
 
 logger = logging.getLogger(__name__)
@@ -94,9 +98,10 @@ def _optimize_audio_file_for_transcription(
 def _build_gemini_client(resolved_config: ResolvedAiUseCaseConfig) -> genai.Client:
     if resolved_config.provider != AiProvider.GOOGLE:
         raise RuntimeError("Audio transcription currently requires a Google provider binding.")
-    if not resolved_config.api_key.strip():
-        raise RuntimeError("Audio transcription provider has no API key configured.")
-    return genai.Client(api_key=resolved_config.api_key)
+    # Use the shared Google client builder so transcription honours Vertex AI
+    # (service-account) auth when GOOGLE_GENAI_USE_VERTEXAI is enabled, instead of
+    # an AI Studio API key that the project may not have access to.
+    return build_google_client(resolved_config)
 
 
 def _guess_audio_content_type(
@@ -147,10 +152,16 @@ def _build_transcript_prompt(
     header = (
         "You are processing IELTS listening audio for PrimeScore.\n"
         "Return JSON only.\n"
-        "Task 1: build a clean full transcript in transcript.\n"
-        "Task 2: return semantic transcript chunks in segments.\n"
+        "Task 1: build a clean full transcript in transcript, with speaker diarization.\n"
+        "Task 2: return semantic transcript chunks in segments, each labelled with its speaker.\n"
         "Rules:\n"
         "- Keep transcript faithful to the audio.\n"
+        "- Perform speaker diarization: identify each distinct speaker and label them.\n"
+        "- Use stable speaker labels reused consistently for the same voice across the whole audio.\n"
+        "- Prefer descriptive labels when the role is clear (e.g. Narrator, Man, Woman, Interviewer,\n"
+        "  Student, Tutor); otherwise use Speaker A, Speaker B, Speaker C.\n"
+        "- Every segment must include the speaker field for who is talking in that chunk.\n"
+        "- In the transcript field, prefix each speaker turn with 'Label: ' on its own line.\n"
         "- start_sec and end_sec must be numbers in seconds, keep 1-2 decimal precision.\n"
         "- end_sec must be >= start_sec.\n"
         "- segments must be sequential and reflect the actual spoken order.\n"
@@ -183,10 +194,11 @@ def _segment_response_schema() -> dict[str, Any]:
                     "type": "OBJECT",
                     "properties": {
                         "text": {"type": "STRING"},
+                        "speaker": {"type": "STRING"},
                         "start_sec": {"type": "NUMBER"},
                         "end_sec": {"type": "NUMBER"},
                     },
-                    "required": ["text", "start_sec", "end_sec"],
+                    "required": ["text", "speaker", "start_sec", "end_sec"],
                 },
             },
         },
@@ -275,6 +287,9 @@ def _normalize_segment_rows(raw_segments: object) -> list[dict[str, object]]:
             "end_sec": round(end_sec, 2),
             "text": text,
         }
+        speaker = str(raw_segment.get("speaker") or "").strip()
+        if speaker:
+            item["speaker"] = speaker
         if raw_segment.get("confidence") is not None:
             item["confidence"] = round(max(0.0, min(1.0, float(raw_segment.get("confidence") or 0))), 4)
         if raw_segment.get("drift_start_sec") is not None:
@@ -782,18 +797,33 @@ def _transcribe_audio_bytes_sync(
         )
         prepared_audio_duration_seconds = _probe_audio_duration_seconds(prepared_audio_path)
 
-        uploaded_file = client.files.upload(
-            file=prepared_audio_path,
-            config=genai_types.UploadFileConfig(
-                mime_type=prepared_content_type,
-                display_name=audio_filename or section_title or section_label or "listening-audio",
-            ),
-        )
-        uploaded_file_name = uploaded_file.name
+        # Send the audio inline. The Files API is AI Studio only; Vertex AI (used
+        # in production via the service account) requires inline bytes or a GCS URI.
+        with open(prepared_audio_path, "rb") as audio_fh:
+            prepared_audio_bytes = audio_fh.read()
+        if len(prepared_audio_bytes) > 19 * 1024 * 1024:
+            raise RuntimeError(
+                "Audio is too large for inline transcription (>19MB after compression). "
+                "Split the section audio into shorter parts and retry."
+            )
 
         response = client.models.generate_content(
             model=resolved_config.model_id,
-            contents=[_build_transcript_prompt(section_label=section_label, section_title=section_title), uploaded_file],
+            contents=[
+                genai_types.Content(
+                    role="user",
+                    parts=[
+                        genai_types.Part(
+                            text=_build_transcript_prompt(
+                                section_label=section_label, section_title=section_title
+                            )
+                        ),
+                        genai_types.Part.from_bytes(
+                            data=prepared_audio_bytes, mime_type=prepared_content_type
+                        ),
+                    ],
+                )
+            ],
             config=genai_types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=_response_schema(),
