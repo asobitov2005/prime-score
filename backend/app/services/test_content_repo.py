@@ -918,6 +918,9 @@ def _normalize_transcript_segments(raw_segments: object) -> list[dict[str, objec
             "end_sec": round(end_sec, 2),
             "text": text,
         }
+        speaker = str(raw_segment.get("speaker") or "").strip()
+        if speaker:
+            item["speaker"] = speaker
         if raw_segment.get("confidence") is not None:
             item["confidence"] = round(float(raw_segment.get("confidence") or 0), 4)
         if raw_segment.get("drift_start_sec") is not None:
