@@ -3680,10 +3680,17 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     const hasAnswerIssue = reference.answer_status && reference.answer_status !== "valid";
 
     return (
-      <div 
-        className="mt-2 rounded-2xl border border-orange-200/70 bg-orange-50/80 p-3 text-sm shadow-sm shadow-orange-950/5 dark:border-orange-400/20 dark:bg-orange-500/10 dark:shadow-black/20"
+      <div
+        className={`mt-2 rounded-2xl border border-orange-200/70 bg-orange-50/80 p-3 text-sm shadow-sm shadow-orange-950/5 dark:border-orange-400/20 dark:bg-orange-500/10 dark:shadow-black/20${hasQuote ? " cursor-pointer select-none" : ""}`}
         onMouseEnter={() => setExplanationHighlightQuote(reference.quote ?? null)}
         onMouseLeave={() => setExplanationHighlightQuote(null)}
+        onClick={() => {
+          if (!hasQuote) return;
+          // Tap-to-locate for touch devices (no hover): toggle the passage highlight.
+          setExplanationHighlightQuote((current) =>
+            current === (reference.quote ?? null) ? null : reference.quote ?? null,
+          );
+        }}
       >
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex h-6 items-center rounded-full bg-orange-600 px-2 text-[11px] font-black text-white dark:bg-orange-400 dark:text-slate-950">

@@ -277,6 +277,8 @@ async function buildAttemptPreviewData(
         correctAnswers: item.correct_answers ?? [],
         options: item.options ?? [],
         questionType: item.question_type,
+        explanation: item.explanation ?? null,
+        explanationReference: item.explanation_reference ?? null,
       },
     ])
   );
