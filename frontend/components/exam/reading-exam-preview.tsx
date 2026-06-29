@@ -1249,6 +1249,21 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     [previewSections, strictListeningAudioSectionId]
   );
   const reviewItems = examData.reviewItems ?? {};
+  // In review mode, every answer's evidence quote is highlighted in the passage
+  // by default (not just on hover), so learners can see where each answer lives.
+  const reviewQuoteList = useMemo(() => {
+    if (!isReviewMode) return [] as string[];
+    const seen = new Set<string>();
+    const quotes: string[] = [];
+    for (const item of Object.values(examData.reviewItems ?? {})) {
+      const quote = item?.explanationReference?.quote?.trim();
+      if (quote && quote.length > 3 && !seen.has(quote.toLowerCase())) {
+        seen.add(quote.toLowerCase());
+        quotes.push(quote);
+      }
+    }
+    return quotes;
+  }, [isReviewMode, examData.reviewItems]);
   const candidateName = hasMounted ? (storedCandidateName || "Guest Candidate") : "Guest Candidate";
   const [showListeningTranscript, setShowListeningTranscript] = useState(false);
   const [showTranscriptAnswerLocations, setShowTranscriptAnswerLocations] = useState(false);
@@ -2709,9 +2724,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
     const { plainText, boldRanges, italicRanges, bulletLineIndexes } = parseBraceBoldText(text);
     let highlights = (textHighlights[blockKey] ?? []).slice();
 
-    if (explanationHighlightQuote && blockKey.startsWith("passage-")) {
-      const normalizedQuote = explanationHighlightQuote.trim();
-      if (normalizedQuote.length > 3) {
+    if (blockKey.startsWith("passage-")) {
+      // Highlight every answer's evidence quote in the passage during review
+      // (always-on), plus whichever explanation card is currently focused.
+      const quotesToHighlight = new Set<string>();
+      for (const quote of reviewQuoteList) {
+        const trimmed = quote.trim();
+        if (trimmed.length > 3) quotesToHighlight.add(trimmed);
+      }
+      if (explanationHighlightQuote && explanationHighlightQuote.trim().length > 3) {
+        quotesToHighlight.add(explanationHighlightQuote.trim());
+      }
+      for (const normalizedQuote of quotesToHighlight) {
         try {
           const escapedQuote = normalizedQuote.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
           const regex = new RegExp(escapedQuote, 'g');
@@ -2740,7 +2764,18 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
       }
     }
 
-    highlights = highlights.sort((a, b) => a.start - b.start);
+    // Merge overlapping ranges so multiple answer quotes never double-render text.
+    highlights = highlights
+      .sort((a, b) => a.start - b.start)
+      .reduce<typeof highlights>((merged, current) => {
+        const last = merged[merged.length - 1];
+        if (last && current.start < last.end) {
+          if (current.end > last.end) last.end = current.end;
+          return merged;
+        }
+        merged.push({ ...current });
+        return merged;
+      }, []);
 
     function renderFormattedSlice(start: number, end: number, keyPrefix: string) {
       if (start >= end) {
