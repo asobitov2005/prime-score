@@ -526,10 +526,32 @@ async def _process_section(
     suspicious: list[dict[str, Any]] = []
     for group_job in group_jobs:
         questions_by_id = group_job["questions"]
-        data = await _generate_section_data(config=config, prompt=_build_prompt(group_job["payload"]))
+        try:
+            data = await _generate_section_data(config=config, prompt=_build_prompt(group_job["payload"]))
+        except Exception as exc:  # noqa: BLE001
+            # One question failing (e.g. the model returns invalid JSON) must not
+            # discard explanations for every other question in the same section.
+            for failed_id, failed_data in questions_by_id.items():
+                suspicious.append(
+                    {
+                        "test_id": str(test.id),
+                        "test_title": test.title,
+                        "test_status": str(test.status.value),
+                        "section_id": str(section.id),
+                        "section_title": section.title,
+                        "question_id": failed_id,
+                        "question_number": failed_data.get("number"),
+                        "current_answers": list(failed_data.get("accepted_answers", [])),
+                        "answer_status": "uncertain",
+                        "suggested_answers": [],
+                        "issue": f"Explanation generation failed: {exc}",
+                        "quote": "",
+                    }
+                )
+            continue
         output_items = data.get("questions") or []
         if not isinstance(output_items, list):
-            raise RuntimeError("AI response has no questions array.")
+            continue
 
         for item in output_items:
             if not isinstance(item, dict):
