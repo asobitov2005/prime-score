@@ -18,6 +18,7 @@ import httpx
 from google import genai
 from google.genai import types as genai_types
 
+from app.core.config import get_settings
 from app.db.session import get_session_maker
 from app.models.enums import AiProvider, AiUseCase
 from app.services.ai_config import (
@@ -894,6 +895,11 @@ async def transcribe_listening_audio_from_url(
     session_maker = get_session_maker()
     async with session_maker() as session:
         resolved_config = await resolve_ai_use_case_config(session, AiUseCase.AUDIO_TRANSCRIPTION)
+    # Pin transcription to the dedicated audio model (gemini-2.5-flash) for reliable
+    # speaker diarization, overriding any general-purpose use-case binding.
+    transcription_model = (get_settings().gemini_transcription_model or "").strip()
+    if transcription_model:
+        resolved_config.model_id = transcription_model
     normalized_existing_segments = _normalize_existing_segments(existing_transcript_segments)
     normalized_existing_transcript = str(existing_transcript or "").strip()
     has_calibrated_timing = bool(normalized_existing_segments) and all(

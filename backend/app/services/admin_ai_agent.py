@@ -34,7 +34,11 @@ from app.models.enums import (
 from app.models.test import Question, QuestionGroup, Test, TestSection
 from app.schemas.admin import AdminTestDraftUpsertRequest
 from app.schemas.common import AdminPrincipal
-from app.services.ai_config import resolve_ai_use_case_config
+from app.services.ai_config import (
+    ResolvedAiUseCaseConfig,
+    build_google_client,
+    resolve_ai_use_case_config,
+)
 from app.services.test_content_repo import (
     build_admin_draft_state_from_db,
     build_test_snapshot_from_db,
@@ -1118,10 +1122,10 @@ def _max_tool_loops() -> int:
     return max(10, int(get_settings().gemini_max_tool_loops or 80))
 
 
-def _build_gemini_client(api_key: str) -> genai.Client:
-    if not (api_key or "").strip():
-        raise RuntimeError("Google provider API key is not configured.")
-    return genai.Client(api_key=api_key)
+def _build_gemini_client(resolved_config: "ResolvedAiUseCaseConfig") -> genai.Client:
+    # Honour Vertex AI (service-account) auth when enabled; the AI Studio API
+    # key path fails in production where the key's project is denied access.
+    return build_google_client(resolved_config)
 
 
 def _build_generation_config(tool_declarations: list[genai_types.FunctionDeclaration]) -> genai_types.GenerateContentConfig:
@@ -1831,7 +1835,7 @@ async def _run_admin_ai_job_once(job_id: UUID) -> None:
             raise RuntimeError(
                 "Admin AI workspace currently requires a Google binding because tool-calling and grounded search still use the Google runtime."
             )
-        client = _build_gemini_client(resolved_config.api_key)
+        client = _build_gemini_client(resolved_config)
         tool_declarations = _tool_declarations()
         config = _build_generation_config(tool_declarations)
         contents: list[Any] = _message_history_to_contents(messages)
