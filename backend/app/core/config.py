@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_writing_model: str | None = None
-    gemini_speaking_live_model: str = "gemini-3.1-flash-live-preview"
+    gemini_speaking_live_model: str = "gemini-live-2.5-flash-native-audio"
     gemini_speaking_grader_model: str = "gemini-2.5-flash-lite"
     gemini_transcription_model: str = "gemini-2.5-flash"
     gemini_thinking_level: str = "HIGH"
