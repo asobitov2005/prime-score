@@ -12,10 +12,12 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from google import genai
 from google.genai import types
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.deps import get_current_user
 from app.core.security import decode_token
 from app.db.session import get_db_session
@@ -970,7 +972,16 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
         topics=selected_topics,
         random_topic=random_topic,
     )
-    client = build_google_client(examiner_config)
+    # Roast mode runs on AI Studio's gemini 3 live model (not published on Vertex);
+    # every other speaking mode stays on the Vertex live model.
+    _speaking_settings = get_settings()
+    _aistudio_key = (_speaking_settings.gemini_aistudio_api_key or "").strip()
+    if mode == "uzbek_roast" and _aistudio_key:
+        client = genai.Client(api_key=_aistudio_key, vertexai=False)
+        live_model = (_speaking_settings.gemini_speaking_roast_model or examiner_config.model_id).strip()
+    else:
+        client = build_google_client(examiner_config)
+        live_model = examiner_config.model_id
     config = _live_config(examiner_config.settings_json, system_instruction, mode=mode)
 
     live_started_at = datetime.now(UTC)
@@ -1015,12 +1026,12 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
             )
 
     try:
-        async with client.aio.live.connect(model=examiner_config.model_id, config=config) as live:
+        async with client.aio.live.connect(model=live_model, config=config) as live:
             ready_payload: dict[str, Any] = {
                 "type": "ready",
                 "mode": mode,
                 "part": part,
-                "model": examiner_config.model_id,
+                "model": live_model,
             }
             if planned_question_count is not None:
                 ready_payload["planned_questions"] = planned_question_count

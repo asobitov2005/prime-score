@@ -27,9 +27,13 @@ class Settings(BaseSettings):
     )
     payment_paused: bool = True
     gemini_api_key: str | None = None
+    # AI Studio key used ONLY for the live speaking roast mode (gemini 3 live is
+    # available on AI Studio, not on Vertex). Everything else stays on Vertex.
+    gemini_aistudio_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_writing_model: str | None = None
     gemini_speaking_live_model: str = "gemini-live-2.5-flash-native-audio"
+    gemini_speaking_roast_model: str = "gemini-3.1-flash-live-preview"
     gemini_speaking_grader_model: str = "gemini-2.5-flash-lite"
     gemini_transcription_model: str = "gemini-2.5-flash"
     gemini_thinking_level: str = "HIGH"
