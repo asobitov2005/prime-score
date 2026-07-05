@@ -250,6 +250,19 @@ def build_google_client(config: ResolvedAiUseCaseConfig) -> genai.Client:
                 credentials_path,
                 scopes=["https://www.googleapis.com/auth/cloud-platform"],
             )
+            # The live WebSocket path needs a ready OAuth token up front; unlike the
+            # REST path it does not lazily refresh, so a token=None credential is
+            # rejected with "expected OAuth 2 access token". Refresh eagerly for live.
+            model_id = (config.model_id or "").lower()
+            is_live = (
+                config.use_case == AiUseCase.SPEAKING_EXAMINER
+                or "live" in model_id
+                or "native-audio" in model_id
+            )
+            if is_live and not credentials.valid:
+                from google.auth.transport.requests import Request as _GoogleAuthRequest
+
+                credentials.refresh(_GoogleAuthRequest())
         return genai.Client(
             vertexai=True,
             credentials=credentials,

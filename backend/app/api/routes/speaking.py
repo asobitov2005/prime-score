@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import asyncio
 import json
+import logging
 import re
 import struct
 import sys
@@ -58,6 +59,7 @@ from app.services.speaking_roast_prompt import (
 )
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 SPEAKING_MODES = {"strict_exam", "free_talk", "uzbek_roast"}
@@ -1148,6 +1150,13 @@ async def speaking_live_websocket(websocket: WebSocket, session_id: UUID) -> Non
     except WebSocketDisconnect:
         pass
     except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "Speaking live session failed (session=%s mode=%s model=%s): %s",
+            session_id,
+            mode,
+            live_model,
+            exc,
+        )
         try:
             await websocket.send_json({"type": "error", "message": str(exc)})
         except Exception:  # noqa: BLE001
