@@ -110,7 +110,7 @@ function directChildren(node) {
   return [];
 }
 
-function findMapCallback(node) {
+function findMapCallback(node, receiverText = null) {
   let result = null;
   function visit(current) {
     if (result) return;
@@ -120,7 +120,9 @@ function findMapCallback(node) {
       current.expression.name.text === "map" &&
       current.arguments.length > 0 &&
       (ts.isArrowFunction(current.arguments[0]) ||
-        ts.isFunctionExpression(current.arguments[0]))
+        ts.isFunctionExpression(current.arguments[0])) &&
+      (receiverText === null ||
+        current.expression.expression.getText(sourceFile) === receiverText)
     ) {
       result = { call: current, callback: current.arguments[0] };
       return;
@@ -194,9 +196,14 @@ const editorChildren = directChildren(editorColumn);
 if (editorChildren.length < 4) {
   throw new Error(`Expected ContentPanel editor children, found ${editorChildren.length}`);
 }
-const sectionsExpression = editorChildren.find((child) => findMapCallback(child));
+const sectionsExpression = editorChildren.find((child) =>
+  findMapCallback(child, "draft.content.sections"),
+);
 if (!sectionsExpression) throw new Error("Content sections map not found");
-const mapInfo = findMapCallback(sectionsExpression);
+const mapInfo = findMapCallback(
+  sectionsExpression,
+  "draft.content.sections",
+);
 if (!mapInfo || !ts.isBlock(mapInfo.callback.body)) {
   throw new Error("Content sections map callback must use a block body");
 }
@@ -332,7 +339,6 @@ itemLines.push(
 );
 writeSmall("section-item.tsx", itemLines.filter(Boolean).join("\n"));
 
-const listContext = moduleContext([sectionsExpression]);
 writeSmall(
   "section-list.tsx",
   [
@@ -378,8 +384,6 @@ writeSmall(
   }),
 );
 
-const cardOpen = `<Card className="overflow-hidden border-border shadow-md">`;
-const cardContext = moduleContext([card], itemNames);
 writeSmall(
   "section-card.tsx",
   [
@@ -392,7 +396,7 @@ writeSmall(
     "",
     "export function ContentSectionCard({ scope, item }: { scope: ContentPanelScope; item: ContentSectionItem }) {",
     "  return (",
-    `    ${cardOpen}`,
+    '    <Card className="overflow-hidden border-border shadow-md">',
     "      <ContentSectionHeader scope={scope} item={item} />",
     "      <ContentSectionBody scope={scope} item={item} />",
     "    </Card>",
@@ -424,15 +428,12 @@ writeSmall(
   "index.tsx",
   [
     '"use client";',
-    'import type { AdminTestDraftState } from "../dependencies";',
-    'import type { React } from "../dependencies";',
     'import { useContentPanelController } from "./controller";',
     'import { ContentPanelView } from "./view";',
     "",
-    "export function ContentPanel(props: {",
-    "  draft: AdminTestDraftState;",
-    "  setDraft: React.Dispatch<React.SetStateAction<AdminTestDraftState>>;",
-    "}) {",
+    "export function ContentPanel(",
+    "  props: Parameters<typeof useContentPanelController>[0],",
+    ") {",
     "  const scope = useContentPanelController(props);",
     "  return <ContentPanelView scope={scope} />;",
     "}",
@@ -443,7 +444,7 @@ const importInsertPosition = sourceFile.statements
   .filter((statement) => ts.isImportDeclaration(statement))
   .at(-1).end;
 const importLine = '\nimport { ContentPanel } from "./test-editor-wizard-modules/content-panel";';
-let updated =
+const updated =
   source.slice(0, importInsertPosition) +
   importLine +
   source.slice(importInsertPosition, contentPanel.getFullStart()) +
