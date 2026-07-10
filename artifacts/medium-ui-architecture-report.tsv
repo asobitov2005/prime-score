@@ -1,5 +1,3 @@
 status	components	shared_parts	path	detail
-split	0	0	frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx	
-split	0	0	frontend/components/layout/site-shell.tsx	
-split	0	0	frontend/app/(app)/dashboard/streak-heatmap.tsx	
-split	0	0	frontend/app/(app)/settings/page.tsx	
+split	0	5	frontend/app/(app)/writing/submissions/[submissionId]/result/result-client.tsx	
+split	1	1	frontend/app/(app)/writing/submissions/[submissionId]/result/writing-result-ready-view.tsx	
