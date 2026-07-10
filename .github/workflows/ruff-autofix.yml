@@ -29,27 +29,42 @@ jobs:
       - name: Apply compatibility patches
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           runtime_store = Path("backend/app/services/runtime_store.py")
           runtime_text = runtime_store.read_text()
-          import_line = "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score\n"
-          export_block = import_line + "\nband_for_raw_score = _band_for_raw_score\n"
-          if "band_for_raw_score = _band_for_raw_score" not in runtime_text:
-              if import_line not in runtime_text:
-                  raise SystemExit("runtime_store import marker not found")
-              runtime_store.write_text(runtime_text.replace(import_line, export_block, 1))
+          runtime_text = runtime_text.replace(
+              "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score\n\nband_for_raw_score = _band_for_raw_score\n",
+              "from app.services.attempt_runtime import (\n"
+              "    AttemptRuntime,\n"
+              "    _band_for_raw_score as band_for_raw_score,\n"
+              ")\n",
+              1,
+          )
+          runtime_store.write_text(runtime_text)
 
           writing_checker = Path("backend/app/services/writing_checker.py")
           writing_text = writing_checker.read_text()
-          unused_block = '''    generated_next_steps = [
-              _trim_sentence(step, limit=180)
-              for step in grader.next_steps
-              if _clean_text(step)
-          ]
-          '''
-          if unused_block in writing_text:
-              writing_checker.write_text(writing_text.replace(unused_block, "", 1))
+          writing_text = re.sub(
+              r"\n    generated_next_steps = \[\n"
+              r"        _trim_sentence\(step, limit=180\)\n"
+              r"        for step in grader\.next_steps\n"
+              r"        if _clean_text\(step\)\n"
+              r"    \]\n",
+              "\n",
+              writing_text,
+              count=1,
+          )
+          writing_checker.write_text(writing_text)
+
+          speaking_test = Path("backend/tests/test_speaking_user_api.py")
+          speaking_text = speaking_test.read_text().replace(
+              'monkeypatch.setattr("app.api.routes.speaking.resolve_ai_use_case_config", _fake_resolve_ai_use_case_config)',
+              'monkeypatch.setattr("app.api.routes.speaking_sessions.resolve_ai_use_case_config", _fake_resolve_ai_use_case_config)',
+              1,
+          )
+          speaking_test.write_text(speaking_text)
           PY
       - name: Install Ruff
         run: python -m pip install "ruff>=0.5.1,<1.0.0"
@@ -65,5 +80,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend
-          git commit -m "fix: restore compatibility exports and clean lint"
+          git commit -m "fix: complete refactor compatibility cleanup"
           git push origin HEAD:${{ github.ref_name }}
