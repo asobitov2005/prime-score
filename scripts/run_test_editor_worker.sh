@@ -96,6 +96,22 @@ const itemNames = [
 ];'''
 if old in extractor_text:
     extractor.write_text(extractor_text.replace(old, new, 1))
+
+questions = Path("scripts/finish_test_editor_questions_panel.cjs")
+question_text = questions.read_text()
+question_text = question_text.replace(
+    "if (lineCount(body) > 220) {",
+    "if (lineCount(body) > 120) {",
+)
+question_text = question_text.replace(
+    "if (lineCount(body) <= 220) break;",
+    "if (lineCount(body) <= 120) break;",
+)
+question_text = question_text.replace(
+    "if (lineCount(body) > 270)",
+    "if (lineCount(body) > 180)",
+)
+questions.write_text(question_text)
 PY
 
 rm -rf admin/components/test-editor-wizard-modules
