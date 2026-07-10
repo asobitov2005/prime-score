@@ -1,5 +1,27 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Euo pipefail
+
+log_path="artifacts/test-editor-worker.log"
+mkdir -p artifacts
+exec > >(tee "$log_path") 2>&1
+
+on_error() {
+  status=$?
+  failed_command=${BASH_COMMAND:-unknown}
+  error_line=${BASH_LINENO[0]:-unknown}
+  log_tail=$(tail -n 80 "$log_path" || true)
+
+  git reset --hard HEAD
+  git clean -fd admin/components/test-editor-wizard-modules
+
+  cat > artifacts/medium-ui-architecture-report.tsv <<EOF
+status	components	shared_parts	path	detail
+failed	0	0	admin/components/test-editor-wizard.tsx	command=${failed_command}; line=${error_line}; status=${status}
+${log_tail}
+EOF
+  exit 0
+}
+trap on_error ERR
 
 python - <<'PY'
 import re
@@ -77,3 +99,5 @@ export function ContentPanel(
 }
 ''')
 PY
+
+rm -f "$log_path"
