@@ -1,0 +1,38 @@
+status	path	detail
+skipped	admin/components/test-editor-wizard.tsx	controller is 771 lines
+skipped	frontend/components/exam/reading-exam-preview.tsx	controller is 3405 lines
+skipped	frontend/app/(app)/speaking/speaking-page-client.tsx	final statement is not JSX return
+skipped	frontend/app/(app)/writing/submissions/[submissionId]/result/result-client.tsx	controller is 282 lines
+skipped	admin/app/(dashboard)/promo-codes/page.tsx	controller is 284 lines
+skipped	frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx	view is 267 lines
+skipped	frontend/components/subscription/subscription-workspace.tsx	shared module is 849 lines
+skipped	frontend/components/layout/site-shell.tsx	controller is 256 lines
+skipped	frontend/app/exam-preview/writing/writing-exam-client.tsx	controller is 431 lines
+skipped	admin/components/ai-settings-dashboard.tsx	controller is 415 lines
+skipped	admin/app/(dashboard)/speaking/page.tsx	shared module is 501 lines
+skipped	frontend/components/attempt-workspaces.tsx	shared module is 387 lines
+skipped	frontend/components/marketing/pricing-plan-grid.tsx	controller is 280 lines
+skipped	frontend/app/(app)/dashboard/page.tsx	not a client module
+skipped	frontend/app/(app)/speaking/topics/speaking-topic-picker-client.tsx	shared module is 339 lines
+skipped	frontend/app/(app)/speaking/microphone-check/microphone-check-client.tsx	controller is 279 lines
+skipped	admin/app/(dashboard)/users/[id]/page.tsx	view is 357 lines
+skipped	admin/app/(dashboard)/writing/page.tsx	view is 282 lines
+skipped	admin/components/writing-task-form.tsx	view is 312 lines
+skipped	admin/components/payments-manager.tsx	view is 305 lines
+skipped	admin/components/plans/plan-manager.tsx	view is 309 lines
+skipped	admin/app/(dashboard)/users/page.tsx	view is 241 lines
+skipped	admin/app/(dashboard)/settings/page.tsx	view is 244 lines
+skipped	frontend/app/(app)/dashboard/streak-heatmap.tsx	view is 245 lines
+skipped	frontend/components/exam/listening-transcript-panel.tsx	controller is 308 lines
+split	admin/app/(dashboard)/tests/page.tsx	TestsPage: hook 177, view 241
+skipped	frontend/app/(app)/settings/page.tsx	view is 259 lines
+skipped	admin/app/(dashboard)/reviews/page.tsx	view is 237 lines
+skipped	frontend/components/layout/app-shell.tsx	controller is 360 lines
+skipped	frontend/components/marketing/login-page-client.tsx	view is 298 lines
+split	admin/app/(dashboard)/writing/submissions/page.tsx	WritingSubmissionsPage: hook 97, view 237
+skipped	admin/app/(dashboard)/writing/[taskId]/page.tsx	view is 292 lines
+skipped	admin/app/(dashboard)/writing/submissions/[submissionId]/page.tsx	view is 248 lines
+split	frontend/app/admin/(panel)/tests/page.tsx	AdminTestsPage: hook 151, view 230
+skipped	admin/app/(dashboard)/dashboard/page.tsx	not a client module
+skipped	admin/app/(dashboard)/analytics/page.tsx	not a client module
+skipped	frontend/app/(app)/tests/practice-catalog-utils.ts	not a client module
