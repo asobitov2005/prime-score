@@ -4,26 +4,9 @@ import { NORMAL_NO_ANSWER_MS, PART_TWO_PREP_NO_ANSWER_MS, SPEECH_END_SILENCE_MS,
 
 import { LiveAudioRuntime, LiveOutputRuntime, getAudioContextConstructor } from "./shared-part-05";
 
-import { base64ToUint8Array, bytesToBase64, calculateInputLevel, floatToPcm16Bytes, parseAudioSampleRate, resampleFloat32 } from "./shared-part-07";
+import { base64ToUint8Array, bytesToBase64, floatToPcm16Bytes, parseAudioSampleRate, resampleFloat32 } from "./shared-part-07";
 
 
-
-export function startOutputRuntime(): LiveOutputRuntime {
-  const AudioContextCtor = getAudioContextConstructor();
-  // Gemini Live streams 24kHz PCM. Pin the context rate to match so playback math
-  // and buffering stay correct instead of depending on the device's native rate.
-  let outputContext: AudioContext;
-  try {
-    outputContext = new AudioContextCtor({ sampleRate: 24000 });
-  } catch {
-    outputContext = new AudioContextCtor();
-  }
-  void outputContext.resume().catch(() => undefined);
-  return {
-    outputContext,
-    nextPlaybackAt: 0,
-  };
-}
 
 export async function startAudioRuntime(
   getSocket: () => WebSocket | null,
@@ -261,4 +244,24 @@ export function mergeTranscript(current: string, next: string): string {
     return current;
   }
   return `${current} ${cleanNext}`.trim();
+}
+
+export function compactLiveTranscript(value: string): string {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (!clean) {
+    return "";
+  }
+  const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((item) => item.trim()).filter(Boolean) ?? [];
+  if (sentences.length <= 2) {
+    return sentences.join(" ");
+  }
+  return sentences.slice(-2).join(" ");
+}
+
+export function calculateInputLevel(samples: Float32Array): number {
+  let totalSquares = 0;
+  for (let index = 0; index < samples.length; index += 1) {
+    totalSquares += samples[index] * samples[index];
+  }
+  return Math.min(1, Math.sqrt(totalSquares / Math.max(1, samples.length)) * 6);
 }

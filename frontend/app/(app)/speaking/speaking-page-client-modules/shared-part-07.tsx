@@ -6,26 +6,6 @@ import { LiveStatus } from "./shared-part-01";
 
 
 
-export function compactLiveTranscript(value: string): string {
-  const clean = value.replace(/\s+/g, " ").trim();
-  if (!clean) {
-    return "";
-  }
-  const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((item) => item.trim()).filter(Boolean) ?? [];
-  if (sentences.length <= 2) {
-    return sentences.join(" ");
-  }
-  return sentences.slice(-2).join(" ");
-}
-
-export function calculateInputLevel(samples: Float32Array): number {
-  let totalSquares = 0;
-  for (let index = 0; index < samples.length; index += 1) {
-    totalSquares += samples[index] * samples[index];
-  }
-  return Math.min(1, Math.sqrt(totalSquares / Math.max(1, samples.length)) * 6);
-}
-
 export function resampleFloat32(input: Float32Array, inputRate: number, outputRate: number): Float32Array {
   if (inputRate === outputRate) {
     return input;

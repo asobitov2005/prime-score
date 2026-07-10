@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle2, Flame, Loader2, ReactNode, SpeakingAiMode, S
 
 import { LiveStatus, display } from "./shared-part-01";
 
-import { LivePanelStatusBar, SpeakingResultPanel, getRoastStatusLabel } from "./shared-part-04";
+import { LivePanelStatusBar, SpeakingResultPanel } from "./shared-part-04";
 
 import { AiQuestionSection, UserAnswerSection } from "./shared-part-05";
 
@@ -253,4 +253,31 @@ export function RoastSpeakingLiveView({
       ) : null}
     </section>
   );
+}
+
+export function getRoastStatusLabel(
+  status: LiveStatus,
+  inputTurnOpen: boolean,
+  isDeletingSession: boolean,
+  isInterviewStarted: boolean,
+): string {
+  if (isDeletingSession || status === "finalizing") {
+    return "Ending session";
+  }
+  if (!isInterviewStarted && (status === "connecting" || status === "idle" || status === "ready")) {
+    return "Connecting";
+  }
+  if (isInterviewStarted && status === "connecting") {
+    return "Starting";
+  }
+  if (status === "listening" && inputTurnOpen) {
+    return "Your turn";
+  }
+  if (status === "ai_speaking") {
+    return "AI speaking";
+  }
+  if (status === "listening") {
+    return "Listening";
+  }
+  return "Roast mode";
 }

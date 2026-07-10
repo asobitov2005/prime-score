@@ -4,38 +4,11 @@ import { ArrowLeft, Check, CheckCircle2, Clock3, FileAudio, Link, Loader2, Messa
 
 import { LiveStatus, display } from "./shared-part-01";
 
-import { FeedbackLine, buildFallbackDiarizedTranscript, formatDurationMs, formatOffsetMs, getCriteriaFeedback } from "./shared-part-05";
+import { buildFallbackDiarizedTranscript } from "./shared-part-05";
 
 import { formatBand, formatTimer, liveStatusLabel } from "./shared-part-07";
 
 
-
-export function getRoastStatusLabel(
-  status: LiveStatus,
-  inputTurnOpen: boolean,
-  isDeletingSession: boolean,
-  isInterviewStarted: boolean,
-): string {
-  if (isDeletingSession || status === "finalizing") {
-    return "Ending session";
-  }
-  if (!isInterviewStarted && (status === "connecting" || status === "idle" || status === "ready")) {
-    return "Connecting";
-  }
-  if (isInterviewStarted && status === "connecting") {
-    return "Starting";
-  }
-  if (status === "listening" && inputTurnOpen) {
-    return "Your turn";
-  }
-  if (status === "ai_speaking") {
-    return "AI speaking";
-  }
-  if (status === "listening") {
-    return "Listening";
-  }
-  return "Roast mode";
-}
 
 export function LivePanelStatusBar({
   status,
@@ -260,4 +233,47 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function getFeedbackText(item: Record<string, unknown>, key: string): string {
   const value = item[key];
   return typeof value === "string" ? value.trim() : "";
+}
+
+export function getCriteriaFeedback(result: SpeakingSessionResult, key: string): string {
+  const raw = result.structuredFeedback.criteriaFeedback[key];
+  if (!isRecord(raw)) {
+    return "";
+  }
+  const feedback = raw.feedback;
+  const nextStep = raw.next_step ?? raw.nextStep;
+  return typeof feedback === "string" && feedback.trim()
+    ? feedback.trim()
+    : typeof nextStep === "string"
+      ? nextStep.trim()
+      : "";
+}
+
+export function FeedbackLine({ label, value }: { label: string; value: string }) {
+  if (!value) {
+    return null;
+  }
+  return (
+    <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
+      <span className="font-black text-slate-950 dark:text-slate-50">{label}: </span>
+      {value}
+    </p>
+  );
+}
+
+export function formatDurationMs(value: number | null): string {
+  if (!value || value <= 0) {
+    return "Audio";
+  }
+  const totalSeconds = Math.round(value / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+export function formatOffsetMs(value: number | null): string {
+  if (value === null || value < 0) {
+    return "";
+  }
+  return formatDurationMs(value);
 }

@@ -4,54 +4,11 @@ import { Loader2, Mic2, RefreshCcw, SpeakingSessionResult, cn } from "./dependen
 
 import { LiveStatus, aiWaveformBars, userWaveformBars } from "./shared-part-01";
 
-import { isRecord } from "./shared-part-04";
+import { compactLiveTranscript } from "./shared-part-06";
 
-import { buildDisplayBars, compactLiveTranscript } from "./shared-part-07";
+import { buildDisplayBars } from "./shared-part-07";
 
 
-
-export function getCriteriaFeedback(result: SpeakingSessionResult, key: string): string {
-  const raw = result.structuredFeedback.criteriaFeedback[key];
-  if (!isRecord(raw)) {
-    return "";
-  }
-  const feedback = raw.feedback;
-  const nextStep = raw.next_step ?? raw.nextStep;
-  return typeof feedback === "string" && feedback.trim()
-    ? feedback.trim()
-    : typeof nextStep === "string"
-      ? nextStep.trim()
-      : "";
-}
-
-export function FeedbackLine({ label, value }: { label: string; value: string }) {
-  if (!value) {
-    return null;
-  }
-  return (
-    <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
-      <span className="font-black text-slate-950 dark:text-slate-50">{label}: </span>
-      {value}
-    </p>
-  );
-}
-
-export function formatDurationMs(value: number | null): string {
-  if (!value || value <= 0) {
-    return "Audio";
-  }
-  const totalSeconds = Math.round(value / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-export function formatOffsetMs(value: number | null): string {
-  if (value === null || value < 0) {
-    return "";
-  }
-  return formatDurationMs(value);
-}
 
 export function buildFallbackDiarizedTranscript(result: SpeakingSessionResult) {
   const items = [];
@@ -265,4 +222,21 @@ export function getAudioContextConstructor(): typeof AudioContext {
     throw new Error("Audio playback is not available in this browser.");
   }
   return AudioContextCtor;
+}
+
+export function startOutputRuntime(): LiveOutputRuntime {
+  const AudioContextCtor = getAudioContextConstructor();
+  // Gemini Live streams 24kHz PCM. Pin the context rate to match so playback math
+  // and buffering stay correct instead of depending on the device's native rate.
+  let outputContext: AudioContext;
+  try {
+    outputContext = new AudioContextCtor({ sampleRate: 24000 });
+  } catch {
+    outputContext = new AudioContextCtor();
+  }
+  void outputContext.resume().catch(() => undefined);
+  return {
+    outputContext,
+    nextPlaybackAt: 0,
+  };
 }
