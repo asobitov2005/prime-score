@@ -1982,11 +1982,6 @@ def _build_payload(
         lr=lr,
         gra=gra,
     )
-    generated_next_steps = [
-        _trim_sentence(step, limit=180)
-        for step in grader.next_steps
-        if _clean_text(step)
-    ]
     normalized_vocabulary = _normalize_vocabulary_suggestions(grader.vocabulary_suggestions)
     normalized_vocabulary = _augment_vocabulary_suggestions(
         task_type=task_type,

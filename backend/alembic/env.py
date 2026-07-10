@@ -1,14 +1,25 @@
-from logging.config import fileConfig
 import asyncio
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
-from app.db.base import Base
-from app.models import admin, ai, attempt, test, user, commerce, notification, ops, review, writing  # noqa: F401
-
+from app.models.base import Base
+from app.models import (  # noqa: F401
+    admin,
+    ai,
+    attempt,
+    commerce,
+    notification,
+    ops,
+    review,
+    speaking,
+    test,
+    user,
+    writing,
+)
 
 config = context.config
 settings = get_settings()
@@ -48,7 +59,6 @@ async def run_migrations_online() -> None:
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
-
     await connectable.dispose()
 
 

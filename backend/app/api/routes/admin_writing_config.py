@@ -21,7 +21,6 @@ from app.schemas.admin_ai import (
     AdminWritingAnchorItemRead,
     AdminWritingAnchorSetCreateRequest,
     AdminWritingAnchorSetRead,
-    AdminWritingAnchorSetUpdateRequest,
     AdminWritingConfigAuditRead,
     AdminWritingPromptPreviewRead,
     AdminWritingPromptPreviewRequest,
@@ -31,7 +30,6 @@ from app.schemas.admin_ai import (
     AdminWritingPromptEntryRead,
     AdminWritingRubricCreateRequest,
     AdminWritingRubricRead,
-    AdminWritingRubricUpdateRequest,
 )
 from app.schemas.common import AdminPrincipal
 from app.services.writing_config import (

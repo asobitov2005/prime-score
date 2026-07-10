@@ -26,7 +26,6 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.db.session import get_session_maker
-from app.models import ops as _ops_models
 from app.models.user import User
 from app.services.user_cleanup import purge_user_data
 from app.services.object_storage import upload_user_avatar_image

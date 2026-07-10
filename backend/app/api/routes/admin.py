@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_admin, get_current_super_admin
 from app.core.security import create_access_token, create_refresh_token, decode_token
-from app.core.enums import AccessType, PaymentMethod, TestStatus, TestType
+from app.core.enums import PaymentMethod, TestStatus, TestType
 from app.db.session import get_db_session, get_session_maker
 from app.api.routes.admin_writing import AdminWritingSubmissionRead, _serialize_submission_read
 from app.api.routes.attempts import (
@@ -28,7 +28,7 @@ from app.api.routes.attempts import (
     _extract_question_labels,
 )
 from app.models.admin import Admin, AdminLoginOtp
-from app.models.commerce import GiftCode, GiftCodeRedemption, Payment, PaymentCard, PaymentSetting, Plan, PromoCode
+from app.models.commerce import GiftCode, Payment, PaymentCard, PaymentSetting, Plan, PromoCode
 from app.models.attempt import Attempt, UserAnswer
 from app.models.enums import AttemptStatus as ModelAttemptStatus
 from app.models.enums import AttemptStatus as ModelAttemptStatusEnum
@@ -39,7 +39,7 @@ from app.models.enums import TestStatus as ModelTestStatus
 from app.models.test import Question, QuestionGroup, Test
 from app.models.user import Session as UserSession
 from app.models.user import TelegramUser, User
-from app.models.ops import AuditLog, Notification
+from app.models.ops import AuditLog
 from app.models.review import Review
 from app.models.writing import WritingEvaluation, WritingSubmission, WritingTask
 from app.core.enums import NotificationType
@@ -143,7 +143,6 @@ from app.services.admin_auth import (
 )
 from app.services.attempt_repo import iter_user_attempts_from_db
 from app.services.notification_sender import delete_telegram_message, edit_telegram_message, send_telegram_message_with_id
-from app.services.code_store import get_code_store
 from app.services.gift_entitlements import grant_manual_premium_entitlement
 from app.services.plan_catalog import (
     list_plans as list_catalog_plans,
@@ -3503,7 +3502,6 @@ async def clear_sessions(
 ) -> MessageResponse:
     _ = current_admin
     from sqlalchemy import update
-    from app.models.user import Session as UserSession
     await session.execute(update(UserSession).values(is_active=False))
     await session.commit()
     return MessageResponse(message="All user sessions have been cleared.")

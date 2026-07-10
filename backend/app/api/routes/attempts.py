@@ -12,7 +12,7 @@ from app.core.enums import TestMode, TestScope, TestType
 from app.db.session import get_db_session
 from app.models.attempt import AttemptEvent
 from app.models.test import Question
-from app.schemas.common import DebugPrincipal, MessageResponse
+from app.schemas.common import DebugPrincipal
 from app.schemas.attempts import (
     AttemptAnswerRequest,
     AttemptAnswerResponse,

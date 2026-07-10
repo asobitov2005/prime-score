@@ -23,7 +23,7 @@ except ModuleNotFoundError:
 from app.core.config import get_settings
 from app.core.enums import AttemptStatus, TestMode, TestScope, TestType
 from app.services.fixtures import build_test_snapshot, get_question_fixture
-from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score, band_for_raw_score
+from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score, _band_for_raw_score as band_for_raw_score  # noqa: F401,E501
 from app.services.scoring import score_answer
 
 

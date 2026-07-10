@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import BIGINT, Boolean, DateTime, ForeignKey, Integer, String
@@ -6,6 +9,9 @@ from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from app.models.ops import Notification
 
 
 class User(UUIDMixin, TimestampMixin, Base):
@@ -35,9 +41,9 @@ class User(UUIDMixin, TimestampMixin, Base):
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    sessions: Mapped[list["Session"]] = relationship(back_populates="user")
-    notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
-    telegram_profile: Mapped["TelegramUser | None"] = relationship(back_populates="linked_user")
+    sessions: Mapped[list[Session]] = relationship(back_populates="user")
+    notifications: Mapped[list[Notification]] = relationship(back_populates="user")
+    telegram_profile: Mapped[TelegramUser | None] = relationship(back_populates="linked_user")
 
 
 class Session(UUIDMixin, TimestampMixin, Base):
@@ -83,4 +89,4 @@ class TelegramUser(UUIDMixin, TimestampMixin, Base):
     bot_contact_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     first_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    linked_user: Mapped["User | None"] = relationship(back_populates="telegram_profile")
+    linked_user: Mapped[User | None] = relationship(back_populates="telegram_profile")

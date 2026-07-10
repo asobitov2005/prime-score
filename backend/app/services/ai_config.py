@@ -9,7 +9,7 @@ from uuid import UUID
 import httpx
 from google import genai
 from google.oauth2 import service_account
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings

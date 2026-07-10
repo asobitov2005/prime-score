@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
-from app.core.enums import AccessType, QuestionType, TestFormat, TestMode, TestScope, TestSource, TestStatus, TestType
+from app.core.enums import AccessType, QuestionType, TestMode, TestScope, TestSource, TestStatus, TestType
 
 
 class TestParagraphSnapshotRead(BaseModel):

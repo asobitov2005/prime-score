@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from google import genai
 from google.genai import types as genai_types
 from pydantic import BaseModel, Field
-from sqlalchemy import Select, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 

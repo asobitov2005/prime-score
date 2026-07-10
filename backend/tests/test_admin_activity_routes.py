@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from types import SimpleNamespace
 from uuid import UUID
 
 import pytest

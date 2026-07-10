@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.enums import AccessType, NotificationType, PaymentMethod, PaymentStatus, TestSource, TestStatus, TestType, UserRole
+from app.core.enums import AccessType, TestSource, TestStatus, TestType
 
 
 class AdminQuickStatsRead(BaseModel):
