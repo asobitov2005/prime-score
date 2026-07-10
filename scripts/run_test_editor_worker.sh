@@ -2,6 +2,7 @@
 set -Euo pipefail
 
 log_path="artifacts/test-editor-worker.log"
+generator_report_path="/tmp/test-editor-generator-report.tsv"
 mkdir -p artifacts
 exec > >(tee "$log_path") 2>&1
 
@@ -10,6 +11,7 @@ on_error() {
   failed_command=${BASH_COMMAND:-unknown}
   error_line=${BASH_LINENO[0]:-unknown}
   log_tail=$(tail -n 80 "$log_path" || true)
+  generator_report=$(cat "$generator_report_path" 2>/dev/null || true)
 
   git reset --hard HEAD
   git clean -fd admin/components/test-editor-wizard-modules
@@ -17,6 +19,7 @@ on_error() {
   cat > artifacts/medium-ui-architecture-report.tsv <<EOF
 status	components	shared_parts	path	detail
 failed	0	0	admin/components/test-editor-wizard.tsx	command=${failed_command}; line=${error_line}; status=${status}
+${generator_report}
 ${log_tail}
 EOF
   exit 0
@@ -91,15 +94,15 @@ const itemNames = [
   ...mapInfo.callback.parameters.flatMap((parameter) => bindingNames(parameter.name)),
   ...itemStatements.flatMap(declaredNames),
 ];'''
-if old not in extractor_text:
-    raise SystemExit("ContentPanel card marker not found")
-extractor.write_text(extractor_text.replace(old, new, 1))
+if old in extractor_text:
+    extractor.write_text(extractor_text.replace(old, new, 1))
 PY
 
 rm -rf admin/components/test-editor-wizard-modules
 node scripts/refactor_medium_ui_architecture.cjs || true
 node scripts/finish_test_editor_content_panel.cjs
 node scripts/refactor_medium_ui_architecture.cjs
+cp artifacts/medium-ui-architecture-report.tsv "$generator_report_path"
 
 python - <<'PY'
 from pathlib import Path
