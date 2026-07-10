@@ -1,4 +1,4 @@
-name: Medium UI recursive section pass
+name: Medium UI standard section pass
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
       - name: Install TypeScript toolchain
         working-directory: frontend
         run: npm ci
-      - name: Configure recursive retry targets
+      - name: Configure standard retry targets
         run: |
           python - <<'PY'
           import re
@@ -34,7 +34,6 @@ jobs:
           path = Path("scripts/refactor_medium_ui_architecture.cjs")
           text = path.read_text()
           targets = '''const TARGETS = [
-            "admin/app/(dashboard)/promo-codes/page.tsx",
             "frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx",
             "frontend/components/layout/site-shell.tsx",
             "frontend/app/(app)/dashboard/streak-heatmap.tsx",
@@ -48,24 +47,20 @@ jobs:
               flags=re.S,
           )
           text = text.replace(
-              "if (lineCount(nodeText) > 210 && children.length > 1) {",
-              "if (lineCount(nodeText) > 180 && children.length > 0) {",
-          )
-          text = text.replace(
-              'if (lineCount(childText) < 35 && lineCount(nodeText) < 280) continue;',
-              'if (lineCount(childText) < 18 && lineCount(nodeText) < 235) continue;',
+              "if (lineCount(nodeText) > 235) {",
+              "if (lineCount(nodeText) > 275) {",
           )
           path.write_text(text)
           PY
-      - name: Generate recursive view sections
+      - name: Generate standard view sections
         run: node scripts/refactor_medium_ui_architecture.cjs
       - name: Commit generated modules
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend admin artifacts/medium-ui-architecture-report.tsv
+          git add frontend artifacts/medium-ui-architecture-report.tsv
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "refactor(ui): complete recursive medium view sections"
+          git commit -m "refactor(ui): finalize standard medium view sections"
           git push origin HEAD:${{ github.ref_name }}
