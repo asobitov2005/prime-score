@@ -34,16 +34,17 @@ jobs:
 
           runtime_store = Path("backend/app/services/runtime_store.py")
           runtime_text = runtime_store.read_text()
-          runtime_text = runtime_text.replace(
+          runtime_alias = (
+              "from app.services.attempt_runtime import AttemptRuntime, "
+              "_band_for_raw_score as band_for_raw_score  # noqa: F401\n"
+          )
+          for old_import in (
               "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score\n\nband_for_raw_score = _band_for_raw_score\n",
               "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score as band_for_raw_score\n",
-              1,
-          )
-          runtime_text = runtime_text.replace(
               "from app.services.attempt_runtime import (\n    AttemptRuntime,\n    _band_for_raw_score as band_for_raw_score,\n)\n",
-              "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score as band_for_raw_score\n",
-              1,
-          )
+              "from app.services.attempt_runtime import (\n    AttemptRuntime,\n)\n",
+          ):
+              runtime_text = runtime_text.replace(old_import, runtime_alias, 1)
           runtime_store.write_text(runtime_text)
 
           writing_checker = Path("backend/app/services/writing_checker.py")
