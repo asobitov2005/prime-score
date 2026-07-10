@@ -1,0 +1,38 @@
+name: UI data registry splitter
+
+on:
+  push:
+    branches:
+      - refactor/ui-data-and-icons
+
+permissions:
+  contents: write
+
+jobs:
+  split:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install TypeScript toolchain
+        working-directory: frontend
+        run: npm ci
+      - name: Split data registries
+        run: node scripts/split_ui_data_registries.cjs
+      - name: Commit generated modules
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/lib/speaking-topic-icons*.ts admin/lib/speaking-icons*.ts frontend/src/data/achievement*.ts
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "refactor(ui): split icon and achievement registries"
+          git push origin HEAD:${{ github.ref_name }}
