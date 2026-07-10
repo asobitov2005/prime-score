@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Callable
 from uuid import UUID
 
 from app.services.attempt_repo_support import snapshot_group_shared_options
 from app.services.scoring import score_answer
+
+ScoreAnswerCallable = Callable[..., Any]
 
 
 @dataclass(slots=True)
@@ -21,6 +24,7 @@ def score_attempt_snapshot(
     answer_map: dict[str, str],
     database_answer_key: dict[str, dict[str, object]],
     frozen_answer_key: dict[str, dict[str, object]],
+    score_answer_fn: ScoreAnswerCallable = score_answer,
 ) -> AttemptScoringSummary:
     shared_options = snapshot_group_shared_options(snapshot)
     scoring_items: list[dict[str, object]] = []
@@ -54,7 +58,7 @@ def score_attempt_snapshot(
         accepted_answers = [
             str(item) for item in answer_key.get("accepted_answers", [])
         ]
-        answer_score = score_answer(
+        answer_score = score_answer_fn(
             answer_value,
             accepted_answers,
             question_type=str(question_payload["question_type"]),
