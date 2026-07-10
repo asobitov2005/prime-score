@@ -1,0 +1,4 @@
+status	shared_parts	view_sections	path	detail
+split	1	11	frontend/app/(app)/dashboard/page.tsx	
+split	1	12	admin/app/(dashboard)/dashboard/page.tsx	
+split	1	13	admin/app/(dashboard)/analytics/page.tsx	
