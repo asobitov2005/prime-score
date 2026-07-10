@@ -1,0 +1,45 @@
+name: Runtime compatibility fix
+
+on:
+  push:
+    branches:
+      - "refactor/**"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Preserve runtime scoring names
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("backend/app/services/runtime_store.py")
+          text = path.read_text()
+          old = (
+              "from app.services.attempt_runtime import AttemptRuntime, "
+              "_band_for_raw_score as band_for_raw_score  # noqa: F401\n"
+          )
+          new = (
+              "from app.services.attempt_runtime import AttemptRuntime, "
+              "_band_for_raw_score, _band_for_raw_score as band_for_raw_score  "
+              "# noqa: F401,E501\n"
+          )
+          if old not in text:
+              raise SystemExit("runtime compatibility import marker not found")
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/services/runtime_store.py
+          git commit -m "fix(runtime): preserve internal and public band helpers"
+          git push origin HEAD:${{ github.ref_name }}
