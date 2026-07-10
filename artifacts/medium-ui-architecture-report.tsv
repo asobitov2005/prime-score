@@ -1,74 +1,16 @@
 status	components	shared_parts	path	detail
 failed	0	0	admin/app/(dashboard)/promo-codes/page.tsx	Error: PromoCodesPage JSX section remains 315 lines
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:582:17)
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:576:31)
-    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:605:31)
-    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:672:20)
+    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:561:17)
+    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:555:31)
+    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:584:31)
+    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:651:20)
     at Module._compile (node:internal/modules/cjs/loader:1521:14)
     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
     at Module.load (node:internal/modules/cjs/loader:1266:32)
     at Module._load (node:internal/modules/cjs/loader:1091:12)
     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
     at node:internal/main/run_main_module:28:49
-failed	0	0	frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx	Error: WritingAnalyticsContent JSX section remains 267 lines
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:582:17)
-    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:605:31)
-    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:672:20)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
-    at node:internal/main/run_main_module:28:49
-split	1	5	frontend/components/subscription/subscription-workspace.tsx	
-failed	0	0	frontend/components/layout/site-shell.tsx	Error: SiteShell JSX section remains 273 lines
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:582:17)
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:576:31)
-    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:605:31)
-    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:672:20)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
-    at node:internal/main/run_main_module:28:49
-split	1	2	frontend/app/exam-preview/writing/writing-exam-client.tsx	
-split	1	2	admin/components/ai-settings-dashboard.tsx	
-split	2	2	admin/app/(dashboard)/speaking/page.tsx	
-split	2	1	frontend/components/attempt-workspaces.tsx	
-split	1	2	frontend/components/marketing/pricing-plan-grid.tsx	
-split	1	2	frontend/app/(app)/speaking/topics/speaking-topic-picker-client.tsx	
-split	1	2	frontend/app/(app)/speaking/microphone-check/microphone-check-client.tsx	
-split	1	1	admin/app/(dashboard)/users/[id]/page.tsx	
-split	1	2	admin/app/(dashboard)/writing/page.tsx	
-split	1	1	admin/components/writing-task-form.tsx	
-split	1	1	admin/components/payments-manager.tsx	
-split	1	1	admin/components/plans/plan-manager.tsx	
-split	1	1	admin/app/(dashboard)/users/page.tsx	
-split	1	1	admin/app/(dashboard)/settings/page.tsx	
-failed	0	0	frontend/app/(app)/dashboard/streak-heatmap.tsx	Error: StreakHeatmap JSX section remains 245 lines
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:582:17)
-    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:605:31)
-    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:672:20)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
-    at node:internal/main/run_main_module:28:49
-split	1	1	frontend/components/exam/listening-transcript-panel.tsx	
-failed	0	0	frontend/app/(app)/settings/page.tsx	Error: SettingsPage JSX section remains 259 lines
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:582:17)
-    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:605:31)
-    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:672:20)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
-    at node:internal/main/run_main_module:28:49
-split	1	1	admin/app/(dashboard)/reviews/page.tsx	
-split	1	1	frontend/components/layout/app-shell.tsx	
-split	1	1	frontend/components/marketing/login-page-client.tsx	
-split	1	1	admin/app/(dashboard)/writing/[taskId]/page.tsx	
-split	1	1	admin/app/(dashboard)/writing/submissions/[submissionId]/page.tsx	
+split	2	3	frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx	
+split	1	2	frontend/components/layout/site-shell.tsx	
+split	1	1	frontend/app/(app)/dashboard/streak-heatmap.tsx	
+split	1	0	frontend/app/(app)/settings/page.tsx	
