@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any, Callable
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from app.services.attempt_repo_support import (
 )
 from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score
 from app.services.premium_bonus import grant_premium_bonus
+from app.services.scoring import score_answer
 from app.services.snapshots import freeze_test_snapshot
 from app.services.xp import award_xp_for_attempt
 
@@ -32,6 +34,11 @@ async def submit_attempt_in_db(
     session: AsyncSession,
     *,
     attempt_id: UUID,
+    load_answers_fn: Callable[..., Any] = load_answers,
+    db_answer_key_fn: Callable[..., Any] = db_answer_key,
+    score_answer_fn: Callable[..., Any] = score_answer,
+    grant_premium_bonus_fn: Callable[..., Any] = grant_premium_bonus,
+    award_xp_for_attempt_fn: Callable[..., Any] = award_xp_for_attempt,
 ) -> AttemptRuntime:
     attempt = await session.get(Attempt, attempt_id)
     if attempt is None:
@@ -40,17 +47,17 @@ async def submit_attempt_in_db(
         ModelAttemptStatus.COMPLETED,
         ModelAttemptStatus.AUTO_SUBMITTED,
     }:
-        answers = await load_answers(session, attempt_id)
+        answers = await load_answers_fn(session, attempt_id)
         return to_runtime(attempt, answers=answers)
 
-    answers = await load_answers(session, attempt_id)
+    answers = await load_answers_fn(session, attempt_id)
     answer_map = {
         str(answer.question_id): str(answer.value.get("value") or "")
         for answer in answers
     }
     snapshot = dict(attempt.test_snapshot or {})
     questions = snapshot_questions(snapshot)
-    database_answer_key = await db_answer_key(
+    database_answer_key = await db_answer_key_fn(
         session,
         [UUID(question_id) for question_id in questions],
     )
@@ -59,6 +66,7 @@ async def submit_attempt_in_db(
         answer_map=answer_map,
         database_answer_key=database_answer_key,
         frozen_answer_key=snapshot_answer_key(snapshot),
+        score_answer_fn=score_answer_fn,
     )
 
     now = datetime.now(timezone.utc)
@@ -89,11 +97,9 @@ async def submit_attempt_in_db(
     metadata["score_status"] = "ready"
     metadata["time_spent_sec"] = time_spent_sec
     metadata["section_time_spent_sec"] = normalize_section_time_spent_sec(
-        (
-            metadata.get("section_time_spent_sec")
-            if isinstance(metadata.get("section_time_spent_sec"), dict)
-            else None
-        ),
+        metadata.get("section_time_spent_sec")
+        if isinstance(metadata.get("section_time_spent_sec"), dict)
+        else None,
         snapshot=snapshot,
         time_limit_seconds=attempt.time_limit_seconds,
     )
@@ -126,7 +132,7 @@ async def submit_attempt_in_db(
     if should_grant_premium_bonus(attempt=attempt, metadata=metadata):
         user = await session.get(User, attempt.user_id)
         if user_can_receive_full_test_premium_bonus(user):
-            bonus_until = await grant_premium_bonus(
+            bonus_until = await grant_premium_bonus_fn(
                 session,
                 user=user,
                 days=2,
@@ -160,7 +166,7 @@ async def submit_attempt_in_db(
                 )
             )
 
-    xp_result = await award_xp_for_attempt(session, attempt)
+    xp_result = await award_xp_for_attempt_fn(session, attempt)
     metadata["xp_awarded_total"] = xp_result.total_awarded
     metadata["xp_breakdown"] = xp_result.breakdown
     metadata["xp_level_after"] = xp_result.level_after
@@ -172,9 +178,7 @@ async def submit_attempt_in_db(
             event_type="attempt_submitted",
             payload={
                 "raw_score": scoring.raw_score,
-                "band_score": (
-                    float(band_score) if band_score is not None else None
-                ),
+                "band_score": float(band_score) if band_score is not None else None,
                 "xp_awarded_total": xp_result.total_awarded,
             },
             created_at=now,
@@ -182,5 +186,5 @@ async def submit_attempt_in_db(
     )
     await session.commit()
     await session.refresh(attempt)
-    answers = await load_answers(session, attempt_id)
+    answers = await load_answers_fn(session, attempt_id)
     return to_runtime(attempt, answers=answers)
