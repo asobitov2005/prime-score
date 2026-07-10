@@ -1,0 +1,78 @@
+file	frontend/app/(app)/speaking/speaking-page-client.tsx
+component	useSpeakingLiveSession
+start	793
+end	1575
+
+index	kind	start	end	lines	names	local_refs	all_refs
+1	memo	810	810	1	api		createApiClient,useMemo
+2	derived	811	811	1	status,setStatus		LiveStatus,useState
+3	derived	812	812	1	error,setError		useState
+4	derived	813	813	1	result,setResult		SpeakingSessionResult,useState
+5	state	814	814	1	examinerTranscript,setExaminerTranscript		useState
+6	state	815	815	1	userTranscript,setUserTranscript		useState
+7	state	816	816	1	inputLevel,setInputLevel		useState
+8	state	817	817	1	isRecording,setIsRecording		useState
+9	state	818	818	1	isStartingMic,setIsStartingMic		useState
+10	state	819	819	1	isDeletingSession,setIsDeletingSession		useState
+11	state	820	820	1	isInterviewStarted,setIsInterviewStarted		useState
+12	derived	821	821	1	micError,setMicError		useState
+13	state	822	822	1	inputTurnOpen,setInputTurnOpen		useState
+14	state	823	823	1	turnCount,setTurnCount		useState
+15	state	824	824	1	plannedQuestionCount,setPlannedQuestionCount		PART_1_QUESTION_COUNT,useState
+16	state	825	825	1	elapsedSeconds,setElapsedSeconds		useState
+17	derived	826	826	1	wsRef		WebSocket,useRef
+18	derived	827	827	1	audioRef		LiveAudioRuntime,useRef
+19	derived	828	828	1	outputAudioRef		LiveOutputRuntime,useRef
+20	ref	829	829	1	stoppedRef		useRef
+21	ref	830	830	1	deletingSessionRef		useRef
+22	derived	831	831	1	statusRef		LiveStatus,useRef
+23	ref	832	832	1	hasStartedInterviewRef		useRef
+24	ref	833	833	1	isStartingAudioRef		useRef
+25	ref	834	834	1	audioStartGenerationRef		useRef
+26	ref	835	835	1	isInputTurnOpenRef		useRef
+27	derived	836	836	1	noAnswerTimerRef		useRef
+28	derived	837	837	1	yourTurnTimerRef		useRef
+29	derived	838	838	1	examinerSpeechWatchRef		useRef
+30	derived	839	839	1	stopRef		useRef
+31	derived	840	840	1	ensureBrowserAudioRef		useRef
+32	ref	841	841	1	examinerTranscriptRef		useRef
+33	ref	842	842	1	liveConfigRef		aiMode,entryMode,part,randomTopic,topics,useRef
+34	ExpressionStatement	843	843	1		liveConfigRef	aiMode,entryMode,liveConfigRef,part,randomTopic,topics
+35	ref	844	844	1	prepCompleteRef		prepComplete,useRef
+36	ExpressionStatement	845	845	1		prepCompleteRef	prepComplete,prepCompleteRef
+37	ref	846	846	1	aiModeRef		aiMode,useRef
+38	ExpressionStatement	847	847	1		aiModeRef	aiMode,aiModeRef
+39	callback	849	849	1	canStreamInput	isInputTurnOpenRef	isInputTurnOpenRef,useCallback
+40	callback	851	854	4	setLiveStatus	setStatus,statusRef	LiveStatus,setStatus,statusRef,useCallback
+41	callback	856	864	9	openInputTurn	isInputTurnOpenRef,setInputTurnOpen,setLiveStatus,wsRef	JSON,WebSocket,isInputTurnOpenRef,setInputTurnOpen,setLiveStatus,useCallback,wsRef
+42	callback	866	869	4	closeInputTurnState	isInputTurnOpenRef,setInputTurnOpen	isInputTurnOpenRef,setInputTurnOpen,useCallback
+43	callback	871	876	6	clearNoAnswerTimer	noAnswerTimerRef	noAnswerTimerRef,useCallback,window
+44	callback	878	883	6	clearYourTurnTimer	yourTurnTimerRef	useCallback,window,yourTurnTimerRef
+45	callback	885	890	6	clearExaminerSpeechWatch	examinerSpeechWatchRef	examinerSpeechWatchRef,useCallback,window
+46	callback	892	901	10	interruptUserTurnForExaminer	closeInputTurnState,hasStartedInterviewRef,isInputTurnOpenRef,wsRef	JSON,WebSocket,closeInputTurnState,hasStartedInterviewRef,isInputTurnOpenRef,useCallback,wsRef
+47	callback	903	918	16	releaseAudioRuntime	audioRef,audioStartGenerationRef,clearExaminerSpeechWatch,clearNoAnswerTimer,clearYourTurnTimer,isInputTurnOpenRef,isStartingAudioRef,outputAudioRef,setInputLevel,setInputTurnOpen,setIsRecording,setIsStartingMic	audioRef,audioStartGenerationRef,clearExaminerSpeechWatch,clearNoAnswerTimer,clearYourTurnTimer,isInputTurnOpenRef,isStartingAudioRef,outputAudioRef,setInputLevel,setInputTurnOpen,setIsRecording,setIsStartingMic,stopAudioRuntime,stopOutputRuntime,useCallback
+48	callback	920	932	13	closeInputTurn	clearNoAnswerTimer,closeInputTurnState,hasStartedInterviewRef,isInputTurnOpenRef,setLiveStatus,wsRef	JSON,WebSocket,clearNoAnswerTimer,closeInputTurnState,hasStartedInterviewRef,isInputTurnOpenRef,setLiveStatus,useCallback,wsRef
+49	callback	934	946	13	scheduleNoAnswerPrompt	clearNoAnswerTimer,closeInputTurn,examinerTranscriptRef,hasStartedInterviewRef,isInputTurnOpenRef,noAnswerTimerRef,prepCompleteRef,statusRef	PART_TWO_PREP_COMPLETE_NO_ANSWER_MS,buildNoAnswerExaminerPrompt,clearNoAnswerTimer,closeInputTurn,examinerTranscriptRef,getNoAnswerDelayMs,hasStartedInterviewRef,isInputTurnOpenRef,isPartTwoPreparationPrompt,noAnswerTimerRef,prepCompleteRef,statusRef,useCallback,window
+50	callback	948	950	3	finishAnswer	closeInputTurn	closeInputTurn,useCallback
+51	callback	952	955	4	resumeBrowserAudioContexts	audioRef,outputAudioRef	audioRef,outputAudioRef,undefined,useCallback
+52	callback	957	1004	48	scheduleExaminerSpeechWatch	clearExaminerSpeechWatch,examinerSpeechWatchRef,examinerTranscriptRef,hasStartedInterviewRef,isInputTurnOpenRef,liveConfigRef,outputAudioRef,statusRef,stopRef,stoppedRef	Boolean,Math,clearExaminerSpeechWatch,examinerSpeechWatchRef,examinerTranscriptRef,hasStartedInterviewRef,isInputTurnOpenRef,isSpeakingSessionClosingMessage,liveConfigRef,outputAudioRef,statusRef,stopRef,stoppedRef,useCallback,window
+53	callback	1006	1041	36	scheduleOpenInputTurn	clearNoAnswerTimer,clearYourTurnTimer,ensureBrowserAudioRef,examinerTranscriptRef,hasStartedInterviewRef,liveConfigRef,openInputTurn,outputAudioRef,resumeBrowserAudioContexts,scheduleNoAnswerPrompt,setTurnCount,stopRef,stoppedRef,yourTurnTimerRef	Math,clearNoAnswerTimer,clearYourTurnTimer,ensureBrowserAudioRef,examinerTranscriptRef,hasStartedInterviewRef,isSpeakingSessionClosingMessage,liveConfigRef,openInputTurn,outputAudioRef,resumeBrowserAudioContexts,scheduleNoAnswerPrompt,setTurnCount,stopRef,stoppedRef,useCallback,window,yourTurnTimerRef
+54	callback	1043	1051	9	getMicTurnHandlers	aiModeRef,clearNoAnswerTimer,closeInputTurn	MIN_SPEECH_MS_BEFORE_SILENCE_END,ROAST_SPEECH_END_SILENCE_MS,SPEECH_END_SILENCE_MS,aiModeRef,clearNoAnswerTimer,closeInputTurn,useCallback
+55	callback	1053	1074	22	fetchResult	api,releaseAudioRuntime,setError,setResult,setStatus,statusRef	Error,api,releaseAudioRuntime,sessionId,setError,setResult,setStatus,statusRef,useCallback,window
+56	callback	1076	1096	21	stop	fetchResult,hasStartedInterviewRef,releaseAudioRuntime,setStatus,stoppedRef,wsRef	JSON,WebSocket,aiMode,fetchResult,hasStartedInterviewRef,releaseAudioRuntime,setStatus,stoppedRef,useCallback,window,wsRef
+57	effect	1098	1100	3		stop,stopRef	stop,stopRef,useEffect
+58	callback	1102	1136	35	discard	api,deletingSessionRef,examinerTranscriptRef,hasStartedInterviewRef,isDeletingSession,releaseAudioRuntime,setError,setExaminerTranscript,setIsDeletingSession,setIsInterviewStarted,setMicError,setResult,setStatus,setUserTranscript,stoppedRef,wsRef	Error,Promise,WebSocket,api,deletingSessionRef,examinerTranscriptRef,hasStartedInterviewRef,isDeletingSession,releaseAudioRuntime,sessionId,setError,setExaminerTranscript,setIsDeletingSession,setIsInterviewStarted,setMicError,setResult,setStatus,setUserTranscript,stoppedRef,useCallback,wsRef
+59	callback	1138	1143	6	sendText	wsRef	JSON,WebSocket,useCallback,wsRef
+60	callback	1145	1188	44	startMicRuntime	audioRef,audioStartGenerationRef,canStreamInput,getMicTurnHandlers,hasStartedInterviewRef,isStartingAudioRef,isStartingMic,setInputLevel,setIsRecording,setIsStartingMic,setMicError,stoppedRef,wsRef	Error,WebSocket,audioRef,audioStartGenerationRef,canStreamInput,getMicTurnHandlers,hasStartedInterviewRef,isStartingAudioRef,isStartingMic,setInputLevel,setIsRecording,setIsStartingMic,setMicError,startAudioRuntime,stopAudioRuntime,stoppedRef,useCallback,wsRef
+61	callback	1190	1214	25	beginInterview	hasStartedInterviewRef,isDeletingSession,isInputTurnOpenRef,liveConfigRef,outputAudioRef,setElapsedSeconds,setError,setInputTurnOpen,setIsInterviewStarted,setLiveStatus,wsRef	Error,JSON,WebSocket,hasStartedInterviewRef,isDeletingSession,isInputTurnOpenRef,liveConfigRef,outputAudioRef,setElapsedSeconds,setError,setInputTurnOpen,setIsInterviewStarted,setLiveStatus,startOutputRuntime,undefined,useCallback,wsRef
+62	callback	1216	1222	7	startMic	beginInterview,hasStartedInterviewRef,startMicRuntime	beginInterview,hasStartedInterviewRef,startMicRuntime,useCallback
+63	ref	1224	1241	18	liveSessionHandlersRef	beginInterview,canStreamInput,clearNoAnswerTimer,clearYourTurnTimer,closeInputTurn,closeInputTurnState,fetchResult,getMicTurnHandlers,interruptUserTurnForExaminer,openInputTurn,releaseAudioRuntime,resumeBrowserAudioContexts,scheduleExaminerSpeechWatch,scheduleNoAnswerPrompt,scheduleOpenInputTurn,setLiveStatus	beginInterview,canStreamInput,clearNoAnswerTimer,clearYourTurnTimer,closeInputTurn,closeInputTurnState,fetchResult,getMicTurnHandlers,interruptUserTurnForExaminer,openInputTurn,releaseAudioRuntime,resumeBrowserAudioContexts,scheduleExaminerSpeechWatch,scheduleNoAnswerPrompt,scheduleOpenInputTurn,setLiveStatus,useRef
+64	ExpressionStatement	1242	1259	18		beginInterview,canStreamInput,clearNoAnswerTimer,clearYourTurnTimer,closeInputTurn,closeInputTurnState,fetchResult,getMicTurnHandlers,interruptUserTurnForExaminer,liveSessionHandlersRef,openInputTurn,releaseAudioRuntime,resumeBrowserAudioContexts,scheduleExaminerSpeechWatch,scheduleNoAnswerPrompt,scheduleOpenInputTurn,setLiveStatus	beginInterview,canStreamInput,clearNoAnswerTimer,clearYourTurnTimer,closeInputTurn,closeInputTurnState,fetchResult,getMicTurnHandlers,interruptUserTurnForExaminer,liveSessionHandlersRef,openInputTurn,releaseAudioRuntime,resumeBrowserAudioContexts,scheduleExaminerSpeechWatch,scheduleNoAnswerPrompt,scheduleOpenInputTurn,setLiveStatus
+65	effect	1261	1267	7		liveSessionHandlersRef	liveSessionHandlersRef,useEffect,window
+66	effect	1269	1540	272		aiModeRef,audioRef,audioStartGenerationRef,clearNoAnswerTimer,deletingSessionRef,ensureBrowserAudioRef,examinerTranscriptRef,hasStartedInterviewRef,isInputTurnOpenRef,isStartingAudioRef,liveSessionHandlersRef,outputAudioRef,setElapsedSeconds,setError,setExaminerTranscript,setInputLevel,setInputTurnOpen,setIsInterviewStarted,setIsRecording,setIsStartingMic,setLiveStatus,setMicError,setPlannedQuestionCount,setResult,setTurnCount,setUserTranscript,statusRef,stoppedRef,wsRef	Error,JSON,PART_1_QUESTION_COUNT,URL,WebSocket,aiModeRef,audioRef,audioStartGenerationRef,clearNoAnswerTimer,deletingSessionRef,ensureBrowserAudioRef,examinerTranscriptRef,getFrontendClientWebSocketApiBaseUrl,getLiveMessageString,hasStartedInterviewRef,isInputTurnOpenRef,isStartingAudioRef,liveSessionHandlersRef,mergeTranscript,outputAudioRef,parseLiveMessage,playPcmAudio,sessionId,setElapsedSeconds,setError,setExaminerTranscript,setInputLevel,setInputTurnOpen,setIsInterviewStarted,setIsRecording,setIsStartingMic,setLiveStatus,setMicError,setPlannedQuestionCount,setResult,setTurnCount,setUserTranscript,startAudioRuntime,startOutputRuntime,statusRef,stopAudioRuntime,stoppedRef,undefined,useAuthStore,useEffect,window,wsRef
+67	effect	1542	1544	3		status,statusRef	status,statusRef,useEffect
+68	effect	1546	1550	5		releaseAudioRuntime,result	releaseAudioRuntime,result,useEffect
+69	return	1552	1574	23		beginInterview,discard,elapsedSeconds,error,examinerTranscript,finishAnswer,inputLevel,inputTurnOpen,isDeletingSession,isInterviewStarted,isRecording,isStartingMic,micError,plannedQuestionCount,result,sendText,startMic,status,stop,turnCount,userTranscript	beginInterview,discard,elapsedSeconds,error,examinerTranscript,finishAnswer,inputLevel,inputTurnOpen,isDeletingSession,isInterviewStarted,isRecording,isStartingMic,micError,plannedQuestionCount,result,sendText,startMic,status,stop,turnCount,userTranscript
+
+ROOT_JSX
+index	start	end	lines	kind	refs
