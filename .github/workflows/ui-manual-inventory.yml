@@ -1,4 +1,4 @@
-name: Remaining UI source inventory
+name: Remaining UI component map
 
 on:
   push:
@@ -9,39 +9,30 @@ permissions:
   contents: write
 
 jobs:
-  inventory:
+  map:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-      - name: Generate inventory
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          ignored = {'node_modules', '.next', 'dist', 'build', 'coverage'}
-          rows = []
-          for root in (Path('frontend'), Path('admin')):
-              for path in root.rglob('*'):
-                  if not path.is_file() or path.suffix not in {'.ts', '.tsx', '.js', '.jsx'}:
-                      continue
-                  if any(part in ignored for part in path.parts):
-                      continue
-                  count = sum(1 for _ in path.open('r', encoding='utf-8', errors='replace'))
-                  if count > 300:
-                      rows.append((count, path.as_posix()))
-          rows.sort(reverse=True)
-          Path('artifacts').mkdir(exist_ok=True)
-          Path('artifacts/remaining-ui-files.tsv').write_text(
-              'lines\tpath\n' + ''.join(f'{count}\t{path}\n' for count, path in rows)
-          )
-          PY
-      - name: Commit inventory
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install TypeScript toolchain
+        working-directory: frontend
+        run: npm ci
+      - name: Map large component bodies
+        run: node scripts/map_large_component_bodies.cjs
+      - name: Commit map
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/remaining-ui-files.tsv
-          git commit -m "chore: inventory remaining oversized UI files"
+          git add artifacts/large-component-bodies.tsv
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: map remaining large component bodies"
           git push origin HEAD:${{ github.ref_name }}
