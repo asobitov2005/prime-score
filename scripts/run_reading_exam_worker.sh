@@ -3,6 +3,7 @@ set -Euo pipefail
 
 log_path="artifacts/reading-exam-worker.log"
 generator_report_path="/tmp/reading-exam-generator-report.tsv"
+renderer_analysis_path="/tmp/reading-renderer-analysis.tsv"
 mkdir -p artifacts
 exec > >(tee "$log_path") 2>&1
 
@@ -12,6 +13,7 @@ on_error() {
   error_line=${BASH_LINENO[0]:-unknown}
   log_tail=$(tail -n 100 "$log_path" || true)
   generator_report=$(cat "$generator_report_path" 2>/dev/null || true)
+  renderer_analysis=$(cat "$renderer_analysis_path" 2>/dev/null || true)
 
   git reset --hard HEAD
   git clean -fd frontend/components/exam/reading-exam-preview-modules
@@ -20,6 +22,8 @@ on_error() {
 status	components	shared_parts	path	detail
 failed	0	0	frontend/components/exam/reading-exam-preview.tsx	command=${failed_command}; line=${error_line}; status=${status}
 ${generator_report}
+RENDERER_ANALYSIS
+${renderer_analysis}
 ${log_tail}
 EOF
   exit 0
@@ -28,6 +32,7 @@ trap on_error ERR
 
 node scripts/reorder_reading_exam_effects.cjs
 node scripts/split_reading_question_control.cjs
+node scripts/analyze_reading_renderer_group.cjs
 
 python - <<'PY'
 import re
