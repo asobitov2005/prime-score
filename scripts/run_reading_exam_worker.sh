@@ -2,6 +2,7 @@
 set -Euo pipefail
 
 log_path="artifacts/reading-exam-worker.log"
+generator_report_path="/tmp/reading-exam-generator-report.tsv"
 mkdir -p artifacts
 exec > >(tee "$log_path") 2>&1
 
@@ -10,6 +11,7 @@ on_error() {
   failed_command=${BASH_COMMAND:-unknown}
   error_line=${BASH_LINENO[0]:-unknown}
   log_tail=$(tail -n 100 "$log_path" || true)
+  generator_report=$(cat "$generator_report_path" 2>/dev/null || true)
 
   git reset --hard HEAD
   git clean -fd frontend/components/exam/reading-exam-preview-modules
@@ -17,6 +19,7 @@ on_error() {
   cat > artifacts/medium-ui-architecture-report.tsv <<EOF
 status	components	shared_parts	path	detail
 failed	0	0	frontend/components/exam/reading-exam-preview.tsx	command=${failed_command}; line=${error_line}; status=${status}
+${generator_report}
 ${log_tail}
 EOF
   exit 0
@@ -67,6 +70,7 @@ PY
 
 rm -rf frontend/components/exam/reading-exam-preview-modules
 node scripts/refactor_medium_ui_architecture.cjs
+cp artifacts/medium-ui-architecture-report.tsv "$generator_report_path"
 
 grep -q $'^split\t' artifacts/medium-ui-architecture-report.tsv
 rm -f "$log_path"
