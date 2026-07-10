@@ -111,6 +111,10 @@ question_text = question_text.replace(
     "if (lineCount(body) > 270)",
     "if (lineCount(body) > 180)",
 )
+question_text = question_text.replace(
+    'const rendered = ts.isJsxExpression(current) ? `<>{${current.expression.getText(sf)}}</>` : body;',
+    'const rendered = ts.isJsxExpression(current) ? `<>${body}</>` : body;',
+)
 questions.write_text(question_text)
 PY
 
