@@ -1,4 +1,4 @@
-name: Medium UI standard section pass
+name: Final source inventory and build
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  generate:
+  inventory:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -17,50 +17,80 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+      - name: Recompute oversized source inventory
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          suffixes = {'.py', '.ts', '.tsx', '.js', '.jsx'}
+          ignored = {'.git', '.next', 'node_modules', 'dist', 'build', 'coverage', 'migrations', 'alembic'}
+          rows = []
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or path.suffix not in suffixes:
+                  continue
+              if any(part in ignored for part in path.parts):
+                  continue
+              count = sum(1 for _ in path.open('r', encoding='utf-8', errors='replace'))
+              if count > 300:
+                  rows.append((count, path.as_posix()))
+          rows.sort(reverse=True)
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/current-oversized-source.tsv').write_text(
+              'lines\tpath\n' + ''.join(f'{count}\t{path}\n' for count, path in rows)
+          )
+          PY
+      - name: Commit current inventory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/current-oversized-source.tsv
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: refresh current oversized source inventory"
+          git push origin HEAD:${{ github.ref_name }}
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_BASE_URL: /api
+      API_INTERNAL_BASE_URL: http://127.0.0.1:8000/api
+      NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: primescorebot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install TypeScript toolchain
-        working-directory: frontend
-        run: npm ci
-      - name: Configure standard retry targets
-        run: |
-          python - <<'PY'
-          import re
-          from pathlib import Path
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
 
-          path = Path("scripts/refactor_medium_ui_architecture.cjs")
-          text = path.read_text()
-          targets = '''const TARGETS = [
-            "frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx",
-            "frontend/components/layout/site-shell.tsx",
-            "frontend/app/(app)/dashboard/streak-heatmap.tsx",
-            "frontend/app/(app)/settings/page.tsx",
-          ];'''
-          text = re.sub(
-              r"const TARGETS = \[.*?\n\];",
-              targets,
-              text,
-              count=1,
-              flags=re.S,
-          )
-          text = text.replace(
-              "if (lineCount(nodeText) > 235) {",
-              "if (lineCount(nodeText) > 275) {",
-          )
-          path.write_text(text)
-          PY
-      - name: Generate standard view sections
-        run: node scripts/refactor_medium_ui_architecture.cjs
-      - name: Commit generated modules
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend artifacts/medium-ui-architecture-report.tsv
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "refactor(ui): finalize standard medium view sections"
-          git push origin HEAD:${{ github.ref_name }}
+  admin-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_API_BASE_URL: /api/admin
+      ADMIN_API_INTERNAL_BASE_URL: http://127.0.0.1:8000/api/admin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
