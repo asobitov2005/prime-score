@@ -193,7 +193,7 @@ async def test_user_can_list_published_speaking_tests(app) -> None:
 
 
 async def test_user_can_create_speaking_session(app, monkeypatch) -> None:
-    monkeypatch.setattr("app.api.routes.speaking.resolve_ai_use_case_config", _fake_resolve_ai_use_case_config)
+    monkeypatch.setattr("app.api.routes.speaking_sessions.resolve_ai_use_case_config", _fake_resolve_ai_use_case_config)
     fake_session = _FakeSession()
 
     async def override_db_session():
