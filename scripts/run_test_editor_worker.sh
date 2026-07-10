@@ -101,6 +101,8 @@ PY
 rm -rf admin/components/test-editor-wizard-modules
 node scripts/refactor_medium_ui_architecture.cjs || true
 node scripts/finish_test_editor_content_panel.cjs
+node scripts/refactor_medium_ui_architecture.cjs || true
+node scripts/finish_test_editor_questions_panel.cjs
 node scripts/refactor_medium_ui_architecture.cjs
 cp artifacts/medium-ui-architecture-report.tsv "$generator_report_path"
 
