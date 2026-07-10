@@ -1,0 +1,201 @@
+name: Project quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  source-size:
+    name: Source file size
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enforce 300-line limit for changed source files
+        run: python scripts/check_changed_file_lengths.py
+
+  backend:
+    name: Backend lint and tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: primescore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d primescore_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ENVIRONMENT: test
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/primescore_test
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: ci-user-access-secret
+      JWT_REFRESH_SECRET: ci-user-refresh-secret
+      TELEGRAM_BOT_TOKEN: change-me
+      MINIO_ENDPOINT: 127.0.0.1:9200
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
+      PAYMENT_PAUSED: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install backend dependencies
+        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+      - name: Ruff
+        run: |
+          mkdir -p ../ci-logs
+          set +e
+          ruff check app tests --output-format=concise 2>&1 | tee ../ci-logs/backend-ruff.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/backend-ruff.status
+          exit 0
+      - name: Pytest
+        run: |
+          set +e
+          pytest -q 2>&1 | tee ../ci-logs/backend-pytest.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/backend-pytest.status
+          exit 0
+      - name: Upload backend logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-quality-logs
+          path: ci-logs/backend-*
+      - name: Verify backend results
+        run: |
+          test "$(cat ../ci-logs/backend-ruff.status)" = "0"
+          test "$(cat ../ci-logs/backend-pytest.status)" = "0"
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_BASE_URL: /api
+      API_INTERNAL_BASE_URL: http://127.0.0.1:8000/api
+      NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: primescorebot
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: |
+          mkdir -p ../ci-logs
+          set +e
+          npm run lint 2>&1 | tee ../ci-logs/frontend-lint.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/frontend-lint.status
+          exit 0
+      - name: Build
+        run: |
+          set +e
+          npm run build 2>&1 | tee ../ci-logs/frontend-build.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/frontend-build.status
+          exit 0
+      - name: Upload frontend logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-quality-logs
+          path: ci-logs/frontend-*
+      - name: Verify frontend results
+        run: |
+          test "$(cat ../ci-logs/frontend-lint.status)" = "0"
+          test "$(cat ../ci-logs/frontend-build.status)" = "0"
+
+  admin:
+    name: Admin lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_ADMIN_API_BASE_URL: /api/admin
+      ADMIN_API_INTERNAL_BASE_URL: http://127.0.0.1:8000/api/admin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: |
+          mkdir -p ../ci-logs
+          set +e
+          npm run lint 2>&1 | tee ../ci-logs/admin-lint.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/admin-lint.status
+          exit 0
+      - name: Build
+        run: |
+          set +e
+          npm run build 2>&1 | tee ../ci-logs/admin-build.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/admin-build.status
+          exit 0
+      - name: Upload admin logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-quality-logs
+          path: ci-logs/admin-*
+      - name: Verify admin results
+        run: |
+          test "$(cat ../ci-logs/admin-lint.status)" = "0"
+          test "$(cat ../ci-logs/admin-build.status)" = "0"
+
+  compose:
+    name: Docker Compose validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate compose configuration
+        run: docker compose config --quiet
