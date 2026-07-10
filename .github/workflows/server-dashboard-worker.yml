@@ -1,0 +1,39 @@
+name: Server dashboard worker
+
+on:
+  push:
+    branches:
+      - worker/server-dashboards-final
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install TypeScript toolchain
+        working-directory: frontend
+        run: npm ci
+      - name: Split server dashboard pages
+        run: node scripts/refactor_server_pages.cjs
+      - name: Commit worker result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend admin artifacts/server-page-refactor-report.tsv
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "refactor(server-ui): split dashboard loaders and views"
+          git push origin HEAD:${{ github.ref_name }}
