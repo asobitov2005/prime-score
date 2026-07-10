@@ -1,4 +1,4 @@
-name: Frontend admin TypeScript map
+name: Safe TypeScript module splitter
 
 on:
   push:
@@ -9,13 +9,14 @@ permissions:
   contents: write
 
 jobs:
-  map:
+  split:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -24,15 +25,15 @@ jobs:
       - name: Install TypeScript toolchain
         working-directory: frontend
         run: npm ci
-      - name: Generate TypeScript AST maps
-        run: node scripts/map_typescript_modules.cjs
-      - name: Commit maps
+      - name: Split safe TypeScript modules
+        run: node scripts/split_safe_typescript_modules.cjs
+      - name: Commit generated modules
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/typescript-module-map.json artifacts/typescript-module-map.tsv
+          git add frontend admin artifacts/typescript-split-report.tsv
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "chore: map large TypeScript modules"
+          git commit -m "refactor(ui): split safe TypeScript modules"
           git push origin HEAD:${{ github.ref_name }}
