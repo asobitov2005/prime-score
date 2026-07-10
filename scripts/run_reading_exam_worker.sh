@@ -56,6 +56,10 @@ text = text.replace(
     "const MAX_BODY_LINES = 285;",
 )
 text = text.replace(
+    "const MAX_FILE_LINES = 290;",
+    "const MAX_FILE_LINES = 300;",
+)
+text = text.replace(
     "const controllerParts = packGroups(controllerUnits, groups, 255);",
     "const controllerParts = packGroups(controllerUnits, groups, 285);",
 )
