@@ -1,8 +1,4 @@
-"""Backward-compatible facade for admin authentication services.
-
-Implementation details live in focused modules so existing imports from
-``app.services.admin_auth`` continue to work unchanged.
-"""
+"""Backward-compatible facade for admin authentication services."""
 
 from app.services.admin_auth_accounts import (
     authenticate_admin,
@@ -52,7 +48,6 @@ from app.services.admin_auth_shared import (
 )
 from app.services.admin_auth_throttle import AdminAuthThrottle, get_admin_auth_throttle
 
-# Preserve private names that may be referenced by older tests or scripts.
 _normalize_login = normalize_login
 _is_local_admin_reset_url = is_local_admin_reset_url
 
@@ -64,7 +59,15 @@ __all__ = [
     "ADMIN_LOGIN_OTP_TTL_SECONDS",
     "ADMIN_OTP_ISSUE_MAX_PER_MINUTE",
     "ADMIN_PASSWORD_MIN_LENGTH",
+    "ADMIN_PASSWORD_RESET_IP_DAILY_MAX",
+    "ADMIN_PASSWORD_RESET_IP_DAILY_WINDOW_SECONDS",
+    "ADMIN_PASSWORD_RESET_IP_SHORT_MAX",
+    "ADMIN_PASSWORD_RESET_IP_SHORT_WINDOW_SECONDS",
     "ADMIN_PASSWORD_RESET_MAX_ATTEMPTS",
+    "ADMIN_PASSWORD_RESET_PHONE_DAILY_MAX",
+    "ADMIN_PASSWORD_RESET_PHONE_DAILY_WINDOW_SECONDS",
+    "ADMIN_PASSWORD_RESET_PHONE_SHORT_MAX",
+    "ADMIN_PASSWORD_RESET_PHONE_SHORT_WINDOW_SECONDS",
     "ADMIN_PASSWORD_RESET_PURPOSE",
     "ADMIN_PASSWORD_RESET_TTL_SECONDS",
     "AdminAuthThrottle",
