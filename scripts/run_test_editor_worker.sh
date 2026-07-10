@@ -60,6 +60,40 @@ text = text.replace(
     "if (lineCount(nodeText) > 285) {",
 )
 path.write_text(text)
+
+extractor = Path("scripts/finish_test_editor_content_panel.cjs")
+extractor_text = extractor.read_text()
+old = '''if (!callbackReturn?.expression || !ts.isJsxElement(callbackReturn.expression)) {
+  throw new Error("Content section card return not found");
+}
+const itemStatements = callbackStatements.slice(
+  0,
+  callbackStatements.indexOf(callbackReturn),
+);
+const itemNames = [
+  ...mapInfo.callback.parameters.flatMap((parameter) => bindingNames(parameter.name)),
+  ...itemStatements.flatMap(declaredNames),
+];
+const card = callbackReturn.expression;'''
+new = '''if (!callbackReturn?.expression) {
+  throw new Error("Content section card return not found");
+}
+let card = callbackReturn.expression;
+while (ts.isParenthesizedExpression(card)) card = card.expression;
+if (!ts.isJsxElement(card)) {
+  throw new Error("Content section card JSX not found");
+}
+const itemStatements = callbackStatements.slice(
+  0,
+  callbackStatements.indexOf(callbackReturn),
+);
+const itemNames = [
+  ...mapInfo.callback.parameters.flatMap((parameter) => bindingNames(parameter.name)),
+  ...itemStatements.flatMap(declaredNames),
+];'''
+if old not in extractor_text:
+    raise SystemExit("ContentPanel card marker not found")
+extractor.write_text(extractor_text.replace(old, new, 1))
 PY
 
 rm -rf admin/components/test-editor-wizard-modules
@@ -100,4 +134,5 @@ export function ContentPanel(
 ''')
 PY
 
+grep -q $'^split\t' artifacts/medium-ui-architecture-report.tsv
 rm -f "$log_path"
