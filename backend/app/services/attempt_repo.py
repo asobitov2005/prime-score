@@ -1,9 +1,6 @@
 """Backward-compatible facade for attempt persistence services."""
 
-from app.services.attempt_repo_commands import (
-    save_answer_in_db,
-    start_attempt_in_db,
-)
+from app.services.attempt_repo_commands import save_answer_in_db, start_attempt_in_db
 from app.services.attempt_repo_progress import (
     normalize_text_highlights,
     normalize_ui_state,
@@ -34,7 +31,6 @@ from app.services.attempt_repo_support import (
     user_can_receive_full_test_premium_bonus,
 )
 
-# Preserve private helper names used by older tests and internal modules.
 _principal_phone = principal_phone
 _principal_telegram_id = principal_telegram_id
 _attempt_query = attempt_query
@@ -60,4 +56,6 @@ __all__ = [
     "save_answer_in_db",
     "save_progress_in_db",
     "submit_attempt_in_db",
+    "normalize_text_highlights",
+    "normalize_ui_state",
 ]
