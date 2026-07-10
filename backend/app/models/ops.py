@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import Boolean, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.enums import NotificationType
-from app.models.base import TimestampMixin, UUIDPrimaryKeyMixin, Base
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class Notification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -26,7 +28,7 @@ class Notification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sent_telegram: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    user: Mapped["User"] = relationship(back_populates="notifications")
+    user: Mapped[User] = relationship(back_populates="notifications")
 
 
 class AuditLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -40,5 +42,3 @@ class AuditLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     entity_id: Mapped[UUID] = mapped_column(nullable=False)
     changes: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
-
-
