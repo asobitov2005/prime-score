@@ -56,6 +56,33 @@ jobs:
               "if (lineCount(nodeText) > 235) {",
               "if (lineCount(nodeText) > 285) {",
           )
+          old = '''function directJsxChildren(node) {
+            let current = node;
+            while (ts.isParenthesizedExpression(current)) current = current.expression;
+            if (ts.isJsxElement(current) || ts.isJsxFragment(current)) {
+              return current.children.filter((child) => !ts.isJsxText(child) || child.getText().trim());
+            }
+            return [];
+          }'''
+          new = '''function directJsxChildren(node) {
+            let current = node;
+            while (ts.isParenthesizedExpression(current)) current = current.expression;
+            if (ts.isJsxExpression(current) && current.expression) {
+              return directJsxChildren(current.expression);
+            }
+            if (ts.isConditionalExpression(current)) {
+              return [current.whenTrue, current.whenFalse].filter((child) =>
+                isJsxExpression(child) || ts.isConditionalExpression(child),
+              );
+            }
+            if (ts.isJsxElement(current) || ts.isJsxFragment(current)) {
+              return current.children.filter((child) => !ts.isJsxText(child) || child.getText().trim());
+            }
+            return [];
+          }'''
+          if old not in text:
+              raise SystemExit("directJsxChildren marker not found")
+          text = text.replace(old, new, 1)
           path.write_text(text)
           PY
       - name: Split promo page modules
