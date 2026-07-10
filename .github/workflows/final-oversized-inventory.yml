@@ -1,0 +1,47 @@
+name: Final oversized source inventory
+
+on:
+  push:
+    branches:
+      - refactor/zero-oversized-source-files
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Generate final inventory
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          suffixes = {'.py', '.ts', '.tsx', '.js', '.jsx'}
+          ignored = {'.git', '.next', 'node_modules', 'dist', 'build', 'coverage', 'migrations', 'alembic'}
+          rows = []
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or path.suffix not in suffixes:
+                  continue
+              if any(part in ignored for part in path.parts):
+                  continue
+              count = sum(1 for _ in path.open('r', encoding='utf-8', errors='replace'))
+              if count > 300:
+                  rows.append((count, path.as_posix()))
+          rows.sort(reverse=True)
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/final-oversized-source.tsv').write_text(
+              'lines\tpath\n' + ''.join(f'{count}\t{path}\n' for count, path in rows)
+          )
+          PY
+      - name: Commit inventory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/final-oversized-source.tsv
+          git commit -m "chore: inventory final oversized source files"
+          git push origin HEAD:${{ github.ref_name }}
