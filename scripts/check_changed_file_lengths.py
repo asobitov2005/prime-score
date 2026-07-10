@@ -3,9 +3,15 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 MAX_LINES = int(os.getenv("MAX_SOURCE_LINES", "300"))
+FULL_SOURCE_SCAN = os.getenv("FULL_SOURCE_SCAN", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
 SOURCE_SUFFIXES = {".py", ".js", ".jsx", ".ts", ".tsx"}
 IGNORED_PARTS = {
     ".git",
@@ -41,6 +47,14 @@ def changed_files() -> list[Path]:
     return [Path(line.strip()) for line in output.splitlines() if line.strip()]
 
 
+def repository_files() -> Iterable[Path]:
+    return Path(".").rglob("*")
+
+
+def source_files() -> Iterable[Path]:
+    return repository_files() if FULL_SOURCE_SCAN else changed_files()
+
+
 def is_source_file(path: Path) -> bool:
     return (
         path.suffix in SOURCE_SUFFIXES
@@ -73,7 +87,8 @@ def main() -> int:
     violations: list[tuple[Path, int, int | None]] = []
     legacy_non_growing: list[tuple[Path, int, int]] = []
     checked = 0
-    for path in changed_files():
+
+    for path in source_files():
         if not is_source_file(path):
             continue
         checked += 1
@@ -81,7 +96,7 @@ def main() -> int:
         if current_count <= MAX_LINES:
             continue
 
-        previous_count = base_line_count(path)
+        previous_count = None if FULL_SOURCE_SCAN else base_line_count(path)
         if (
             previous_count is not None
             and previous_count > MAX_LINES
@@ -91,7 +106,8 @@ def main() -> int:
             continue
         violations.append((path, current_count, previous_count))
 
-    print(f"Checked {checked} changed source files (limit: {MAX_LINES} lines).")
+    scope = "all" if FULL_SOURCE_SCAN else "changed"
+    print(f"Checked {checked} {scope} source files (limit: {MAX_LINES} lines).")
     for path, previous, current in sorted(legacy_non_growing):
         print(
             f"Legacy oversized file did not grow: {path} "
@@ -100,9 +116,11 @@ def main() -> int:
     if not violations:
         return 0
 
-    print("Source file size regressions:", file=sys.stderr)
+    print("Source file size violations:", file=sys.stderr)
     for path, current, previous in sorted(violations):
-        baseline = "new file" if previous is None else f"previously {previous}"
+        baseline = "repository-wide scan" if FULL_SOURCE_SCAN else (
+            "new file" if previous is None else f"previously {previous}"
+        )
         print(
             f"- {path}: {current} lines ({baseline}, limit {MAX_LINES})",
             file=sys.stderr,
