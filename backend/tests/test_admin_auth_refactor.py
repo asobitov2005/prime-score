@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -41,8 +42,7 @@ def test_consume_admin_login_otp_marks_valid_code_used() -> None:
     otp = SimpleNamespace(
         used_at=None,
         purpose=admin_auth.ADMIN_LOGIN_OTP_PURPOSE,
-        expires_at=admin_auth.datetime.now(admin_auth.timezone.utc)
-        + admin_auth.timedelta(seconds=30),
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=30),
         attempts=0,
         otp_code="12345",
     )
@@ -53,8 +53,6 @@ def test_consume_admin_login_otp_marks_valid_code_used() -> None:
 
 
 def test_consume_admin_login_otp_tracks_invalid_attempt() -> None:
-    from datetime import datetime, timedelta, timezone
-
     otp = SimpleNamespace(
         used_at=None,
         purpose=admin_auth.ADMIN_LOGIN_OTP_PURPOSE,
