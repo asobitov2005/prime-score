@@ -77,9 +77,28 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
       - name: Ruff
-        run: ruff check app tests
+        run: |
+          mkdir -p ../ci-logs
+          set +e
+          ruff check app tests --output-format=concise 2>&1 | tee ../ci-logs/backend-ruff.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/backend-ruff.status
+          exit 0
       - name: Pytest
-        run: pytest -q
+        run: |
+          set +e
+          pytest -q 2>&1 | tee ../ci-logs/backend-pytest.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/backend-pytest.status
+          exit 0
+      - name: Upload backend logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-quality-logs
+          path: ci-logs/backend-*
+      - name: Verify backend results
+        run: |
+          test "$(cat ../ci-logs/backend-ruff.status)" = "0"
+          test "$(cat ../ci-logs/backend-pytest.status)" = "0"
 
   frontend:
     name: Frontend lint and build
@@ -104,9 +123,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Lint
-        run: npm run lint
+        run: |
+          mkdir -p ../ci-logs
+          set +e
+          npm run lint 2>&1 | tee ../ci-logs/frontend-lint.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/frontend-lint.status
+          exit 0
       - name: Build
-        run: npm run build
+        run: |
+          set +e
+          npm run build 2>&1 | tee ../ci-logs/frontend-build.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/frontend-build.status
+          exit 0
+      - name: Upload frontend logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-quality-logs
+          path: ci-logs/frontend-*
+      - name: Verify frontend results
+        run: |
+          test "$(cat ../ci-logs/frontend-lint.status)" = "0"
+          test "$(cat ../ci-logs/frontend-build.status)" = "0"
 
   admin:
     name: Admin lint and build
@@ -130,9 +168,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Lint
-        run: npm run lint
+        run: |
+          mkdir -p ../ci-logs
+          set +e
+          npm run lint 2>&1 | tee ../ci-logs/admin-lint.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/admin-lint.status
+          exit 0
       - name: Build
-        run: npm run build
+        run: |
+          set +e
+          npm run build 2>&1 | tee ../ci-logs/admin-build.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/admin-build.status
+          exit 0
+      - name: Upload admin logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-quality-logs
+          path: ci-logs/admin-*
+      - name: Verify admin results
+        run: |
+          test "$(cat ../ci-logs/admin-lint.status)" = "0"
+          test "$(cat ../ci-logs/admin-build.status)" = "0"
 
   compose:
     name: Docker Compose validation
