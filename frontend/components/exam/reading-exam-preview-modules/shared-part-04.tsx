@@ -6,46 +6,6 @@ import { isMcqMultiple } from "./shared-part-02";
 
 
 
-export function parseCompletionTableLayout(text: string) {
-  const rows = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  const parsedRows: Array<{ isHeader: boolean; cells: string[] }> = [];
-
-  for (const line of rows) {
-    if (!line.includes("|")) {
-      const previousRow = parsedRows[parsedRows.length - 1];
-      if (!previousRow) {
-        return null;
-      }
-
-      const continuationTargetIndex = /^\(.*\)$/.test(line)
-        ? 0
-        : Math.max(0, previousRow.cells.length - 1);
-      previousRow.cells[continuationTargetIndex] = previousRow.cells[continuationTargetIndex]
-        ? `${previousRow.cells[continuationTargetIndex]}\n${line}`
-        : line;
-      continue;
-    }
-
-    const isHeader = line.startsWith("||") && line.endsWith("||");
-    const body = isHeader ? line.slice(2, -2).trim() : line;
-    const cells = body.split("|").map((cell) => cell.trim());
-    if (cells.length < 2) {
-      return null;
-    }
-    parsedRows.push({ isHeader, cells });
-  }
-
-  return parsedRows;
-}
-
 export function toggleMultiValue(current: string | undefined, next: string, maxValues = 2) {
   const existing = (current ?? "")
     .split(",")

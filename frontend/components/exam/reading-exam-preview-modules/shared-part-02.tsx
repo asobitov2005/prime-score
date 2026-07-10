@@ -2,20 +2,9 @@
 
 import { getMatchingOptionViewModel, groupUsesOptionBank, readBrowserSessionCookies } from "./dependencies";
 
-import { PASSAGE_PARAGRAPHS, PreviewGroup, PreviewQuestion, QUESTION_GROUPS, ReadingExamPreviewData } from "./shared-part-01";
+import { PreviewGroup, PreviewQuestion } from "./shared-part-01";
 
 
-
-export const DEFAULT_EXAM_DATA: ReadingExamPreviewData = {
-  title: "Urban Rooftops and Hidden Ecology",
-  subtitle: "Read the passage and answer questions 1-13. Keep your answers in the question panel on the right.",
-  partLabel: "Part 1",
-  timeLimitSeconds: 20 * 60,
-  paragraphs: PASSAGE_PARAGRAPHS,
-  questionGroups: QUESTION_GROUPS,
-};
-
-export const attemptApiBaseUrl = "/internal-api";
 
 export function formatCountdown(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -224,4 +213,36 @@ export function typedOptionView(option: string, index: number, type: PreviewGrou
 
 export function normalizeHeadingComparableValue(value: string | undefined) {
   return String(value ?? "").trim().toUpperCase();
+}
+
+export function parsePassageBlockStyle(rawText: string) {
+  const trimmed = rawText.trim();
+  const hasOuterBraces = trimmed.startsWith("{") && trimmed.endsWith("}");
+  let body = hasOuterBraces ? trimmed.slice(1, -1).trim() : trimmed;
+  let italic = false;
+  let center = false;
+
+  let matched = true;
+  while (matched) {
+    matched = false;
+    if (body.startsWith("<i>")) {
+      italic = true;
+      body = body.slice(3).trimStart();
+      matched = true;
+    }
+    if (body.startsWith("<c>")) {
+      center = true;
+      body = body.slice(3).trimStart();
+      matched = true;
+    }
+  }
+
+  const isStyled = italic || center;
+  return {
+    text: isStyled ? body : rawText,
+    isStyled,
+    italic,
+    center,
+    bold: isStyled && hasOuterBraces,
+  };
 }

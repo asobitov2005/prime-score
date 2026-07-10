@@ -253,3 +253,14 @@ export const QUESTION_GROUPS: PreviewGroup[] = [
     ],
   },
 ];
+
+export const DEFAULT_EXAM_DATA: ReadingExamPreviewData = {
+  title: "Urban Rooftops and Hidden Ecology",
+  subtitle: "Read the passage and answer questions 1-13. Keep your answers in the question panel on the right.",
+  partLabel: "Part 1",
+  timeLimitSeconds: 20 * 60,
+  paragraphs: PASSAGE_PARAGRAPHS,
+  questionGroups: QUESTION_GROUPS,
+};
+
+export const attemptApiBaseUrl = "/internal-api";

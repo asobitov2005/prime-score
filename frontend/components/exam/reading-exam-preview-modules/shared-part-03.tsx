@@ -6,38 +6,6 @@ import { normalizeInlineBlankPlaceholders } from "./shared-part-02";
 
 
 
-export function parsePassageBlockStyle(rawText: string) {
-  const trimmed = rawText.trim();
-  const hasOuterBraces = trimmed.startsWith("{") && trimmed.endsWith("}");
-  let body = hasOuterBraces ? trimmed.slice(1, -1).trim() : trimmed;
-  let italic = false;
-  let center = false;
-
-  let matched = true;
-  while (matched) {
-    matched = false;
-    if (body.startsWith("<i>")) {
-      italic = true;
-      body = body.slice(3).trimStart();
-      matched = true;
-    }
-    if (body.startsWith("<c>")) {
-      center = true;
-      body = body.slice(3).trimStart();
-      matched = true;
-    }
-  }
-
-  const isStyled = italic || center;
-  return {
-    text: isStyled ? body : rawText,
-    isStyled,
-    italic,
-    center,
-    bold: isStyled && hasOuterBraces,
-  };
-}
-
 export function parseBraceBoldSegments(text: string) {
   const segments: Array<{ text: string; bold: boolean }> = [];
   let cursor = 0;
@@ -259,4 +227,44 @@ export function softenInstructionText(text: string) {
   return text
     .replace(/\bTRUE,\s*FALSE,\s*or\s*NOT GIVEN\b/g, "True, False, or Not Given")
     .replace(/\bYES,\s*NO,\s*or\s*NOT GIVEN\b/g, "Yes, No, or Not Given");
+}
+
+export function parseCompletionTableLayout(text: string) {
+  const rows = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const parsedRows: Array<{ isHeader: boolean; cells: string[] }> = [];
+
+  for (const line of rows) {
+    if (!line.includes("|")) {
+      const previousRow = parsedRows[parsedRows.length - 1];
+      if (!previousRow) {
+        return null;
+      }
+
+      const continuationTargetIndex = /^\(.*\)$/.test(line)
+        ? 0
+        : Math.max(0, previousRow.cells.length - 1);
+      previousRow.cells[continuationTargetIndex] = previousRow.cells[continuationTargetIndex]
+        ? `${previousRow.cells[continuationTargetIndex]}\n${line}`
+        : line;
+      continue;
+    }
+
+    const isHeader = line.startsWith("||") && line.endsWith("||");
+    const body = isHeader ? line.slice(2, -2).trim() : line;
+    const cells = body.split("|").map((cell) => cell.trim());
+    if (cells.length < 2) {
+      return null;
+    }
+    parsedRows.push({ isHeader, cells });
+  }
+
+  return parsedRows;
 }

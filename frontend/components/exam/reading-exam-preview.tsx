@@ -995,951 +995,830 @@ function resolveInitialReviewTarget(
 
 export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: ReadingExamPreviewData }) {
   const router = useRouter();
+
   const isAttemptPreview = Boolean(data?.attemptId);
+
   const storedCandidateName = useAuthStore((state) => state.name);
+
   const accessToken = useAuthStore((state) => state.accessToken);
+
   const containerRef = useRef<HTMLElement | null>(null);
+
   const readingPaneRef = useRef<HTMLDivElement | null>(null);
+
   const questionPaneRef = useRef<HTMLDivElement | null>(null);
+
   const listeningAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const textBlockRefs = useRef<Record<string, HTMLElement | null>>({});
+
   const examData = data ?? DEFAULT_EXAM_DATA;
+
   const initialTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
+
   const initialReviewTarget = useMemo(
-    () => resolveInitialReviewTarget(examData.initialReviewTarget, examData.questionGroups, examData.paragraphs),
-    [examData.initialReviewTarget, examData.questionGroups, examData.paragraphs]
-  );
+      () => resolveInitialReviewTarget(examData.initialReviewTarget, examData.questionGroups, examData.paragraphs),
+      [examData.initialReviewTarget, examData.questionGroups, examData.paragraphs]
+    );
+
   const initialQuestionId = initialReviewTarget?.questionId || examData.initialUiState?.activeQuestionId || examData.questionGroups[0]?.questions[0]?.id || "";
+
   const initialSectionId = initialReviewTarget?.sectionId || findSectionIdForQuestion(initialQuestionId, examData.questionGroups, examData.paragraphs);
+
   const [answers, setAnswers] = useState<Record<string, string>>(examData.initialAnswers ?? {});
+
   const [hasMounted, setHasMounted] = useState(false);
+
   const [theme, setTheme] = useState<"light" | "dark">("light");
+
   const [splitRatio, setSplitRatio] = useState(clampSplitRatio(examData.initialUiState?.splitRatio ?? 54));
+
   const [fontScale, setFontScale] = useState(clampFontScale(examData.initialUiState?.fontScale ?? 1));
+
   const [timeLeft, setTimeLeft] = useState(
-    mode === "exam"
-      ? Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - initialTimeSpentSeconds)
-      : initialTimeSpentSeconds
-  );
+      mode === "exam"
+        ? Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - initialTimeSpentSeconds)
+        : initialTimeSpentSeconds
+    );
+
   const [isSubmitted, setIsSubmitted] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [isCalculatingResults, setIsCalculatingResults] = useState(false);
+
   const [isFullscreen, setIsFullscreen] = useState(false);
+
   const [activeDialog, setActiveDialog] = useState<PreviewDialog>(null);
+
   const activeDialogRef = useRef<PreviewDialog>(null);
+
   const [fullscreenDialogStage, setFullscreenDialogStage] = useState<FullscreenDialogStage>(null);
+
   const [fullscreenExitCountdown, setFullscreenExitCountdown] = useState(0);
+
   const [strictListeningPhase, setStrictListeningPhase] = useState<StrictListeningPhase>("idle");
+
   const [strictListeningTransferLeft, setStrictListeningTransferLeft] = useState(LISTENING_TRANSFER_SECONDS);
+
   const [strictListeningIsPlaying, setStrictListeningIsPlaying] = useState(false);
+
   const [strictListeningPlaybackBlocked, setStrictListeningPlaybackBlocked] = useState(false);
+
   const [strictListeningElapsedSeconds, setStrictListeningElapsedSeconds] = useState(initialTimeSpentSeconds);
+
   const [strictListeningAudioSectionId, setStrictListeningAudioSectionId] = useState(
-    initialSectionId
-  );
+      initialSectionId
+    );
+
   const [activeQuestionId, setActiveQuestionId] = useState(initialQuestionId);
+
   const [activeSectionId, setActiveSectionId] = useState(initialSectionId);
+
   const [showPassageQuestionNav, setShowPassageQuestionNav] = useState(false);
+
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+
   const [draggingHeading, setDraggingHeading] = useState<{ groupId: string; value: string; sourceQuestionId?: string } | null>(null);
+
   const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
+
   const [dragOverHeadingBankGroupId, setDragOverHeadingBankGroupId] = useState<string | null>(null);
+
   const [draggingWordBank, setDraggingWordBank] = useState<{
-    groupId: string;
-    value: string;
-    sourceQuestionId?: string;
-    previewLabel?: string;
-  } | null>(null);
+      groupId: string;
+      value: string;
+      sourceQuestionId?: string;
+      previewLabel?: string;
+    } | null>(null);
+
   const [dragOverWordBankQuestionId, setDragOverWordBankQuestionId] = useState<string | null>(null);
+
   const [dragOverWordBankGroupId, setDragOverWordBankGroupId] = useState<string | null>(null);
+
   const [dragPreviewPosition, setDragPreviewPosition] = useState<{ x: number; y: number } | null>(null);
+
   const [textHighlights, setTextHighlights] = useState<Record<string, TextHighlight[]>>(examData.initialTextHighlights ?? {});
+
   const [explanationHighlightQuote, setExplanationHighlightQuote] = useState<string | null>(null);
+
   const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarState>(null);
+
   const [showGuestLoginModal, setShowGuestLoginModal] = useState(false);
+
   const [syncState, setSyncState] = useState<"idle" | "saving" | "saved" | "error">(
-    examData.attemptId ? "saved" : "idle"
-  );
+      examData.attemptId ? "saved" : "idle"
+    );
+
   const dialogResetKey = [
-    mode,
-    examData.attemptId ?? "",
-    examData.testId ?? "",
-    examData.testSlug ?? "",
-    examData.testType ?? "reading",
-    examData.title,
-    initialReviewTarget?.sectionId ?? "",
-    initialReviewTarget?.questionId ?? "",
-    examData.initialReviewTarget?.questionType ?? "",
-  ].join("|");
+      mode,
+      examData.attemptId ?? "",
+      examData.testId ?? "",
+      examData.testSlug ?? "",
+      examData.testType ?? "reading",
+      examData.title,
+      initialReviewTarget?.sectionId ?? "",
+      initialReviewTarget?.questionId ?? "",
+      examData.initialReviewTarget?.questionType ?? "",
+    ].join("|");
+
   const previousDialogResetKeyRef = useRef<string | null>(null);
+
   const allowLeaveRef = useRef(false);
+
   const ignoreNextFullscreenExitRef = useRef(false);
 
   function updateActiveDialog(nextDialog: PreviewDialog) {
-    activeDialogRef.current = nextDialog;
-    setActiveDialog(nextDialog);
-  }
+      activeDialogRef.current = nextDialog;
+      setActiveDialog(nextDialog);
+    }
+
   const hasExamFullscreenSessionRef = useRef(false);
+
   const strictListeningCompletedAudioRef = useRef<Record<string, number>>({});
+
   const saveTimersRef = useRef<Record<string, number>>({});
+
   const pendingAnswerValuesRef = useRef<Record<string, string>>({});
+
   const latestAnswersRef = useRef<Record<string, string>>(examData.initialAnswers ?? {});
+
   const sectionTimeSpentSecondsRef = useRef<Record<string, number>>(normalizeSectionTimeSpentSeconds(examData.initialSectionTimeSpentSeconds));
+
   const activeSectionTimerRef = useRef<{ sectionId: string; startedAtMs: number } | null>(
-    initialSectionId ? { sectionId: initialSectionId, startedAtMs: Date.now() } : null
-  );
+      initialSectionId ? { sectionId: initialSectionId, startedAtMs: Date.now() } : null
+    );
+
   const progressSaveTimerRef = useRef<number | null>(null);
+
   const timerBaseSpentSecondsRef = useRef(initialTimeSpentSeconds);
+
   const timerBaseStartedAtMsRef = useRef(Date.now());
+
   const latestProgressRef = useRef<{
-    timeSpentSec: number;
-    sectionTimeSpentSec: Record<string, number>;
-    activeQuestionId: string;
-    textHighlights: Record<string, TextHighlight[]>;
-    uiState: PreviewUiState;
-  }>({
-    timeSpentSec: initialTimeSpentSeconds,
-    sectionTimeSpentSec: normalizeSectionTimeSpentSeconds(examData.initialSectionTimeSpentSeconds),
-    activeQuestionId: initialQuestionId,
-    textHighlights: examData.initialTextHighlights ?? {},
-    uiState: {
-      theme: examData.initialUiState?.theme === "light" ? "light" : "dark",
-      splitRatio: clampSplitRatio(examData.initialUiState?.splitRatio ?? 54),
-      fontScale: clampFontScale(examData.initialUiState?.fontScale ?? 1),
+      timeSpentSec: number;
+      sectionTimeSpentSec: Record<string, number>;
+      activeQuestionId: string;
+      textHighlights: Record<string, TextHighlight[]>;
+      uiState: PreviewUiState;
+    }>({
+      timeSpentSec: initialTimeSpentSeconds,
+      sectionTimeSpentSec: normalizeSectionTimeSpentSeconds(examData.initialSectionTimeSpentSeconds),
       activeQuestionId: initialQuestionId,
-    },
-  });
+      textHighlights: examData.initialTextHighlights ?? {},
+      uiState: {
+        theme: examData.initialUiState?.theme === "light" ? "light" : "dark",
+        splitRatio: clampSplitRatio(examData.initialUiState?.splitRatio ?? 54),
+        fontScale: clampFontScale(examData.initialUiState?.fontScale ?? 1),
+        activeQuestionId: initialQuestionId,
+      },
+    });
 
   function handlePaneWheel(event: ReactWheelEvent<HTMLDivElement>) {
-    const pane = event.currentTarget;
-    const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      const pane = event.currentTarget;
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
 
-    if (!Number.isFinite(delta) || delta === 0) {
-      return;
+      if (!Number.isFinite(delta) || delta === 0) {
+        return;
+      }
+
+      const canScrollDown = delta > 0 && pane.scrollTop + pane.clientHeight < pane.scrollHeight - 1;
+      const canScrollUp = delta < 0 && pane.scrollTop > 0;
+
+      if (!canScrollDown && !canScrollUp) {
+        return;
+      }
+
+      pane.scrollTop += delta;
+      event.preventDefault();
+      event.stopPropagation();
     }
 
-    const canScrollDown = delta > 0 && pane.scrollTop + pane.clientHeight < pane.scrollHeight - 1;
-    const canScrollUp = delta < 0 && pane.scrollTop > 0;
-
-    if (!canScrollDown && !canScrollUp) {
-      return;
-    }
-
-    pane.scrollTop += delta;
-    event.preventDefault();
-    event.stopPropagation();
-  }
   const headingDragStateRef = useRef<{
-    startX: number;
-    startY: number;
-    groupId: string;
-    value: string;
-    sourceQuestionId?: string;
-    dragging: boolean;
-  } | null>(null);
+      startX: number;
+      startY: number;
+      groupId: string;
+      value: string;
+      sourceQuestionId?: string;
+      dragging: boolean;
+    } | null>(null);
+
   const allQuestions = useMemo(() => examData.questionGroups.flatMap((group) => group.questions), [examData.questionGroups]);
+
   const previewSections = useMemo(() => {
-    const ordered: PreviewSection[] = [];
-    const byId = new Map<string, PreviewSection>();
+      const ordered: PreviewSection[] = [];
+      const byId = new Map<string, PreviewSection>();
 
-    const ensureSection = (id: string, fallbackLabel: string) => {
-      const existing = byId.get(id);
-      if (existing) {
-        return existing;
-      }
+      const ensureSection = (id: string, fallbackLabel: string) => {
+        const existing = byId.get(id);
+        if (existing) {
+          return existing;
+        }
 
-      const next = {
-        id,
-        label: fallbackLabel,
-        title: undefined as string | undefined,
-        subtitle: undefined as string | undefined,
-        previewLabel: undefined as string | undefined,
-        audioUrl: undefined as string | undefined,
-        audioDurationSeconds: undefined as number | undefined,
-        transcriptSegments: undefined as PreviewTranscriptSegment[] | undefined,
-        transcriptQuestionLocations: undefined as PreviewTranscriptQuestionLocation[] | undefined,
-        paragraphs: [] as PreviewParagraph[],
-        questionGroups: [] as PreviewGroup[],
-        questions: [] as PreviewQuestion[],
+        const next = {
+          id,
+          label: fallbackLabel,
+          title: undefined as string | undefined,
+          subtitle: undefined as string | undefined,
+          previewLabel: undefined as string | undefined,
+          audioUrl: undefined as string | undefined,
+          audioDurationSeconds: undefined as number | undefined,
+          transcriptSegments: undefined as PreviewTranscriptSegment[] | undefined,
+          transcriptQuestionLocations: undefined as PreviewTranscriptQuestionLocation[] | undefined,
+          paragraphs: [] as PreviewParagraph[],
+          questionGroups: [] as PreviewGroup[],
+          questions: [] as PreviewQuestion[],
+        };
+        byId.set(id, next);
+        ordered.push(next);
+        return next;
       };
-      byId.set(id, next);
-      ordered.push(next);
-      return next;
-    };
 
-    examData.paragraphs.forEach((paragraph) => {
-      const id = sectionKeyForParagraph(paragraph);
-      const section = ensureSection(id, paragraph.sectionLabel ?? `Passage ${ordered.length + 1}`);
-      if (paragraph.sectionLabel) {
-        section.label = paragraph.sectionLabel;
-      }
-      if (paragraph.sectionTitle && !section.title) {
-        section.title = paragraph.sectionTitle;
-      }
-      if (paragraph.sectionSubtitle && !section.subtitle) {
-        section.subtitle = paragraph.sectionSubtitle;
-      }
-      if (paragraph.sectionPreviewLabel && !section.previewLabel) {
-        section.previewLabel = paragraph.sectionPreviewLabel;
-      }
-      if (paragraph.sectionAudioUrl && !section.audioUrl) {
-        section.audioUrl = paragraph.sectionAudioUrl;
-      }
-      if (paragraph.sectionAudioDurationSeconds && !section.audioDurationSeconds) {
-        section.audioDurationSeconds = paragraph.sectionAudioDurationSeconds;
-      }
-      if (paragraph.sectionTranscriptSegments && !section.transcriptSegments) {
-        section.transcriptSegments = paragraph.sectionTranscriptSegments;
-      }
-      if (paragraph.sectionTranscriptQuestionLocations && !section.transcriptQuestionLocations) {
-        section.transcriptQuestionLocations = paragraph.sectionTranscriptQuestionLocations;
-      }
-      section.paragraphs.push(paragraph);
-    });
+      examData.paragraphs.forEach((paragraph) => {
+        const id = sectionKeyForParagraph(paragraph);
+        const section = ensureSection(id, paragraph.sectionLabel ?? `Passage ${ordered.length + 1}`);
+        if (paragraph.sectionLabel) {
+          section.label = paragraph.sectionLabel;
+        }
+        if (paragraph.sectionTitle && !section.title) {
+          section.title = paragraph.sectionTitle;
+        }
+        if (paragraph.sectionSubtitle && !section.subtitle) {
+          section.subtitle = paragraph.sectionSubtitle;
+        }
+        if (paragraph.sectionPreviewLabel && !section.previewLabel) {
+          section.previewLabel = paragraph.sectionPreviewLabel;
+        }
+        if (paragraph.sectionAudioUrl && !section.audioUrl) {
+          section.audioUrl = paragraph.sectionAudioUrl;
+        }
+        if (paragraph.sectionAudioDurationSeconds && !section.audioDurationSeconds) {
+          section.audioDurationSeconds = paragraph.sectionAudioDurationSeconds;
+        }
+        if (paragraph.sectionTranscriptSegments && !section.transcriptSegments) {
+          section.transcriptSegments = paragraph.sectionTranscriptSegments;
+        }
+        if (paragraph.sectionTranscriptQuestionLocations && !section.transcriptQuestionLocations) {
+          section.transcriptQuestionLocations = paragraph.sectionTranscriptQuestionLocations;
+        }
+        section.paragraphs.push(paragraph);
+      });
 
-    examData.questionGroups.forEach((group) => {
-      const id = sectionKeyForGroup(group);
-      const section = ensureSection(id, group.sectionLabel ?? `Passage ${ordered.length + 1}`);
-      if (group.sectionLabel) {
-        section.label = group.sectionLabel;
-      }
-      if (group.sectionTitle && !section.title) {
-        section.title = group.sectionTitle;
-      }
-      if (group.sectionSubtitle && !section.subtitle) {
-        section.subtitle = group.sectionSubtitle;
-      }
-      if (group.sectionAudioUrl && !section.audioUrl) {
-        section.audioUrl = group.sectionAudioUrl;
-      }
-      if (group.sectionAudioDurationSeconds && !section.audioDurationSeconds) {
-        section.audioDurationSeconds = group.sectionAudioDurationSeconds;
-      }
-      if (group.sectionTranscriptSegments && !section.transcriptSegments) {
-        section.transcriptSegments = group.sectionTranscriptSegments;
-      }
-      if (group.sectionTranscriptQuestionLocations && !section.transcriptQuestionLocations) {
-        section.transcriptQuestionLocations = group.sectionTranscriptQuestionLocations;
-      }
-      section.questionGroups.push(group);
-      section.questions.push(...group.questions);
-    });
+      examData.questionGroups.forEach((group) => {
+        const id = sectionKeyForGroup(group);
+        const section = ensureSection(id, group.sectionLabel ?? `Passage ${ordered.length + 1}`);
+        if (group.sectionLabel) {
+          section.label = group.sectionLabel;
+        }
+        if (group.sectionTitle && !section.title) {
+          section.title = group.sectionTitle;
+        }
+        if (group.sectionSubtitle && !section.subtitle) {
+          section.subtitle = group.sectionSubtitle;
+        }
+        if (group.sectionAudioUrl && !section.audioUrl) {
+          section.audioUrl = group.sectionAudioUrl;
+        }
+        if (group.sectionAudioDurationSeconds && !section.audioDurationSeconds) {
+          section.audioDurationSeconds = group.sectionAudioDurationSeconds;
+        }
+        if (group.sectionTranscriptSegments && !section.transcriptSegments) {
+          section.transcriptSegments = group.sectionTranscriptSegments;
+        }
+        if (group.sectionTranscriptQuestionLocations && !section.transcriptQuestionLocations) {
+          section.transcriptQuestionLocations = group.sectionTranscriptQuestionLocations;
+        }
+        section.questionGroups.push(group);
+        section.questions.push(...group.questions);
+      });
 
-    return ordered;
-  }, [examData.paragraphs, examData.questionGroups]);
+      return ordered;
+    }, [examData.paragraphs, examData.questionGroups]);
+
   const currentSection = useMemo(
-    () => previewSections.find((section) => section.id === activeSectionId) ?? previewSections[0],
-    [activeSectionId, previewSections]
-  );
+      () => previewSections.find((section) => section.id === activeSectionId) ?? previewSections[0],
+      [activeSectionId, previewSections]
+    );
+
   const currentParagraphs = currentSection?.paragraphs ?? examData.paragraphs;
+
   const currentQuestionGroups = currentSection?.questionGroups ?? examData.questionGroups;
+
   const currentQuestions = currentSection?.questions ?? allQuestions;
+
   const isListeningPreview = examData.testType === "listening";
+
   const isExamMode = mode === "exam";
+
   const isReviewMode = mode === "review";
+
   const isSinglePaneListeningMode = isListeningPreview && !isReviewMode;
+
   const isStrictListeningExam = isSinglePaneListeningMode && isExamMode;
+
   const timedSectionId = isStrictListeningExam && strictListeningPhase !== "transfer" && strictListeningPhase !== "complete"
-    ? strictListeningAudioSectionId
-    : activeSectionId;
+      ? strictListeningAudioSectionId
+      : activeSectionId;
+
   const currentTranscriptSegments = currentSection?.transcriptSegments ?? [];
+
   const currentTranscriptQuestionLocations = currentSection?.transcriptQuestionLocations ?? [];
+
   const strictListeningAudioSection = useMemo(
-    () => previewSections.find((section) => section.id === strictListeningAudioSectionId) ?? previewSections[0],
-    [previewSections, strictListeningAudioSectionId]
-  );
+      () => previewSections.find((section) => section.id === strictListeningAudioSectionId) ?? previewSections[0],
+      [previewSections, strictListeningAudioSectionId]
+    );
+
   const reviewItems = examData.reviewItems ?? {};
+
   // In review mode, every answer's evidence quote is highlighted in the passage
-  // by default (not just on hover), so learners can see where each answer lives.
-  const reviewQuoteList = useMemo(() => {
-    if (!isReviewMode) return [] as string[];
-    const seen = new Set<string>();
-    const quotes: string[] = [];
-    for (const item of Object.values(examData.reviewItems ?? {})) {
-      const quote = item?.explanationReference?.quote?.trim();
-      if (quote && quote.length > 3 && !seen.has(quote.toLowerCase())) {
-        seen.add(quote.toLowerCase());
-        quotes.push(quote);
+    // by default (not just on hover), so learners can see where each answer lives.
+    const reviewQuoteList = useMemo(() => {
+      if (!isReviewMode) return [] as string[];
+      const seen = new Set<string>();
+      const quotes: string[] = [];
+      for (const item of Object.values(examData.reviewItems ?? {})) {
+        const quote = item?.explanationReference?.quote?.trim();
+        if (quote && quote.length > 3 && !seen.has(quote.toLowerCase())) {
+          seen.add(quote.toLowerCase());
+          quotes.push(quote);
+        }
       }
-    }
-    return quotes;
-  }, [isReviewMode, examData.reviewItems]);
+      return quotes;
+    }, [isReviewMode, examData.reviewItems]);
+
   const candidateName = hasMounted ? (storedCandidateName || "Guest Candidate") : "Guest Candidate";
+
   const [showListeningTranscript, setShowListeningTranscript] = useState(false);
+
   const [showTranscriptAnswerLocations, setShowTranscriptAnswerLocations] = useState(false);
 
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
+  const answeredCount = useMemo(
+      () => allQuestions.reduce((count, question) => count + answeredQuestionWeight(question, answers[question.id]), 0),
+      [allQuestions, answers]
+    );
 
-  useEffect(() => {
-    if (!isExamMode || isReviewMode || isSubmitted) {
-      return;
+  const totalQuestions = useMemo(
+      () => allQuestions.reduce((count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1), 0),
+      [allQuestions]
+    );
+
+  const currentAnsweredCount = useMemo(
+      () => currentQuestions.reduce((count, question) => count + answeredQuestionWeight(question, answers[question.id]), 0),
+      [answers, currentQuestions]
+    );
+
+  const currentTotalQuestions = useMemo(
+      () => currentQuestions.reduce((count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1), 0),
+      [currentQuestions]
+    );
+
+  const matchingInformationParagraphOptions = useMemo(() => {
+      const optionsBySection = new Map<string, string[]>();
+      const seenBySection = new Map<string, Set<string>>();
+
+      examData.paragraphs.forEach((paragraph) => {
+        const option = paragraph.label ?? paragraph.paragraphKey;
+        if (!/^[A-Z]+$/.test(option)) {
+          return;
+        }
+
+        const sectionKey = paragraph.sectionId ?? paragraph.sectionLabel ?? "section";
+        const seen = seenBySection.get(sectionKey) ?? new Set<string>();
+        if (seen.has(option)) {
+          return;
+        }
+
+        seen.add(option);
+        seenBySection.set(sectionKey, seen);
+        optionsBySection.set(sectionKey, [...(optionsBySection.get(sectionKey) ?? []), option]);
+      });
+
+      return optionsBySection;
+    }, [examData.paragraphs]);
+
+  const matchingHeadingTargets = useMemo(() => {
+      const targets = new Map<string, { group: PreviewGroup; question: PreviewQuestion }>();
+      examData.questionGroups
+        .filter((group) => group.type.includes("matching_headings"))
+        .forEach((group) => {
+          group.questions.forEach((question) => {
+            const paragraphKey = paragraphLabelFromPrompt(question.prompt);
+            if (!paragraphKey) {
+              return;
+            }
+            targets.set(`${group.sectionId ?? group.sectionLabel ?? "section"}:${paragraphKey}`, {
+              group,
+              question,
+            });
+          });
+        });
+      return targets;
+    }, [examData.questionGroups]);
+
+  const matchingHeadingExamples = useMemo(() => {
+      const examples = new Map<string, { groupId: string; value: string; prefix: string; text: string; label: string }>();
+      examData.questionGroups
+        .filter((group) => group.type.includes("matching_headings"))
+        .forEach((group) => {
+          const options = group.secondaryBlock?.trim()
+            ? splitOptionLines(group.secondaryBlock)
+            : (group.sharedOptions ?? []);
+
+          options.forEach((option, index) => {
+            const optionView = typedOptionView(option, index, group.type);
+            if (!optionView.fixedParagraphLabel) {
+              return;
+            }
+            examples.set(`${group.sectionId ?? group.sectionLabel ?? "section"}:${optionView.fixedParagraphLabel}`, {
+              groupId: group.id,
+              value: optionView.value,
+              prefix: optionView.prefix,
+              text: optionView.text,
+              label: optionView.label,
+            });
+          });
+        });
+      return examples;
+    }, [examData.questionGroups]);
+
+  const headingOptionLookup = useMemo(() => {
+      const lookup = new Map<string, { value: string; prefix: string; text: string; label: string }>();
+      examData.questionGroups
+        .filter((group) => group.type.includes("matching_headings"))
+        .forEach((group) => {
+          const options = group.secondaryBlock?.trim()
+            ? splitOptionLines(group.secondaryBlock)
+            : (group.sharedOptions ?? []);
+
+          options.forEach((option, index) => {
+            const optionView = typedOptionView(option, index, group.type);
+            lookup.set(`${group.id}:${optionView.value}`, {
+              value: optionView.value,
+              prefix: optionView.prefix,
+              text: optionView.text,
+              label: optionView.label,
+            });
+          });
+        });
+      return lookup;
+    }, [examData.questionGroups]);
+
+  const unansweredCount = totalQuestions - answeredCount;
+
+  const isLastFiveMinutes = isExamMode && timeLeft <= 5 * 60;
+
+  const isLastMinute = isExamMode && timeLeft <= 60;
+
+  const effectiveFontScale = fontScale * 0.93;
+
+  const bodyFontSize = 17 * effectiveFontScale;
+
+  const timerDisplay = isExamMode
+      ? isLastFiveMinutes
+        ? formatCountdown(timeLeft)
+        : formatMinutesLeft(timeLeft)
+      : formatCountdown(timeLeft);
+
+  const strictListeningTimerDisplay = formatCountdown(strictListeningTransferLeft);
+
+  const strictListeningAutoPlayDelayMs = isStrictListeningExam && strictListeningPhase === "waiting"
+      ? Object.keys(strictListeningCompletedAudioRef.current).length === 0
+        ? 3000
+        : 250
+      : null;
+
+  const showStrictListeningTransferTimer = isStrictListeningExam && (strictListeningPhase === "transfer" || strictListeningPhase === "complete");
+
+  const submitDisabled = isSubmitted || isSubmitting || (isStrictListeningExam && (strictListeningPhase === "waiting" || strictListeningPhase === "playing"));
+
+  const inputFocusClass = theme === "light"
+      ? "focus-visible:border-[#2f436f] focus-visible:ring-1 focus-visible:ring-[#2f436f]/20"
+      : "focus-visible:border-primary/45 focus-visible:ring-1 focus-visible:ring-primary/20";
+
+  const activeInputClass = theme === "light"
+      ? "border-[#2f436f]/70 ring-1 ring-[#2f436f]/20"
+      : "border-primary/45 ring-1 ring-primary/20";
+
+  const answerNumberBadgeClassName = theme === "light"
+      ? "border-[#2f436f]/45 bg-white text-[#2f436f]"
+      : "border-primary/35 bg-slate-950/30 text-primary";
+
+  const inlineAnswerFieldClassName =
+      "mx-1 inline-flex h-[1.55em] min-w-[7.75rem] max-w-full items-center rounded-md border px-2.5 py-0 text-[0.96em] leading-none align-middle shadow-none";
+
+  const inlineAnswerPlaceholderClassName =
+      "placeholder:text-[0.86em] placeholder:font-semibold placeholder:tracking-[0.04em] placeholder:opacity-100";
+
+  const inlineRowControlClassName = "h-[1.55em] px-2.5 text-[0.96em] leading-none";
+
+  const layoutStyle = {
+      "--reading-pane": `${splitRatio}%`,
+      "--question-pane": `${100 - splitRatio}%`,
+    } as CSSProperties;
+
+  const examToneStyle = (theme === "light"
+      ? {
+          "--foreground": "222 47% 11%",
+          "--card-foreground": "222 47% 11%",
+          "--popover-foreground": "222 47% 11%",
+          "--muted-foreground": "215 16% 47%",
+        }
+      : {
+          "--foreground": "210 33% 99%",
+          "--card-foreground": "210 33% 99%",
+          "--popover-foreground": "210 33% 99%",
+          "--muted-foreground": "210 20% 92%",
+        }) as CSSProperties;
+
+  const attemptBackupKey = examData.attemptId ? `prime-attempt-backup:${examData.attemptId}` : null;
+
+  function readAttemptBackup() {
+      if (!attemptBackupKey || typeof window === "undefined") {
+        return null;
+      }
+
+      try {
+        const raw = window.localStorage.getItem(attemptBackupKey);
+        if (!raw) {
+          return null;
+        }
+        const parsed = JSON.parse(raw) as {
+          answers?: Record<string, string>;
+          textHighlights?: Record<string, TextHighlight[]>;
+          timeSpentSec?: number;
+          sectionTimeSpentSec?: Record<string, number>;
+          uiState?: PreviewUiState;
+          updatedAt?: number;
+        };
+        return parsed;
+      } catch {
+        return null;
+      }
     }
 
-    const enterFullscreen = async () => {
-      if (document.fullscreenElement) {
-        hasExamFullscreenSessionRef.current = true;
+  function writeAttemptBackup() {
+      if (!attemptBackupKey || typeof window === "undefined" || isSubmitted || isReviewMode) {
         return;
       }
 
       try {
-        await document.documentElement.requestFullscreen();
+        refreshLatestProgressSnapshot();
+        window.localStorage.setItem(attemptBackupKey, JSON.stringify({
+          answers: latestAnswersRef.current,
+          textHighlights: latestProgressRef.current.textHighlights,
+          timeSpentSec: latestProgressRef.current.timeSpentSec,
+          sectionTimeSpentSec: latestProgressRef.current.sectionTimeSpentSec,
+          uiState: latestProgressRef.current.uiState,
+          updatedAt: Date.now(),
+        }));
       } catch {}
-    };
-
-    void enterFullscreen();
-  }, [isExamMode, isReviewMode, isSubmitted]);
-
-  useEffect(() => {
-    const currentTheme = getDocumentTheme();
-    const backup = readAttemptBackup();
-    const serverAnswers = examData.initialAnswers ?? {};
-    const backupAnswers = backup?.answers ?? {};
-    const serverHighlights = examData.initialTextHighlights ?? {};
-    const backupHighlights = backup?.textHighlights ?? {};
-    const backupAnswerCount = Object.values(backupAnswers).filter((value) => value.trim().length > 0).length;
-    const backupHighlightCount = Object.values(backupHighlights).reduce((count, items) => count + items.length, 0);
-    const serverTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
-    const backupTimeSpentSeconds = Math.max(0, backup?.timeSpentSec ?? 0);
-    const shouldUseBackupContent = Boolean(backup);
-    const nextSectionTimeSpentSeconds = mergeSectionTimeSpentSeconds(
-      examData.initialSectionTimeSpentSeconds,
-      shouldUseBackupContent ? backup?.sectionTimeSpentSec : undefined
-    );
-    const nextTheme = currentTheme;
-    const nextAnswers = shouldUseBackupContent && backupAnswerCount > 0 ? { ...serverAnswers, ...backupAnswers } : serverAnswers;
-    const nextTextHighlights = shouldUseBackupContent && backupHighlightCount > 0 ? { ...serverHighlights, ...backupHighlights } : serverHighlights;
-    const nextSplitRatio = clampSplitRatio((shouldUseBackupContent ? backup?.uiState?.splitRatio : undefined) ?? examData.initialUiState?.splitRatio ?? 54);
-    const nextFontScale = clampFontScale((shouldUseBackupContent ? backup?.uiState?.fontScale : undefined) ?? examData.initialUiState?.fontScale ?? 1);
-    const hasInitialReviewTarget = Boolean(initialReviewTarget);
-    const nextActiveQuestionId = hasInitialReviewTarget
-      ? initialQuestionId
-      : (shouldUseBackupContent ? backup?.uiState?.activeQuestionId : undefined) ?? initialQuestionId;
-    const nextSectionId = hasInitialReviewTarget
-      ? initialSectionId
-      : findSectionIdForQuestion(nextActiveQuestionId, examData.questionGroups, examData.paragraphs);
-    const nextTimeSpentSeconds = Math.max(serverTimeSpentSeconds, backupTimeSpentSeconds);
-
-    document.documentElement.classList.add(nextTheme);
-    document.documentElement.classList.remove(nextTheme === "light" ? "dark" : "light");
-    setTheme(nextTheme);
-    setAnswers(nextAnswers);
-    setTextHighlights(nextTextHighlights);
-    setSplitRatio(nextSplitRatio);
-    setFontScale(nextFontScale);
-    setActiveQuestionId(nextActiveQuestionId);
-    setActiveSectionId(nextSectionId);
-    // Open the active passage's question navigator automatically on first entry,
-    // instead of requiring the user to click the passage tab first.
-    setShowPassageQuestionNav(true);
-    resetWallClockTimer(nextTimeSpentSeconds);
-    sectionTimeSpentSecondsRef.current = nextSectionTimeSpentSeconds;
-    activeSectionTimerRef.current = nextSectionId ? { sectionId: nextSectionId, startedAtMs: Date.now() } : null;
-    setTimeLeft(
-      mode === "exam"
-        ? Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - nextTimeSpentSeconds)
-        : nextTimeSpentSeconds
-    );
-    setShowListeningTranscript(false);
-    setShowTranscriptAnswerLocations(false);
-    latestAnswersRef.current = nextAnswers;
-    latestProgressRef.current = {
-      timeSpentSec: nextTimeSpentSeconds,
-      sectionTimeSpentSec: { ...nextSectionTimeSpentSeconds },
-      activeQuestionId: nextActiveQuestionId,
-      textHighlights: nextTextHighlights,
-      uiState: {
-        theme: nextTheme,
-        splitRatio: nextSplitRatio,
-        fontScale: nextFontScale,
-        activeQuestionId: nextActiveQuestionId,
-      },
-    };
-    const shouldResetDialogState = previousDialogResetKeyRef.current !== dialogResetKey;
-    previousDialogResetKeyRef.current = dialogResetKey;
-
-    setIsSubmitted(false);
-    setIsSubmitting(false);
-    if (shouldResetDialogState) {
-      updateActiveDialog(null);
-      setFullscreenDialogStage(null);
-      setFullscreenExitCountdown(0);
     }
-    setStrictListeningPhase(mode === "exam" && examData.testType === "listening" ? "waiting" : "idle");
-    setStrictListeningTransferLeft(LISTENING_TRANSFER_SECONDS);
-    setStrictListeningIsPlaying(false);
-    setStrictListeningPlaybackBlocked(false);
-    setStrictListeningElapsedSeconds(nextTimeSpentSeconds);
-    setStrictListeningAudioSectionId(nextSectionId);
-    strictListeningCompletedAudioRef.current = {};
-    setSyncState(examData.attemptId ? "saved" : "idle");
-    pendingAnswerValuesRef.current = {};
-    ignoreNextFullscreenExitRef.current = false;
-    hasExamFullscreenSessionRef.current = false;
-  }, [dialogResetKey, examData, initialQuestionId, initialReviewTarget, initialSectionId, isReviewMode, mode, previewSections.length]);
-
-  useEffect(() => {
-    if (!isReviewMode || !initialReviewTarget?.questionId) {
-      return;
-    }
-
-    const scrollTimer = window.setTimeout(() => {
-      const inlineBlank = questionPaneRef.current?.querySelector<HTMLElement>(
-        `[data-question-anchor="${initialReviewTarget.questionId}"]`
-      );
-      if (inlineBlank) {
-        inlineBlank.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
-
-      const questionCard = questionPaneRef.current?.querySelector<HTMLElement>(
-        `[id="${initialReviewTarget.questionId}"]`
-      );
-      if (questionCard) {
-        questionCard.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
-
-      document
-        .querySelector<HTMLElement>(`[data-heading-drop-question-id="${initialReviewTarget.questionId}"]`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 220);
-
-    return () => window.clearTimeout(scrollTimer);
-  }, [activeSectionId, initialReviewTarget?.questionId, isReviewMode]);
-
-  useEffect(() => {
-    const handleFocusOrFullscreenChange = () => {
-      const blockingDialog = activeDialogRef.current;
-      if (blockingDialog && blockingDialog !== "fullscreen") {
-        return;
-      }
-
-      const isCurrentlyFullscreen = Boolean(document.fullscreenElement);
-      setIsFullscreen(isCurrentlyFullscreen);
-
-      const isHidden = document.visibilityState === "hidden";
-      const isFocused = document.hasFocus ? document.hasFocus() : true;
-
-      const isCompliant = isCurrentlyFullscreen && !isHidden && isFocused;
-
-      if (isCompliant) {
-        hasExamFullscreenSessionRef.current = true;
-        return;
-      }
-
-      if (!isExamMode || isSubmitted || isSubmitting) {
-        return;
-      }
-      if (ignoreNextFullscreenExitRef.current) {
-        ignoreNextFullscreenExitRef.current = false;
-        return;
-      }
-      if (!hasExamFullscreenSessionRef.current) {
-        return;
-      }
-
-      if (fullscreenDialogStage === "exited-warning") {
-        return;
-      }
-
-      let eventType = "violation_exit_fullscreen";
-      if (isHidden) eventType = "violation_tab_switch";
-      else if (!isFocused) eventType = "violation_window_blur";
-
-      if (examData.attemptId) {
-        void fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/events`, {
-          method: "POST",
-          headers: buildAttemptRequestHeaders(accessToken),
-          credentials: "same-origin",
-          keepalive: true,
-          body: JSON.stringify({ event_type: eventType, payload: {} }),
-        }).catch(() => undefined);
-      }
-
-      setFullscreenDialogStage("exited-warning");
-      setFullscreenExitCountdown(10);
-      updateActiveDialog("fullscreen");
-    };
-
-    const onVisibilityChange = () => handleFocusOrFullscreenChange();
-    const onBlur = () => handleFocusOrFullscreenChange();
-    const onFocus = () => handleFocusOrFullscreenChange();
-
-    handleFocusOrFullscreenChange();
-    document.addEventListener("fullscreenchange", handleFocusOrFullscreenChange);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFocusOrFullscreenChange);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [accessToken, examData.attemptId, fullscreenDialogStage, isExamMode, isSubmitted, isSubmitting]);
-
-  useEffect(() => {
-    if (isSubmitted) return;
-    if (isStrictListeningExam) {
-      if (strictListeningPhase !== "transfer") {
-        return;
-      }
-      const timer = window.setInterval(() => {
-        setStrictListeningTransferLeft((current) => (current <= 1 ? 0 : current - 1));
-        setStrictListeningElapsedSeconds((current) => current + 1);
-      }, 1000);
-      return () => window.clearInterval(timer);
-    }
-    if (mode === "exam") {
-      const syncExamTimer = () => {
-        const timeSpent = wallClockTimeSpentSeconds();
-        setTimeLeft(Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - timeSpent));
-      };
-      syncExamTimer();
-      const timer = window.setInterval(() => {
-        syncExamTimer();
-      }, 1000);
-      return () => window.clearInterval(timer);
-    }
-
-    if (isReviewMode) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setTimeLeft((current) => current + 1);
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [examData.timeLimitSeconds, isReviewMode, isStrictListeningExam, isSubmitted, mode, strictListeningPhase]);
-
-  useEffect(() => {
-    if (isStrictListeningExam) {
-      return;
-    }
-    if (timeLeft === 0 && mode === "exam" && !isSubmitted) {
-      void submitAttempt("time_up");
-    }
-  }, [isStrictListeningExam, timeLeft, mode, isSubmitted]);
-
-  useEffect(() => {
-    if (!isStrictListeningExam || isSubmitted || strictListeningPhase !== "transfer") {
-      return;
-    }
-    if (strictListeningTransferLeft === 0) {
-      setStrictListeningPhase("complete");
-      void submitAttempt("time_up");
-    }
-  }, [isStrictListeningExam, isSubmitted, strictListeningPhase, strictListeningTransferLeft]);
-
-  useEffect(() => {
-    if (activeDialog !== "fullscreen" || fullscreenDialogStage !== "exited-warning" || isSubmitting) {
-      return;
-    }
-    if (fullscreenExitCountdown <= 0) {
-      void submitAttempt("exit_fullscreen");
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setFullscreenExitCountdown((current) => current - 1);
-    }, 1000);
-
-    return () => window.clearTimeout(timer);
-  }, [activeDialog, fullscreenDialogStage, fullscreenExitCountdown, isSubmitting]);
-
-  const answeredCount = useMemo(
-    () => allQuestions.reduce((count, question) => count + answeredQuestionWeight(question, answers[question.id]), 0),
-    [allQuestions, answers]
-  );
-  const totalQuestions = useMemo(
-    () => allQuestions.reduce((count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1), 0),
-    [allQuestions]
-  );
-  const currentAnsweredCount = useMemo(
-    () => currentQuestions.reduce((count, question) => count + answeredQuestionWeight(question, answers[question.id]), 0),
-    [answers, currentQuestions]
-  );
-  const currentTotalQuestions = useMemo(
-    () => currentQuestions.reduce((count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1), 0),
-    [currentQuestions]
-  );
-  const matchingInformationParagraphOptions = useMemo(() => {
-    const optionsBySection = new Map<string, string[]>();
-    const seenBySection = new Map<string, Set<string>>();
-
-    examData.paragraphs.forEach((paragraph) => {
-      const option = paragraph.label ?? paragraph.paragraphKey;
-      if (!/^[A-Z]+$/.test(option)) {
-        return;
-      }
-
-      const sectionKey = paragraph.sectionId ?? paragraph.sectionLabel ?? "section";
-      const seen = seenBySection.get(sectionKey) ?? new Set<string>();
-      if (seen.has(option)) {
-        return;
-      }
-
-      seen.add(option);
-      seenBySection.set(sectionKey, seen);
-      optionsBySection.set(sectionKey, [...(optionsBySection.get(sectionKey) ?? []), option]);
-    });
-
-    return optionsBySection;
-  }, [examData.paragraphs]);
-  const matchingHeadingTargets = useMemo(() => {
-    const targets = new Map<string, { group: PreviewGroup; question: PreviewQuestion }>();
-    examData.questionGroups
-      .filter((group) => group.type.includes("matching_headings"))
-      .forEach((group) => {
-        group.questions.forEach((question) => {
-          const paragraphKey = paragraphLabelFromPrompt(question.prompt);
-          if (!paragraphKey) {
-            return;
-          }
-          targets.set(`${group.sectionId ?? group.sectionLabel ?? "section"}:${paragraphKey}`, {
-            group,
-            question,
-          });
-        });
-      });
-    return targets;
-  }, [examData.questionGroups]);
-  const matchingHeadingExamples = useMemo(() => {
-    const examples = new Map<string, { groupId: string; value: string; prefix: string; text: string; label: string }>();
-    examData.questionGroups
-      .filter((group) => group.type.includes("matching_headings"))
-      .forEach((group) => {
-        const options = group.secondaryBlock?.trim()
-          ? splitOptionLines(group.secondaryBlock)
-          : (group.sharedOptions ?? []);
-
-        options.forEach((option, index) => {
-          const optionView = typedOptionView(option, index, group.type);
-          if (!optionView.fixedParagraphLabel) {
-            return;
-          }
-          examples.set(`${group.sectionId ?? group.sectionLabel ?? "section"}:${optionView.fixedParagraphLabel}`, {
-            groupId: group.id,
-            value: optionView.value,
-            prefix: optionView.prefix,
-            text: optionView.text,
-            label: optionView.label,
-          });
-        });
-      });
-    return examples;
-  }, [examData.questionGroups]);
-  const headingOptionLookup = useMemo(() => {
-    const lookup = new Map<string, { value: string; prefix: string; text: string; label: string }>();
-    examData.questionGroups
-      .filter((group) => group.type.includes("matching_headings"))
-      .forEach((group) => {
-        const options = group.secondaryBlock?.trim()
-          ? splitOptionLines(group.secondaryBlock)
-          : (group.sharedOptions ?? []);
-
-        options.forEach((option, index) => {
-          const optionView = typedOptionView(option, index, group.type);
-          lookup.set(`${group.id}:${optionView.value}`, {
-            value: optionView.value,
-            prefix: optionView.prefix,
-            text: optionView.text,
-            label: optionView.label,
-          });
-        });
-      });
-    return lookup;
-  }, [examData.questionGroups]);
-  const unansweredCount = totalQuestions - answeredCount;
-  const isLastFiveMinutes = isExamMode && timeLeft <= 5 * 60;
-  const isLastMinute = isExamMode && timeLeft <= 60;
-  const effectiveFontScale = fontScale * 0.93;
-  const bodyFontSize = 17 * effectiveFontScale;
-  const timerDisplay = isExamMode
-    ? isLastFiveMinutes
-      ? formatCountdown(timeLeft)
-      : formatMinutesLeft(timeLeft)
-    : formatCountdown(timeLeft);
-  const strictListeningTimerDisplay = formatCountdown(strictListeningTransferLeft);
-  const strictListeningAutoPlayDelayMs = isStrictListeningExam && strictListeningPhase === "waiting"
-    ? Object.keys(strictListeningCompletedAudioRef.current).length === 0
-      ? 3000
-      : 250
-    : null;
-  const showStrictListeningTransferTimer = isStrictListeningExam && (strictListeningPhase === "transfer" || strictListeningPhase === "complete");
-  const submitDisabled = isSubmitted || isSubmitting || (isStrictListeningExam && (strictListeningPhase === "waiting" || strictListeningPhase === "playing"));
-  const inputFocusClass = theme === "light"
-    ? "focus-visible:border-[#2f436f] focus-visible:ring-1 focus-visible:ring-[#2f436f]/20"
-    : "focus-visible:border-primary/45 focus-visible:ring-1 focus-visible:ring-primary/20";
-  const activeInputClass = theme === "light"
-    ? "border-[#2f436f]/70 ring-1 ring-[#2f436f]/20"
-    : "border-primary/45 ring-1 ring-primary/20";
-  const answerNumberBadgeClassName = theme === "light"
-    ? "border-[#2f436f]/45 bg-white text-[#2f436f]"
-    : "border-primary/35 bg-slate-950/30 text-primary";
-  const inlineAnswerFieldClassName =
-    "mx-1 inline-flex h-[1.55em] min-w-[7.75rem] max-w-full items-center rounded-md border px-2.5 py-0 text-[0.96em] leading-none align-middle shadow-none";
-  const inlineAnswerPlaceholderClassName =
-    "placeholder:text-[0.86em] placeholder:font-semibold placeholder:tracking-[0.04em] placeholder:opacity-100";
-  const inlineRowControlClassName = "h-[1.55em] px-2.5 text-[0.96em] leading-none";
-  const layoutStyle = {
-    "--reading-pane": `${splitRatio}%`,
-    "--question-pane": `${100 - splitRatio}%`,
-  } as CSSProperties;
-  const examToneStyle = (theme === "light"
-    ? {
-        "--foreground": "222 47% 11%",
-        "--card-foreground": "222 47% 11%",
-        "--popover-foreground": "222 47% 11%",
-        "--muted-foreground": "215 16% 47%",
-      }
-    : {
-        "--foreground": "210 33% 99%",
-        "--card-foreground": "210 33% 99%",
-        "--popover-foreground": "210 33% 99%",
-        "--muted-foreground": "210 20% 92%",
-      }) as CSSProperties;
-  const attemptBackupKey = examData.attemptId ? `prime-attempt-backup:${examData.attemptId}` : null;
-
-  function readAttemptBackup() {
-    if (!attemptBackupKey || typeof window === "undefined") {
-      return null;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(attemptBackupKey);
-      if (!raw) {
-        return null;
-      }
-      const parsed = JSON.parse(raw) as {
-        answers?: Record<string, string>;
-        textHighlights?: Record<string, TextHighlight[]>;
-        timeSpentSec?: number;
-        sectionTimeSpentSec?: Record<string, number>;
-        uiState?: PreviewUiState;
-        updatedAt?: number;
-      };
-      return parsed;
-    } catch {
-      return null;
-    }
-  }
-
-  function writeAttemptBackup() {
-    if (!attemptBackupKey || typeof window === "undefined" || isSubmitted || isReviewMode) {
-      return;
-    }
-
-    try {
-      refreshLatestProgressSnapshot();
-      window.localStorage.setItem(attemptBackupKey, JSON.stringify({
-        answers: latestAnswersRef.current,
-        textHighlights: latestProgressRef.current.textHighlights,
-        timeSpentSec: latestProgressRef.current.timeSpentSec,
-        sectionTimeSpentSec: latestProgressRef.current.sectionTimeSpentSec,
-        uiState: latestProgressRef.current.uiState,
-        updatedAt: Date.now(),
-      }));
-    } catch {}
-  }
 
   function clearAttemptBackup() {
-    if (!attemptBackupKey || typeof window === "undefined") {
-      return;
+      if (!attemptBackupKey || typeof window === "undefined") {
+        return;
+      }
+      try {
+        window.localStorage.removeItem(attemptBackupKey);
+      } catch {}
     }
-    try {
-      window.localStorage.removeItem(attemptBackupKey);
-    } catch {}
-  }
-
-  useEffect(() => {
-    if (!allQuestions.some((question) => question.id === activeQuestionId)) {
-      setActiveQuestionId(allQuestions[0]?.id ?? "");
-    }
-  }, [activeQuestionId, allQuestions]);
-
-  useEffect(() => {
-    if (!previewSections.some((section) => section.id === activeSectionId)) {
-      setActiveSectionId(previewSections[0]?.id ?? "section");
-    }
-  }, [activeSectionId, previewSections]);
-
-  useEffect(() => {
-    if (!examData.attemptId || isSubmitted || isReviewMode || mode === "guest") {
-      activeSectionTimerRef.current = null;
-      return;
-    }
-
-    resetActiveSectionTimer(timedSectionId);
-    return () => flushActiveSectionTime();
-  }, [examData.attemptId, isSubmitted, isReviewMode, mode, timedSectionId]);
 
   function markSyncSaved() {
-    setSyncState("saved");
-  }
+      setSyncState("saved");
+    }
 
   function markSyncError() {
-    setSyncState("error");
-  }
+      setSyncState("error");
+    }
 
   function resetWallClockTimer(timeSpentSeconds: number) {
-    timerBaseSpentSecondsRef.current = Math.max(0, Math.floor(timeSpentSeconds));
-    timerBaseStartedAtMsRef.current = Date.now();
-  }
+      timerBaseSpentSecondsRef.current = Math.max(0, Math.floor(timeSpentSeconds));
+      timerBaseStartedAtMsRef.current = Date.now();
+    }
 
   function wallClockTimeSpentSeconds() {
-    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timerBaseStartedAtMsRef.current) / 1000));
-    const nextTimeSpent = timerBaseSpentSecondsRef.current + elapsedSeconds;
-    if (mode === "exam") {
-      return Math.min(Math.max(0, nextTimeSpent), examData.timeLimitSeconds ?? 20 * 60);
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timerBaseStartedAtMsRef.current) / 1000));
+      const nextTimeSpent = timerBaseSpentSecondsRef.current + elapsedSeconds;
+      if (mode === "exam") {
+        return Math.min(Math.max(0, nextTimeSpent), examData.timeLimitSeconds ?? 20 * 60);
+      }
+      return Math.max(0, nextTimeSpent);
     }
-    return Math.max(0, nextTimeSpent);
-  }
 
   function currentTimeSpentSeconds() {
-    if (isStrictListeningExam) {
-      return Math.max(0, Math.floor(strictListeningElapsedSeconds));
+      if (isStrictListeningExam) {
+        return Math.max(0, Math.floor(strictListeningElapsedSeconds));
+      }
+      if (mode === "exam") {
+        return wallClockTimeSpentSeconds();
+      }
+      return Math.max(0, timeLeft);
     }
-    if (mode === "exam") {
-      return wallClockTimeSpentSeconds();
-    }
-    return Math.max(0, timeLeft);
-  }
 
   function flushActiveSectionTime(nowMs = Date.now()) {
-    const current = activeSectionTimerRef.current;
-    if (!current?.sectionId || isReviewMode || mode === "guest") {
-      return;
+      const current = activeSectionTimerRef.current;
+      if (!current?.sectionId || isReviewMode || mode === "guest") {
+        return;
+      }
+      const elapsedSeconds = Math.max(0, Math.floor((nowMs - current.startedAtMs) / 1000));
+      if (elapsedSeconds <= 0) {
+        return;
+      }
+      sectionTimeSpentSecondsRef.current = {
+        ...sectionTimeSpentSecondsRef.current,
+        [current.sectionId]: (sectionTimeSpentSecondsRef.current[current.sectionId] ?? 0) + elapsedSeconds,
+      };
+      activeSectionTimerRef.current = {
+        sectionId: current.sectionId,
+        startedAtMs: current.startedAtMs + elapsedSeconds * 1000,
+      };
     }
-    const elapsedSeconds = Math.max(0, Math.floor((nowMs - current.startedAtMs) / 1000));
-    if (elapsedSeconds <= 0) {
-      return;
-    }
-    sectionTimeSpentSecondsRef.current = {
-      ...sectionTimeSpentSecondsRef.current,
-      [current.sectionId]: (sectionTimeSpentSecondsRef.current[current.sectionId] ?? 0) + elapsedSeconds,
-    };
-    activeSectionTimerRef.current = {
-      sectionId: current.sectionId,
-      startedAtMs: current.startedAtMs + elapsedSeconds * 1000,
-    };
-  }
 
   function resetActiveSectionTimer(sectionId: string) {
-    flushActiveSectionTime();
-    activeSectionTimerRef.current = sectionId ? { sectionId, startedAtMs: Date.now() } : null;
-  }
+      flushActiveSectionTime();
+      activeSectionTimerRef.current = sectionId ? { sectionId, startedAtMs: Date.now() } : null;
+    }
 
   function refreshLatestProgressSnapshot() {
-    flushActiveSectionTime();
-    latestProgressRef.current = {
-      timeSpentSec: currentTimeSpentSeconds(),
-      sectionTimeSpentSec: { ...sectionTimeSpentSecondsRef.current },
-      activeQuestionId,
-      textHighlights,
-      uiState: {
-        theme,
-        splitRatio,
-        fontScale,
+      flushActiveSectionTime();
+      latestProgressRef.current = {
+        timeSpentSec: currentTimeSpentSeconds(),
+        sectionTimeSpentSec: { ...sectionTimeSpentSecondsRef.current },
         activeQuestionId,
-      },
-    };
-  }
-
-  useEffect(() => {
-    refreshLatestProgressSnapshot();
-  }, [activeQuestionId, examData.timeLimitSeconds, fontScale, isStrictListeningExam, mode, splitRatio, strictListeningElapsedSeconds, textHighlights, theme, timedSectionId, timeLeft]);
-
-  useEffect(() => {
-    latestAnswersRef.current = answers;
-  }, [answers]);
-
-  useEffect(() => {
-    if (!examData.attemptId || isSubmitted || isReviewMode) {
-      return;
+        textHighlights,
+        uiState: {
+          theme,
+          splitRatio,
+          fontScale,
+          activeQuestionId,
+        },
+      };
     }
-    writeAttemptBackup();
-  }, [answers, examData.attemptId, isSubmitted, isReviewMode, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timedSectionId, timeLeft]);
-
-  useEffect(() => {
-    if (!examData.attemptId || isSubmitted || isReviewMode) {
-      return;
-    }
-
-    const handlePageHide = () => {
-      writeAttemptBackup();
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
-    return () => window.removeEventListener("pagehide", handlePageHide);
-  }, [examData.attemptId, isSubmitted, isReviewMode, answers, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timedSectionId, timeLeft]);
 
   async function persistProgressNow() {
-    if (!examData.attemptId || isSubmitted || isReviewMode) {
-      return;
-    }
-
-    refreshLatestProgressSnapshot();
-    setSyncState("saving");
-    try {
-      const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/progress`, {
-        method: "PATCH",
-        headers: buildAttemptRequestHeaders(accessToken),
-        credentials: "same-origin",
-        body: JSON.stringify({
-          time_spent_sec: latestProgressRef.current.timeSpentSec,
-          section_time_spent_sec: latestProgressRef.current.sectionTimeSpentSec,
-          active_question_id: latestProgressRef.current.activeQuestionId,
-          text_highlights: latestProgressRef.current.textHighlights,
-          ui_state: {
-            theme: latestProgressRef.current.uiState.theme,
-            split_ratio: latestProgressRef.current.uiState.splitRatio,
-            font_scale: latestProgressRef.current.uiState.fontScale,
-          },
-        }),
-      });
-      if (!response.ok) {
-        throw new Error("Progress save failed");
+      if (!examData.attemptId || isSubmitted || isReviewMode) {
+        return;
       }
-      markSyncSaved();
-    } catch {
-      markSyncError();
+
+      refreshLatestProgressSnapshot();
+      setSyncState("saving");
+      try {
+        const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/progress`, {
+          method: "PATCH",
+          headers: buildAttemptRequestHeaders(accessToken),
+          credentials: "same-origin",
+          body: JSON.stringify({
+            time_spent_sec: latestProgressRef.current.timeSpentSec,
+            section_time_spent_sec: latestProgressRef.current.sectionTimeSpentSec,
+            active_question_id: latestProgressRef.current.activeQuestionId,
+            text_highlights: latestProgressRef.current.textHighlights,
+            ui_state: {
+              theme: latestProgressRef.current.uiState.theme,
+              split_ratio: latestProgressRef.current.uiState.splitRatio,
+              font_scale: latestProgressRef.current.uiState.fontScale,
+            },
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Progress save failed");
+        }
+        markSyncSaved();
+      } catch {
+        markSyncError();
+      }
     }
-  }
 
   function queueProgressPersist(delay = 700) {
-    if (!examData.attemptId || isSubmitted || isReviewMode) {
-      return;
+      if (!examData.attemptId || isSubmitted || isReviewMode) {
+        return;
+      }
+      setSyncState("saving");
+      if (progressSaveTimerRef.current) {
+        window.clearTimeout(progressSaveTimerRef.current);
+      }
+      progressSaveTimerRef.current = window.setTimeout(() => {
+        progressSaveTimerRef.current = null;
+        void persistProgressNow();
+      }, delay);
     }
-    setSyncState("saving");
-    if (progressSaveTimerRef.current) {
-      window.clearTimeout(progressSaveTimerRef.current);
-    }
-    progressSaveTimerRef.current = window.setTimeout(() => {
-      progressSaveTimerRef.current = null;
-      void persistProgressNow();
-    }, delay);
-  }
 
   async function flushPendingAnswerSaves() {
-    if (!examData.attemptId || isReviewMode) {
-      return;
+      if (!examData.attemptId || isReviewMode) {
+        return;
+      }
+
+      const pendingEntries = Object.entries(pendingAnswerValuesRef.current);
+      pendingAnswerValuesRef.current = {};
+
+      for (const timer of Object.values(saveTimersRef.current)) {
+        window.clearTimeout(timer);
+      }
+      saveTimersRef.current = {};
+
+      let hadError = false;
+      await Promise.all(
+        pendingEntries.map(async ([questionId, value]) => {
+          try {
+            const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
+              method: "PATCH",
+              headers: buildAttemptRequestHeaders(accessToken),
+              credentials: "same-origin",
+              body: JSON.stringify({
+                question_id: questionId,
+                value,
+              }),
+            });
+            if (!response.ok) {
+              throw new Error("Answer save failed");
+            }
+          } catch {
+            hadError = true;
+          }
+        })
+      );
+
+      if (hadError) {
+        markSyncError();
+        throw new Error("Answer flush failed");
+      }
+
+      markSyncSaved();
     }
 
-    const pendingEntries = Object.entries(pendingAnswerValuesRef.current);
-    pendingAnswerValuesRef.current = {};
-
-    for (const timer of Object.values(saveTimersRef.current)) {
-      window.clearTimeout(timer);
+  async function flushPendingProgressSave() {
+      if (progressSaveTimerRef.current) {
+        window.clearTimeout(progressSaveTimerRef.current);
+        progressSaveTimerRef.current = null;
+      }
+      await persistProgressNow();
     }
-    saveTimersRef.current = {};
 
-    let hadError = false;
-    await Promise.all(
-      pendingEntries.map(async ([questionId, value]) => {
+  async function waitForNextPaint() {
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    }
+
+  function updateTheme(nextTheme: "light" | "dark") {
+      setTheme(nextTheme);
+      localStorage.setItem("prime-theme", nextTheme);
+      document.documentElement.classList.add(nextTheme);
+      document.documentElement.classList.remove(nextTheme === "light" ? "dark" : "light");
+    }
+
+  function handleSubmit() {
+      if (isSubmitted || isReviewMode) return;
+      if (unansweredCount === 0) {
+        void submitAttempt("user_confirmed");
+        return;
+      }
+      updateActiveDialog("submit");
+    }
+
+  function dismissActiveDialogFromBackdrop() {
+      if (activeDialog === "fullscreen") {
+        if (fullscreenDialogStage === "confirm-exit") {
+          updateActiveDialog(null);
+          setFullscreenDialogStage(null);
+          return;
+        }
+        void recoverFullscreen();
+        return;
+      }
+
+      updateActiveDialog(null);
+    }
+
+  function persistAnswer(questionId: string, value: string) {
+      if (isReviewMode) {
+        return;
+      }
+
+      if (mode === "guest") {
+        setActiveQuestionId(questionId);
+        setShowGuestLoginModal(true);
+        return;
+      }
+
+      setAnswers((current) => {
+        const next = { ...current, [questionId]: value };
+        latestAnswersRef.current = next;
+        return next;
+      });
+
+      if (!examData.attemptId) {
+        return;
+      }
+
+      pendingAnswerValuesRef.current[questionId] = value;
+      setSyncState("saving");
+
+      if (saveTimersRef.current[questionId]) {
+        window.clearTimeout(saveTimersRef.current[questionId]);
+      }
+
+      saveTimersRef.current[questionId] = window.setTimeout(async () => {
         try {
           const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
             method: "PATCH",
@@ -1953,2230 +1832,1948 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
           if (!response.ok) {
             throw new Error("Answer save failed");
           }
+          delete pendingAnswerValuesRef.current[questionId];
+          delete saveTimersRef.current[questionId];
+          markSyncSaved();
         } catch {
-          hadError = true;
+          markSyncError();
         }
-      })
-    );
-
-    if (hadError) {
-      markSyncError();
-      throw new Error("Answer flush failed");
+      }, 220);
     }
-
-    markSyncSaved();
-  }
-
-  async function flushPendingProgressSave() {
-    if (progressSaveTimerRef.current) {
-      window.clearTimeout(progressSaveTimerRef.current);
-      progressSaveTimerRef.current = null;
-    }
-    await persistProgressNow();
-  }
-
-  async function waitForNextPaint() {
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => resolve());
-    });
-  }
-
-  useEffect(() => {
-    if (!examData.attemptId || isSubmitted || isReviewMode) {
-      return;
-    }
-    queueProgressPersist(700);
-  }, [activeQuestionId, examData.attemptId, fontScale, isSubmitted, isReviewMode, splitRatio, textHighlights, theme, timedSectionId]);
-
-  useEffect(() => {
-    if (!examData.attemptId || isSubmitted || isReviewMode) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void persistProgressNow();
-    }, 10000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [examData.attemptId, isSubmitted, isReviewMode]);
-
-  useEffect(() => {
-    return () => {
-      if (progressSaveTimerRef.current) {
-        window.clearTimeout(progressSaveTimerRef.current);
-      }
-      for (const timer of Object.values(saveTimersRef.current)) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, []);
-
-  function updateTheme(nextTheme: "light" | "dark") {
-    setTheme(nextTheme);
-    localStorage.setItem("prime-theme", nextTheme);
-    document.documentElement.classList.add(nextTheme);
-    document.documentElement.classList.remove(nextTheme === "light" ? "dark" : "light");
-  }
-
-  function handleSubmit() {
-    if (isSubmitted || isReviewMode) return;
-    if (unansweredCount === 0) {
-      void submitAttempt("user_confirmed");
-      return;
-    }
-    updateActiveDialog("submit");
-  }
-
-  function dismissActiveDialogFromBackdrop() {
-    if (activeDialog === "fullscreen") {
-      if (fullscreenDialogStage === "confirm-exit") {
-        updateActiveDialog(null);
-        setFullscreenDialogStage(null);
-        return;
-      }
-      void recoverFullscreen();
-      return;
-    }
-
-    updateActiveDialog(null);
-  }
-
-  function persistAnswer(questionId: string, value: string) {
-    if (isReviewMode) {
-      return;
-    }
-
-    if (mode === "guest") {
-      setActiveQuestionId(questionId);
-      setShowGuestLoginModal(true);
-      return;
-    }
-
-    setAnswers((current) => {
-      const next = { ...current, [questionId]: value };
-      latestAnswersRef.current = next;
-      return next;
-    });
-
-    if (!examData.attemptId) {
-      return;
-    }
-
-    pendingAnswerValuesRef.current[questionId] = value;
-    setSyncState("saving");
-
-    if (saveTimersRef.current[questionId]) {
-      window.clearTimeout(saveTimersRef.current[questionId]);
-    }
-
-    saveTimersRef.current[questionId] = window.setTimeout(async () => {
-      try {
-        const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/answer`, {
-          method: "PATCH",
-          headers: buildAttemptRequestHeaders(accessToken),
-          credentials: "same-origin",
-          body: JSON.stringify({
-            question_id: questionId,
-            value,
-          }),
-        });
-        if (!response.ok) {
-          throw new Error("Answer save failed");
-        }
-        delete pendingAnswerValuesRef.current[questionId];
-        delete saveTimersRef.current[questionId];
-        markSyncSaved();
-      } catch {
-        markSyncError();
-      }
-    }, 220);
-  }
 
   async function submitAttempt(reason: SubmitReason) {
-    if (isSubmitting) return;
-    updateActiveDialog(null);
-    setFullscreenDialogStage(null);
-    setFullscreenExitCountdown(0);
-    setIsSubmitting(true);
-    setIsSubmitted(true);
-
-    if (!examData.attemptId) {
-      setIsSubmitting(false);
-      return;
-    }
-
-    setIsCalculatingResults(true);
-    await waitForNextPaint();
-
-    try {
-      await flushPendingAnswerSaves();
-      await flushPendingProgressSave();
-      const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/submit`, {
-        method: "POST",
-        headers: buildAttemptRequestHeaders(accessToken),
-        credentials: "same-origin",
-        body: JSON.stringify({ confirm: true, reason }),
-      });
-      if (!response.ok) {
-        throw new Error("Submit failed");
-      }
-      emitNotificationRefresh();
-      clearAttemptBackup();
-      allowLeaveRef.current = true;
-      if (document.fullscreenElement) {
-        await document.exitFullscreen().catch(() => undefined);
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 1000));
-      router.replace(`/attempts/${examData.attemptId}/result`);
-    } catch {
-      setIsCalculatingResults(false);
-      setIsSubmitted(false);
-      setIsSubmitting(false);
-    }
-  }
-
-  function updateStrictListeningTimeSnapshot(sectionId: string, currentTime: number, duration: number) {
-    if (!isStrictListeningExam) {
-      return;
-    }
-    const completedSeconds = Object.entries(strictListeningCompletedAudioRef.current).reduce((sum, [completedSectionId, seconds]) => {
-      if (completedSectionId === sectionId) {
-        return sum;
-      }
-      return sum + seconds;
-    }, 0);
-    const currentSeconds = Math.max(0, Math.min(
-      Number.isFinite(currentTime) ? currentTime : 0,
-      Number.isFinite(duration) && duration > 0 ? duration : currentTime
-    ));
-    const transferSeconds = strictListeningPhase === "transfer"
-      ? LISTENING_TRANSFER_SECONDS - strictListeningTransferLeft
-      : 0;
-    setStrictListeningElapsedSeconds(Math.floor(initialTimeSpentSeconds + completedSeconds + currentSeconds + transferSeconds));
-  }
-
-  function handleStrictListeningAudioEnded(sectionId: string, duration: number) {
-    if (!isStrictListeningExam) {
-      return;
-    }
-    const audioSection = previewSections.find((section) => section.id === sectionId);
-    const fallbackDuration = audioSection?.audioDurationSeconds ?? duration;
-    strictListeningCompletedAudioRef.current[sectionId] = Math.max(0, Math.floor(
-      Number.isFinite(duration) && duration > 0 ? duration : fallbackDuration ?? 0
-    ));
-
-    const audioSectionIndex = previewSections.findIndex((section) => section.id === sectionId);
-    const nextSection = previewSections[audioSectionIndex + 1];
-    if (nextSection?.audioUrl) {
-      setStrictListeningAudioSectionId(nextSection.id);
-      setStrictListeningIsPlaying(false);
-      setStrictListeningPhase("waiting");
-      return;
-    }
-
-    setStrictListeningIsPlaying(false);
-    setStrictListeningTransferLeft(LISTENING_TRANSFER_SECONDS);
-    setStrictListeningPhase("transfer");
-  }
-
-  async function startStrictListeningAudio() {
-    const audio = listeningAudioRef.current;
-    if (!audio) {
-      return;
-    }
-    try {
-      audio.muted = false;
-      await audio.play();
-      setStrictListeningPlaybackBlocked(false);
-    } catch {
-      setStrictListeningPlaybackBlocked(true);
-    }
-  }
-
-  async function confirmSubmit() {
-    if (!examData.attemptId) {
-      updateActiveDialog(null);
-      setIsSubmitted(true);
-      return;
-    }
-    await submitAttempt("user_confirmed");
-  }
-
-  async function recoverFullscreen() {
-    try {
-      await document.documentElement.requestFullscreen();
+      if (isSubmitting) return;
       updateActiveDialog(null);
       setFullscreenDialogStage(null);
       setFullscreenExitCountdown(0);
-    } catch {}
-  }
+      setIsSubmitting(true);
+      setIsSubmitted(true);
 
-  async function confirmFullscreenExit() {
-    ignoreNextFullscreenExitRef.current = true;
-    if (document.fullscreenElement) {
-      try {
-        await document.exitFullscreen();
-      } catch {}
-    }
-    await submitAttempt("exit_fullscreen");
-  }
-
-  function selectSection(sectionId: string) {
-    const targetSection = previewSections.find((section) => section.id === sectionId);
-    if (!targetSection) {
-      return;
-    }
-
-    setActiveSectionId(sectionId);
-    setShowPassageQuestionNav(true);
-    setActiveQuestionId(targetSection.questions[0]?.id ?? "");
-    readingPaneRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    questionPaneRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function navigateToQuestion(questionId: string) {
-    setActiveSectionId(findSectionIdForQuestion(questionId, examData.questionGroups, examData.paragraphs));
-    setActiveQuestionId(questionId);
-    setShowPassageQuestionNav(true);
-
-    const inlineBlank = questionPaneRef.current?.querySelector<HTMLElement>(`[data-question-anchor="${questionId}"]`);
-    if (inlineBlank) {
-      inlineBlank.scrollIntoView({ behavior: "smooth", block: "center" });
-      window.setTimeout(() => {
-        if ("focus" in inlineBlank && typeof inlineBlank.focus === "function") {
-          inlineBlank.focus();
-        }
-      }, 120);
-      return;
-    }
-
-    const questionCard = questionPaneRef.current?.querySelector<HTMLElement>(`[id="${questionId}"]`);
-    if (questionCard) {
-      questionCard.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-
-    document
-      .querySelector<HTMLElement>(`[data-heading-drop-question-id="${questionId}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  async function toggleFullscreen() {
-    if (isExamMode && isFullscreen && !isReviewMode && !isSubmitted) {
-      setFullscreenDialogStage("confirm-exit");
-      updateActiveDialog("fullscreen");
-      return;
-    }
-
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-        return;
-      }
-      await document.exitFullscreen();
-    } catch {}
-  }
-
-  const headerControlClass = cn(
-    "border-border bg-card text-foreground transition-colors hover:bg-muted"
-  );
-
-  useEffect(() => {
-    if (!isDraggingSplit) {
-      return;
-    }
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const container = containerRef.current;
-      if (!container) {
+      if (!examData.attemptId) {
+        setIsSubmitting(false);
         return;
       }
 
-      const rect = container.getBoundingClientRect();
-      const nextRatio = ((event.clientX - rect.left) / rect.width) * 100;
-      const clampedRatio = Math.min(58, Math.max(42, nextRatio));
-      setSplitRatio(Number(clampedRatio.toFixed(1)));
-    };
+      setIsCalculatingResults(true);
+      await waitForNextPaint();
 
-    const stopDragging = () => setIsDraggingSplit(false);
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", stopDragging);
-    document.body.style.cursor = "ew-resize";
-    document.body.style.userSelect = "none";
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", stopDragging);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [isDraggingSplit]);
-
-  useEffect(() => {
-    if (isReviewMode) {
-      allowLeaveRef.current = true;
-      return;
-    }
-
-    if (isSubmitted) {
-      allowLeaveRef.current = true;
-      return;
-    }
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-
-    const handlePopState = () => {
-      if (allowLeaveRef.current) return;
-      window.history.pushState({ examPreviewGuard: true }, "", window.location.href);
-      updateActiveDialog("leave");
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isRefreshShortcut =
-        event.key === "F5" || ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r");
-      const isSearchShortcut =
-        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f";
-
-      if (isSearchShortcut) {
-        event.preventDefault();
-        return;
-      }
-
-      if (!isRefreshShortcut) return;
-      event.preventDefault();
-      updateActiveDialog("leave");
-    };
-
-    window.history.pushState({ examPreviewGuard: true }, "", window.location.href);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("popstate", handlePopState);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("popstate", handlePopState);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isReviewMode, isSubmitted]);
-
-  async function confirmLeave() {
-    allowLeaveRef.current = true;
-    updateActiveDialog(null);
-    writeAttemptBackup();
-
-    if (examData.attemptId && !isSubmitted) {
       try {
         await flushPendingAnswerSaves();
         await flushPendingProgressSave();
+        const response = await fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/submit`, {
+          method: "POST",
+          headers: buildAttemptRequestHeaders(accessToken),
+          credentials: "same-origin",
+          body: JSON.stringify({ confirm: true, reason }),
+        });
+        if (!response.ok) {
+          throw new Error("Submit failed");
+        }
+        emitNotificationRefresh();
+        clearAttemptBackup();
+        allowLeaveRef.current = true;
+        if (document.fullscreenElement) {
+          await document.exitFullscreen().catch(() => undefined);
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        router.replace(`/attempts/${examData.attemptId}/result`);
       } catch {
-        markSyncError();
+        setIsCalculatingResults(false);
+        setIsSubmitted(false);
+        setIsSubmitting(false);
       }
     }
 
-    if (document.fullscreenElement) {
-      await document.exitFullscreen().catch(() => undefined);
+  function updateStrictListeningTimeSnapshot(sectionId: string, currentTime: number, duration: number) {
+      if (!isStrictListeningExam) {
+        return;
+      }
+      const completedSeconds = Object.entries(strictListeningCompletedAudioRef.current).reduce((sum, [completedSectionId, seconds]) => {
+        if (completedSectionId === sectionId) {
+          return sum;
+        }
+        return sum + seconds;
+      }, 0);
+      const currentSeconds = Math.max(0, Math.min(
+        Number.isFinite(currentTime) ? currentTime : 0,
+        Number.isFinite(duration) && duration > 0 ? duration : currentTime
+      ));
+      const transferSeconds = strictListeningPhase === "transfer"
+        ? LISTENING_TRANSFER_SECONDS - strictListeningTransferLeft
+        : 0;
+      setStrictListeningElapsedSeconds(Math.floor(initialTimeSpentSeconds + completedSeconds + currentSeconds + transferSeconds));
     }
 
-    const exitHref = examData.exitHref ?? "/tests?type=reading";
-    const separator = exitHref.includes("?") ? "&" : "?";
-    router.push(`${exitHref}${separator}refresh=${Date.now()}`);
-  }
+  function handleStrictListeningAudioEnded(sectionId: string, duration: number) {
+      if (!isStrictListeningExam) {
+        return;
+      }
+      const audioSection = previewSections.find((section) => section.id === sectionId);
+      const fallbackDuration = audioSection?.audioDurationSeconds ?? duration;
+      strictListeningCompletedAudioRef.current[sectionId] = Math.max(0, Math.floor(
+        Number.isFinite(duration) && duration > 0 ? duration : fallbackDuration ?? 0
+      ));
+
+      const audioSectionIndex = previewSections.findIndex((section) => section.id === sectionId);
+      const nextSection = previewSections[audioSectionIndex + 1];
+      if (nextSection?.audioUrl) {
+        setStrictListeningAudioSectionId(nextSection.id);
+        setStrictListeningIsPlaying(false);
+        setStrictListeningPhase("waiting");
+        return;
+      }
+
+      setStrictListeningIsPlaying(false);
+      setStrictListeningTransferLeft(LISTENING_TRANSFER_SECONDS);
+      setStrictListeningPhase("transfer");
+    }
+
+  async function startStrictListeningAudio() {
+      const audio = listeningAudioRef.current;
+      if (!audio) {
+        return;
+      }
+      try {
+        audio.muted = false;
+        await audio.play();
+        setStrictListeningPlaybackBlocked(false);
+      } catch {
+        setStrictListeningPlaybackBlocked(true);
+      }
+    }
+
+  async function confirmSubmit() {
+      if (!examData.attemptId) {
+        updateActiveDialog(null);
+        setIsSubmitted(true);
+        return;
+      }
+      await submitAttempt("user_confirmed");
+    }
+
+  async function recoverFullscreen() {
+      try {
+        await document.documentElement.requestFullscreen();
+        updateActiveDialog(null);
+        setFullscreenDialogStage(null);
+        setFullscreenExitCountdown(0);
+      } catch {}
+    }
+
+  async function confirmFullscreenExit() {
+      ignoreNextFullscreenExitRef.current = true;
+      if (document.fullscreenElement) {
+        try {
+          await document.exitFullscreen();
+        } catch {}
+      }
+      await submitAttempt("exit_fullscreen");
+    }
+
+  function selectSection(sectionId: string) {
+      const targetSection = previewSections.find((section) => section.id === sectionId);
+      if (!targetSection) {
+        return;
+      }
+
+      setActiveSectionId(sectionId);
+      setShowPassageQuestionNav(true);
+      setActiveQuestionId(targetSection.questions[0]?.id ?? "");
+      readingPaneRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      questionPaneRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+  function navigateToQuestion(questionId: string) {
+      setActiveSectionId(findSectionIdForQuestion(questionId, examData.questionGroups, examData.paragraphs));
+      setActiveQuestionId(questionId);
+      setShowPassageQuestionNav(true);
+
+      const inlineBlank = questionPaneRef.current?.querySelector<HTMLElement>(`[data-question-anchor="${questionId}"]`);
+      if (inlineBlank) {
+        inlineBlank.scrollIntoView({ behavior: "smooth", block: "center" });
+        window.setTimeout(() => {
+          if ("focus" in inlineBlank && typeof inlineBlank.focus === "function") {
+            inlineBlank.focus();
+          }
+        }, 120);
+        return;
+      }
+
+      const questionCard = questionPaneRef.current?.querySelector<HTMLElement>(`[id="${questionId}"]`);
+      if (questionCard) {
+        questionCard.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+
+      document
+        .querySelector<HTMLElement>(`[data-heading-drop-question-id="${questionId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+  async function toggleFullscreen() {
+      if (isExamMode && isFullscreen && !isReviewMode && !isSubmitted) {
+        setFullscreenDialogStage("confirm-exit");
+        updateActiveDialog("fullscreen");
+        return;
+      }
+
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+          return;
+        }
+        await document.exitFullscreen();
+      } catch {}
+    }
+
+  const headerControlClass = cn(
+      "border-border bg-card text-foreground transition-colors hover:bg-muted"
+    );
+
+  async function confirmLeave() {
+      allowLeaveRef.current = true;
+      updateActiveDialog(null);
+      writeAttemptBackup();
+
+      if (examData.attemptId && !isSubmitted) {
+        try {
+          await flushPendingAnswerSaves();
+          await flushPendingProgressSave();
+        } catch {
+          markSyncError();
+        }
+      }
+
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => undefined);
+      }
+
+      const exitHref = examData.exitHref ?? "/tests?type=reading";
+      const separator = exitHref.includes("?") ? "&" : "?";
+      router.push(`${exitHref}${separator}refresh=${Date.now()}`);
+    }
 
   function startSplitDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    setIsDraggingSplit(true);
-  }
+      event.preventDefault();
+      setIsDraggingSplit(true);
+    }
 
   function clearSelection() {
-    window.getSelection()?.removeAllRanges();
-    setSelectionToolbar(null);
-  }
+      window.getSelection()?.removeAllRanges();
+      setSelectionToolbar(null);
+    }
 
   function hasActiveSelection() {
-    const selection = window.getSelection();
-    return Boolean(selection && !selection.isCollapsed && selection.toString().trim().length > 0);
-  }
+      const selection = window.getSelection();
+      return Boolean(selection && !selection.isCollapsed && selection.toString().trim().length > 0);
+    }
 
   function getTextOffsets(blockNode: HTMLElement, range: Range) {
-    return getHighlightTextOffsets(blockNode, range);
-  }
+      return getHighlightTextOffsets(blockNode, range);
+    }
 
   function handleTextBlockMouseUp(blockKey: string, event?: ReactMouseEvent<HTMLElement>) {
-    const pointerTop = event ? event.clientY + 12 : null;
-    const pointerLeft = event ? event.clientX : null;
+      const pointerTop = event ? event.clientY + 12 : null;
+      const pointerLeft = event ? event.clientX : null;
 
-    window.setTimeout(() => {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0 || selection.isCollapsed || selection.toString().trim().length === 0) {
-        setSelectionToolbar(null);
-        return;
-      }
+      window.setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed || selection.toString().trim().length === 0) {
+          setSelectionToolbar(null);
+          return;
+        }
 
-      const range = selection.getRangeAt(0);
-      const blockNode = textBlockRefs.current[blockKey];
-      if (!blockNode || !blockNode.contains(range.commonAncestorContainer)) {
-        setSelectionToolbar(null);
-        return;
-      }
+        const range = selection.getRangeAt(0);
+        const blockNode = textBlockRefs.current[blockKey];
+        if (!blockNode || !blockNode.contains(range.commonAncestorContainer)) {
+          setSelectionToolbar(null);
+          return;
+        }
 
-      const { start, end } = getTextOffsets(blockNode, range);
-      if (start === end) {
-        setSelectionToolbar(null);
-        return;
-      }
+        const { start, end } = getTextOffsets(blockNode, range);
+        if (start === end) {
+          setSelectionToolbar(null);
+          return;
+        }
 
-      const rect = range.getBoundingClientRect();
-      setSelectionToolbar({
-        blockKey,
-        start,
-        end,
-        top: pointerTop ?? (rect.bottom + 10),
-        left: pointerLeft ?? (rect.left + rect.width / 2),
-      });
-    }, 0);
-  }
+        const rect = range.getBoundingClientRect();
+        setSelectionToolbar({
+          blockKey,
+          start,
+          end,
+          top: pointerTop ?? (rect.bottom + 10),
+          left: pointerLeft ?? (rect.left + rect.width / 2),
+        });
+      }, 0);
+    }
 
   function normalizeHighlights(highlights: TextHighlight[]) {
-    const sorted = [...highlights].sort((a, b) => a.start - b.start);
-    const merged: TextHighlight[] = [];
+      const sorted = [...highlights].sort((a, b) => a.start - b.start);
+      const merged: TextHighlight[] = [];
 
-    for (const highlight of sorted) {
-      const last = merged[merged.length - 1];
-      if (!last || highlight.start > last.end) {
-        merged.push(highlight);
-        continue;
+      for (const highlight of sorted) {
+        const last = merged[merged.length - 1];
+        if (!last || highlight.start > last.end) {
+          merged.push(highlight);
+          continue;
+        }
+        last.end = Math.max(last.end, highlight.end);
       }
-      last.end = Math.max(last.end, highlight.end);
-    }
 
-    return merged;
-  }
+      return merged;
+    }
 
   function applyHighlight() {
-    if (!selectionToolbar) return;
+      if (!selectionToolbar) return;
 
-    setTextHighlights((current) => {
-      const existing = current[selectionToolbar.blockKey] ?? [];
-      const next = normalizeHighlights([
-        ...existing,
-        {
-          id: `${selectionToolbar.blockKey}-${selectionToolbar.start}-${selectionToolbar.end}-${Date.now()}`,
-          start: selectionToolbar.start,
-          end: selectionToolbar.end,
-        },
-      ]);
+      setTextHighlights((current) => {
+        const existing = current[selectionToolbar.blockKey] ?? [];
+        const next = normalizeHighlights([
+          ...existing,
+          {
+            id: `${selectionToolbar.blockKey}-${selectionToolbar.start}-${selectionToolbar.end}-${Date.now()}`,
+            start: selectionToolbar.start,
+            end: selectionToolbar.end,
+          },
+        ]);
 
-      return {
-        ...current,
-        [selectionToolbar.blockKey]: next,
-      };
-    });
+        return {
+          ...current,
+          [selectionToolbar.blockKey]: next,
+        };
+      });
 
-    clearSelection();
-  }
+      clearSelection();
+    }
 
   function clearHighlight() {
-    if (!selectionToolbar) return;
+      if (!selectionToolbar) return;
 
-    setTextHighlights((current) => {
-      const existing = current[selectionToolbar.blockKey] ?? [];
-      const next = existing.filter(
-        (highlight) =>
-          highlight.end <= selectionToolbar.start || highlight.start >= selectionToolbar.end
-      );
+      setTextHighlights((current) => {
+        const existing = current[selectionToolbar.blockKey] ?? [];
+        const next = existing.filter(
+          (highlight) =>
+            highlight.end <= selectionToolbar.start || highlight.start >= selectionToolbar.end
+        );
 
-      return {
-        ...current,
-        [selectionToolbar.blockKey]: next,
-      };
-    });
+        return {
+          ...current,
+          [selectionToolbar.blockKey]: next,
+        };
+      });
 
-    clearSelection();
-  }
+      clearSelection();
+    }
 
   function startHeadingDrag(groupId: string, value: string, sourceQuestionId?: string) {
-    setDraggingHeading({
-      groupId,
-      value,
-      sourceQuestionId,
-    });
-  }
+      setDraggingHeading({
+        groupId,
+        value,
+        sourceQuestionId,
+      });
+    }
 
   function resolveHeadingDropTarget(clientX: number, clientY: number, groupId: string) {
-    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-    const dropTarget = target?.closest("[data-heading-drop-question-id]") as HTMLElement | null;
-    if (!dropTarget) {
-      return null;
-    }
+      const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      const dropTarget = target?.closest("[data-heading-drop-question-id]") as HTMLElement | null;
+      if (!dropTarget) {
+        return null;
+      }
 
-    if (dropTarget.dataset.headingDropGroupId !== groupId) {
-      return null;
-    }
+      if (dropTarget.dataset.headingDropGroupId !== groupId) {
+        return null;
+      }
 
-    return dropTarget.dataset.headingDropQuestionId ?? null;
-  }
+      return dropTarget.dataset.headingDropQuestionId ?? null;
+    }
 
   function isHeadingBankDropTarget(clientX: number, clientY: number, groupId: string) {
-    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-    const bankTarget = target?.closest("[data-heading-bank-group-id]") as HTMLElement | null;
-    if (!bankTarget) {
-      return false;
-    }
+      const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      const bankTarget = target?.closest("[data-heading-bank-group-id]") as HTMLElement | null;
+      if (!bankTarget) {
+        return false;
+      }
 
-    return bankTarget.dataset.headingBankGroupId === groupId;
-  }
+      return bankTarget.dataset.headingBankGroupId === groupId;
+    }
 
   function resolveWordBankDropTarget(clientX: number, clientY: number, groupId: string) {
-    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-    const dropTarget = target?.closest("[data-wordbank-drop-question-id]") as HTMLElement | null;
-    if (!dropTarget) {
-      return null;
-    }
+      const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      const dropTarget = target?.closest("[data-wordbank-drop-question-id]") as HTMLElement | null;
+      if (!dropTarget) {
+        return null;
+      }
 
-    if (dropTarget.dataset.wordbankDropGroupId !== groupId) {
-      return null;
-    }
+      if (dropTarget.dataset.wordbankDropGroupId !== groupId) {
+        return null;
+      }
 
-    return dropTarget.dataset.wordbankDropQuestionId ?? null;
-  }
+      return dropTarget.dataset.wordbankDropQuestionId ?? null;
+    }
 
   function isWordBankBankDropTarget(clientX: number, clientY: number, groupId: string) {
-    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-    const bankTarget = target?.closest("[data-wordbank-bank-group-id]") as HTMLElement | null;
-    if (!bankTarget) {
-      return false;
-    }
+      const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      const bankTarget = target?.closest("[data-wordbank-bank-group-id]") as HTMLElement | null;
+      if (!bankTarget) {
+        return false;
+      }
 
-    return bankTarget.dataset.wordbankBankGroupId === groupId;
-  }
+      return bankTarget.dataset.wordbankBankGroupId === groupId;
+    }
 
   function beginHeadingPointerDrag(
-    event: ReactPointerEvent<HTMLElement>,
-    payload: { groupId: string; value: string; sourceQuestionId?: string }
-  ) {
-    if (event.button !== 0) {
-      return;
-    }
-
-    headingDragStateRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      groupId: payload.groupId,
-      value: payload.value,
-      sourceQuestionId: payload.sourceQuestionId,
-      dragging: false,
-    };
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const state = headingDragStateRef.current;
-      if (!state) {
+      event: ReactPointerEvent<HTMLElement>,
+      payload: { groupId: string; value: string; sourceQuestionId?: string }
+    ) {
+      if (event.button !== 0) {
         return;
       }
 
-      if (!state.dragging) {
-        const deltaX = Math.abs(moveEvent.clientX - state.startX);
-        const deltaY = Math.abs(moveEvent.clientY - state.startY);
-        if (Math.max(deltaX, deltaY) < 10) {
+      headingDragStateRef.current = {
+        startX: event.clientX,
+        startY: event.clientY,
+        groupId: payload.groupId,
+        value: payload.value,
+        sourceQuestionId: payload.sourceQuestionId,
+        dragging: false,
+      };
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const state = headingDragStateRef.current;
+        if (!state) {
           return;
         }
 
-        state.dragging = true;
-        startHeadingDrag(state.groupId, state.value, state.sourceQuestionId);
+        if (!state.dragging) {
+          const deltaX = Math.abs(moveEvent.clientX - state.startX);
+          const deltaY = Math.abs(moveEvent.clientY - state.startY);
+          if (Math.max(deltaX, deltaY) < 10) {
+            return;
+          }
+
+          state.dragging = true;
+          startHeadingDrag(state.groupId, state.value, state.sourceQuestionId);
+          setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+          document.body.style.cursor = "grabbing";
+          document.body.style.userSelect = "none";
+          window.getSelection()?.removeAllRanges();
+        }
+
         setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
-        document.body.style.cursor = "grabbing";
-        document.body.style.userSelect = "none";
-        window.getSelection()?.removeAllRanges();
-      }
+        const targetQuestionId = resolveHeadingDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId);
+        setDragOverQuestionId(targetQuestionId);
+        setDragOverHeadingBankGroupId(
+          targetQuestionId ? null : (isHeadingBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId) ? state.groupId : null)
+        );
+      };
 
-      setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
-      const targetQuestionId = resolveHeadingDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId);
-      setDragOverQuestionId(targetQuestionId);
-      setDragOverHeadingBankGroupId(
-        targetQuestionId ? null : (isHeadingBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId) ? state.groupId : null)
-      );
-    };
+      const cleanup = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("pointercancel", handlePointerUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        headingDragStateRef.current = null;
+        setDraggingHeading(null);
+        setDragOverQuestionId(null);
+        setDragOverHeadingBankGroupId(null);
+        setDragPreviewPosition(null);
+      };
 
-    const cleanup = () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      headingDragStateRef.current = null;
-      setDraggingHeading(null);
-      setDragOverQuestionId(null);
-      setDragOverHeadingBankGroupId(null);
-      setDragPreviewPosition(null);
-    };
-
-    const handlePointerUp = (upEvent: PointerEvent) => {
-      const state = headingDragStateRef.current;
-      if (state?.dragging) {
-        const targetQuestionId = resolveHeadingDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
-        const droppedBackToBank = isHeadingBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
-        if (targetQuestionId) {
-          setActiveQuestionId(targetQuestionId);
-          if (state.sourceQuestionId && state.sourceQuestionId !== targetQuestionId) {
+      const handlePointerUp = (upEvent: PointerEvent) => {
+        const state = headingDragStateRef.current;
+        if (state?.dragging) {
+          const targetQuestionId = resolveHeadingDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
+          const droppedBackToBank = isHeadingBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
+          if (targetQuestionId) {
+            setActiveQuestionId(targetQuestionId);
+            if (state.sourceQuestionId && state.sourceQuestionId !== targetQuestionId) {
+              persistAnswer(state.sourceQuestionId, "");
+            }
+            persistAnswer(targetQuestionId, state.value);
+          } else if (droppedBackToBank && state.sourceQuestionId) {
             persistAnswer(state.sourceQuestionId, "");
           }
-          persistAnswer(targetQuestionId, state.value);
-        } else if (droppedBackToBank && state.sourceQuestionId) {
-          persistAnswer(state.sourceQuestionId, "");
         }
-      }
 
-      cleanup();
-    };
+        cleanup();
+      };
 
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-  }
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener("pointercancel", handlePointerUp);
+    }
 
   function beginWordBankPointerDrag(
-    event: ReactPointerEvent<HTMLElement>,
-    payload: { groupId: string; value: string; sourceQuestionId?: string; previewLabel?: string }
-  ) {
-    if (event.button !== 0) {
-      return;
-    }
-
-    const state = {
-      startX: event.clientX,
-      startY: event.clientY,
-      groupId: payload.groupId,
-      value: payload.value,
-      sourceQuestionId: payload.sourceQuestionId,
-      dragging: false,
-    };
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      if (!state.dragging) {
-        const deltaX = Math.abs(moveEvent.clientX - state.startX);
-        const deltaY = Math.abs(moveEvent.clientY - state.startY);
-        if (Math.max(deltaX, deltaY) < 10) {
-          return;
-        }
-
-        state.dragging = true;
-        setDraggingWordBank({
-          groupId: state.groupId,
-          value: state.value,
-          sourceQuestionId: state.sourceQuestionId,
-          previewLabel: payload.previewLabel,
-        });
-        setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
-        document.body.style.cursor = "grabbing";
-        document.body.style.userSelect = "none";
-        window.getSelection()?.removeAllRanges();
+      event: ReactPointerEvent<HTMLElement>,
+      payload: { groupId: string; value: string; sourceQuestionId?: string; previewLabel?: string }
+    ) {
+      if (event.button !== 0) {
+        return;
       }
 
-      setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
-      const targetQuestionId = resolveWordBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId);
-      setDragOverWordBankQuestionId(targetQuestionId);
-      setDragOverWordBankGroupId(
-        targetQuestionId ? null : (isWordBankBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId) ? state.groupId : null)
-      );
-    };
+      const state = {
+        startX: event.clientX,
+        startY: event.clientY,
+        groupId: payload.groupId,
+        value: payload.value,
+        sourceQuestionId: payload.sourceQuestionId,
+        dragging: false,
+      };
 
-    const cleanup = () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      setDraggingWordBank(null);
-      setDragOverWordBankQuestionId(null);
-      setDragOverWordBankGroupId(null);
-      setDragPreviewPosition(null);
-    };
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        if (!state.dragging) {
+          const deltaX = Math.abs(moveEvent.clientX - state.startX);
+          const deltaY = Math.abs(moveEvent.clientY - state.startY);
+          if (Math.max(deltaX, deltaY) < 10) {
+            return;
+          }
 
-    const handlePointerUp = (upEvent: PointerEvent) => {
-      if (state.dragging) {
-        const targetQuestionId = resolveWordBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
-        const droppedBackToBank = isWordBankBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
-        if (targetQuestionId) {
-          setActiveQuestionId(targetQuestionId);
-          if (state.sourceQuestionId && state.sourceQuestionId !== targetQuestionId) {
+          state.dragging = true;
+          setDraggingWordBank({
+            groupId: state.groupId,
+            value: state.value,
+            sourceQuestionId: state.sourceQuestionId,
+            previewLabel: payload.previewLabel,
+          });
+          setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+          document.body.style.cursor = "grabbing";
+          document.body.style.userSelect = "none";
+          window.getSelection()?.removeAllRanges();
+        }
+
+        setDragPreviewPosition({ x: moveEvent.clientX, y: moveEvent.clientY });
+        const targetQuestionId = resolveWordBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId);
+        setDragOverWordBankQuestionId(targetQuestionId);
+        setDragOverWordBankGroupId(
+          targetQuestionId ? null : (isWordBankBankDropTarget(moveEvent.clientX, moveEvent.clientY, state.groupId) ? state.groupId : null)
+        );
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("pointercancel", handlePointerUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        setDraggingWordBank(null);
+        setDragOverWordBankQuestionId(null);
+        setDragOverWordBankGroupId(null);
+        setDragPreviewPosition(null);
+      };
+
+      const handlePointerUp = (upEvent: PointerEvent) => {
+        if (state.dragging) {
+          const targetQuestionId = resolveWordBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
+          const droppedBackToBank = isWordBankBankDropTarget(upEvent.clientX, upEvent.clientY, state.groupId);
+          if (targetQuestionId) {
+            setActiveQuestionId(targetQuestionId);
+            if (state.sourceQuestionId && state.sourceQuestionId !== targetQuestionId) {
+              persistAnswer(state.sourceQuestionId, "");
+            }
+            persistAnswer(targetQuestionId, state.value);
+          } else if (droppedBackToBank && state.sourceQuestionId) {
             persistAnswer(state.sourceQuestionId, "");
           }
-          persistAnswer(targetQuestionId, state.value);
-        } else if (droppedBackToBank && state.sourceQuestionId) {
-          persistAnswer(state.sourceQuestionId, "");
         }
-      }
 
-      cleanup();
-    };
+        cleanup();
+      };
 
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-  }
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener("pointercancel", handlePointerUp);
+    }
 
   function renderHighlightedText(blockKey: string, text: string) {
-    const { plainText, boldRanges, italicRanges, bulletLineIndexes } = parseBraceBoldText(text);
-    let highlights = (textHighlights[blockKey] ?? []).slice();
+      const { plainText, boldRanges, italicRanges, bulletLineIndexes } = parseBraceBoldText(text);
+      let highlights = (textHighlights[blockKey] ?? []).slice();
 
-    if (blockKey.startsWith("passage-")) {
-      // Highlight every answer's evidence quote in the passage during review
-      // (always-on), plus whichever explanation card is currently focused.
-      const quotesToHighlight = new Set<string>();
-      for (const quote of reviewQuoteList) {
-        const trimmed = quote.trim();
-        if (trimmed.length > 3) quotesToHighlight.add(trimmed);
-      }
-      if (explanationHighlightQuote && explanationHighlightQuote.trim().length > 3) {
-        quotesToHighlight.add(explanationHighlightQuote.trim());
-      }
-      for (const normalizedQuote of quotesToHighlight) {
-        try {
-          const escapedQuote = normalizedQuote.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-          const regex = new RegExp(escapedQuote, 'g');
-          let match;
-          while ((match = regex.exec(plainText)) !== null) {
-            highlights.push({
-              id: `explanation-highlight-${match.index}`,
-              start: match.index,
-              end: match.index + match[0].length,
-            });
-          }
-        } catch (e) {
-          // fallback to simple indexOf
-          let searchStartIndex = 0;
-          while (true) {
-            const index = plainText.indexOf(normalizedQuote, searchStartIndex);
-            if (index === -1) break;
-            highlights.push({
-              id: `explanation-highlight-${index}`,
-              start: index,
-              end: index + normalizedQuote.length,
-            });
-            searchStartIndex = index + normalizedQuote.length;
+      if (blockKey.startsWith("passage-")) {
+        // Highlight every answer's evidence quote in the passage during review
+        // (always-on), plus whichever explanation card is currently focused.
+        const quotesToHighlight = new Set<string>();
+        for (const quote of reviewQuoteList) {
+          const trimmed = quote.trim();
+          if (trimmed.length > 3) quotesToHighlight.add(trimmed);
+        }
+        if (explanationHighlightQuote && explanationHighlightQuote.trim().length > 3) {
+          quotesToHighlight.add(explanationHighlightQuote.trim());
+        }
+        for (const normalizedQuote of quotesToHighlight) {
+          try {
+            const escapedQuote = normalizedQuote.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+            const regex = new RegExp(escapedQuote, 'g');
+            let match;
+            while ((match = regex.exec(plainText)) !== null) {
+              highlights.push({
+                id: `explanation-highlight-${match.index}`,
+                start: match.index,
+                end: match.index + match[0].length,
+              });
+            }
+          } catch (e) {
+            // fallback to simple indexOf
+            let searchStartIndex = 0;
+            while (true) {
+              const index = plainText.indexOf(normalizedQuote, searchStartIndex);
+              if (index === -1) break;
+              highlights.push({
+                id: `explanation-highlight-${index}`,
+                start: index,
+                end: index + normalizedQuote.length,
+              });
+              searchStartIndex = index + normalizedQuote.length;
+            }
           }
         }
       }
-    }
 
-    // Merge overlapping ranges so multiple answer quotes never double-render text.
-    highlights = highlights
-      .sort((a, b) => a.start - b.start)
-      .reduce<typeof highlights>((merged, current) => {
-        const last = merged[merged.length - 1];
-        if (last && current.start < last.end) {
-          if (current.end > last.end) last.end = current.end;
+      // Merge overlapping ranges so multiple answer quotes never double-render text.
+      highlights = highlights
+        .sort((a, b) => a.start - b.start)
+        .reduce<typeof highlights>((merged, current) => {
+          const last = merged[merged.length - 1];
+          if (last && current.start < last.end) {
+            if (current.end > last.end) last.end = current.end;
+            return merged;
+          }
+          merged.push({ ...current });
           return merged;
-        }
-        merged.push({ ...current });
-        return merged;
-      }, []);
+        }, []);
 
-    function renderFormattedSlice(start: number, end: number, keyPrefix: string) {
-      if (start >= end) {
-        return null;
+      function renderFormattedSlice(start: number, end: number, keyPrefix: string) {
+        if (start >= end) {
+          return null;
+        }
+
+        const parts: ReactNode[] = [];
+        const overlappingBoldRanges = boldRanges.filter((range) => range.end > start && range.start < end);
+        const overlappingItalicRanges = italicRanges.filter((range) => range.end > start && range.start < end);
+        const boundaries = new Set<number>([start, end]);
+
+        overlappingBoldRanges.forEach((range) => {
+          boundaries.add(Math.max(start, range.start));
+          boundaries.add(Math.min(end, range.end));
+        });
+        overlappingItalicRanges.forEach((range) => {
+          boundaries.add(Math.max(start, range.start));
+          boundaries.add(Math.min(end, range.end));
+        });
+
+        const sortedBoundaries = Array.from(boundaries).sort((left, right) => left - right);
+        for (let index = 0; index < sortedBoundaries.length - 1; index += 1) {
+          const segmentStart = sortedBoundaries[index] ?? start;
+          const segmentEnd = sortedBoundaries[index + 1] ?? end;
+          if (segmentEnd <= segmentStart) {
+            continue;
+          }
+
+          const segmentText = plainText.slice(segmentStart, segmentEnd);
+          const isBold = overlappingBoldRanges.some((range) => range.start < segmentEnd && range.end > segmentStart);
+          const isItalic = overlappingItalicRanges.some((range) => range.start < segmentEnd && range.end > segmentStart);
+
+          if (isBold) {
+            parts.push(
+              <strong
+                key={`${keyPrefix}-segment-${index}-${segmentStart}`}
+                className={cn("font-bold text-inherit", isItalic && "italic")}
+              >
+                {segmentText}
+              </strong>
+            );
+            continue;
+          }
+
+          if (isItalic) {
+            parts.push(
+              <em key={`${keyPrefix}-segment-${index}-${segmentStart}`} className="italic">
+                {segmentText}
+              </em>
+            );
+            continue;
+          }
+
+          parts.push(<span key={`${keyPrefix}-segment-${index}-${segmentStart}`}>{segmentText}</span>);
+        }
+
+        return parts.length > 0 ? parts : plainText.slice(start, end);
       }
 
-      const parts: ReactNode[] = [];
-      const overlappingBoldRanges = boldRanges.filter((range) => range.end > start && range.start < end);
-      const overlappingItalicRanges = italicRanges.filter((range) => range.end > start && range.start < end);
-      const boundaries = new Set<number>([start, end]);
-
-      overlappingBoldRanges.forEach((range) => {
-        boundaries.add(Math.max(start, range.start));
-        boundaries.add(Math.min(end, range.end));
-      });
-      overlappingItalicRanges.forEach((range) => {
-        boundaries.add(Math.max(start, range.start));
-        boundaries.add(Math.min(end, range.end));
-      });
-
-      const sortedBoundaries = Array.from(boundaries).sort((left, right) => left - right);
-      for (let index = 0; index < sortedBoundaries.length - 1; index += 1) {
-        const segmentStart = sortedBoundaries[index] ?? start;
-        const segmentEnd = sortedBoundaries[index + 1] ?? end;
-        if (segmentEnd <= segmentStart) {
-          continue;
+      function renderHighlightedSlice(start: number, end: number, keyPrefix: string) {
+        if (start >= end) {
+          return null;
         }
 
-        const segmentText = plainText.slice(segmentStart, segmentEnd);
-        const isBold = overlappingBoldRanges.some((range) => range.start < segmentEnd && range.end > segmentStart);
-        const isItalic = overlappingItalicRanges.some((range) => range.start < segmentEnd && range.end > segmentStart);
+        if (highlights.length === 0) {
+          return renderFormattedSlice(start, end, `${keyPrefix}-base`);
+        }
 
-        if (isBold) {
+        const parts: ReactNode[] = [];
+        let cursor = start;
+        const overlappingHighlights = highlights.filter((highlight) => highlight.end > start && highlight.start < end);
+
+        overlappingHighlights.forEach((highlight, index) => {
+          const segmentStart = Math.max(start, highlight.start);
+          const segmentEnd = Math.min(end, highlight.end);
+
+          if (cursor < segmentStart) {
+            parts.push(
+              <span key={`${keyPrefix}-before-${index}-${cursor}`}>
+                {renderFormattedSlice(cursor, segmentStart, `${keyPrefix}-before-${index}`)}
+              </span>
+            );
+          }
+
+          if (segmentStart < segmentEnd) {
+            const isExplanation = highlight.id.startsWith("explanation-highlight-");
+            parts.push(
+              <span
+                key={`${highlight.id}-${segmentStart}-${segmentEnd}`}
+                className={cn(
+                  isExplanation
+                    ? cn(
+                        "exam-text-highlight-explanation",
+                        theme === "dark" && "exam-text-highlight-explanation-dark"
+                      )
+                    : cn("exam-text-highlight", theme === "dark" && "exam-text-highlight-dark")
+                )}
+              >
+                {renderFormattedSlice(segmentStart, segmentEnd, `${keyPrefix}-mark-${index}`)}
+              </span>
+            );
+          }
+
+          cursor = segmentEnd;
+        });
+
+        if (cursor < end) {
           parts.push(
-            <strong
-              key={`${keyPrefix}-segment-${index}-${segmentStart}`}
-              className={cn("font-bold text-inherit", isItalic && "italic")}
-            >
-              {segmentText}
-            </strong>
-          );
-          continue;
-        }
-
-        if (isItalic) {
-          parts.push(
-            <em key={`${keyPrefix}-segment-${index}-${segmentStart}`} className="italic">
-              {segmentText}
-            </em>
-          );
-          continue;
-        }
-
-        parts.push(<span key={`${keyPrefix}-segment-${index}-${segmentStart}`}>{segmentText}</span>);
-      }
-
-      return parts.length > 0 ? parts : plainText.slice(start, end);
-    }
-
-    function renderHighlightedSlice(start: number, end: number, keyPrefix: string) {
-      if (start >= end) {
-        return null;
-      }
-
-      if (highlights.length === 0) {
-        return renderFormattedSlice(start, end, `${keyPrefix}-base`);
-      }
-
-      const parts: ReactNode[] = [];
-      let cursor = start;
-      const overlappingHighlights = highlights.filter((highlight) => highlight.end > start && highlight.start < end);
-
-      overlappingHighlights.forEach((highlight, index) => {
-        const segmentStart = Math.max(start, highlight.start);
-        const segmentEnd = Math.min(end, highlight.end);
-
-        if (cursor < segmentStart) {
-          parts.push(
-            <span key={`${keyPrefix}-before-${index}-${cursor}`}>
-              {renderFormattedSlice(cursor, segmentStart, `${keyPrefix}-before-${index}`)}
+            <span key={`${keyPrefix}-tail-${cursor}`}>
+              {renderFormattedSlice(cursor, end, `${keyPrefix}-tail`)}
             </span>
           );
         }
 
-        if (segmentStart < segmentEnd) {
-          const isExplanation = highlight.id.startsWith("explanation-highlight-");
-          parts.push(
-            <span
-              key={`${highlight.id}-${segmentStart}-${segmentEnd}`}
-              className={cn(
-                isExplanation
-                  ? cn(
-                      "exam-text-highlight-explanation",
-                      theme === "dark" && "exam-text-highlight-explanation-dark"
-                    )
-                  : cn("exam-text-highlight", theme === "dark" && "exam-text-highlight-dark")
-              )}
-            >
-              {renderFormattedSlice(segmentStart, segmentEnd, `${keyPrefix}-mark-${index}`)}
-            </span>
-          );
+        if (parts.length === 0) {
+          return renderFormattedSlice(start, end, `${keyPrefix}-plain`);
         }
 
-        cursor = segmentEnd;
-      });
+        return parts;
+      }
 
-      if (cursor < end) {
-        parts.push(
-          <span key={`${keyPrefix}-tail-${cursor}`}>
-            {renderFormattedSlice(cursor, end, `${keyPrefix}-tail`)}
+      const lines = plainText.split("\n");
+      if (lines.length === 1 && bulletLineIndexes.size === 0) {
+        return renderHighlightedSlice(0, plainText.length, `${blockKey}-single`);
+      }
+
+      const rows: ReactNode[] = [];
+      let lineStart = 0;
+
+      lines.forEach((line, index) => {
+        const lineEnd = lineStart + line.length;
+        const lineContent = line.length > 0
+          ? renderHighlightedSlice(lineStart, lineEnd, `${blockKey}-line-${index}`)
+          : <span>&nbsp;</span>;
+
+        rows.push(
+          <span key={`${blockKey}-row-${index}`}>
+            {bulletLineIndexes.has(index) ? (
+              <span className="my-0.5 ml-4 inline-flex max-w-full items-start gap-2 align-top">
+                <span className="mt-[0.55em] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+                <span className="min-w-0 flex-1">{lineContent}</span>
+              </span>
+            ) : (
+              lineContent
+            )}
+            {index < lines.length - 1 ? <br /> : null}
           </span>
         );
-      }
 
-      if (parts.length === 0) {
-        return renderFormattedSlice(start, end, `${keyPrefix}-plain`);
-      }
+        lineStart = lineEnd + 1;
+      });
 
-      return parts;
+      return rows;
     }
-
-    const lines = plainText.split("\n");
-    if (lines.length === 1 && bulletLineIndexes.size === 0) {
-      return renderHighlightedSlice(0, plainText.length, `${blockKey}-single`);
-    }
-
-    const rows: ReactNode[] = [];
-    let lineStart = 0;
-
-    lines.forEach((line, index) => {
-      const lineEnd = lineStart + line.length;
-      const lineContent = line.length > 0
-        ? renderHighlightedSlice(lineStart, lineEnd, `${blockKey}-line-${index}`)
-        : <span>&nbsp;</span>;
-
-      rows.push(
-        <span key={`${blockKey}-row-${index}`}>
-          {bulletLineIndexes.has(index) ? (
-            <span className="my-0.5 ml-4 inline-flex max-w-full items-start gap-2 align-top">
-              <span className="mt-[0.55em] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
-              <span className="min-w-0 flex-1">{lineContent}</span>
-            </span>
-          ) : (
-            lineContent
-          )}
-          {index < lines.length - 1 ? <br /> : null}
-        </span>
-      );
-
-      lineStart = lineEnd + 1;
-    });
-
-    return rows;
-  }
 
   function renderFormattedText(text: string, keyPrefix: string) {
-    return renderHighlightedText(keyPrefix, text);
-  }
+      return renderHighlightedText(keyPrefix, text);
+    }
 
   function renderInstructionText(blockKey: string, text: string) {
-    const softenedText = softenInstructionText(text);
-    const binaryLayout = parseBinaryInstructionLayout(softenedText);
-    if (!binaryLayout) {
-      return renderHighlightedText(blockKey, softenedText);
-    }
+      const softenedText = softenInstructionText(text);
+      const binaryLayout = parseBinaryInstructionLayout(softenedText);
+      if (!binaryLayout) {
+        return renderHighlightedText(blockKey, softenedText);
+      }
 
-    return (
-      <div className="space-y-2">
-        {binaryLayout.prefix ? (
-          <div
-            ref={(node) => {
-              textBlockRefs.current[`${blockKey}-prefix`] = node;
-            }}
-            data-highlight-text
-            onMouseUp={(event) => handleTextBlockMouseUp(`${blockKey}-prefix`, event)}
-            className="select-text whitespace-pre-wrap"
-          >
-            {renderHighlightedText(`${blockKey}-prefix`, binaryLayout.prefix)}
-          </div>
-        ) : null}
-        <div className="grid gap-y-1">
-          {binaryLayout.optionRows.map((row, index) => (
-            <div key={`${blockKey}-row-${row.label}-${index}`} className="grid grid-cols-[5.5rem_1fr] items-start gap-x-1">
-              <strong className="font-bold text-foreground">{row.label}</strong>
-              <span>{row.detail}</span>
+      return (
+        <div className="space-y-2">
+          {binaryLayout.prefix ? (
+            <div
+              ref={(node) => {
+                textBlockRefs.current[`${blockKey}-prefix`] = node;
+              }}
+              data-highlight-text
+              onMouseUp={(event) => handleTextBlockMouseUp(`${blockKey}-prefix`, event)}
+              className="select-text whitespace-pre-wrap"
+            >
+              {renderHighlightedText(`${blockKey}-prefix`, binaryLayout.prefix)}
             </div>
-          ))}
+          ) : null}
+          <div className="grid gap-y-1">
+            {binaryLayout.optionRows.map((row, index) => (
+              <div key={`${blockKey}-row-${row.label}-${index}`} className="grid grid-cols-[5.5rem_1fr] items-start gap-x-1">
+                <strong className="font-bold text-foreground">{row.label}</strong>
+                <span>{row.detail}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("[data-selection-toolbar]")) {
-        return;
-      }
-      if (target?.closest("[data-highlight-text]")) {
-        return;
-      }
-      setSelectionToolbar(null);
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      Object.values(saveTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
-    };
-  }, []);
+      );
+    }
 
   function optionBankWidthForGroup(group: PreviewGroup) {
-    if (group.type.includes("listening_matching")) {
-      return "18rem";
+      if (group.type.includes("listening_matching")) {
+        return "18rem";
+      }
+
+      const longestChars = typedOptionLines(group).reduce((maxLength, option, index) => {
+        const optionView = typedOptionView(option, index, group.type);
+        const text = optionView.text || optionView.label || optionView.value;
+        const hasPrefix =
+          !group.type.includes("matching_headings")
+          && (optionView.hasExplicitPrefix || shouldAutoLetterMatchingOptions(group.type));
+        const displayText = hasPrefix ? `${optionView.value}. ${text}` : text;
+        return Math.max(maxLength, displayText.trim().length);
+      }, 18);
+
+      return `${Math.max(18, longestChars + 6)}ch`;
     }
-
-    const longestChars = typedOptionLines(group).reduce((maxLength, option, index) => {
-      const optionView = typedOptionView(option, index, group.type);
-      const text = optionView.text || optionView.label || optionView.value;
-      const hasPrefix =
-        !group.type.includes("matching_headings")
-        && (optionView.hasExplicitPrefix || shouldAutoLetterMatchingOptions(group.type));
-      const displayText = hasPrefix ? `${optionView.value}. ${text}` : text;
-      return Math.max(maxLength, displayText.trim().length);
-    }, 18);
-
-    return `${Math.max(18, longestChars + 6)}ch`;
-  }
 
   function optionPanelTitleForGroup(group: PreviewGroup) {
-    const customTitle = group.optionsTitle?.trim();
-    if (customTitle) {
-      return customTitle;
+      const customTitle = group.optionsTitle?.trim();
+      if (customTitle) {
+        return customTitle;
+      }
+      if (group.type.includes("matching_headings")) {
+        return "List of Headings";
+      }
+      if (group.type.includes("matching_sentence_endings")) {
+        return "Sentence Endings";
+      }
+      return "Options";
     }
-    if (group.type.includes("matching_headings")) {
-      return "List of Headings";
-    }
-    if (group.type.includes("matching_sentence_endings")) {
-      return "Sentence Endings";
-    }
-    return "Options";
-  }
 
   function renderOptionBank(group: PreviewGroup) {
-    if (!groupUsesOptionBank(group.type)) {
-      return null;
-    }
+      if (!groupUsesOptionBank(group.type)) {
+        return null;
+      }
 
-    const isListeningMatchingGroup = group.type.includes("listening_matching");
-    const isWordBankGroup = group.type.includes("wordbank");
-    const baseOptions = typedOptionLines(group);
-    const baseOptionEntries = baseOptions.map((option, index) => ({
-      option,
-      index,
-      optionView: typedOptionView(option, index, group.type),
-    }));
+      const isListeningMatchingGroup = group.type.includes("listening_matching");
+      const isWordBankGroup = group.type.includes("wordbank");
+      const baseOptions = typedOptionLines(group);
+      const baseOptionEntries = baseOptions.map((option, index) => ({
+        option,
+        index,
+        optionView: typedOptionView(option, index, group.type),
+      }));
 
-    const selectedValues = group.type.includes("matching_headings")
-      ? new Set<string>([
-          ...group.questions
-            .map((question) => normalizeHeadingComparableValue(answers[question.id] ?? ""))
-            .filter(Boolean),
-          ...examData.paragraphs
-            .map((paragraph) => matchingHeadingExamples.get(`${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`))
-            .filter((entry): entry is { groupId: string; value: string; prefix: string; text: string; label: string } => Boolean(entry && entry.groupId === group.id))
-            .map((entry) => normalizeHeadingComparableValue(entry.value)),
-        ])
-      : isWordBankGroup
-        ? new Set<string>(
-          group.questions
-              .map((question) => {
-                const groupOptions = typedQuestionOptionLines(group, question, []);
-                return normalizeMatchingAnswerValue(String(answers[question.id] ?? "").trim(), groupOptions, question.type);
-              })
-              .filter(Boolean)
-              .map((value) => normalizeHeadingComparableValue(value))
-          )
-        : new Set<string>();
+      const selectedValues = group.type.includes("matching_headings")
+        ? new Set<string>([
+            ...group.questions
+              .map((question) => normalizeHeadingComparableValue(answers[question.id] ?? ""))
+              .filter(Boolean),
+            ...examData.paragraphs
+              .map((paragraph) => matchingHeadingExamples.get(`${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`))
+              .filter((entry): entry is { groupId: string; value: string; prefix: string; text: string; label: string } => Boolean(entry && entry.groupId === group.id))
+              .map((entry) => normalizeHeadingComparableValue(entry.value)),
+          ])
+        : isWordBankGroup
+          ? new Set<string>(
+            group.questions
+                .map((question) => {
+                  const groupOptions = typedQuestionOptionLines(group, question, []);
+                  return normalizeMatchingAnswerValue(String(answers[question.id] ?? "").trim(), groupOptions, question.type);
+                })
+                .filter(Boolean)
+                .map((value) => normalizeHeadingComparableValue(value))
+            )
+          : new Set<string>();
 
-    const bankOptions = group.type.includes("matching_headings") || isWordBankGroup
-      ? baseOptionEntries.filter((entry) => {
-          const value = normalizeHeadingComparableValue(entry.optionView.value);
-          return !selectedValues.has(value);
-        })
-      : baseOptionEntries;
+      const bankOptions = group.type.includes("matching_headings") || isWordBankGroup
+        ? baseOptionEntries.filter((entry) => {
+            const value = normalizeHeadingComparableValue(entry.optionView.value);
+            return !selectedValues.has(value);
+          })
+        : baseOptionEntries;
 
-    if (bankOptions.length === 0 && !isWordBankGroup && !isListeningMatchingGroup) {
-      return null;
-    }
+      if (bankOptions.length === 0 && !isWordBankGroup && !isListeningMatchingGroup) {
+        return null;
+      }
 
-    const optionBankWidth = optionBankWidthForGroup(group);
-    const isBankDropReady = !isListeningMatchingGroup && (draggingHeading?.groupId === group.id || draggingWordBank?.groupId === group.id);
+      const optionBankWidth = optionBankWidthForGroup(group);
+      const isBankDropReady = !isListeningMatchingGroup && (draggingHeading?.groupId === group.id || draggingWordBank?.groupId === group.id);
 
-    return (
-      <div
-        data-heading-bank-group-id={group.type.includes("matching_headings") ? group.id : undefined}
-        data-wordbank-bank-group-id={isWordBankGroup ? group.id : undefined}
-        className={cn(
-          "w-full p-1 transition",
-          !isListeningMatchingGroup && (dragOverHeadingBankGroupId === group.id || dragOverWordBankGroupId === group.id) && isBankDropReady && "rounded-xl bg-primary/5"
-        )}
-        style={isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
-      >
-        <p
+      return (
+        <div
+          data-heading-bank-group-id={group.type.includes("matching_headings") ? group.id : undefined}
+          data-wordbank-bank-group-id={isWordBankGroup ? group.id : undefined}
           className={cn(
-            "mb-3",
-            group.optionsTitle?.trim()
-              ? "text-[15px] font-bold tracking-tight text-foreground"
-              : group.type.includes("matching_headings")
-                ? "font-black uppercase tracking-[0.18em] text-[13px] text-foreground"
-                : "font-black uppercase tracking-[0.18em] text-[10px] text-foreground/80"
+            "w-full p-1 transition",
+            !isListeningMatchingGroup && (dragOverHeadingBankGroupId === group.id || dragOverWordBankGroupId === group.id) && isBankDropReady && "rounded-xl bg-primary/5"
           )}
+          style={isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
         >
-          {renderFormattedText(optionPanelTitleForGroup(group), `${group.id}-option-bank-title`)}
-        </p>
-        <div className={cn(
-          isListeningMatchingGroup
-            ? "flex flex-col gap-2"
-            : group.type.includes("wordbank")
-            ? "flex flex-wrap gap-2"
-            : "space-y-2"
-        )}>
-          {bankOptions.map((entry) => {
-            const { option, index, optionView } = entry;
-            const value = optionView.value;
-            const text = optionView.text || optionView.label;
-            const headingPrefix = optionView.prefix;
-            const hasPrefix = !group.type.includes("matching_headings")
-              && (optionView.hasExplicitPrefix || shouldAutoLetterMatchingOptions(group.type));
-            const optionBlockKey = `option-bank-${group.id}-${value}-${text}`;
-            const isDraggingOption = group.type.includes("matching_headings")
-              ? (
-                  draggingHeading?.groupId === group.id &&
-                  normalizeHeadingComparableValue(draggingHeading?.value) === normalizeHeadingComparableValue(value) &&
-                  !draggingHeading?.sourceQuestionId
-                )
-              : (
-                  isWordBankGroup
-                  && draggingWordBank?.groupId === group.id
-                  && normalizeHeadingComparableValue(draggingWordBank?.value) === normalizeHeadingComparableValue(value)
-                  && !draggingWordBank?.sourceQuestionId
-                );
+          <p
+            className={cn(
+              "mb-3",
+              group.optionsTitle?.trim()
+                ? "text-[15px] font-bold tracking-tight text-foreground"
+                : group.type.includes("matching_headings")
+                  ? "font-black uppercase tracking-[0.18em] text-[13px] text-foreground"
+                  : "font-black uppercase tracking-[0.18em] text-[10px] text-foreground/80"
+            )}
+          >
+            {renderFormattedText(optionPanelTitleForGroup(group), `${group.id}-option-bank-title`)}
+          </p>
+          <div className={cn(
+            isListeningMatchingGroup
+              ? "flex flex-col gap-2"
+              : group.type.includes("wordbank")
+              ? "flex flex-wrap gap-2"
+              : "space-y-2"
+          )}>
+            {bankOptions.map((entry) => {
+              const { option, index, optionView } = entry;
+              const value = optionView.value;
+              const text = optionView.text || optionView.label;
+              const headingPrefix = optionView.prefix;
+              const hasPrefix = !group.type.includes("matching_headings")
+                && (optionView.hasExplicitPrefix || shouldAutoLetterMatchingOptions(group.type));
+              const optionBlockKey = `option-bank-${group.id}-${value}-${text}`;
+              const isDraggingOption = group.type.includes("matching_headings")
+                ? (
+                    draggingHeading?.groupId === group.id &&
+                    normalizeHeadingComparableValue(draggingHeading?.value) === normalizeHeadingComparableValue(value) &&
+                    !draggingHeading?.sourceQuestionId
+                  )
+                : (
+                    isWordBankGroup
+                    && draggingWordBank?.groupId === group.id
+                    && normalizeHeadingComparableValue(draggingWordBank?.value) === normalizeHeadingComparableValue(value)
+                    && !draggingWordBank?.sourceQuestionId
+                  );
 
-            if (isDraggingOption) {
-              return null;
-            }
+              if (isDraggingOption) {
+                return null;
+              }
 
-            return (
-              <div
-                key={`${group.id}-${value}-${text}-${index}`}
-                onPointerDown={(event) => {
-                  if (isWordBankGroup) {
-                    beginWordBankPointerDrag(event, {
-                      groupId: group.id,
-                      value: entry.optionView.value,
-                      previewLabel: entry.optionView.label,
-                    });
-                  }
-                }}
-                className={cn(
-                  "rounded-xl px-3 py-2 transition-transform duration-150",
-                  group.type.includes("matching_headings")
-                    ? "w-full min-w-0 border border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
-                    : group.type.includes("wordbank")
-                      ? "inline-flex w-fit max-w-full cursor-grab items-center border border-border/55 bg-card px-3.5 py-1.5 active:cursor-grabbing hover:bg-muted/20"
-                      : isListeningMatchingGroup
-                        ? "w-full min-w-0 px-0 py-1"
-                      : "border border-border/55 bg-card",
-                  hasPrefix ? "flex items-start gap-0.5" : "block"
-                )}
-                style={group.type.includes("matching_headings") || isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
-              >
-              {hasPrefix ? (
-                  <>
-                    {group.type.includes("matching_headings") ? (
-                      <span
-                        onPointerDown={(event) => beginHeadingPointerDrag(event, { groupId: group.id, value })}
-                        className="mt-0.5 flex h-7 w-7 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-md border border-[#2f436f]/35 bg-[#2f436f]/[0.07] text-[#2f436f] transition active:cursor-grabbing dark:border-[#4b6498]/45 dark:bg-[#4b6498]/[0.12] dark:text-[#89a4d8]"
-                        aria-hidden="true"
-                      >
-                        <GripVertical className="h-4 w-4" />
-                      </span>
-                    ) : null}
-                    <span
-                      className={cn(
-                        "flex-1 whitespace-nowrap text-[16px] leading-6 text-foreground",
-                        isListeningMatchingGroup && "min-w-0 whitespace-normal break-words leading-5",
-                        group.type.includes("matching_headings") && "whitespace-normal"
-                      )}
-                    >
+              return (
+                <div
+                  key={`${group.id}-${value}-${text}-${index}`}
+                  onPointerDown={(event) => {
+                    if (isWordBankGroup) {
+                      beginWordBankPointerDrag(event, {
+                        groupId: group.id,
+                        value: entry.optionView.value,
+                        previewLabel: entry.optionView.label,
+                      });
+                    }
+                  }}
+                  className={cn(
+                    "rounded-xl px-3 py-2 transition-transform duration-150",
+                    group.type.includes("matching_headings")
+                      ? "w-full min-w-0 border border-[#2f436f]/55 bg-[#2f436f]/[0.035] dark:border-[#4b6498]/55 dark:bg-[#4b6498]/[0.08]"
+                      : group.type.includes("wordbank")
+                        ? "inline-flex w-fit max-w-full cursor-grab items-center border border-border/55 bg-card px-3.5 py-1.5 active:cursor-grabbing hover:bg-muted/20"
+                        : isListeningMatchingGroup
+                          ? "w-full min-w-0 px-0 py-1"
+                        : "border border-border/55 bg-card",
+                    hasPrefix ? "flex items-start gap-0.5" : "block"
+                  )}
+                  style={group.type.includes("matching_headings") || isListeningMatchingGroup ? { width: optionBankWidth } : undefined}
+                >
+                {hasPrefix ? (
+                    <>
                       {group.type.includes("matching_headings") ? (
                         <span
-                          ref={(node) => {
-                            textBlockRefs.current[optionBlockKey] = node;
-                          }}
-                          data-highlight-text
-                          onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
-                          className="select-text"
+                          onPointerDown={(event) => beginHeadingPointerDrag(event, { groupId: group.id, value })}
+                          className="mt-0.5 flex h-7 w-7 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-md border border-[#2f436f]/35 bg-[#2f436f]/[0.07] text-[#2f436f] transition active:cursor-grabbing dark:border-[#4b6498]/45 dark:bg-[#4b6498]/[0.12] dark:text-[#89a4d8]"
+                          aria-hidden="true"
                         >
-                          {renderHighlightedText(optionBlockKey, `${headingPrefix}. ${text}`)}
+                          <GripVertical className="h-4 w-4" />
                         </span>
-                      ) : isListeningMatchingGroup ? (
-                        <>
-                          <span className="font-black">{value}.</span>{" "}
+                      ) : null}
+                      <span
+                        className={cn(
+                          "flex-1 whitespace-nowrap text-[16px] leading-6 text-foreground",
+                          isListeningMatchingGroup && "min-w-0 whitespace-normal break-words leading-5",
+                          group.type.includes("matching_headings") && "whitespace-normal"
+                        )}
+                      >
+                        {group.type.includes("matching_headings") ? (
                           <span
                             ref={(node) => {
                               textBlockRefs.current[optionBlockKey] = node;
                             }}
                             data-highlight-text
                             onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
-                            className="font-normal select-text"
+                            className="select-text"
                           >
-                            {renderHighlightedText(optionBlockKey, text)}
+                            {renderHighlightedText(optionBlockKey, `${headingPrefix}. ${text}`)}
                           </span>
-                        </>
-                      ) : (
-                        <span
-                          ref={(node) => {
-                            textBlockRefs.current[optionBlockKey] = node;
-                          }}
-                          data-highlight-text
-                          onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
-                          className="select-text"
-                        >
-                          {renderHighlightedText(optionBlockKey, `${value}. ${text}`)}
-                        </span>
-                      )}
-                    </span>
-                  </>
-                ) : (
-                  <div className="flex items-start gap-3">
-                    {group.type.includes("matching_headings") ? (
-                      <span
-                        onPointerDown={(event) => beginHeadingPointerDrag(event, { groupId: group.id, value })}
-                        className="mt-0.5 flex h-7 w-7 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-md border border-[#2f436f]/35 bg-[#2f436f]/[0.07] text-[#2f436f] transition active:cursor-grabbing dark:border-[#4b6498]/45 dark:bg-[#4b6498]/[0.12] dark:text-[#89a4d8]"
-                        aria-hidden="true"
-                      >
-                        <GripVertical className="h-4 w-4" />
+                        ) : isListeningMatchingGroup ? (
+                          <>
+                            <span className="font-black">{value}.</span>{" "}
+                            <span
+                              ref={(node) => {
+                                textBlockRefs.current[optionBlockKey] = node;
+                              }}
+                              data-highlight-text
+                              onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
+                              className="font-normal select-text"
+                            >
+                              {renderHighlightedText(optionBlockKey, text)}
+                            </span>
+                          </>
+                        ) : (
+                          <span
+                            ref={(node) => {
+                              textBlockRefs.current[optionBlockKey] = node;
+                            }}
+                            data-highlight-text
+                            onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
+                            className="select-text"
+                          >
+                            {renderHighlightedText(optionBlockKey, `${value}. ${text}`)}
+                          </span>
+                        )}
                       </span>
-                    ) : null}
-                    <span
-                      ref={(node) => {
-                        textBlockRefs.current[optionBlockKey] = node;
-                        }}
-                      data-highlight-text
-                      onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
-                      className={cn(
-                        "select-text whitespace-nowrap text-[16px] font-bold leading-6 text-foreground",
-                        group.type.includes("matching_headings") && "whitespace-normal",
-                        group.type.includes("wordbank") ? "block leading-5" : "block flex-1"
-                      )}
-                    >
+                    </>
+                  ) : (
+                    <div className="flex items-start gap-3">
                       {group.type.includes("matching_headings") ? (
-                        renderHighlightedText(optionBlockKey, `${headingPrefix}. ${text}`)
-                      ) : (
-                        renderHighlightedText(optionBlockKey, text)
-                      )}
-                    </span>
-                  </div>
-                )}
+                        <span
+                          onPointerDown={(event) => beginHeadingPointerDrag(event, { groupId: group.id, value })}
+                          className="mt-0.5 flex h-7 w-7 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-md border border-[#2f436f]/35 bg-[#2f436f]/[0.07] text-[#2f436f] transition active:cursor-grabbing dark:border-[#4b6498]/45 dark:bg-[#4b6498]/[0.12] dark:text-[#89a4d8]"
+                          aria-hidden="true"
+                        >
+                          <GripVertical className="h-4 w-4" />
+                        </span>
+                      ) : null}
+                      <span
+                        ref={(node) => {
+                          textBlockRefs.current[optionBlockKey] = node;
+                          }}
+                        data-highlight-text
+                        onMouseUp={(event) => handleTextBlockMouseUp(optionBlockKey, event)}
+                        className={cn(
+                          "select-text whitespace-nowrap text-[16px] font-bold leading-6 text-foreground",
+                          group.type.includes("matching_headings") && "whitespace-normal",
+                          group.type.includes("wordbank") ? "block leading-5" : "block flex-1"
+                        )}
+                      >
+                        {group.type.includes("matching_headings") ? (
+                          renderHighlightedText(optionBlockKey, `${headingPrefix}. ${text}`)
+                        ) : (
+                          renderHighlightedText(optionBlockKey, text)
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {bankOptions.length === 0 && isWordBankGroup ? (
+              <div className="rounded-xl border border-dashed border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground">
+                All options are in use
               </div>
-            );
-          })}
-          {bankOptions.length === 0 && isWordBankGroup ? (
-            <div className="rounded-xl border border-dashed border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground">
-              All options are in use
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
   function renderDiagramBlock(group: PreviewGroup) {
-    if ((!group.type.includes("diagram") && !group.type.includes("plan_map_labeling")) || !group.diagramImageUrl) {
-      return null;
-    }
+      if ((!group.type.includes("diagram") && !group.type.includes("plan_map_labeling")) || !group.diagramImageUrl) {
+        return null;
+      }
 
-    return (
-      <div className="p-1">
-        <div className="overflow-hidden rounded-xl p-2">
-          <img
-            src={group.diagramImageUrl}
-            alt={group.title}
-            className="max-h-[340px] w-full object-contain object-left"
-          />
+      return (
+        <div className="p-1">
+          <div className="overflow-hidden rounded-xl p-2">
+            <img
+              src={group.diagramImageUrl}
+              alt={group.title}
+              className="max-h-[340px] w-full object-contain object-left"
+            />
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
   function renderGroupQuestionList(group: PreviewGroup) {
-    if (usesBracketCompletionLayout(group.type) && hasFlowChartSeparators(group.questionBlock ?? "")) {
-      return renderFlowChartCompletionGroup(group);
+      if (usesBracketCompletionLayout(group.type) && hasFlowChartSeparators(group.questionBlock ?? "")) {
+        return renderFlowChartCompletionGroup(group);
+      }
+
+      if (usesBracketCompletionLayout(group.type) && group.questionBlock?.trim()) {
+        return renderInlineCompletionGroup(group);
+      }
+
+      if (group.type.includes("matching_headings")) {
+        return null;
+      }
+
+      return group.questions.map((question) => {
+        const isBinaryQuestion = isTfng(question.type) || isYnng(question.type);
+        const isMatchingInformationQuestion = question.type.includes("matching_information");
+        const isMatchingFeaturesQuestion = question.type.includes("matching_features");
+        const isListeningMatchingQuestion = question.type.includes("listening_matching");
+        const isPlanMapQuestion = question.type.includes("plan_map_labeling");
+        const isInlineMatchingQuestion =
+          isMatchingInformationQuestion
+          || isMatchingFeaturesQuestion
+          || isListeningMatchingQuestion
+          || isPlanMapQuestion;
+        const inlineQuestionLabel = question.label ?? String(question.number);
+
+        return (
+          <div
+            key={question.id}
+            id={question.id}
+            onClick={() => setActiveQuestionId(question.id)}
+            className={cn(
+              "px-0 transition",
+              isInlineMatchingQuestion ? "py-0" : "py-2",
+              activeQuestionId === question.id && ""
+            )}
+          >
+            <div className={cn(
+              "mb-2.5 flex items-start gap-3",
+              isBinaryQuestion && "mb-1.5",
+              isInlineMatchingQuestion && "mb-0 gap-1 items-start",
+              isListeningMatchingQuestion && "gap-4",
+              isPlanMapQuestion && "gap-2 items-center"
+            )}>
+              <div className={cn(
+                isPlanMapQuestion
+                  ? "inline-grid max-w-[456px] grid-cols-[minmax(0,252px)_188px] items-center gap-4"
+                  : "min-w-0 flex-1 space-y-1",
+                isInlineMatchingQuestion && !isPlanMapQuestion && "flex flex-1 flex-wrap items-start gap-1 space-y-0",
+                isListeningMatchingQuestion && "w-auto flex-none",
+                isMcqMultiple(question.type) && "space-y-0"
+              )}>
+                <p
+                  className={cn(
+                    "font-sans text-foreground",
+                    isMatchingInformationQuestion && "min-w-[160px] flex-1",
+                    isMatchingFeaturesQuestion && "min-w-[180px] flex-1",
+                    isListeningMatchingQuestion && "w-[260px] max-w-[260px] flex-none",
+                    isPlanMapQuestion && "min-w-0 max-w-none"
+                  )}
+                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: isInlineMatchingQuestion ? 1.35 : 1.5 }}
+                >
+                  <span className="mr-3 inline-block whitespace-nowrap text-[16px] font-bold tracking-tight text-foreground">
+                    {inlineQuestionLabel}
+                  </span>
+                  <span
+                    ref={(node) => {
+                      textBlockRefs.current[`question-prompt-${question.id}`] = node;
+                    }}
+                    data-highlight-text
+                    onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
+                    className="select-text"
+                  >
+                    {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
+                  </span>
+                </p>
+                {isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
+                {question.instruction && !group.instruction?.trim() && !isBinaryQuestion && !isMatching(question.type) ? (
+                  <p
+                    ref={(node) => {
+                      textBlockRefs.current[`question-instruction-${question.id}`] = node;
+                    }}
+                    data-highlight-text
+                    onMouseUp={(event) => handleTextBlockMouseUp(`question-instruction-${question.id}`, event)}
+                    className="select-text text-[12px] font-medium leading-5 text-muted-foreground md:text-[13px]"
+                  >
+                    {renderHighlightedText(`question-instruction-${question.id}`, softenInstructionText(question.instruction))}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            {!isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
+          </div>
+        );
+      });
     }
 
-    if (usesBracketCompletionLayout(group.type) && group.questionBlock?.trim()) {
-      return renderInlineCompletionGroup(group);
+  function renderCustomGroupTitle(group: PreviewGroup) {
+      if (!shouldRenderCustomGroupTitle(group)) {
+        return null;
+      }
+
+      return (
+        <div className="px-2">
+          <h2 className="text-center text-[17px] font-bold tracking-tight text-foreground md:text-[19px]">
+            {renderFormattedText(group.title, `group-title-${group.id}`)}
+          </h2>
+        </div>
+      );
     }
 
-    if (group.type.includes("matching_headings")) {
-      return null;
-    }
+  function renderMatchingHeadingDropArea(paragraph: PreviewParagraph) {
+      const paragraphKey = `${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`;
+      const target = matchingHeadingTargets.get(paragraphKey);
+      const fixedExample = matchingHeadingExamples.get(paragraphKey);
 
-    return group.questions.map((question) => {
-      const isBinaryQuestion = isTfng(question.type) || isYnng(question.type);
-      const isMatchingInformationQuestion = question.type.includes("matching_information");
-      const isMatchingFeaturesQuestion = question.type.includes("matching_features");
-      const isListeningMatchingQuestion = question.type.includes("listening_matching");
-      const isPlanMapQuestion = question.type.includes("plan_map_labeling");
-      const isInlineMatchingQuestion =
-        isMatchingInformationQuestion
-        || isMatchingFeaturesQuestion
-        || isListeningMatchingQuestion
-        || isPlanMapQuestion;
-      const inlineQuestionLabel = question.label ?? String(question.number);
+      if (!target && !fixedExample) {
+        return null;
+      }
+
+      if (!target && fixedExample) {
+        return (
+          <div className={cn(
+            "mb-2 flex min-h-[28px] items-center justify-center rounded-md border border-success/40 bg-success/8 px-2.5 py-1 text-sm font-semibold text-foreground transition-all duration-150"
+          )}>
+            <span className="ml-2.5 flex-1 text-left text-[15px] font-bold leading-6 text-inherit">
+              {renderFormattedText(`${fixedExample.prefix}. ${fixedExample.text}`, `selected-heading-example-${paragraph.paragraphKey}`)}
+            </span>
+          </div>
+        );
+      }
+
+      if (!target) {
+        return null;
+      }
+
+      const isDraggingSelectedHeading =
+        draggingHeading?.groupId === target.group.id &&
+        normalizeHeadingComparableValue(draggingHeading?.value) === normalizeHeadingComparableValue(answers[target.question.id] ?? "") &&
+        draggingHeading?.sourceQuestionId === target.question.id;
+      const currentValue = isDraggingSelectedHeading ? "" : (answers[target.question.id] ?? "");
+      const optionLines = typedOptionLines(target.group);
+      const currentOptionIndex = optionLines.findIndex(
+        (option, index) =>
+          normalizeHeadingComparableValue(typedOptionView(option, index, target.group.type).value) === normalizeHeadingComparableValue(currentValue)
+      );
+      const currentHeadingOption = currentOptionIndex >= 0
+        ? typedOptionView(optionLines[currentOptionIndex], currentOptionIndex, target.group.type)
+        : headingOptionLookup.get(`${target.group.id}:${currentValue}`) ?? null;
+      const currentHeadingText = currentHeadingOption?.text ?? currentValue;
+      const currentHeadingPrefix = currentHeadingOption?.prefix ?? currentValue;
+      const isActive = activeQuestionId === target.question.id;
+      const isDropReady = draggingHeading?.groupId === target.group.id;
+      const isDropHover = dragOverQuestionId === target.question.id && isDropReady;
+      const hasValue = Boolean(currentValue);
+      const dropTone = theme === "light"
+        ? {
+            hover: "border-[#2f436f] text-[#2f436f] bg-[#2f436f]/16 ring-2 ring-[#2f436f]/18 shadow-sm",
+            filled: "border-[#2f436f]/75 text-[#2f436f] bg-[#2f436f]/8",
+            idle: "border-[#2f436f]/70 text-[#2f436f]/90",
+          }
+        : {
+            hover: "border-slate-300 text-[#FBFCFD] bg-slate-700/70 ring-2 ring-slate-300/18 shadow-sm",
+            filled: "border-slate-500/80 text-[#FBFCFD] bg-slate-700/35",
+            idle: "border-slate-500/75 text-[#FBFCFD]/88",
+          };
 
       return (
         <div
-          key={question.id}
-          id={question.id}
-          onClick={() => setActiveQuestionId(question.id)}
+          id={target.question.id}
+          data-heading-drop-question-id={target.question.id}
+          data-heading-drop-group-id={target.group.id}
+          onClick={() => setActiveQuestionId(target.question.id)}
           className={cn(
-            "px-0 transition",
-            isInlineMatchingQuestion ? "py-0" : "py-2",
-            activeQuestionId === question.id && ""
+            "mb-2 flex min-h-[28px] items-center justify-center rounded-md border border-dashed px-2.5 py-1 text-sm font-semibold transition-all duration-150",
+            "cursor-default",
+            isDropHover
+              ? dropTone.hover
+              : hasValue
+                ? dropTone.filled
+                : isActive
+                  ? "border-[#2f436f] text-[#2f436f] bg-[#2f436f]/[0.03]"
+                  : dropTone.idle,
           )}
         >
-          <div className={cn(
-            "mb-2.5 flex items-start gap-3",
-            isBinaryQuestion && "mb-1.5",
-            isInlineMatchingQuestion && "mb-0 gap-1 items-start",
-            isListeningMatchingQuestion && "gap-4",
-            isPlanMapQuestion && "gap-2 items-center"
-          )}>
-            <div className={cn(
-              isPlanMapQuestion
-                ? "inline-grid max-w-[456px] grid-cols-[minmax(0,252px)_188px] items-center gap-4"
-                : "min-w-0 flex-1 space-y-1",
-              isInlineMatchingQuestion && !isPlanMapQuestion && "flex flex-1 flex-wrap items-start gap-1 space-y-0",
-              isListeningMatchingQuestion && "w-auto flex-none",
-              isMcqMultiple(question.type) && "space-y-0"
-            )}>
-              <p
-                className={cn(
-                  "font-sans text-foreground",
-                  isMatchingInformationQuestion && "min-w-[160px] flex-1",
-                  isMatchingFeaturesQuestion && "min-w-[180px] flex-1",
-                  isListeningMatchingQuestion && "w-[260px] max-w-[260px] flex-none",
-                  isPlanMapQuestion && "min-w-0 max-w-none"
-                )}
-                style={{ fontSize: `${bodyFontSize}px`, lineHeight: isInlineMatchingQuestion ? 1.35 : 1.5 }}
-              >
-                <span className="mr-3 inline-block whitespace-nowrap text-[16px] font-bold tracking-tight text-foreground">
-                  {inlineQuestionLabel}
-                </span>
-                <span
-                  ref={(node) => {
-                    textBlockRefs.current[`question-prompt-${question.id}`] = node;
-                  }}
-                  data-highlight-text
-                  onMouseUp={(event) => handleTextBlockMouseUp(`question-prompt-${question.id}`, event)}
-                  className="select-text"
-                >
-                  {renderHighlightedText(`question-prompt-${question.id}`, question.prompt)}
-                </span>
-              </p>
-              {isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
-              {question.instruction && !group.instruction?.trim() && !isBinaryQuestion && !isMatching(question.type) ? (
-                <p
-                  ref={(node) => {
-                    textBlockRefs.current[`question-instruction-${question.id}`] = node;
-                  }}
-                  data-highlight-text
-                  onMouseUp={(event) => handleTextBlockMouseUp(`question-instruction-${question.id}`, event)}
-                  className="select-text text-[12px] font-medium leading-5 text-muted-foreground md:text-[13px]"
-                >
-                  {renderHighlightedText(`question-instruction-${question.id}`, softenInstructionText(question.instruction))}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          {!isInlineMatchingQuestion ? renderQuestionControl(question, group) : null}
-        </div>
-      );
-    });
-  }
-
-  function renderCustomGroupTitle(group: PreviewGroup) {
-    if (!shouldRenderCustomGroupTitle(group)) {
-      return null;
-    }
-
-    return (
-      <div className="px-2">
-        <h2 className="text-center text-[17px] font-bold tracking-tight text-foreground md:text-[19px]">
-          {renderFormattedText(group.title, `group-title-${group.id}`)}
-        </h2>
-      </div>
-    );
-  }
-
-  function renderMatchingHeadingDropArea(paragraph: PreviewParagraph) {
-    const paragraphKey = `${paragraph.sectionId ?? paragraph.sectionLabel ?? "section"}:${paragraph.paragraphKey}`;
-    const target = matchingHeadingTargets.get(paragraphKey);
-    const fixedExample = matchingHeadingExamples.get(paragraphKey);
-
-    if (!target && !fixedExample) {
-      return null;
-    }
-
-    if (!target && fixedExample) {
-      return (
-        <div className={cn(
-          "mb-2 flex min-h-[28px] items-center justify-center rounded-md border border-success/40 bg-success/8 px-2.5 py-1 text-sm font-semibold text-foreground transition-all duration-150"
-        )}>
-          <span className="ml-2.5 flex-1 text-left text-[15px] font-bold leading-6 text-inherit">
-            {renderFormattedText(`${fixedExample.prefix}. ${fixedExample.text}`, `selected-heading-example-${paragraph.paragraphKey}`)}
+          <span className="flex min-w-[18px] items-center justify-center text-[16px] font-black leading-none text-inherit">
+            {target.question.label ?? target.question.number}
           </span>
+          {currentValue ? (
+            <span
+              onPointerDown={(event) =>
+                beginHeadingPointerDrag(event, {
+                  groupId: target.group.id,
+                  value: currentValue,
+                  sourceQuestionId: target.question.id,
+                })}
+              className="ml-2 flex h-7 w-7 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-md border border-current/25 bg-current/[0.08] text-inherit transition active:cursor-grabbing"
+              aria-hidden="true"
+            >
+              <GripVertical className="h-4 w-4" />
+            </span>
+          ) : null}
+          {currentValue ? (
+            <span className="ml-2.5 flex-1 text-left text-[15px] font-bold leading-6 text-inherit">
+              {renderFormattedText(`${currentHeadingPrefix}. ${currentHeadingText}`, `selected-heading-${target.question.id}`)}
+            </span>
+          ) : null}
         </div>
       );
     }
-
-    if (!target) {
-      return null;
-    }
-
-    const isDraggingSelectedHeading =
-      draggingHeading?.groupId === target.group.id &&
-      normalizeHeadingComparableValue(draggingHeading?.value) === normalizeHeadingComparableValue(answers[target.question.id] ?? "") &&
-      draggingHeading?.sourceQuestionId === target.question.id;
-    const currentValue = isDraggingSelectedHeading ? "" : (answers[target.question.id] ?? "");
-    const optionLines = typedOptionLines(target.group);
-    const currentOptionIndex = optionLines.findIndex(
-      (option, index) =>
-        normalizeHeadingComparableValue(typedOptionView(option, index, target.group.type).value) === normalizeHeadingComparableValue(currentValue)
-    );
-    const currentHeadingOption = currentOptionIndex >= 0
-      ? typedOptionView(optionLines[currentOptionIndex], currentOptionIndex, target.group.type)
-      : headingOptionLookup.get(`${target.group.id}:${currentValue}`) ?? null;
-    const currentHeadingText = currentHeadingOption?.text ?? currentValue;
-    const currentHeadingPrefix = currentHeadingOption?.prefix ?? currentValue;
-    const isActive = activeQuestionId === target.question.id;
-    const isDropReady = draggingHeading?.groupId === target.group.id;
-    const isDropHover = dragOverQuestionId === target.question.id && isDropReady;
-    const hasValue = Boolean(currentValue);
-    const dropTone = theme === "light"
-      ? {
-          hover: "border-[#2f436f] text-[#2f436f] bg-[#2f436f]/16 ring-2 ring-[#2f436f]/18 shadow-sm",
-          filled: "border-[#2f436f]/75 text-[#2f436f] bg-[#2f436f]/8",
-          idle: "border-[#2f436f]/70 text-[#2f436f]/90",
-        }
-      : {
-          hover: "border-slate-300 text-[#FBFCFD] bg-slate-700/70 ring-2 ring-slate-300/18 shadow-sm",
-          filled: "border-slate-500/80 text-[#FBFCFD] bg-slate-700/35",
-          idle: "border-slate-500/75 text-[#FBFCFD]/88",
-        };
-
-    return (
-      <div
-        id={target.question.id}
-        data-heading-drop-question-id={target.question.id}
-        data-heading-drop-group-id={target.group.id}
-        onClick={() => setActiveQuestionId(target.question.id)}
-        className={cn(
-          "mb-2 flex min-h-[28px] items-center justify-center rounded-md border border-dashed px-2.5 py-1 text-sm font-semibold transition-all duration-150",
-          "cursor-default",
-          isDropHover
-            ? dropTone.hover
-            : hasValue
-              ? dropTone.filled
-              : isActive
-                ? "border-[#2f436f] text-[#2f436f] bg-[#2f436f]/[0.03]"
-                : dropTone.idle,
-        )}
-      >
-        <span className="flex min-w-[18px] items-center justify-center text-[16px] font-black leading-none text-inherit">
-          {target.question.label ?? target.question.number}
-        </span>
-        {currentValue ? (
-          <span
-            onPointerDown={(event) =>
-              beginHeadingPointerDrag(event, {
-                groupId: target.group.id,
-                value: currentValue,
-                sourceQuestionId: target.question.id,
-              })}
-            className="ml-2 flex h-7 w-7 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-md border border-current/25 bg-current/[0.08] text-inherit transition active:cursor-grabbing"
-            aria-hidden="true"
-          >
-            <GripVertical className="h-4 w-4" />
-          </span>
-        ) : null}
-        {currentValue ? (
-          <span className="ml-2.5 flex-1 text-left text-[15px] font-bold leading-6 text-inherit">
-            {renderFormattedText(`${currentHeadingPrefix}. ${currentHeadingText}`, `selected-heading-${target.question.id}`)}
-          </span>
-        ) : null}
-      </div>
-    );
-  }
 
   function renderCompletionAnswer(group: PreviewGroup, question: PreviewQuestion, key: string) {
-    const isWordBankGroup = isWordBankCompletion(question.type);
-    const answerLabel = question.label ?? String(question.number);
-    const answerNumberBadge = (
-      <span className={cn("inline-flex h-[1.55em] min-w-[1.55em] items-center justify-center rounded-full border px-1 text-[0.78em] font-bold leading-none align-middle", answerNumberBadgeClassName)}>
-        {answerLabel}
-      </span>
-    );
+      const isWordBankGroup = isWordBankCompletion(question.type);
+      const answerLabel = question.label ?? String(question.number);
+      const answerNumberBadge = (
+        <span className={cn("inline-flex h-[1.55em] min-w-[1.55em] items-center justify-center rounded-full border px-1 text-[0.78em] font-bold leading-none align-middle", answerNumberBadgeClassName)}>
+          {answerLabel}
+        </span>
+      );
 
-    if (isWordBankGroup) {
+      if (isWordBankGroup) {
+        return (
+          <span key={`${key}-wordbank-wrap`} className="mx-1 inline-flex items-center gap-1 align-middle">
+            {answerNumberBadge}
+            <button
+              type="button"
+              data-question-anchor={question.id}
+              data-wordbank-drop-question-id={question.id}
+              data-wordbank-drop-group-id={group.id}
+              onClick={() => setActiveQuestionId(question.id)}
+              onPointerDown={(event) => {
+                const currentValue = answers[question.id] ?? "";
+                if (!currentValue) {
+                  return;
+                }
+                beginWordBankPointerDrag(event, {
+                  groupId: group.id,
+                  value: currentValue,
+                  sourceQuestionId: question.id,
+                });
+              }}
+              className={cn(
+                inlineAnswerFieldClassName,
+                "mx-0 text-left font-medium transition",
+                theme === "light"
+                  ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
+                  : "border-slate-500/55 bg-card text-foreground",
+                dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
+                answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+                activeQuestionId === question.id && activeInputClass
+              )}
+              style={{ width: `${inlineAnswerWidth(answers[question.id], answerLabel)}px` }}
+            >
+              <span>{answers[question.id] || "\u00a0"}</span>
+            </button>
+          </span>
+        );
+      }
+
       return (
-        <span key={`${key}-wordbank-wrap`} className="mx-1 inline-flex items-center gap-1 align-middle">
+        <span key={`${key}-input-wrap`} className="mx-1 inline-flex items-center gap-1 align-middle">
           {answerNumberBadge}
-          <button
-            type="button"
+          <Input
+            value={answers[question.id] ?? ""}
+            onFocus={() => setActiveQuestionId(question.id)}
+            onChange={(event) => persistAnswer(question.id, event.target.value)}
+            placeholder=""
             data-question-anchor={question.id}
-            data-wordbank-drop-question-id={question.id}
-            data-wordbank-drop-group-id={group.id}
-            onClick={() => setActiveQuestionId(question.id)}
-            onPointerDown={(event) => {
-              const currentValue = answers[question.id] ?? "";
-              if (!currentValue) {
-                return;
-              }
-              beginWordBankPointerDrag(event, {
-                groupId: group.id,
-                value: currentValue,
-                sourceQuestionId: question.id,
-              });
-            }}
             className={cn(
               inlineAnswerFieldClassName,
-              "mx-0 text-left font-medium transition",
+              "mx-0 text-left font-medium",
               theme === "light"
-                ? "border-[#2f436f]/45 bg-[#f8faff] text-[#22314d]"
-                : "border-slate-500/55 bg-card text-foreground",
-              dragOverWordBankQuestionId === question.id && "border-primary/55 bg-primary/10",
-              answers[question.id] ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+                ? "border-[#2f436f]/45 bg-[#f8faff]"
+                : "border-primary/30 bg-card",
+              inlineAnswerPlaceholderClassName,
+              inputFocusClass,
               activeQuestionId === question.id && activeInputClass
             )}
             style={{ width: `${inlineAnswerWidth(answers[question.id], answerLabel)}px` }}
-          >
-            <span>{answers[question.id] || "\u00a0"}</span>
-          </button>
+            autoComplete="off"
+            spellCheck="false"
+          />
         </span>
       );
     }
 
-    return (
-      <span key={`${key}-input-wrap`} className="mx-1 inline-flex items-center gap-1 align-middle">
-        {answerNumberBadge}
-        <Input
-          value={answers[question.id] ?? ""}
-          onFocus={() => setActiveQuestionId(question.id)}
-          onChange={(event) => persistAnswer(question.id, event.target.value)}
-          placeholder=""
-          data-question-anchor={question.id}
-          className={cn(
-            inlineAnswerFieldClassName,
-            "mx-0 text-left font-medium",
-            theme === "light"
-              ? "border-[#2f436f]/45 bg-[#f8faff]"
-              : "border-primary/30 bg-card",
-            inlineAnswerPlaceholderClassName,
-            inputFocusClass,
-            activeQuestionId === question.id && activeInputClass
-          )}
-          style={{ width: `${inlineAnswerWidth(answers[question.id], answerLabel)}px` }}
-          autoComplete="off"
-          spellCheck="false"
-        />
-      </span>
-    );
-  }
-
   function renderFlowChartCompletionGroup(group: PreviewGroup) {
-    const questionBlock = group.questionBlock ?? "";
-    const flowLines = questionBlock.split(/\r?\n\s*\\+\s*\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const questionIndexRef = { current: 0 };
-
-    return (
-      <div className="px-2 py-2">
-        <div className="mx-auto flex max-w-3xl flex-col items-center gap-2 text-center">
-          {flowLines.map((line, lineIndex) => {
-            const segments = line.split("[]");
-            return (
-              <div key={`${group.id}-flow-line-${lineIndex}`} className="flex w-full flex-col items-center gap-2">
-                <div className="w-full text-center">
-                  <div
-                    className="whitespace-pre-wrap font-sans text-foreground text-center"
-                    style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.55 }}
-                  >
-                    {segments.map((segment, segmentIndex) => {
-                      const question = segmentIndex < segments.length - 1
-                        ? group.questions[questionIndexRef.current++]
-                        : null;
-                      const blockKey = `flowchart-completion-${group.id}-${lineIndex}-${segmentIndex}`;
-
-                      return (
-                        <span key={`${group.id}-flow-fragment-${lineIndex}-${segmentIndex}`}>
-                          <span
-                            ref={(node) => {
-                              textBlockRefs.current[blockKey] = node;
-                            }}
-                            data-highlight-text
-                            onMouseUp={(event) => handleTextBlockMouseUp(blockKey, event)}
-                            className="select-text"
-                          >
-                            {renderHighlightedText(blockKey, segment)}
-                          </span>
-                          {question ? renderCompletionAnswer(group, question, `${group.id}-flow-answer-${question.id}`) : null}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                {lineIndex < flowLines.length - 1 ? (
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm">
-                    <ArrowDown className="h-4 w-4" />
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  function renderInlineCompletionGroup(group: PreviewGroup) {
-    const questionBlock = group.questionBlock ?? "";
-    const segments = questionBlock.split("[]");
-
-    const tableLayout = parseCompletionTableLayout(questionBlock);
-    if (tableLayout) {
+      const questionBlock = group.questionBlock ?? "";
+      const flowLines = questionBlock.split(/\r?\n\s*\\+\s*\r?\n/).map((line) => line.trim()).filter(Boolean);
       const questionIndexRef = { current: 0 };
 
       return (
         <div className="px-2 py-2">
-          <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-border bg-background p-1 shadow-[0_0_0_1px_hsl(var(--border)),0_8px_24px_-18px_hsl(var(--foreground)/0.28)]">
-            <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-border bg-background">
-              <tbody>
-                {tableLayout.map((row, rowIndex) => (
-                  <tr
-                    key={`${group.id}-table-row-${rowIndex}`}
-                    className={row.isHeader ? "bg-muted/85" : "border-t border-border"}
-                  >
-                    {row.cells.map((cell, cellIndex) => {
-                      const CellTag = row.isHeader ? "th" : "td";
-                      const cellSegments = cell.split("[]");
+          <div className="mx-auto flex max-w-3xl flex-col items-center gap-2 text-center">
+            {flowLines.map((line, lineIndex) => {
+              const segments = line.split("[]");
+              return (
+                <div key={`${group.id}-flow-line-${lineIndex}`} className="flex w-full flex-col items-center gap-2">
+                  <div className="w-full text-center">
+                    <div
+                      className="whitespace-pre-wrap font-sans text-foreground text-center"
+                      style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.55 }}
+                    >
+                      {segments.map((segment, segmentIndex) => {
+                        const question = segmentIndex < segments.length - 1
+                          ? group.questions[questionIndexRef.current++]
+                          : null;
+                        const blockKey = `flowchart-completion-${group.id}-${lineIndex}-${segmentIndex}`;
 
-                      return (
-                        <CellTag
-                          key={`${group.id}-table-cell-${rowIndex}-${cellIndex}`}
-                          className={cn(
-                            "align-middle border-l border-border px-3 py-2 text-left font-sans text-foreground first:border-l-0",
-                            row.isHeader ? "text-sm font-bold" : "text-[15px] font-normal"
-                          )}
-                          style={{ lineHeight: 1.5 }}
-                        >
-                          {cellSegments.map((segment, segmentIndex) => {
-                            const question = segmentIndex < cellSegments.length - 1
-                              ? group.questions[questionIndexRef.current++]
-                              : null;
-                            const blockKey = `${group.id}-table-text-${rowIndex}-${cellIndex}-${segmentIndex}`;
-                            return (
-                              <span key={`${group.id}-table-fragment-${rowIndex}-${cellIndex}-${segmentIndex}`}>
-                                {segment ? (
-                                  <span
-                                    ref={(node) => {
-                                      textBlockRefs.current[blockKey] = node;
-                                    }}
-                                    data-highlight-text
-                                    onMouseUp={(event) => handleTextBlockMouseUp(blockKey, event)}
-                                  >
-                                    {renderHighlightedText(blockKey, segment)}
-                                  </span>
-                                ) : null}
-                                {question ? renderCompletionAnswer(group, question, `${group.id}-table-answer-${question.id}`) : null}
-                              </span>
-                            );
-                          })}
-                        </CellTag>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        return (
+                          <span key={`${group.id}-flow-fragment-${lineIndex}-${segmentIndex}`}>
+                            <span
+                              ref={(node) => {
+                                textBlockRefs.current[blockKey] = node;
+                              }}
+                              data-highlight-text
+                              onMouseUp={(event) => handleTextBlockMouseUp(blockKey, event)}
+                              className="select-text"
+                            >
+                              {renderHighlightedText(blockKey, segment)}
+                            </span>
+                            {question ? renderCompletionAnswer(group, question, `${group.id}-flow-answer-${question.id}`) : null}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {lineIndex < flowLines.length - 1 ? (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm">
+                      <ArrowDown className="h-4 w-4" />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       );
     }
 
-    return (
-      <div className="px-2 py-2">
-        <div
-          className="whitespace-pre-wrap font-sans text-foreground"
-          style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
-        >
-          {segments.map((segment, index) => {
-            const question = group.questions[index];
-            return (
-              <span key={`${group.id}-segment-${index}`}>
-                <span
-                  ref={(node) => {
-                    textBlockRefs.current[`inline-completion-${group.id}-${index}`] = node;
-                  }}
-                  data-highlight-text
-                  onMouseUp={(event) => handleTextBlockMouseUp(`inline-completion-${group.id}-${index}`, event)}
-                  className="select-text"
-                >
-                  {renderHighlightedText(`inline-completion-${group.id}-${index}`, segment)}
-                </span>
-                {question ? renderCompletionAnswer(group, question, `${group.id}-inline-answer-${question.id}`) : null}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
+  function renderInlineCompletionGroup(group: PreviewGroup) {
+      const questionBlock = group.questionBlock ?? "";
+      const segments = questionBlock.split("[]");
 
-  function renderReviewExplanation(reviewItem: NonNullable<typeof reviewItems[string]>, questionNumber: number) {
-    if (!reviewItem.explanation) {
-      return null;
-    }
-    const reference = reviewItem.explanationReference ?? {};
-    const highlightedAnswer = reference.highlighted_answer?.trim();
-    const hasQuote = Boolean(reference.quote?.trim());
-    const hasAnswerIssue = reference.answer_status && reference.answer_status !== "valid";
+      const tableLayout = parseCompletionTableLayout(questionBlock);
+      if (tableLayout) {
+        const questionIndexRef = { current: 0 };
 
-    return (
-      <div
-        className={`mt-2 rounded-2xl border border-orange-200/70 bg-orange-50/80 p-3 text-sm shadow-sm shadow-orange-950/5 dark:border-orange-400/20 dark:bg-orange-500/10 dark:shadow-black/20${hasQuote ? " cursor-pointer select-none" : ""}`}
-        onMouseEnter={() => setExplanationHighlightQuote(reference.quote ?? null)}
-        onMouseLeave={() => setExplanationHighlightQuote(null)}
-        onClick={() => {
-          if (!hasQuote) return;
-          // Tap-to-locate for touch devices (no hover): toggle the passage highlight.
-          setExplanationHighlightQuote((current) =>
-            current === (reference.quote ?? null) ? null : reference.quote ?? null,
-          );
-        }}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex h-6 items-center rounded-full bg-orange-600 px-2 text-[11px] font-black text-white dark:bg-orange-400 dark:text-slate-950">
-            Q{questionNumber}
-          </span>
-          {highlightedAnswer ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300/80 bg-white/80 px-2 py-1 text-xs font-bold text-orange-800 dark:border-orange-400/25 dark:bg-slate-950/40 dark:text-orange-200">
-              <Highlighter className="h-3.5 w-3.5" />
-              {highlightedAnswer}
-            </span>
-          ) : null}
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
-            <Lightbulb className="h-3.5 w-3.5" />
-            Explanation
-          </span>
-        </div>
-        <p className="mt-2 leading-relaxed text-foreground">{reviewItem.explanation}</p>
-        {hasQuote ? (
-          <div className="mt-2 rounded-xl border-l-2 border-orange-400 bg-background/70 p-2 text-xs italic text-muted-foreground dark:bg-slate-950/40">
-            "{reference.quote}"
-          </div>
-        ) : null}
-        {hasAnswerIssue ? (
-          <div className="mt-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-2 text-xs font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-200">
-            Answer key check: {reference.issue || "This answer needs manual review."}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  function renderQuestionControl(question: PreviewQuestion, group: PreviewGroup) {
-    const reviewItem = isReviewMode ? reviewItems[question.id] : undefined;
-    const formattedReviewCorrectAnswer = reviewItem
-      ? (
-          isMatching(question.type) || isWordBankCompletion(question.type)
-            ? reviewItem.correctAnswers.map((answer) => formatMatchingAnswerForReview(answer, typedQuestionOptionLines(group, question, []), question.type)).join(", ")
-            : reviewItem.correctAnswers.join(", ")
-        )
-      : "";
-
-    if (isTfng(question.type) || isYnng(question.type)) {
-      const options = isTfng(question.type)
-        ? ["TRUE", "FALSE", "NOT GIVEN"]
-        : ["YES", "NO", "NOT GIVEN"];
-
-      return (
-        <div className="space-y-0">
-          {options.map((option) => {
-            const selected = answers[question.id] === option;
-            const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(option));
-            const isIncorrectSelected = Boolean(reviewItem && selected && !isCorrectOption);
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  if (hasActiveSelection()) return;
-                  setActiveQuestionId(question.id);
-                  persistAnswer(question.id, option);
-                }}
-                className={cn(
-                  "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
-                  isReviewMode && isCorrectOption && "text-emerald-700 dark:text-emerald-400",
-                  isReviewMode && isIncorrectSelected && "text-red-700 dark:text-red-400",
-                  "bg-transparent hover:bg-transparent"
-                )}
-              >
-                <span
-                  className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
-                    theme === "light"
-                      ? isReviewMode && isCorrectOption
-                        ? "border-emerald-600 text-emerald-600"
-                        : isReviewMode && isIncorrectSelected
-                          ? "border-red-600 text-red-600"
-                          : selected
-                        ? "border-slate-900 text-slate-900"
-                        : "border-slate-400/85 text-transparent"
-                      : isReviewMode && isCorrectOption
-                        ? "border-emerald-400 text-emerald-400"
-                        : isReviewMode && isIncorrectSelected
-                          ? "border-red-400 text-red-400"
-                          : selected
-                        ? "border-slate-200 text-slate-200"
-                        : "border-slate-500/85 text-transparent"
-                  )}
-                >
-                  <span className={cn("h-2 w-2 rounded-full bg-current transition", selected ? "opacity-100" : "opacity-0")} />
-                </span>
-                <span
-                  className="font-sans text-foreground"
-                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
-                >
-                  {option}
-                </span>
-              </button>
-            );
-          })}
-          {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
-            <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Correct answer: {formattedReviewCorrectAnswer}
-            </p>
-          ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-        </div>
-      );
-    }
-
-    if (isMcq(question.type) && !isMcqMultiple(question.type)) {
-      return (
-        <div className="space-y-0">
-          {(question.options ?? []).map((option, index) => {
-            const optionLetter = String.fromCharCode(65 + index);
-            const checked = answers[question.id] === optionLetter;
-            const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(optionLetter));
-            const isIncorrectSelected = Boolean(reviewItem && checked && !isCorrectOption);
-            return (
-              <button
-                key={`${question.id}-${optionLetter}`}
-                type="button"
-                onClick={() => {
-                  if (hasActiveSelection()) return;
-                  setActiveQuestionId(question.id);
-                  persistAnswer(question.id, optionLetter);
-                }}
-                className={cn(
-                  "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
-                  isReviewMode && isCorrectOption && "text-emerald-700 dark:text-emerald-400",
-                  isReviewMode && isIncorrectSelected && "text-red-700 dark:text-red-400",
-                  "bg-transparent hover:bg-transparent"
-                )}
-              >
-                <span
-                  className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
-                    checked
-                      ? isReviewMode && isCorrectOption
-                        ? "border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
-                        : isReviewMode && isIncorrectSelected
-                          ? "border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
-                          : "border-slate-900 text-slate-900 dark:border-slate-200 dark:text-slate-200"
-                      : "border-slate-400/85 text-transparent dark:border-slate-500/85"
-                  )}
-                >
-                  <span className={cn("h-2 w-2 rounded-full bg-current transition", checked ? "opacity-100" : "opacity-0")} />
-                </span>
-                <span
-                  className={cn("font-sans text-foreground transition-colors", checked && "text-slate-950 dark:text-slate-50")}
-                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
-                >
-                  <span className="mr-2 font-black">{optionLetter}.</span>
-                  <span
-                    ref={(node) => {
-                      textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
-                    }}
-                    data-highlight-text
-                    onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
-                    className="select-text"
-                  >
-                    {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-          {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
-            <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Correct answer: {formattedReviewCorrectAnswer}
-            </p>
-          ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-        </div>
-      );
-    }
-
-    if (isMcqMultiple(question.type)) {
-      const maxSelections = mcMultipleQuestionWeight(question);
-      const selectedCount = (answers[question.id] ?? "")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .length;
-      return (
-        <div className="space-y-0">
-          {(question.options ?? []).map((option, index) => {
-            const optionLetter = String.fromCharCode(65 + index);
-            const checked = hasMultiValue(answers[question.id], optionLetter);
-            const disabled = !checked && selectedCount >= maxSelections;
-            const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(optionLetter));
-            const isIncorrectSelected = Boolean(reviewItem && checked && !isCorrectOption);
-
-            return (
-              <button
-                key={`${question.id}-${optionLetter}`}
-                type="button"
-                onClick={() => {
-                  if (hasActiveSelection()) return;
-                  if (disabled) return;
-                  setActiveQuestionId(question.id);
-                  persistAnswer(question.id, toggleMultiValue(answers[question.id], optionLetter, maxSelections));
-                }}
-                className={cn(
-                  "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
-                  isReviewMode && isCorrectOption && "bg-emerald-500/10",
-                  isReviewMode && isIncorrectSelected && "bg-red-500/10",
-                  disabled && "opacity-70",
-                  disabled
-                    ? "bg-card"
-                    : "bg-card hover:bg-muted/20"
-                )}
-              >
-                <span
-                  className={cn(
-                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 transition",
-                    checked
-                      ? isReviewMode && isCorrectOption
-                        ? "border-transparent bg-emerald-600 dark:bg-emerald-400"
-                        : isReviewMode && isIncorrectSelected
-                          ? "border-transparent bg-red-600 dark:bg-red-400"
-                          : "border-transparent bg-slate-950 dark:bg-slate-50"
-                      : disabled
-                        ? "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70"
-                        : "border-slate-500 bg-background dark:border-slate-400 dark:bg-transparent"
-                  )}
-                >
-                  {checked ? <Check className="h-3.5 w-3.5 text-white dark:text-slate-950" strokeWidth={3.25} /> : null}
-                </span>
-                <span
-                  className={cn(
-                    "font-sans text-foreground transition-colors",
-                    disabled && "text-muted-foreground"
-                  )}
-                  style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
-                >
-                  <span className="mr-2 font-black">{optionLetter}.</span>
-                  <span
-                    ref={(node) => {
-                      textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
-                    }}
-                    data-highlight-text
-                    onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
-                    className="select-text"
-                  >
-                    {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-          {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
-            <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Correct answer: {formattedReviewCorrectAnswer}
-            </p>
-          ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-        </div>
-      );
-    }
-
-    if (isMatching(question.type)) {
-      const isMatchingInformation = question.type.includes("matching_information");
-      const isMatchingFeatures = question.type.includes("matching_features");
-      const isListeningMatching = question.type.includes("listening_matching");
-      const isInlineMatching = isMatchingInformation || isMatchingFeatures || isListeningMatching;
-      const sectionKey = group.sectionId ?? group.sectionLabel ?? "section";
-      const matchingInformationOptions = matchingInformationParagraphOptions.get(sectionKey) ?? [];
-      const matchingOptions = typedQuestionOptionLines(group, question, matchingInformationOptions);
-      const matchingOptionViews = matchingOptions.map((option, index) => typedOptionView(option, index, question.type));
-      const normalizedMatchingValue = normalizeMatchingAnswerValue(
-        answers[question.id] ?? "",
-        matchingOptions,
-        question.type
-      );
-
-      if (matchingOptions.length === 0) {
         return (
-          <div className={cn(
-            isMatchingInformation
-              ? "min-w-[150px] max-w-[180px] flex-none"
-              : isMatchingFeatures
-                ? "min-w-[150px] max-w-[210px] flex-none"
-                : isListeningMatching
-                  ? "min-w-[160px] max-w-[220px] flex-none"
-                  : "pl-12"
-          )}>
-            <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-3 py-2 text-xs font-semibold text-muted-foreground">
-              Options not configured
+          <div className="px-2 py-2">
+            <div className="inline-block max-w-full overflow-x-auto rounded-2xl border border-border bg-background p-1 shadow-[0_0_0_1px_hsl(var(--border)),0_8px_24px_-18px_hsl(var(--foreground)/0.28)]">
+              <table className="w-auto border-collapse overflow-hidden rounded-[1rem] border border-border bg-background">
+                <tbody>
+                  {tableLayout.map((row, rowIndex) => (
+                    <tr
+                      key={`${group.id}-table-row-${rowIndex}`}
+                      className={row.isHeader ? "bg-muted/85" : "border-t border-border"}
+                    >
+                      {row.cells.map((cell, cellIndex) => {
+                        const CellTag = row.isHeader ? "th" : "td";
+                        const cellSegments = cell.split("[]");
+
+                        return (
+                          <CellTag
+                            key={`${group.id}-table-cell-${rowIndex}-${cellIndex}`}
+                            className={cn(
+                              "align-middle border-l border-border px-3 py-2 text-left font-sans text-foreground first:border-l-0",
+                              row.isHeader ? "text-sm font-bold" : "text-[15px] font-normal"
+                            )}
+                            style={{ lineHeight: 1.5 }}
+                          >
+                            {cellSegments.map((segment, segmentIndex) => {
+                              const question = segmentIndex < cellSegments.length - 1
+                                ? group.questions[questionIndexRef.current++]
+                                : null;
+                              const blockKey = `${group.id}-table-text-${rowIndex}-${cellIndex}-${segmentIndex}`;
+                              return (
+                                <span key={`${group.id}-table-fragment-${rowIndex}-${cellIndex}-${segmentIndex}`}>
+                                  {segment ? (
+                                    <span
+                                      ref={(node) => {
+                                        textBlockRefs.current[blockKey] = node;
+                                      }}
+                                      data-highlight-text
+                                      onMouseUp={(event) => handleTextBlockMouseUp(blockKey, event)}
+                                    >
+                                      {renderHighlightedText(blockKey, segment)}
+                                    </span>
+                                  ) : null}
+                                  {question ? renderCompletionAnswer(group, question, `${group.id}-table-answer-${question.id}`) : null}
+                                </span>
+                              );
+                            })}
+                          </CellTag>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         );
       }
 
-      if (isListeningMatching) {
+      return (
+        <div className="px-2 py-2">
+          <div
+            className="whitespace-pre-wrap font-sans text-foreground"
+            style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
+          >
+            {segments.map((segment, index) => {
+              const question = group.questions[index];
+              return (
+                <span key={`${group.id}-segment-${index}`}>
+                  <span
+                    ref={(node) => {
+                      textBlockRefs.current[`inline-completion-${group.id}-${index}`] = node;
+                    }}
+                    data-highlight-text
+                    onMouseUp={(event) => handleTextBlockMouseUp(`inline-completion-${group.id}-${index}`, event)}
+                    className="select-text"
+                  >
+                    {renderHighlightedText(`inline-completion-${group.id}-${index}`, segment)}
+                  </span>
+                  {question ? renderCompletionAnswer(group, question, `${group.id}-inline-answer-${question.id}`) : null}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+  function renderReviewExplanation(reviewItem: NonNullable<typeof reviewItems[string]>, questionNumber: number) {
+      if (!reviewItem.explanation) {
+        return null;
+      }
+      const reference = reviewItem.explanationReference ?? {};
+      const highlightedAnswer = reference.highlighted_answer?.trim();
+      const hasQuote = Boolean(reference.quote?.trim());
+      const hasAnswerIssue = reference.answer_status && reference.answer_status !== "valid";
+
+      return (
+        <div
+          className={`mt-2 rounded-2xl border border-orange-200/70 bg-orange-50/80 p-3 text-sm shadow-sm shadow-orange-950/5 dark:border-orange-400/20 dark:bg-orange-500/10 dark:shadow-black/20${hasQuote ? " cursor-pointer select-none" : ""}`}
+          onMouseEnter={() => setExplanationHighlightQuote(reference.quote ?? null)}
+          onMouseLeave={() => setExplanationHighlightQuote(null)}
+          onClick={() => {
+            if (!hasQuote) return;
+            // Tap-to-locate for touch devices (no hover): toggle the passage highlight.
+            setExplanationHighlightQuote((current) =>
+              current === (reference.quote ?? null) ? null : reference.quote ?? null,
+            );
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-6 items-center rounded-full bg-orange-600 px-2 text-[11px] font-black text-white dark:bg-orange-400 dark:text-slate-950">
+              Q{questionNumber}
+            </span>
+            {highlightedAnswer ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-300/80 bg-white/80 px-2 py-1 text-xs font-bold text-orange-800 dark:border-orange-400/25 dark:bg-slate-950/40 dark:text-orange-200">
+                <Highlighter className="h-3.5 w-3.5" />
+                {highlightedAnswer}
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
+              <Lightbulb className="h-3.5 w-3.5" />
+              Explanation
+            </span>
+          </div>
+          <p className="mt-2 leading-relaxed text-foreground">{reviewItem.explanation}</p>
+          {hasQuote ? (
+            <div className="mt-2 rounded-xl border-l-2 border-orange-400 bg-background/70 p-2 text-xs italic text-muted-foreground dark:bg-slate-950/40">
+              "{reference.quote}"
+            </div>
+          ) : null}
+          {hasAnswerIssue ? (
+            <div className="mt-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-2 text-xs font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-200">
+              Answer key check: {reference.issue || "This answer needs manual review."}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+  function renderQuestionControl(question: PreviewQuestion, group: PreviewGroup) {
+      const reviewItem = isReviewMode ? reviewItems[question.id] : undefined;
+      const formattedReviewCorrectAnswer = reviewItem
+        ? (
+            isMatching(question.type) || isWordBankCompletion(question.type)
+              ? reviewItem.correctAnswers.map((answer) => formatMatchingAnswerForReview(answer, typedQuestionOptionLines(group, question, []), question.type)).join(", ")
+              : reviewItem.correctAnswers.join(", ")
+          )
+        : "";
+
+      if (isTfng(question.type) || isYnng(question.type)) {
+        const options = isTfng(question.type)
+          ? ["TRUE", "FALSE", "NOT GIVEN"]
+          : ["YES", "NO", "NOT GIVEN"];
+
         return (
-          <div className="min-w-[176px] max-w-[240px] flex-none space-y-2">
-            <div className="relative">
+          <div className="space-y-0">
+            {options.map((option) => {
+              const selected = answers[question.id] === option;
+              const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(option));
+              const isIncorrectSelected = Boolean(reviewItem && selected && !isCorrectOption);
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    if (hasActiveSelection()) return;
+                    setActiveQuestionId(question.id);
+                    persistAnswer(question.id, option);
+                  }}
+                  className={cn(
+                    "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
+                    isReviewMode && isCorrectOption && "text-emerald-700 dark:text-emerald-400",
+                    isReviewMode && isIncorrectSelected && "text-red-700 dark:text-red-400",
+                    "bg-transparent hover:bg-transparent"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
+                      theme === "light"
+                        ? isReviewMode && isCorrectOption
+                          ? "border-emerald-600 text-emerald-600"
+                          : isReviewMode && isIncorrectSelected
+                            ? "border-red-600 text-red-600"
+                            : selected
+                          ? "border-slate-900 text-slate-900"
+                          : "border-slate-400/85 text-transparent"
+                        : isReviewMode && isCorrectOption
+                          ? "border-emerald-400 text-emerald-400"
+                          : isReviewMode && isIncorrectSelected
+                            ? "border-red-400 text-red-400"
+                            : selected
+                          ? "border-slate-200 text-slate-200"
+                          : "border-slate-500/85 text-transparent"
+                    )}
+                  >
+                    <span className={cn("h-2 w-2 rounded-full bg-current transition", selected ? "opacity-100" : "opacity-0")} />
+                  </span>
+                  <span
+                    className="font-sans text-foreground"
+                    style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
+                  >
+                    {option}
+                  </span>
+                </button>
+              );
+            })}
+            {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
+              <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                Correct answer: {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+          </div>
+        );
+      }
+
+      if (isMcq(question.type) && !isMcqMultiple(question.type)) {
+        return (
+          <div className="space-y-0">
+            {(question.options ?? []).map((option, index) => {
+              const optionLetter = String.fromCharCode(65 + index);
+              const checked = answers[question.id] === optionLetter;
+              const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(optionLetter));
+              const isIncorrectSelected = Boolean(reviewItem && checked && !isCorrectOption);
+              return (
+                <button
+                  key={`${question.id}-${optionLetter}`}
+                  type="button"
+                  onClick={() => {
+                    if (hasActiveSelection()) return;
+                    setActiveQuestionId(question.id);
+                    persistAnswer(question.id, optionLetter);
+                  }}
+                  className={cn(
+                    "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
+                    isReviewMode && isCorrectOption && "text-emerald-700 dark:text-emerald-400",
+                    isReviewMode && isIncorrectSelected && "text-red-700 dark:text-red-400",
+                    "bg-transparent hover:bg-transparent"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition",
+                      checked
+                        ? isReviewMode && isCorrectOption
+                          ? "border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
+                          : isReviewMode && isIncorrectSelected
+                            ? "border-red-600 text-red-600 dark:border-red-400 dark:text-red-400"
+                            : "border-slate-900 text-slate-900 dark:border-slate-200 dark:text-slate-200"
+                        : "border-slate-400/85 text-transparent dark:border-slate-500/85"
+                    )}
+                  >
+                    <span className={cn("h-2 w-2 rounded-full bg-current transition", checked ? "opacity-100" : "opacity-0")} />
+                  </span>
+                  <span
+                    className={cn("font-sans text-foreground transition-colors", checked && "text-slate-950 dark:text-slate-50")}
+                    style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
+                  >
+                    <span className="mr-2 font-black">{optionLetter}.</span>
+                    <span
+                      ref={(node) => {
+                        textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
+                      }}
+                      data-highlight-text
+                      onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
+                      className="select-text"
+                    >
+                      {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
+              <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                Correct answer: {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+          </div>
+        );
+      }
+
+      if (isMcqMultiple(question.type)) {
+        const maxSelections = mcMultipleQuestionWeight(question);
+        const selectedCount = (answers[question.id] ?? "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .length;
+        return (
+          <div className="space-y-0">
+            {(question.options ?? []).map((option, index) => {
+              const optionLetter = String.fromCharCode(65 + index);
+              const checked = hasMultiValue(answers[question.id], optionLetter);
+              const disabled = !checked && selectedCount >= maxSelections;
+              const isCorrectOption = Boolean(reviewItem?.correctAnswers?.includes(optionLetter));
+              const isIncorrectSelected = Boolean(reviewItem && checked && !isCorrectOption);
+
+              return (
+                <button
+                  key={`${question.id}-${optionLetter}`}
+                  type="button"
+                  onClick={() => {
+                    if (hasActiveSelection()) return;
+                    if (disabled) return;
+                    setActiveQuestionId(question.id);
+                    persistAnswer(question.id, toggleMultiValue(answers[question.id], optionLetter, maxSelections));
+                  }}
+                  className={cn(
+                    "flex w-full items-start gap-2.5 rounded-2xl px-2.5 py-2 text-left transition duration-150",
+                    isReviewMode && isCorrectOption && "bg-emerald-500/10",
+                    isReviewMode && isIncorrectSelected && "bg-red-500/10",
+                    disabled && "opacity-70",
+                    disabled
+                      ? "bg-card"
+                      : "bg-card hover:bg-muted/20"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border-2 transition",
+                      checked
+                        ? isReviewMode && isCorrectOption
+                          ? "border-transparent bg-emerald-600 dark:bg-emerald-400"
+                          : isReviewMode && isIncorrectSelected
+                            ? "border-transparent bg-red-600 dark:bg-red-400"
+                            : "border-transparent bg-slate-950 dark:bg-slate-50"
+                        : disabled
+                          ? "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/70"
+                          : "border-slate-500 bg-background dark:border-slate-400 dark:bg-transparent"
+                    )}
+                  >
+                    {checked ? <Check className="h-3.5 w-3.5 text-white dark:text-slate-950" strokeWidth={3.25} /> : null}
+                  </span>
+                  <span
+                    className={cn(
+                      "font-sans text-foreground transition-colors",
+                      disabled && "text-muted-foreground"
+                    )}
+                    style={{ fontSize: `${bodyFontSize}px`, lineHeight: 1.5 }}
+                  >
+                    <span className="mr-2 font-black">{optionLetter}.</span>
+                    <span
+                      ref={(node) => {
+                        textBlockRefs.current[`question-option-${question.id}-${optionLetter}`] = node;
+                      }}
+                      data-highlight-text
+                      onMouseUp={(event) => handleTextBlockMouseUp(`question-option-${question.id}-${optionLetter}`, event)}
+                      className="select-text"
+                    >
+                      {renderHighlightedText(`question-option-${question.id}-${optionLetter}`, option)}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            {isReviewMode && reviewItem && !reviewItem.isCorrect && formattedReviewCorrectAnswer ? (
+              <p className="px-2 pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                Correct answer: {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+          </div>
+        );
+      }
+
+      if (isMatching(question.type)) {
+        const isMatchingInformation = question.type.includes("matching_information");
+        const isMatchingFeatures = question.type.includes("matching_features");
+        const isListeningMatching = question.type.includes("listening_matching");
+        const isInlineMatching = isMatchingInformation || isMatchingFeatures || isListeningMatching;
+        const sectionKey = group.sectionId ?? group.sectionLabel ?? "section";
+        const matchingInformationOptions = matchingInformationParagraphOptions.get(sectionKey) ?? [];
+        const matchingOptions = typedQuestionOptionLines(group, question, matchingInformationOptions);
+        const matchingOptionViews = matchingOptions.map((option, index) => typedOptionView(option, index, question.type));
+        const normalizedMatchingValue = normalizeMatchingAnswerValue(
+          answers[question.id] ?? "",
+          matchingOptions,
+          question.type
+        );
+
+        if (matchingOptions.length === 0) {
+          return (
+            <div className={cn(
+              isMatchingInformation
+                ? "min-w-[150px] max-w-[180px] flex-none"
+                : isMatchingFeatures
+                  ? "min-w-[150px] max-w-[210px] flex-none"
+                  : isListeningMatching
+                    ? "min-w-[160px] max-w-[220px] flex-none"
+                    : "pl-12"
+            )}>
+              <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-3 py-2 text-xs font-semibold text-muted-foreground">
+                Options not configured
+              </div>
+            </div>
+          );
+        }
+
+        if (isListeningMatching) {
+          return (
+            <div className="min-w-[176px] max-w-[240px] flex-none space-y-2">
+              <div className="relative">
+                <select
+                  value={normalizedMatchingValue}
+                  onFocus={() => setActiveQuestionId(question.id)}
+                  onChange={(event) => persistAnswer(question.id, event.target.value)}
+                  className={cn(
+                    "flex w-full appearance-none items-center rounded-md border border-border bg-card pr-7 font-semibold text-foreground shadow-none outline-none transition",
+                    inlineRowControlClassName,
+                    theme === "light"
+                      ? "focus:border-[#2f436f]"
+                      : "focus:border-primary/45",
+                    isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500/90 bg-emerald-500/10 dark:border-emerald-400/85",
+                    isReviewMode && reviewItem?.isCorrect === false && "border-red-500/90 bg-red-500/10 dark:border-red-400/85",
+                    activeQuestionId === question.id && activeInputClass
+                  )}
+                >
+                  <option value="">Select answer</option>
+                  {matchingOptionViews.map((optionView, index) => (
+                    <option key={`${question.id}-listening-matching-${index}`} value={optionView.value}>
+                      {optionView.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
+              {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+                <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  {formattedReviewCorrectAnswer}
+                </p>
+              ) : null}
+              {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+            </div>
+          );
+        }
+
+        return (
+            <div className={cn(
+              isMatchingInformation
+                ? "min-w-[120px] max-w-[156px] flex-none"
+                : isMatchingFeatures
+                  ? "min-w-[220px] max-w-[300px] flex-none"
+                  : "pl-12"
+            )}>
+            <div className={cn(
+              "relative",
+              isMatchingInformation
+                ? "max-w-[156px]"
+                : isMatchingFeatures
+                  ? "max-w-[300px]"
+                  : "max-w-md"
+            )}>
               <select
                 value={normalizedMatchingValue}
-                onFocus={() => setActiveQuestionId(question.id)}
                 onChange={(event) => persistAnswer(question.id, event.target.value)}
                 className={cn(
-                  "flex w-full appearance-none items-center rounded-md border border-border bg-card pr-7 font-semibold text-foreground shadow-none outline-none transition",
-                  inlineRowControlClassName,
+                  "flex w-full appearance-none items-center rounded-md border border-border bg-card font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
+                  isInlineMatching
+                    ? cn(inlineRowControlClassName, "pr-7")
+                    : isMatchingInformation
+                      ? "h-8 px-3 pr-8 text-sm"
+                      : isMatchingFeatures
+                        ? "h-8 px-3 pr-8 text-sm"
+                        : "h-9 px-4 pr-10 text-sm",
                   theme === "light"
                     ? "focus:border-[#2f436f]"
-                    : "focus:border-primary/45",
-                  isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500/90 bg-emerald-500/10 dark:border-emerald-400/85",
-                  isReviewMode && reviewItem?.isCorrect === false && "border-red-500/90 bg-red-500/10 dark:border-red-400/85",
-                  activeQuestionId === question.id && activeInputClass
+                    : "focus:border-primary/45"
                 )}
               >
                 <option value="">Select answer</option>
-                {matchingOptionViews.map((optionView, index) => (
-                  <option key={`${question.id}-listening-matching-${index}`} value={optionView.value}>
-                    {optionView.label}
-                  </option>
-                ))}
+                {matchingOptions.map((option, index) => {
+                  const optionView = typedOptionView(option, index, question.type);
+                  const shouldShowLabel =
+                    !question.type.includes("matching_headings") && shouldAutoLetterMatchingOptions(question.type);
+                  return (
+                    <option key={`${question.id}-matching-${index}`} value={optionView.value}>
+                      {question.type.includes("matching_headings")
+                        ? optionView.label
+                        : shouldShowLabel
+                          ? optionView.label
+                          : optionView.value}
+                    </option>
+                  );
+                })}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <ChevronDown className={cn(
+                "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
+                isInlineMatching ? "right-2 h-3.5 w-3.5" : "right-3 h-4 w-4"
+              )} />
+              {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+                <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  {formattedReviewCorrectAnswer}
+                </p>
+              ) : null}
+              {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
             </div>
-            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
-              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                {formattedReviewCorrectAnswer}
-              </p>
-            ) : null}
-            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
           </div>
         );
       }
 
-      return (
-          <div className={cn(
-            isMatchingInformation
-              ? "min-w-[120px] max-w-[156px] flex-none"
-              : isMatchingFeatures
-                ? "min-w-[220px] max-w-[300px] flex-none"
-                : "pl-12"
-          )}>
-          <div className={cn(
-            "relative",
-            isMatchingInformation
-              ? "max-w-[156px]"
-              : isMatchingFeatures
-                ? "max-w-[300px]"
-                : "max-w-md"
-          )}>
-            <select
-              value={normalizedMatchingValue}
-              onChange={(event) => persistAnswer(question.id, event.target.value)}
-              className={cn(
-                "flex w-full appearance-none items-center rounded-md border border-border bg-card font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
-                isInlineMatching
-                  ? cn(inlineRowControlClassName, "pr-7")
-                  : isMatchingInformation
-                    ? "h-8 px-3 pr-8 text-sm"
-                    : isMatchingFeatures
-                      ? "h-8 px-3 pr-8 text-sm"
-                      : "h-9 px-4 pr-10 text-sm",
-                theme === "light"
-                  ? "focus:border-[#2f436f]"
-                  : "focus:border-primary/45"
-              )}
-            >
-              <option value="">Select answer</option>
-              {matchingOptions.map((option, index) => {
-                const optionView = typedOptionView(option, index, question.type);
-                const shouldShowLabel =
-                  !question.type.includes("matching_headings") && shouldAutoLetterMatchingOptions(question.type);
-                return (
-                  <option key={`${question.id}-matching-${index}`} value={optionView.value}>
-                    {question.type.includes("matching_headings")
-                      ? optionView.label
-                      : shouldShowLabel
-                        ? optionView.label
-                        : optionView.value}
-                  </option>
-                );
-              })}
-            </select>
-            <ChevronDown className={cn(
-              "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
-              isInlineMatching ? "right-2 h-3.5 w-3.5" : "right-3 h-4 w-4"
-            )} />
-            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
-              <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                {formattedReviewCorrectAnswer}
-              </p>
-            ) : null}
-            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-          </div>
-        </div>
-      );
-    }
+      if (isWordBankCompletion(question.type)) {
+        const wordBankOptions = group.secondaryBlock?.trim()
+          ? splitOptionLines(group.secondaryBlock)
+          : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
 
-    if (isWordBankCompletion(question.type)) {
-      const wordBankOptions = group.secondaryBlock?.trim()
-        ? splitOptionLines(group.secondaryBlock)
-        : normalizeOptionList(group.sharedOptions ?? question.options ?? []);
-
-      return (
-        <div className="pl-12 space-y-1">
-          <div className="relative max-w-xl">
-            <select
-              value={answers[question.id] ?? ""}
-              onChange={(event) => persistAnswer(question.id, event.target.value)}
-              className={cn(
-                "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
-                isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
-                isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
-                theme === "light"
-                  ? "focus:border-[#2f436f]"
-                  : "focus:border-slate-400"
-              )}
-            >
-              <option value="">Select word</option>
-              {wordBankOptions.map((option, index) => {
-                const label = optionText(option) || option;
-                return (
-                  <option key={`${question.id}-wordbank-${index}`} value={label}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          </div>
-          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
-            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Correct answer: {formattedReviewCorrectAnswer}
-            </p>
-          ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-        </div>
-      );
-    }
-
-    if (isPlanMapLabeling(question.type)) {
-      const mapOptions = typedQuestionOptionLines(group, question, []);
-      const normalizedMapValue = normalizeMatchingAnswerValue(
-        answers[question.id] ?? "",
-        mapOptions,
-        question.type
-      );
-
-      if (mapOptions.length > 0) {
         return (
-          <div className="w-[188px] flex-none space-y-1">
-            <div className="relative">
+          <div className="pl-12 space-y-1">
+            <div className="relative max-w-xl">
               <select
-                value={normalizedMapValue}
+                value={answers[question.id] ?? ""}
                 onChange={(event) => persistAnswer(question.id, event.target.value)}
                 className={cn(
                   "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
@@ -4187,12 +3784,12 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
                     : "focus:border-slate-400"
                 )}
               >
-                <option value=""></option>
-                {mapOptions.map((option, index) => {
-                  const optionView = typedOptionView(option, index, question.type);
+                <option value="">Select word</option>
+                {wordBankOptions.map((option, index) => {
+                  const label = optionText(option) || option;
                   return (
-                    <option key={`${question.id}-map-${optionView.value}`} value={optionView.value}>
-                      {optionView.value}
+                    <option key={`${question.id}-wordbank-${index}`} value={label}>
+                      {label}
                     </option>
                   );
                 })}
@@ -4209,34 +3806,106 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
         );
       }
 
-      return (
-        <div className="w-[188px] flex-none space-y-1">
-          <Input
-            value={answers[question.id] ?? ""}
-            onFocus={() => setActiveQuestionId(question.id)}
-            onChange={(event) => persistAnswer(question.id, event.target.value)}
-            placeholder=""
-            className={cn(
-              "w-full rounded-md border-border bg-card px-2 font-medium shadow-none",
-              inlineRowControlClassName,
-              isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
-              isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
-              inputFocusClass
-            )}
-            autoComplete="off"
-            spellCheck="false"
-          />
-          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
-            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Correct answer: {formattedReviewCorrectAnswer}
-            </p>
-          ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-        </div>
-      );
-    }
+      if (isPlanMapLabeling(question.type)) {
+        const mapOptions = typedQuestionOptionLines(group, question, []);
+        const normalizedMapValue = normalizeMatchingAnswerValue(
+          answers[question.id] ?? "",
+          mapOptions,
+          question.type
+        );
 
-    if (isCompletion(question.type)) {
+        if (mapOptions.length > 0) {
+          return (
+            <div className="w-[188px] flex-none space-y-1">
+              <div className="relative">
+                <select
+                  value={normalizedMapValue}
+                  onChange={(event) => persistAnswer(question.id, event.target.value)}
+                  className={cn(
+                    "flex h-10 w-full appearance-none items-center rounded-xl border border-border bg-card px-4 pr-10 text-sm font-semibold text-foreground shadow-none outline-none transition whitespace-nowrap overflow-hidden text-ellipsis",
+                    isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+                    isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
+                    theme === "light"
+                      ? "focus:border-[#2f436f]"
+                      : "focus:border-slate-400"
+                  )}
+                >
+                  <option value=""></option>
+                  {mapOptions.map((option, index) => {
+                    const optionView = typedOptionView(option, index, question.type);
+                    return (
+                      <option key={`${question.id}-map-${optionView.value}`} value={optionView.value}>
+                        {optionView.value}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
+              {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+                <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  Correct answer: {formattedReviewCorrectAnswer}
+                </p>
+              ) : null}
+              {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+            </div>
+          );
+        }
+
+        return (
+          <div className="w-[188px] flex-none space-y-1">
+            <Input
+              value={answers[question.id] ?? ""}
+              onFocus={() => setActiveQuestionId(question.id)}
+              onChange={(event) => persistAnswer(question.id, event.target.value)}
+              placeholder=""
+              className={cn(
+                "w-full rounded-md border-border bg-card px-2 font-medium shadow-none",
+                inlineRowControlClassName,
+                isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+                isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
+                inputFocusClass
+              )}
+              autoComplete="off"
+              spellCheck="false"
+            />
+            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                Correct answer: {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+          </div>
+        );
+      }
+
+      if (isCompletion(question.type)) {
+        return (
+          <div className="pl-12 space-y-1">
+            <Input
+              value={answers[question.id] ?? ""}
+              onFocus={() => setActiveQuestionId(question.id)}
+              onChange={(event) => persistAnswer(question.id, event.target.value)}
+              placeholder="Type your answer"
+              className={cn(
+                "h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none",
+                isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
+                isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
+                inputFocusClass
+              )}
+              autoComplete="off"
+              spellCheck="false"
+            />
+            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                Correct answer: {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+          </div>
+        );
+      }
+
       return (
         <div className="pl-12 space-y-1">
           <Input
@@ -4251,1015 +3920,1457 @@ export function ReadingExamPreview({ mode, data }: { mode: PreviewMode; data?: R
               inputFocusClass
             )}
             autoComplete="off"
-            spellCheck="false"
-          />
-          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
-            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Correct answer: {formattedReviewCorrectAnswer}
-            </p>
-          ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-        </div>
+              spellCheck="false"
+            />
+            {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
+              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                Correct answer: {formattedReviewCorrectAnswer}
+              </p>
+            ) : null}
+            {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
+          </div>
       );
     }
 
-    return (
-      <div className="pl-12 space-y-1">
-        <Input
-          value={answers[question.id] ?? ""}
-          onFocus={() => setActiveQuestionId(question.id)}
-          onChange={(event) => persistAnswer(question.id, event.target.value)}
-          placeholder="Type your answer"
-          className={cn(
-            "h-10 w-full max-w-md rounded-xl border-border bg-card px-3 text-[15px] font-medium shadow-none",
-            isReviewMode && reviewItem?.isCorrect === true && "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400",
-            isReviewMode && reviewItem?.isCorrect === false && "border-red-500 bg-red-500/10 dark:border-red-400",
-            inputFocusClass
-          )}
-          autoComplete="off"
-            spellCheck="false"
-          />
-          {isReviewMode && reviewItem?.isCorrect === false && formattedReviewCorrectAnswer ? (
-            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Correct answer: {formattedReviewCorrectAnswer}
-            </p>
-          ) : null}
-          {isReviewMode && reviewItem ? renderReviewExplanation(reviewItem, question.number) : null}
-        </div>
-    );
-  }
+  useEffect(() => {
+      setHasMounted(true);
+    }, []);
+
+  useEffect(() => {
+      if (!isExamMode || isReviewMode || isSubmitted) {
+        return;
+      }
+
+      const enterFullscreen = async () => {
+        if (document.fullscreenElement) {
+          hasExamFullscreenSessionRef.current = true;
+          return;
+        }
+
+        try {
+          await document.documentElement.requestFullscreen();
+        } catch {}
+      };
+
+      void enterFullscreen();
+    }, [isExamMode, isReviewMode, isSubmitted]);
+
+  useEffect(() => {
+      const currentTheme = getDocumentTheme();
+      const backup = readAttemptBackup();
+      const serverAnswers = examData.initialAnswers ?? {};
+      const backupAnswers = backup?.answers ?? {};
+      const serverHighlights = examData.initialTextHighlights ?? {};
+      const backupHighlights = backup?.textHighlights ?? {};
+      const backupAnswerCount = Object.values(backupAnswers).filter((value) => value.trim().length > 0).length;
+      const backupHighlightCount = Object.values(backupHighlights).reduce((count, items) => count + items.length, 0);
+      const serverTimeSpentSeconds = Math.max(0, examData.initialTimeSpentSeconds ?? 0);
+      const backupTimeSpentSeconds = Math.max(0, backup?.timeSpentSec ?? 0);
+      const shouldUseBackupContent = Boolean(backup);
+      const nextSectionTimeSpentSeconds = mergeSectionTimeSpentSeconds(
+        examData.initialSectionTimeSpentSeconds,
+        shouldUseBackupContent ? backup?.sectionTimeSpentSec : undefined
+      );
+      const nextTheme = currentTheme;
+      const nextAnswers = shouldUseBackupContent && backupAnswerCount > 0 ? { ...serverAnswers, ...backupAnswers } : serverAnswers;
+      const nextTextHighlights = shouldUseBackupContent && backupHighlightCount > 0 ? { ...serverHighlights, ...backupHighlights } : serverHighlights;
+      const nextSplitRatio = clampSplitRatio((shouldUseBackupContent ? backup?.uiState?.splitRatio : undefined) ?? examData.initialUiState?.splitRatio ?? 54);
+      const nextFontScale = clampFontScale((shouldUseBackupContent ? backup?.uiState?.fontScale : undefined) ?? examData.initialUiState?.fontScale ?? 1);
+      const hasInitialReviewTarget = Boolean(initialReviewTarget);
+      const nextActiveQuestionId = hasInitialReviewTarget
+        ? initialQuestionId
+        : (shouldUseBackupContent ? backup?.uiState?.activeQuestionId : undefined) ?? initialQuestionId;
+      const nextSectionId = hasInitialReviewTarget
+        ? initialSectionId
+        : findSectionIdForQuestion(nextActiveQuestionId, examData.questionGroups, examData.paragraphs);
+      const nextTimeSpentSeconds = Math.max(serverTimeSpentSeconds, backupTimeSpentSeconds);
+
+      document.documentElement.classList.add(nextTheme);
+      document.documentElement.classList.remove(nextTheme === "light" ? "dark" : "light");
+      setTheme(nextTheme);
+      setAnswers(nextAnswers);
+      setTextHighlights(nextTextHighlights);
+      setSplitRatio(nextSplitRatio);
+      setFontScale(nextFontScale);
+      setActiveQuestionId(nextActiveQuestionId);
+      setActiveSectionId(nextSectionId);
+      // Open the active passage's question navigator automatically on first entry,
+      // instead of requiring the user to click the passage tab first.
+      setShowPassageQuestionNav(true);
+      resetWallClockTimer(nextTimeSpentSeconds);
+      sectionTimeSpentSecondsRef.current = nextSectionTimeSpentSeconds;
+      activeSectionTimerRef.current = nextSectionId ? { sectionId: nextSectionId, startedAtMs: Date.now() } : null;
+      setTimeLeft(
+        mode === "exam"
+          ? Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - nextTimeSpentSeconds)
+          : nextTimeSpentSeconds
+      );
+      setShowListeningTranscript(false);
+      setShowTranscriptAnswerLocations(false);
+      latestAnswersRef.current = nextAnswers;
+      latestProgressRef.current = {
+        timeSpentSec: nextTimeSpentSeconds,
+        sectionTimeSpentSec: { ...nextSectionTimeSpentSeconds },
+        activeQuestionId: nextActiveQuestionId,
+        textHighlights: nextTextHighlights,
+        uiState: {
+          theme: nextTheme,
+          splitRatio: nextSplitRatio,
+          fontScale: nextFontScale,
+          activeQuestionId: nextActiveQuestionId,
+        },
+      };
+      const shouldResetDialogState = previousDialogResetKeyRef.current !== dialogResetKey;
+      previousDialogResetKeyRef.current = dialogResetKey;
+
+      setIsSubmitted(false);
+      setIsSubmitting(false);
+      if (shouldResetDialogState) {
+        updateActiveDialog(null);
+        setFullscreenDialogStage(null);
+        setFullscreenExitCountdown(0);
+      }
+      setStrictListeningPhase(mode === "exam" && examData.testType === "listening" ? "waiting" : "idle");
+      setStrictListeningTransferLeft(LISTENING_TRANSFER_SECONDS);
+      setStrictListeningIsPlaying(false);
+      setStrictListeningPlaybackBlocked(false);
+      setStrictListeningElapsedSeconds(nextTimeSpentSeconds);
+      setStrictListeningAudioSectionId(nextSectionId);
+      strictListeningCompletedAudioRef.current = {};
+      setSyncState(examData.attemptId ? "saved" : "idle");
+      pendingAnswerValuesRef.current = {};
+      ignoreNextFullscreenExitRef.current = false;
+      hasExamFullscreenSessionRef.current = false;
+    }, [dialogResetKey, examData, initialQuestionId, initialReviewTarget, initialSectionId, isReviewMode, mode, previewSections.length]);
+
+  useEffect(() => {
+      if (!isReviewMode || !initialReviewTarget?.questionId) {
+        return;
+      }
+
+      const scrollTimer = window.setTimeout(() => {
+        const inlineBlank = questionPaneRef.current?.querySelector<HTMLElement>(
+          `[data-question-anchor="${initialReviewTarget.questionId}"]`
+        );
+        if (inlineBlank) {
+          inlineBlank.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+
+        const questionCard = questionPaneRef.current?.querySelector<HTMLElement>(
+          `[id="${initialReviewTarget.questionId}"]`
+        );
+        if (questionCard) {
+          questionCard.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+
+        document
+          .querySelector<HTMLElement>(`[data-heading-drop-question-id="${initialReviewTarget.questionId}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 220);
+
+      return () => window.clearTimeout(scrollTimer);
+    }, [activeSectionId, initialReviewTarget?.questionId, isReviewMode]);
+
+  useEffect(() => {
+      const handleFocusOrFullscreenChange = () => {
+        const blockingDialog = activeDialogRef.current;
+        if (blockingDialog && blockingDialog !== "fullscreen") {
+          return;
+        }
+
+        const isCurrentlyFullscreen = Boolean(document.fullscreenElement);
+        setIsFullscreen(isCurrentlyFullscreen);
+
+        const isHidden = document.visibilityState === "hidden";
+        const isFocused = document.hasFocus ? document.hasFocus() : true;
+
+        const isCompliant = isCurrentlyFullscreen && !isHidden && isFocused;
+
+        if (isCompliant) {
+          hasExamFullscreenSessionRef.current = true;
+          return;
+        }
+
+        if (!isExamMode || isSubmitted || isSubmitting) {
+          return;
+        }
+        if (ignoreNextFullscreenExitRef.current) {
+          ignoreNextFullscreenExitRef.current = false;
+          return;
+        }
+        if (!hasExamFullscreenSessionRef.current) {
+          return;
+        }
+
+        if (fullscreenDialogStage === "exited-warning") {
+          return;
+        }
+
+        let eventType = "violation_exit_fullscreen";
+        if (isHidden) eventType = "violation_tab_switch";
+        else if (!isFocused) eventType = "violation_window_blur";
+
+        if (examData.attemptId) {
+          void fetchInternalUserApi(`${attemptApiBaseUrl}/attempts/${examData.attemptId}/events`, {
+            method: "POST",
+            headers: buildAttemptRequestHeaders(accessToken),
+            credentials: "same-origin",
+            keepalive: true,
+            body: JSON.stringify({ event_type: eventType, payload: {} }),
+          }).catch(() => undefined);
+        }
+
+        setFullscreenDialogStage("exited-warning");
+        setFullscreenExitCountdown(10);
+        updateActiveDialog("fullscreen");
+      };
+
+      const onVisibilityChange = () => handleFocusOrFullscreenChange();
+      const onBlur = () => handleFocusOrFullscreenChange();
+      const onFocus = () => handleFocusOrFullscreenChange();
+
+      handleFocusOrFullscreenChange();
+      document.addEventListener("fullscreenchange", handleFocusOrFullscreenChange);
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      window.addEventListener("blur", onBlur);
+      window.addEventListener("focus", onFocus);
+
+      return () => {
+        document.removeEventListener("fullscreenchange", handleFocusOrFullscreenChange);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        window.removeEventListener("blur", onBlur);
+        window.removeEventListener("focus", onFocus);
+      };
+    }, [accessToken, examData.attemptId, fullscreenDialogStage, isExamMode, isSubmitted, isSubmitting]);
+
+  useEffect(() => {
+      if (isSubmitted) return;
+      if (isStrictListeningExam) {
+        if (strictListeningPhase !== "transfer") {
+          return;
+        }
+        const timer = window.setInterval(() => {
+          setStrictListeningTransferLeft((current) => (current <= 1 ? 0 : current - 1));
+          setStrictListeningElapsedSeconds((current) => current + 1);
+        }, 1000);
+        return () => window.clearInterval(timer);
+      }
+      if (mode === "exam") {
+        const syncExamTimer = () => {
+          const timeSpent = wallClockTimeSpentSeconds();
+          setTimeLeft(Math.max(0, (examData.timeLimitSeconds ?? 20 * 60) - timeSpent));
+        };
+        syncExamTimer();
+        const timer = window.setInterval(() => {
+          syncExamTimer();
+        }, 1000);
+        return () => window.clearInterval(timer);
+      }
+
+      if (isReviewMode) {
+        return;
+      }
+
+      const timer = window.setInterval(() => {
+        setTimeLeft((current) => current + 1);
+      }, 1000);
+      return () => window.clearInterval(timer);
+    }, [examData.timeLimitSeconds, isReviewMode, isStrictListeningExam, isSubmitted, mode, strictListeningPhase]);
+
+  useEffect(() => {
+      if (isStrictListeningExam) {
+        return;
+      }
+      if (timeLeft === 0 && mode === "exam" && !isSubmitted) {
+        void submitAttempt("time_up");
+      }
+    }, [isStrictListeningExam, timeLeft, mode, isSubmitted]);
+
+  useEffect(() => {
+      if (!isStrictListeningExam || isSubmitted || strictListeningPhase !== "transfer") {
+        return;
+      }
+      if (strictListeningTransferLeft === 0) {
+        setStrictListeningPhase("complete");
+        void submitAttempt("time_up");
+      }
+    }, [isStrictListeningExam, isSubmitted, strictListeningPhase, strictListeningTransferLeft]);
+
+  useEffect(() => {
+      if (activeDialog !== "fullscreen" || fullscreenDialogStage !== "exited-warning" || isSubmitting) {
+        return;
+      }
+      if (fullscreenExitCountdown <= 0) {
+        void submitAttempt("exit_fullscreen");
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        setFullscreenExitCountdown((current) => current - 1);
+      }, 1000);
+
+      return () => window.clearTimeout(timer);
+    }, [activeDialog, fullscreenDialogStage, fullscreenExitCountdown, isSubmitting]);
+
+  useEffect(() => {
+      if (!allQuestions.some((question) => question.id === activeQuestionId)) {
+        setActiveQuestionId(allQuestions[0]?.id ?? "");
+      }
+    }, [activeQuestionId, allQuestions]);
+
+  useEffect(() => {
+      if (!previewSections.some((section) => section.id === activeSectionId)) {
+        setActiveSectionId(previewSections[0]?.id ?? "section");
+      }
+    }, [activeSectionId, previewSections]);
+
+  useEffect(() => {
+      if (!examData.attemptId || isSubmitted || isReviewMode || mode === "guest") {
+        activeSectionTimerRef.current = null;
+        return;
+      }
+
+      resetActiveSectionTimer(timedSectionId);
+      return () => flushActiveSectionTime();
+    }, [examData.attemptId, isSubmitted, isReviewMode, mode, timedSectionId]);
+
+  useEffect(() => {
+      refreshLatestProgressSnapshot();
+    }, [activeQuestionId, examData.timeLimitSeconds, fontScale, isStrictListeningExam, mode, splitRatio, strictListeningElapsedSeconds, textHighlights, theme, timedSectionId, timeLeft]);
+
+  useEffect(() => {
+      latestAnswersRef.current = answers;
+    }, [answers]);
+
+  useEffect(() => {
+      if (!examData.attemptId || isSubmitted || isReviewMode) {
+        return;
+      }
+      writeAttemptBackup();
+    }, [answers, examData.attemptId, isSubmitted, isReviewMode, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timedSectionId, timeLeft]);
+
+  useEffect(() => {
+      if (!examData.attemptId || isSubmitted || isReviewMode) {
+        return;
+      }
+
+      const handlePageHide = () => {
+        writeAttemptBackup();
+      };
+
+      window.addEventListener("pagehide", handlePageHide);
+      return () => window.removeEventListener("pagehide", handlePageHide);
+    }, [examData.attemptId, isSubmitted, isReviewMode, answers, textHighlights, theme, splitRatio, fontScale, activeQuestionId, timedSectionId, timeLeft]);
+
+  useEffect(() => {
+      if (!examData.attemptId || isSubmitted || isReviewMode) {
+        return;
+      }
+      queueProgressPersist(700);
+    }, [activeQuestionId, examData.attemptId, fontScale, isSubmitted, isReviewMode, splitRatio, textHighlights, theme, timedSectionId]);
+
+  useEffect(() => {
+      if (!examData.attemptId || isSubmitted || isReviewMode) {
+        return;
+      }
+
+      const timer = window.setInterval(() => {
+        void persistProgressNow();
+      }, 10000);
+
+      return () => {
+        window.clearInterval(timer);
+      };
+    }, [examData.attemptId, isSubmitted, isReviewMode]);
+
+  useEffect(() => {
+      return () => {
+        if (progressSaveTimerRef.current) {
+          window.clearTimeout(progressSaveTimerRef.current);
+        }
+        for (const timer of Object.values(saveTimersRef.current)) {
+          window.clearTimeout(timer);
+        }
+      };
+    }, []);
+
+  useEffect(() => {
+      if (!isDraggingSplit) {
+        return;
+      }
+
+      const handlePointerMove = (event: PointerEvent) => {
+        const container = containerRef.current;
+        if (!container) {
+          return;
+        }
+
+        const rect = container.getBoundingClientRect();
+        const nextRatio = ((event.clientX - rect.left) / rect.width) * 100;
+        const clampedRatio = Math.min(58, Math.max(42, nextRatio));
+        setSplitRatio(Number(clampedRatio.toFixed(1)));
+      };
+
+      const stopDragging = () => setIsDraggingSplit(false);
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", stopDragging);
+      document.body.style.cursor = "ew-resize";
+      document.body.style.userSelect = "none";
+
+      return () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", stopDragging);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+    }, [isDraggingSplit]);
+
+  useEffect(() => {
+      if (isReviewMode) {
+        allowLeaveRef.current = true;
+        return;
+      }
+
+      if (isSubmitted) {
+        allowLeaveRef.current = true;
+        return;
+      }
+
+      const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+        event.preventDefault();
+        event.returnValue = "";
+      };
+
+      const handlePopState = () => {
+        if (allowLeaveRef.current) return;
+        window.history.pushState({ examPreviewGuard: true }, "", window.location.href);
+        updateActiveDialog("leave");
+      };
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        const isRefreshShortcut =
+          event.key === "F5" || ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r");
+        const isSearchShortcut =
+          (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f";
+
+        if (isSearchShortcut) {
+          event.preventDefault();
+          return;
+        }
+
+        if (!isRefreshShortcut) return;
+        event.preventDefault();
+        updateActiveDialog("leave");
+      };
+
+      window.history.pushState({ examPreviewGuard: true }, "", window.location.href);
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      window.addEventListener("popstate", handlePopState);
+      window.addEventListener("keydown", handleKeyDown);
+
+      return () => {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+        window.removeEventListener("popstate", handlePopState);
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [isReviewMode, isSubmitted]);
+
+  useEffect(() => {
+      const handlePointerDown = (event: MouseEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-selection-toolbar]")) {
+          return;
+        }
+        if (target?.closest("[data-highlight-text]")) {
+          return;
+        }
+        setSelectionToolbar(null);
+      };
+
+      document.addEventListener("mousedown", handlePointerDown);
+      return () => document.removeEventListener("mousedown", handlePointerDown);
+    }, []);
+
+  useEffect(() => {
+      return () => {
+        Object.values(saveTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
+      };
+    }, []);
 
   return (
-    <div
-      className={cn(
-        "fixed inset-0 flex flex-col overflow-hidden font-sans text-foreground",
-        theme === "light" ? "bg-[#FBFCFD]" : "bg-background"
-      )}
-      style={examToneStyle}
-    >
-      {(draggingHeading || draggingWordBank) && dragPreviewPosition ? (
-        <div
-          className="pointer-events-none fixed z-[95] -translate-x-1/2 -translate-y-1/2"
-          style={{ left: dragPreviewPosition.x, top: dragPreviewPosition.y }}
-        >
-          <div className="flex max-w-[28rem] items-start gap-3 rounded-xl border border-[#2f436f]/85 bg-background/96 px-3 py-2 shadow-[0_22px_55px_-26px_rgba(15,23,42,0.7)] backdrop-blur-md dark:border-[#89a4d8]/70 dark:bg-[#162033]/96 dark:shadow-[0_22px_55px_-26px_rgba(137,164,216,0.32)]">
-            <span
-              className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#2f436f]/35 bg-[#2f436f]/[0.07] text-[#2f436f] dark:border-[#4b6498]/45 dark:bg-[#4b6498]/[0.12] dark:text-[#89a4d8]"
-              aria-hidden="true"
-            >
-              <GripVertical className="h-4 w-4" />
-            </span>
-            {(() => {
-              if (draggingWordBank) {
-                return (
-                  <span className="text-[15px] font-semibold leading-6 text-foreground">
-                    {draggingWordBank.previewLabel ?? draggingWordBank.value}
-                  </span>
-                );
-              }
-              if (!draggingHeading) {
-                return null;
-              }
-              const draggingOption = headingOptionLookup.get(`${draggingHeading.groupId}:${draggingHeading.value}`);
-              if (!draggingOption) {
-                return (
-                  <span className="text-[15px] font-semibold leading-6 text-foreground">
-                    {draggingHeading.value}
-                  </span>
-                );
-              }
-              return (
-                <span className="text-[15px] font-semibold leading-6 text-foreground">
-                  {draggingOption.prefix}. {draggingOption.text}
-                </span>
-              );
-            })()}
-          </div>
-        </div>
-      ) : null}
-
-      {selectionToolbar ? (
-        <div
-          data-selection-toolbar
-          className="fixed z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card/95 px-2 py-1.5 shadow-[0_18px_45px_-24px_rgba(15,23,42,0.7)] backdrop-blur-xl"
-          style={{ top: selectionToolbar.top, left: selectionToolbar.left }}
-        >
-          <button
-            type="button"
-            onClick={applyHighlight}
-            title="Highlight selected text"
-            aria-label="Highlight selected text"
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-full transition",
-              theme === "dark"
-                ? "bg-[#facc15] text-slate-950 hover:bg-[#fde047]"
-                : "bg-[#fde047] text-slate-900 hover:bg-[#facc15]"
-            )}
-          >
-            <Highlighter className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={clearHighlight}
-            title="Remove highlight"
-            aria-label="Remove highlight"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-foreground transition hover:bg-muted"
-          >
-            <Eraser className="h-4 w-4" />
-          </button>
-        </div>
-      ) : null}
-
-      {isCalculatingResults ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xs rounded-[1.5rem] border border-border/80 bg-card px-6 py-5 text-center shadow-[0_40px_120px_-30px_rgba(15,23,42,0.55)]">
-            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-border border-t-foreground/80" />
-            <p className="text-sm font-semibold text-foreground">Calculating your results…</p>
-          </div>
-        </div>
-      ) : null}
-
-      {activeDialog ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={dismissActiveDialogFromBackdrop}
-        >
+      <div
+        className={cn(
+          "fixed inset-0 flex flex-col overflow-hidden font-sans text-foreground",
+          theme === "light" ? "bg-[#FBFCFD]" : "bg-background"
+        )}
+        style={examToneStyle}
+      >
+        {(draggingHeading || draggingWordBank) && dragPreviewPosition ? (
           <div
-            className="relative w-full max-w-[340px] overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 duration-300"
-            onClick={(event) => event.stopPropagation()}
+            className="pointer-events-none fixed z-[95] -translate-x-1/2 -translate-y-1/2"
+            style={{ left: dragPreviewPosition.x, top: dragPreviewPosition.y }}
           >
-            
-            <div className={cn(
-              "absolute top-0 left-0 right-0 h-1",
-              activeDialog === "submit" && unansweredCount > 0 ? "bg-red-500" :
-              activeDialog === "submit" ? "bg-emerald-500" :
-              activeDialog === "fullscreen" ? "bg-amber-500" : "bg-red-500"
-            )} />
+            <div className="flex max-w-[28rem] items-start gap-3 rounded-xl border border-[#2f436f]/85 bg-background/96 px-3 py-2 shadow-[0_22px_55px_-26px_rgba(15,23,42,0.7)] backdrop-blur-md dark:border-[#89a4d8]/70 dark:bg-[#162033]/96 dark:shadow-[0_22px_55px_-26px_rgba(137,164,216,0.32)]">
+              <span
+                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#2f436f]/35 bg-[#2f436f]/[0.07] text-[#2f436f] dark:border-[#4b6498]/45 dark:bg-[#4b6498]/[0.12] dark:text-[#89a4d8]"
+                aria-hidden="true"
+              >
+                <GripVertical className="h-4 w-4" />
+              </span>
+              {(() => {
+                if (draggingWordBank) {
+                  return (
+                    <span className="text-[15px] font-semibold leading-6 text-foreground">
+                      {draggingWordBank.previewLabel ?? draggingWordBank.value}
+                    </span>
+                  );
+                }
+                if (!draggingHeading) {
+                  return null;
+                }
+                const draggingOption = headingOptionLookup.get(`${draggingHeading.groupId}:${draggingHeading.value}`);
+                if (!draggingOption) {
+                  return (
+                    <span className="text-[15px] font-semibold leading-6 text-foreground">
+                      {draggingHeading.value}
+                    </span>
+                  );
+                }
+                return (
+                  <span className="text-[15px] font-semibold leading-6 text-foreground">
+                    {draggingOption.prefix}. {draggingOption.text}
+                  </span>
+                );
+              })()}
+            </div>
+          </div>
+        ) : null}
 
-            <div className="p-5 space-y-5">
-              <div className="text-center space-y-2">
-                <Badge className={cn(
-                  "mx-auto rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-none border-0 mb-3",
-                  activeDialog === "submit" && unansweredCount > 0 ? "bg-red-500/10 text-red-600 dark:text-red-400" :
-                  activeDialog === "submit" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
-                  activeDialog === "fullscreen" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-red-500/10 text-red-600 dark:text-red-400"
-                )}>
-                  {activeDialog === "submit"
-                    ? (unansweredCount > 0 ? "Warning" : "Submit")
-                    : activeDialog === "fullscreen"
-                      ? "Focus Required"
-                      : "Leave"}
-                </Badge>
-                <h3 className="text-lg font-bold tracking-tight text-foreground">
-                  {activeDialog === "submit"
-                    ? unansweredCount > 0 ? "Unanswered Questions" : "Ready to Submit?"
-                    : activeDialog === "fullscreen"
-                      ? fullscreenDialogStage === "confirm-exit" ? "Exit & Submit?" : "Return to Full Screen"
-                      : "Leave Attempt?"}
-                </h3>
-                <p className="text-xs font-medium leading-relaxed text-muted-foreground">
-                  {activeDialog === "submit"
-                    ? unansweredCount > 0
-                      ? `You have ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} left. Are you sure?`
-                      : "Submit now to lock in your score."
-                    : activeDialog === "fullscreen"
-                      ? fullscreenDialogStage === "confirm-exit"
-                        ? "Leaving full screen will submit your attempt."
-                        : "Please return to full screen."
-                      : "Your progress will be lost if you leave."}
-                </p>
-              </div>
-
-              {activeDialog === "fullscreen" && fullscreenDialogStage !== "confirm-exit" && (
-                <div className="flex justify-center">
-                  <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono text-xl font-bold border border-amber-500/20">
-                    00:{fullscreenExitCountdown.toString().padStart(2, '0')}
-                  </div>
-                </div>
+        {selectionToolbar ? (
+          <div
+            data-selection-toolbar
+            className="fixed z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card/95 px-2 py-1.5 shadow-[0_18px_45px_-24px_rgba(15,23,42,0.7)] backdrop-blur-xl"
+            style={{ top: selectionToolbar.top, left: selectionToolbar.left }}
+          >
+            <button
+              type="button"
+              onClick={applyHighlight}
+              title="Highlight selected text"
+              aria-label="Highlight selected text"
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full transition",
+                theme === "dark"
+                  ? "bg-[#facc15] text-slate-950 hover:bg-[#fde047]"
+                  : "bg-[#fde047] text-slate-900 hover:bg-[#facc15]"
               )}
+            >
+              <Highlighter className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={clearHighlight}
+              title="Remove highlight"
+              aria-label="Remove highlight"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-foreground transition hover:bg-muted"
+            >
+              <Eraser className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
 
-              <div className="flex flex-col gap-2 pt-1">
-                {activeDialog === "submit" ? (
-                  <>
-                    <Button
-                      type="button"
-                      className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
-                      onClick={() => updateActiveDialog(null)}
-                    >
-                      Go back to test
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className={cn(
-                        "h-10 w-full rounded-xl text-xs font-semibold transition-all hover:bg-muted/50",
-                        unansweredCount > 0 ? "text-red-500 hover:text-red-600" : "text-emerald-500 hover:text-emerald-600"
-                      )}
-                      onClick={confirmSubmit}
-                    >
-                      Yes, submit anyway
-                    </Button>
-                  </>
-                ) : activeDialog === "fullscreen" ? (
-                  fullscreenDialogStage === "confirm-exit" ? (
+        {isCalculatingResults ? (
+          <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-xs rounded-[1.5rem] border border-border/80 bg-card px-6 py-5 text-center shadow-[0_40px_120px_-30px_rgba(15,23,42,0.55)]">
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-border border-t-foreground/80" />
+              <p className="text-sm font-semibold text-foreground">Calculating your results…</p>
+            </div>
+          </div>
+        ) : null}
+
+        {activeDialog ? (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={dismissActiveDialogFromBackdrop}
+          >
+            <div
+              className="relative w-full max-w-[340px] overflow-hidden rounded-3xl border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 duration-300"
+              onClick={(event) => event.stopPropagation()}
+            >
+              
+              <div className={cn(
+                "absolute top-0 left-0 right-0 h-1",
+                activeDialog === "submit" && unansweredCount > 0 ? "bg-red-500" :
+                activeDialog === "submit" ? "bg-emerald-500" :
+                activeDialog === "fullscreen" ? "bg-amber-500" : "bg-red-500"
+              )} />
+
+              <div className="p-5 space-y-5">
+                <div className="text-center space-y-2">
+                  <Badge className={cn(
+                    "mx-auto rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest shadow-none border-0 mb-3",
+                    activeDialog === "submit" && unansweredCount > 0 ? "bg-red-500/10 text-red-600 dark:text-red-400" :
+                    activeDialog === "submit" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
+                    activeDialog === "fullscreen" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-red-500/10 text-red-600 dark:text-red-400"
+                  )}>
+                    {activeDialog === "submit"
+                      ? (unansweredCount > 0 ? "Warning" : "Submit")
+                      : activeDialog === "fullscreen"
+                        ? "Focus Required"
+                        : "Leave"}
+                  </Badge>
+                  <h3 className="text-lg font-bold tracking-tight text-foreground">
+                    {activeDialog === "submit"
+                      ? unansweredCount > 0 ? "Unanswered Questions" : "Ready to Submit?"
+                      : activeDialog === "fullscreen"
+                        ? fullscreenDialogStage === "confirm-exit" ? "Exit & Submit?" : "Return to Full Screen"
+                        : "Leave Attempt?"}
+                  </h3>
+                  <p className="text-xs font-medium leading-relaxed text-muted-foreground">
+                    {activeDialog === "submit"
+                      ? unansweredCount > 0
+                        ? `You have ${unansweredCount} question${unansweredCount === 1 ? "" : "s"} left. Are you sure?`
+                        : "Submit now to lock in your score."
+                      : activeDialog === "fullscreen"
+                        ? fullscreenDialogStage === "confirm-exit"
+                          ? "Leaving full screen will submit your attempt."
+                          : "Please return to full screen."
+                        : "Your progress will be lost if you leave."}
+                  </p>
+                </div>
+
+                {activeDialog === "fullscreen" && fullscreenDialogStage !== "confirm-exit" && (
+                  <div className="flex justify-center">
+                    <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono text-xl font-bold border border-amber-500/20">
+                      00:{fullscreenExitCountdown.toString().padStart(2, '0')}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 pt-1">
+                  {activeDialog === "submit" ? (
                     <>
                       <Button
                         type="button"
                         className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
-                        onClick={() => {
-                          updateActiveDialog(null);
-                          setFullscreenDialogStage(null);
-                        }}
+                        onClick={() => updateActiveDialog(null)}
                       >
-                        Stay in full screen
+                        Go back to test
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
-                        className="h-10 w-full rounded-xl text-xs font-semibold text-amber-600 hover:text-amber-700 hover:bg-muted/50 transition-all dark:text-amber-500"
-                        onClick={() => void confirmFullscreenExit()}
+                        className={cn(
+                          "h-10 w-full rounded-xl text-xs font-semibold transition-all hover:bg-muted/50",
+                          unansweredCount > 0 ? "text-red-500 hover:text-red-600" : "text-emerald-500 hover:text-emerald-600"
+                        )}
+                        onClick={confirmSubmit}
                       >
-                        Exit & Submit
+                        Yes, submit anyway
                       </Button>
                     </>
+                  ) : activeDialog === "fullscreen" ? (
+                    fullscreenDialogStage === "confirm-exit" ? (
+                      <>
+                        <Button
+                          type="button"
+                          className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
+                          onClick={() => {
+                            updateActiveDialog(null);
+                            setFullscreenDialogStage(null);
+                          }}
+                        >
+                          Stay in full screen
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-10 w-full rounded-xl text-xs font-semibold text-amber-600 hover:text-amber-700 hover:bg-muted/50 transition-all dark:text-amber-500"
+                          onClick={() => void confirmFullscreenExit()}
+                        >
+                          Exit & Submit
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
+                          onClick={() => void recoverFullscreen()}
+                        >
+                          Return to Full Screen
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-10 w-full rounded-xl text-xs font-semibold text-amber-600 hover:text-amber-700 hover:bg-muted/50 transition-all dark:text-amber-500"
+                          onClick={() => void submitAttempt("exit_fullscreen")}
+                        >
+                          Submit now
+                        </Button>
+                      </>
+                    )
                   ) : (
                     <>
                       <Button
                         type="button"
                         className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
-                        onClick={() => void recoverFullscreen()}
+                        onClick={() => updateActiveDialog(null)}
                       >
-                        Return to Full Screen
+                        Stay in test
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
-                        className="h-10 w-full rounded-xl text-xs font-semibold text-amber-600 hover:text-amber-700 hover:bg-muted/50 transition-all dark:text-amber-500"
-                        onClick={() => void submitAttempt("exit_fullscreen")}
+                        className="h-10 w-full rounded-xl text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-muted/50 transition-all"
+                        onClick={confirmLeave}
                       >
-                        Submit now
+                        Leave test
                       </Button>
                     </>
-                  )
-                ) : (
-                  <>
-                    <Button
-                      type="button"
-                      className="h-11 w-full rounded-xl font-bold shadow-sm transition-all bg-foreground text-background hover:bg-foreground/90"
-                      onClick={() => updateActiveDialog(null)}
-                    >
-                      Stay in test
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-10 w-full rounded-xl text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-muted/50 transition-all"
-                      onClick={confirmLeave}
-                    >
-                      Leave test
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showGuestLoginModal && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-auto"
-          onClick={() => setShowGuestLoginModal(false)}
-        >
-          <div
-            className="relative w-full max-w-[340px] overflow-hidden rounded-[1.5rem] border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-400"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-orange-500" />
-            
-            <div className="p-6 space-y-6">
-              <div className="text-center space-y-3">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500 mb-2 shadow-sm">
-                  <LogIn className="h-6 w-6" />
-                </div>
-                <h3 className="text-lg font-bold tracking-tight text-foreground">
-                  Login Required
-                </h3>
-                <p className="text-xs font-medium leading-relaxed text-muted-foreground">
-                  Please log in to answer questions and save your progress.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2 pt-2">
-                <Button
-                  onClick={() => {
-                    const returnPath = examData.testSlug ? `/tests/${examData.testSlug}` : (examData.exitHref ?? "/tests");
-                    const returnUrl = encodeURIComponent(returnPath);
-                    router.push(`/login?returnUrl=${returnUrl}`);
-                  }}
-                  className="h-10 w-full rounded-xl font-bold bg-orange-500 text-white hover:bg-orange-600 transition-all shadow-sm"
-                >
-                  Login
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => router.push(examData.exitHref ?? "/tests")}
-                  className="h-10 w-full rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-                >
-                  Exit
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <header className="z-40 shrink-0 border-b border-border/80 bg-background/95 text-foreground shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-        <div className={cn(
-          "mx-auto grid min-h-[68px] max-w-[1800px] grid-cols-1 gap-3 px-4 py-3 lg:items-center lg:px-6",
-          isSinglePaneListeningMode
-            ? "lg:grid-cols-[auto_minmax(0,1fr)_auto]"
-            : "lg:grid-cols-[1fr_auto_1fr]"
-        )}>
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={() => updateActiveDialog("leave")}
-              className="flex h-10 items-center rounded-md transition hover:opacity-90"
-              aria-label="Leave test"
-              title="Leave test"
-            >
-              <img
-                src={theme === "light" ? "/exam-logo-lightmode.svg" : "/exam-logo-darkmode.svg"}
-                alt="PrimeScore"
-                className="h-8 w-auto"
-              />
-            </button>
-            <div className="min-w-0 border-l border-border pl-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Test Taker</p>
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    "inline-flex h-5 w-5 flex-none items-center justify-center",
-                    syncState === "error"
-                      ? "text-red-500"
-                      : syncState === "saving"
-                        ? "text-primary animate-pulse"
-                        : "text-primary"
                   )}
-                  title={
-                    syncState === "error"
-                      ? "Save failed"
-                      : syncState === "saving"
-                        ? "Saving changes"
-                        : "Saved"
-                  }
-                >
-                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                    <path
-                      d="M6.5 18.25C4.01 18.25 2 16.24 2 13.75C2 11.49 3.67 9.62 5.84 9.31C6.6 6.77 8.95 5 11.75 5C15.19 5 18 7.81 18 11.25V11.5H18.5C20.43 11.5 22 13.07 22 15C22 16.93 20.43 18.5 18.5 18.5H6.5V18.25Z"
-                      className="stroke-current"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    {syncState === "error" ? (
-                      <path
-                        d="M10.1 10.1L13.9 13.9M13.9 10.1L10.1 13.9"
-                        className="stroke-current"
-                        strokeWidth="1.9"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    ) : syncState === "saving" ? (
-                      <path
-                        d="M8.5 13.1L10.2 14.8L13.1 11.9"
-                        className="stroke-current"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        opacity="0.6"
-                      />
-                    ) : (
-                      <path
-                        d="M8.5 13.1L10.2 14.8L13.1 11.9"
-                        className="stroke-emerald-500"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    )}
-                  </svg>
-                </span>
-                <p className="truncate text-sm font-semibold text-foreground">{candidateName}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-center">
-            {isSinglePaneListeningMode && (isStrictListeningExam ? strictListeningAudioSection?.audioUrl : currentSection?.audioUrl) && !showStrictListeningTransferTimer ? (
-              <div className="flex w-full max-w-[48rem] flex-col items-center gap-2">
-	                {isStrictListeningExam ? (
-	                  <button
-	                    type="button"
-	                    onClick={() => void startStrictListeningAudio()}
-	                    className={cn(
-	                      "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] transition",
-	                      strictListeningPlaybackBlocked
-	                        ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
-	                        : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-	                    )}
-	                  >
-	                    <Radio className={cn("h-3.5 w-3.5", strictListeningIsPlaying && "animate-pulse")} />
-	                    {strictListeningPlaybackBlocked ? "Tap to start audio" : strictListeningIsPlaying ? "Audio is playing" : "Audio starting"}
-	                  </button>
-	                ) : null}
-                <ListeningWaveformPlayer
-                  audioRef={listeningAudioRef}
-                  src={(isStrictListeningExam ? strictListeningAudioSection?.audioUrl : currentSection?.audioUrl) ?? ""}
-		                  className="w-full"
-		                  hiddenUi={isStrictListeningExam}
-	                  locked={isStrictListeningExam}
-                  autoPlayDelayMs={strictListeningAutoPlayDelayMs}
-	                  onPlaybackStateChange={(playing) => {
-	                    setStrictListeningIsPlaying(playing);
-	                    if (isStrictListeningExam && playing) {
-	                      setStrictListeningPlaybackBlocked(false);
-	                      setStrictListeningPhase("playing");
-	                    }
-	                  }}
-	                  onPlaybackBlocked={setStrictListeningPlaybackBlocked}
-	                  onTimeSnapshot={(currentTime, duration) => {
-	                    const audioSectionId = isStrictListeningExam ? strictListeningAudioSection?.id : currentSection?.id;
-	                    if (audioSectionId) {
-	                      updateStrictListeningTimeSnapshot(audioSectionId, currentTime, duration);
-	                    }
-	                  }}
-	                  onEnded={() => {
-	                    const audioSectionId = isStrictListeningExam ? strictListeningAudioSection?.id : currentSection?.id;
-	                    const audioDuration = isStrictListeningExam ? strictListeningAudioSection?.audioDurationSeconds : currentSection?.audioDurationSeconds;
-	                    if (audioSectionId) {
-	                      handleStrictListeningAudioEnded(audioSectionId, listeningAudioRef.current?.duration ?? audioDuration ?? 0);
-	                    }
-	                  }}
-                />
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  "px-2 text-center transition-all",
-                  isLastMinute && "animate-[pulse_2.4s_ease-in-out_infinite]"
-                )}
-              >
-                <p
-                  className={cn(
-                    "text-[15px] font-bold leading-none",
-                    isLastFiveMinutes
-                      ? "font-mono tracking-[0.18em] text-red-400 dark:text-red-300"
-                      : "tracking-[0.04em] text-foreground"
-                  )}
-                >
-                  {showStrictListeningTransferTimer ? strictListeningTimerDisplay : timerDisplay}
-                </p>
-                {showStrictListeningTransferTimer ? (
-                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                    Transfer time
-                  </p>
-                ) : null}
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className={cn("h-9 w-9 rounded-xl p-0", headerControlClass)}
-              onClick={() => updateTheme(theme === "dark" ? "light" : "dark")}
-            >
-              {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={isFullscreen ? "Exit full screen" : "Enter full screen"}
-              className={cn("h-9 w-9 rounded-xl p-0", headerControlClass)}
-              onClick={toggleFullscreen}
-            >
-              {isFullscreen ? <Shrink className="h-[18px] w-[18px]" /> : <Expand className="h-[18px] w-[18px]" />}
-            </Button>
-            <div className={cn("flex items-center rounded-xl p-0.5 shadow-inner", headerControlClass)}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg text-foreground hover:bg-muted"
-                onClick={() => setFontScale((current) => Math.max(0.9, Number((current - 0.05).toFixed(2))))}
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </Button>
-              <span className="px-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{Math.round(fontScale * 100)}%</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg text-foreground hover:bg-muted"
-                onClick={() => setFontScale((current) => Math.min(1.2, Number((current + 0.05).toFixed(2))))}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-            {!isReviewMode ? (
-              <Button
-	                type="button"
-	                onClick={handleSubmit}
-	                disabled={submitDisabled}
-	                className={cn(
-                  "h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                  theme === "dark"
-                    ? "border border-slate-400 bg-slate-300 text-slate-950 hover:bg-slate-200"
-                    : "border border-border bg-muted/45 text-slate-700 hover:bg-muted/70"
-                )}
-              >
-                {isSubmitted ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <SendHorizontal className="mr-1.5 h-3.5 w-3.5" />}
-                {isSubmitting ? "Submitting" : isSubmitted ? "Submitted" : "Submit"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
-      <main
-        ref={containerRef}
-        style={layoutStyle}
-        className="relative mx-auto flex min-h-0 w-full max-w-[1800px] flex-1 flex-col overflow-hidden lg:flex-row"
-      >
-        {!isSinglePaneListeningMode ? (
-        <section
-          className={cn(
-            "min-h-0 flex-1 overflow-hidden border-b border-border/70 lg:flex lg:w-[var(--reading-pane)] lg:flex-none lg:flex-col lg:border-b-0 lg:border-r lg:border-border/80",
-            theme === "light" ? "bg-[#FBFCFD]" : "bg-card/40"
-          )}
-        >
-          <div
-            ref={readingPaneRef}
-
-            onWheelCapture={handlePaneWheel}
-            className="h-full min-h-0 overflow-y-auto px-5 py-4 overscroll-contain lg:flex-1 lg:px-8 lg:py-5"
-            style={{ scrollbarGutter: "stable" }}
-          >
-            <div className="mb-3">
-              {isAttemptPreview ? null : (
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-black tracking-tight text-foreground">{examData.title}</h1>
-                  <p className="max-w-3xl text-sm font-medium text-muted-foreground">
-                    {examData.subtitle}
-                  </p>
                 </div>
-              )}
+              </div>
             </div>
-
-            <article className="space-y-5">
-              {currentSection?.audioUrl ? (
-                <div className="rounded-[1.4rem] border border-border/75 bg-card/70 p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.55)]">
-                  {isListeningPreview && isReviewMode ? (
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant={showListeningTranscript ? "solid" : "outline"}
-                        size="sm"
-                        className="h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.08em]"
-                        onClick={() => setShowListeningTranscript((current) => !current)}
-                      >
-                        {showListeningTranscript ? "Hide Transcript" : "Open Transcript"}
-                      </Button>
-                      {currentTranscriptQuestionLocations.length > 0 ? (
-                        <Button
-                          type="button"
-                          variant={showTranscriptAnswerLocations ? "solid" : "outline"}
-                          size="sm"
-                          aria-label={showTranscriptAnswerLocations ? "Hide answer locations" : "Show answer locations"}
-                          title={showTranscriptAnswerLocations ? "Hide answer locations" : "Show answer locations"}
-                          className="h-8 w-8 rounded-xl p-0"
-                          disabled={!showListeningTranscript}
-                          onClick={() => setShowTranscriptAnswerLocations((current) => !current)}
-                        >
-                          <Lightbulb className={cn("h-4 w-4", showTranscriptAnswerLocations && "fill-current")} />
-                        </Button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <audio
-                    ref={listeningAudioRef}
-                    controls
-                    preload="metadata"
-                    controlsList="nodownload noplaybackrate"
-                    onContextMenu={(event) => event.preventDefault()}
-                    className="w-full"
-                    src={currentSection.audioUrl}
-                  />
-                </div>
-              ) : null}
-
-              {isListeningPreview && showListeningTranscript && currentTranscriptSegments.length > 0 ? (
-                <ListeningTranscriptPanel
-                  audioRef={listeningAudioRef}
-                  segments={currentTranscriptSegments}
-                  questionLocations={currentTranscriptQuestionLocations}
-                  showAnswerLocations={showTranscriptAnswerLocations}
-                />
-              ) : null}
-
-              {(!isListeningPreview || (showListeningTranscript && currentTranscriptSegments.length === 0)) && currentParagraphs.length > 0 ? currentParagraphs.map((paragraph, paragraphIndex) => {
-                const paragraphStyle = parsePassageBlockStyle(paragraph.text);
-                const passageBlockKey = `passage-${sectionKeyForParagraph(paragraph)}-${paragraph.paragraphKey}`;
-
-                return (
-                  <div key={`${paragraph.label ?? paragraphIndex}`} className="px-1 py-1">
-                    {paragraph.sectionPreviewLabel ? (
-                      <div className="mb-3 space-y-1">
-                        <p className="text-lg font-semibold text-foreground">
-                          {renderFormattedText(paragraph.sectionPreviewLabel, `section-label-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
-                        </p>
-                        {paragraph.sectionIntro ? (
-                          <p className="border-l-2 border-primary/40 py-0.5 pl-3 text-sm font-medium italic leading-relaxed text-muted-foreground">
-                            {renderFormattedText(paragraph.sectionIntro, `section-intro-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
-                          </p>
-                        ) : null}
-                        {paragraph.sectionTitle ? (
-                          <h2 className="pt-1 text-center text-2xl font-semibold tracking-tight text-foreground">
-                            {renderFormattedText(paragraph.sectionTitle, `section-title-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
-                          </h2>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {renderMatchingHeadingDropArea(paragraph)}
-                    <p
-                      className={cn(
-                        "select-text font-sans text-foreground",
-                        paragraphStyle.center && "text-center",
-                        paragraphStyle.italic && "italic",
-                        paragraphStyle.bold && "font-bold"
-                      )}
-                      style={{
-                        fontSize: `${bodyFontSize}px`,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {paragraph.label ? (
-                        <span className="mr-3 inline-flex min-w-9 items-center justify-center rounded-md border border-border/70 bg-muted/30 px-2.5 py-1 align-[0.08em] text-sm font-black leading-none text-foreground">
-                          {paragraph.label}
-                        </span>
-                      ) : null}
-                      <span
-                        ref={(node) => {
-                          textBlockRefs.current[passageBlockKey] = node;
-                        }}
-                        data-highlight-text
-                        onMouseUp={(event) => handleTextBlockMouseUp(passageBlockKey, event)}
-                      >
-                        {renderHighlightedText(passageBlockKey, paragraphStyle.text)}
-                      </span>
-                    </p>
-                  </div>
-                );
-              }) : null}
-            </article>
           </div>
-        </section>
         ) : null}
 
-        <section
-          className={cn(
-            "min-h-0 flex-1 overflow-hidden lg:flex lg:flex-col",
-            isSinglePaneListeningMode || (isReviewMode && isListeningPreview) ? "lg:w-full lg:flex-1" : "lg:w-[var(--question-pane)] lg:flex-none",
-            theme === "light" ? "bg-[#FBFCFD]" : "bg-muted/15"
-          )}
-        >
+        {showGuestLoginModal && (
           <div
-            ref={questionPaneRef}
-
-            onWheelCapture={handlePaneWheel}
-            className="h-full min-h-0 overflow-y-auto px-4 py-5 overscroll-contain lg:flex-1 lg:px-6 lg:py-6"
-            style={{ scrollbarGutter: "stable" }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-auto"
+            onClick={() => setShowGuestLoginModal(false)}
           >
-            <div className="space-y-8">
-              {isSinglePaneListeningMode ? (
-                <div className="space-y-4">
-                  {isAttemptPreview ? null : (
-                    <div className="space-y-2">
-                      <h1 className="text-3xl font-black tracking-tight text-foreground">{examData.title}</h1>
-                      <p className="max-w-3xl text-sm font-medium text-muted-foreground">
-                        {examData.subtitle}
-                      </p>
-                    </div>
-                  )}
-                  {currentSection?.previewLabel ? (
-                    <div className="space-y-2 rounded-2xl border border-border/75 bg-card/55 px-4 py-3">
-                      <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                        {currentSection.previewLabel}
-                      </h2>
-                      {currentSection?.label ? (
-                        <p className="border-l-2 border-primary/70 pl-3 text-sm font-medium leading-6 text-foreground">
-                          {(() => {
-                            const sectionQuestionNumbers = currentSection?.questions.map((question) => question.number) ?? [];
-                            const sectionQuestionStart = sectionQuestionNumbers.length > 0 ? Math.min(...sectionQuestionNumbers) : null;
-                            const sectionQuestionEnd = sectionQuestionNumbers.length > 0 ? Math.max(...sectionQuestionNumbers) : null;
-                            return sectionQuestionStart !== null && sectionQuestionEnd !== null
-                              ? `${currentSection.label}. Questions ${sectionQuestionStart}-${sectionQuestionEnd}.`
-                              : `${currentSection.label}.`;
-                          })()}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {isListeningPreview && showListeningTranscript && currentTranscriptSegments.length > 0 ? (
-                    <ListeningTranscriptPanel
-                      audioRef={listeningAudioRef}
-                      segments={currentTranscriptSegments}
-                      questionLocations={currentTranscriptQuestionLocations}
-                      showAnswerLocations={showTranscriptAnswerLocations}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-              {currentQuestionGroups.map((group, groupIndex) => (
-                <div key={group.id} className="rounded-none border-0 bg-transparent p-0 shadow-none">
-                  {(() => {
-                    const isListeningMatchingGroup = group.type.includes("listening_matching");
-                    const isPlanMapGroup = group.type.includes("plan_map_labeling");
-                    return (
-                      <>
-                  <div className="border-l-2 border-primary/70 pl-3">
-                    <p className="text-base font-black tracking-tight text-foreground">
-                      {questionRangeLabelForGroup(group)}
-                    </p>
-                    <div className="mt-2 whitespace-pre-wrap text-[14px] font-medium leading-6 text-foreground md:text-[15px]">
-                      {(() => {
-                        const instructionBlockKey = `group-instruction-${group.id}`;
-                        const binaryLayout = parseBinaryInstructionLayout(softenInstructionText(group.instruction));
-
-                        if (binaryLayout) {
-                          return renderInstructionText(instructionBlockKey, group.instruction);
-                        }
-
-                        return (
-                          <div
-                            ref={(node) => {
-                              textBlockRefs.current[instructionBlockKey] = node;
-                            }}
-                            data-highlight-text
-                            onMouseUp={(event) => handleTextBlockMouseUp(instructionBlockKey, event)}
-                            className="select-text"
-                            style={{ fontSize: `${Math.max(bodyFontSize - 1, 14)}px`, lineHeight: 1.55 }}
-                          >
-                            {renderHighlightedText(instructionBlockKey, softenInstructionText(group.instruction))}
-                          </div>
-                        );
-                      })()}
-                    </div>
+            <div
+              className="relative w-full max-w-[340px] overflow-hidden rounded-[1.5rem] border border-border/60 bg-card/95 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-400"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="absolute top-0 left-0 right-0 h-1 bg-orange-500" />
+              
+              <div className="p-6 space-y-6">
+                <div className="text-center space-y-3">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-500 mb-2 shadow-sm">
+                    <LogIn className="h-6 w-6" />
                   </div>
-
-                  <div className={cn(
-                    "mt-5 px-0 py-2",
-                    isListeningMatchingGroup ? "inline-flex max-w-full items-start gap-3" : "space-y-4"
-                  )}>
-                    <div className={cn(
-                      "min-w-0",
-                      isListeningMatchingGroup ? "w-[32rem] max-w-full flex-none space-y-4" : "space-y-4"
-                    )}>
-                    {isPlanMapGroup ? (
-                      <div className="grid gap-3 lg:grid-cols-[560px_312px] lg:items-start lg:justify-start">
-                        <div className="min-w-0 w-[560px] justify-self-start">
-                          {renderDiagramBlock(group)}
-                        </div>
-                        <div className="min-w-0 justify-self-start space-y-3 lg:self-center">
-                          {renderCustomGroupTitle(group)}
-                          {renderGroupQuestionList(group)}
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {renderDiagramBlock(group)}
-                        {!isListeningMatchingGroup ? renderOptionBank(group) : null}
-                        {renderCustomGroupTitle(group)}
-                        {renderGroupQuestionList(group)}
-                      </>
-                    )}
-                    </div>
-                    {isListeningMatchingGroup ? (
-                      <div
-                        className="shrink-0 rounded-2xl border border-border/70 bg-muted/20 p-3"
-                        style={{ width: optionBankWidthForGroup(group) }}
-                      >
-                        {renderOptionBank(group)}
-                      </div>
-                    ) : null}
-                  </div>
-                      </>
-                    );
-                  })()}
+                  <h3 className="text-lg font-bold tracking-tight text-foreground">
+                    Login Required
+                  </h3>
+                  <p className="text-xs font-medium leading-relaxed text-muted-foreground">
+                    Please log in to answer questions and save your progress.
+                  </p>
                 </div>
-              ))}
+
+                <div className="flex flex-col gap-2 pt-2">
+                  <Button
+                    onClick={() => {
+                      const returnPath = examData.testSlug ? `/tests/${examData.testSlug}` : (examData.exitHref ?? "/tests");
+                      const returnUrl = encodeURIComponent(returnPath);
+                      router.push(`/login?returnUrl=${returnUrl}`);
+                    }}
+                    className="h-10 w-full rounded-xl font-bold bg-orange-500 text-white hover:bg-orange-600 transition-all shadow-sm"
+                  >
+                    Login
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => router.push(examData.exitHref ?? "/tests")}
+                    className="h-10 w-full rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                  >
+                    Exit
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </section>
+        )}
 
-        {!isSinglePaneListeningMode ? (
-          <div
-            className="pointer-events-none absolute inset-y-0 z-20 hidden lg:flex"
-            style={{ left: `calc(${splitRatio}% - 18px)` }}
-          >
-            <div className="relative flex w-9 items-center justify-center">
-              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/80" />
+        <header className="z-40 shrink-0 border-b border-border/80 bg-background/95 text-foreground shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+          <div className={cn(
+            "mx-auto grid min-h-[68px] max-w-[1800px] grid-cols-1 gap-3 px-4 py-3 lg:items-center lg:px-6",
+            isSinglePaneListeningMode
+              ? "lg:grid-cols-[auto_minmax(0,1fr)_auto]"
+              : "lg:grid-cols-[1fr_auto_1fr]"
+          )}>
+            <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
-                aria-label="Adjust split layout"
-                onPointerDown={startSplitDrag}
-                className={cn(
-                  "pointer-events-auto relative flex h-8 w-8 cursor-ew-resize items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[0_10px_28px_-18px_rgba(15,23,42,0.65)] transition hover:bg-muted hover:text-foreground",
-                  isDraggingSplit && "border-primary/40 bg-primary/10 text-primary"
-                )}
+                onClick={() => updateActiveDialog("leave")}
+                className="flex h-10 items-center rounded-md transition hover:opacity-90"
+                aria-label="Leave test"
+                title="Leave test"
               >
-                <MoveHorizontal className="h-4 w-4" />
+                <img
+                  src={theme === "light" ? "/exam-logo-lightmode.svg" : "/exam-logo-darkmode.svg"}
+                  alt="PrimeScore"
+                  className="h-8 w-auto"
+                />
               </button>
+              <div className="min-w-0 border-l border-border pl-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-muted-foreground">Test Taker</p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "inline-flex h-5 w-5 flex-none items-center justify-center",
+                      syncState === "error"
+                        ? "text-red-500"
+                        : syncState === "saving"
+                          ? "text-primary animate-pulse"
+                          : "text-primary"
+                    )}
+                    title={
+                      syncState === "error"
+                        ? "Save failed"
+                        : syncState === "saving"
+                          ? "Saving changes"
+                          : "Saved"
+                    }
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                      <path
+                        d="M6.5 18.25C4.01 18.25 2 16.24 2 13.75C2 11.49 3.67 9.62 5.84 9.31C6.6 6.77 8.95 5 11.75 5C15.19 5 18 7.81 18 11.25V11.5H18.5C20.43 11.5 22 13.07 22 15C22 16.93 20.43 18.5 18.5 18.5H6.5V18.25Z"
+                        className="stroke-current"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      {syncState === "error" ? (
+                        <path
+                          d="M10.1 10.1L13.9 13.9M13.9 10.1L10.1 13.9"
+                          className="stroke-current"
+                          strokeWidth="1.9"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ) : syncState === "saving" ? (
+                        <path
+                          d="M8.5 13.1L10.2 14.8L13.1 11.9"
+                          className="stroke-current"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.6"
+                        />
+                      ) : (
+                        <path
+                          d="M8.5 13.1L10.2 14.8L13.1 11.9"
+                          className="stroke-emerald-500"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      )}
+                    </svg>
+                  </span>
+                  <p className="truncate text-sm font-semibold text-foreground">{candidateName}</p>
+                </div>
+              </div>
             </div>
-          </div>
-        ) : null}
-      </main>
 
-      <footer className="z-30 shrink-0 border-t border-border/80 bg-background/95 backdrop-blur-xl">
-        <div className="mx-auto max-w-[1800px] px-4 py-2 lg:px-6">
-          <div className="flex w-full flex-col gap-2">
-            <div className="flex min-h-[2.25rem] items-center justify-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {previewSections.length > 1 ? (
-                <div className="flex w-full items-stretch gap-0">
-                  {previewSections.map((section, index) => {
-                    const sectionAnsweredCount = section.questions.reduce(
-                      (count, question) => count + answeredQuestionWeight(question, answers[question.id]),
-                      0
-                    );
-                    const sectionTotalQuestions = section.questions.reduce(
-                      (count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1),
-                      0
-                    );
-                    const active = section.id === currentSection?.id;
-                    const completed = sectionAnsweredCount === sectionTotalQuestions;
-
-                    return (
-                      <div
-                        key={section.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => selectSection(section.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            selectSection(section.id);
-                          }
-                        }}
-                        className={cn(
-                          "min-w-0 cursor-pointer px-3 py-2 transition",
-                          active && showPassageQuestionNav ? "flex-[2.2]" : "flex-1",
-                          active
-                            ? completed
-                              ? "bg-emerald-500/10 text-foreground"
-                              : "bg-card text-foreground"
-                            : completed
-                              ? "bg-emerald-500/8 text-foreground hover:bg-emerald-500/12"
-                              : "bg-card/55 text-foreground hover:bg-muted/40"
-                        )}
-                      >
-                        <div className={cn("flex items-center gap-3", active && showPassageQuestionNav ? "justify-between" : "justify-center")}>
-                          <div className="flex min-w-0 shrink-0 items-center gap-2 text-left">
-                            <span
-                              className={cn(
-                                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition",
-                                completed
-                                  ? "border-emerald-500/45 bg-emerald-500/10 text-emerald-500"
-                                  : "border-transparent bg-transparent text-transparent"
-                              )}
-                            >
-                              {completed ? <Check className="h-3.5 w-3.5" /> : null}
-                            </span>
-                            <span className="text-[14px] font-semibold text-foreground whitespace-nowrap">
-                              {section.label ?? `Passage ${index + 1}`}
-                            </span>
-                            <span className="text-[12px] text-muted-foreground whitespace-nowrap">
-                              {sectionAnsweredCount} of {sectionTotalQuestions}
-                            </span>
-                          </div>
-
-                        {active && showPassageQuestionNav ? (
-                          <div className="flex min-w-0 flex-1 items-center justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                            <div className="flex min-w-max items-center gap-1">
-                            {section.questions.map((question) => {
-                              const answered = isQuestionFullyAnswered(question, answers[question.id]);
-                              const questionActive = activeQuestionId === question.id;
-                              const navLabel = question.label ?? String(question.number);
-                              const isRangeLabel = String(navLabel).includes("-");
-
-                              return (
-                                <button
-                                  key={question.id}
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    navigateToQuestion(question.id);
-                                  }}
-                                  className={cn(
-                                    "flex h-7 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-0 transition",
-                                    isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
-                                    questionActive
-                                      ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
-                                      : answered
-                                        ? "border-transparent bg-transparent text-foreground"
-                                        : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/35"
-                                  )}
-                                >
-                                  <span
-                                    className={cn(
-                                      "mb-0.5 h-1 rounded-full transition",
-                                      isRangeLabel ? "w-8" : "w-3.5",
-                                      answered ? "bg-emerald-500" : "bg-transparent"
-                                    )}
-                                  />
-                                  <span className="text-[12px] font-bold leading-none whitespace-nowrap text-current">{navLabel}</span>
-                                </button>
-                              );
-                            })}
-                            </div>
-                          </div>
-                        ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
+            <div className="flex items-center justify-center">
+              {isSinglePaneListeningMode && (isStrictListeningExam ? strictListeningAudioSection?.audioUrl : currentSection?.audioUrl) && !showStrictListeningTransferTimer ? (
+                <div className="flex w-full max-w-[48rem] flex-col items-center gap-2">
+  	                {isStrictListeningExam ? (
+  	                  <button
+  	                    type="button"
+  	                    onClick={() => void startStrictListeningAudio()}
+  	                    className={cn(
+  	                      "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] transition",
+  	                      strictListeningPlaybackBlocked
+  	                        ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+  	                        : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+  	                    )}
+  	                  >
+  	                    <Radio className={cn("h-3.5 w-3.5", strictListeningIsPlaying && "animate-pulse")} />
+  	                    {strictListeningPlaybackBlocked ? "Tap to start audio" : strictListeningIsPlaying ? "Audio is playing" : "Audio starting"}
+  	                  </button>
+  	                ) : null}
+                  <ListeningWaveformPlayer
+                    audioRef={listeningAudioRef}
+                    src={(isStrictListeningExam ? strictListeningAudioSection?.audioUrl : currentSection?.audioUrl) ?? ""}
+  		                  className="w-full"
+  		                  hiddenUi={isStrictListeningExam}
+  	                  locked={isStrictListeningExam}
+                    autoPlayDelayMs={strictListeningAutoPlayDelayMs}
+  	                  onPlaybackStateChange={(playing) => {
+  	                    setStrictListeningIsPlaying(playing);
+  	                    if (isStrictListeningExam && playing) {
+  	                      setStrictListeningPlaybackBlocked(false);
+  	                      setStrictListeningPhase("playing");
+  	                    }
+  	                  }}
+  	                  onPlaybackBlocked={setStrictListeningPlaybackBlocked}
+  	                  onTimeSnapshot={(currentTime, duration) => {
+  	                    const audioSectionId = isStrictListeningExam ? strictListeningAudioSection?.id : currentSection?.id;
+  	                    if (audioSectionId) {
+  	                      updateStrictListeningTimeSnapshot(audioSectionId, currentTime, duration);
+  	                    }
+  	                  }}
+  	                  onEnded={() => {
+  	                    const audioSectionId = isStrictListeningExam ? strictListeningAudioSection?.id : currentSection?.id;
+  	                    const audioDuration = isStrictListeningExam ? strictListeningAudioSection?.audioDurationSeconds : currentSection?.audioDurationSeconds;
+  	                    if (audioSectionId) {
+  	                      handleStrictListeningAudioEnded(audioSectionId, listeningAudioRef.current?.duration ?? audioDuration ?? 0);
+  	                    }
+  	                  }}
+                  />
                 </div>
               ) : (
-                <div className="flex min-h-[2.25rem] w-full items-center justify-center gap-3">
-                  <div className="flex shrink-0 items-center gap-1.5 pr-1">
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded-full border",
-                        currentAnsweredCount === currentTotalQuestions
-                          ? "border-emerald-500/45 text-emerald-500"
-                          : "border-primary/35 text-primary"
-                      )}
-                    >
-                      {currentAnsweredCount === currentTotalQuestions ? <Check className="h-3.5 w-3.5" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
-                    </span>
-                    <span className="whitespace-nowrap text-[14px] font-semibold tracking-tight text-foreground">{currentSection?.label ?? examData.partLabel}</span>
-                    <span className="whitespace-nowrap text-[13px] font-medium text-muted-foreground">{currentAnsweredCount} of {currentTotalQuestions}</span>
-                  </div>
-
-                  <div className="flex min-w-0 max-w-full items-center justify-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <div className="flex min-w-max items-center gap-px">
-                      {currentQuestions.map((question) => {
-                        const answered = isQuestionFullyAnswered(question, answers[question.id]);
-                        const active = activeQuestionId === question.id;
-                        const navLabel = question.label ?? String(question.number);
-                        const isRangeLabel = String(navLabel).includes("-");
-
-                        return (
-                          <button
-                            key={question.id}
-                            type="button"
-                            onClick={() => navigateToQuestion(question.id)}
-                            className={cn(
-                              "flex h-7 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-0 transition",
-                              isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
-                              active
-                                ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
-                                : answered
-                                  ? "border-transparent bg-transparent text-foreground"
-                                  : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/35"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "mb-0.5 h-1 rounded-full transition",
-                                isRangeLabel ? "w-8" : "w-3.5",
-                                answered
-                                  ? "bg-emerald-500"
-                                  : "bg-transparent"
-                              )}
-                            />
-                            <span className="text-[12px] font-bold leading-none whitespace-nowrap text-current">{navLabel}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                <div
+                  className={cn(
+                    "px-2 text-center transition-all",
+                    isLastMinute && "animate-[pulse_2.4s_ease-in-out_infinite]"
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "text-[15px] font-bold leading-none",
+                      isLastFiveMinutes
+                        ? "font-mono tracking-[0.18em] text-red-400 dark:text-red-300"
+                        : "tracking-[0.04em] text-foreground"
+                    )}
+                  >
+                    {showStrictListeningTransferTimer ? strictListeningTimerDisplay : timerDisplay}
+                  </p>
+                  {showStrictListeningTransferTimer ? (
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                      Transfer time
+                    </p>
+                  ) : null}
                 </div>
               )}
             </div>
+
+            <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                className={cn("h-9 w-9 rounded-xl p-0", headerControlClass)}
+                onClick={() => updateTheme(theme === "dark" ? "light" : "dark")}
+              >
+                {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label={isFullscreen ? "Exit full screen" : "Enter full screen"}
+                className={cn("h-9 w-9 rounded-xl p-0", headerControlClass)}
+                onClick={toggleFullscreen}
+              >
+                {isFullscreen ? <Shrink className="h-[18px] w-[18px]" /> : <Expand className="h-[18px] w-[18px]" />}
+              </Button>
+              <div className={cn("flex items-center rounded-xl p-0.5 shadow-inner", headerControlClass)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-foreground hover:bg-muted"
+                  onClick={() => setFontScale((current) => Math.max(0.9, Number((current - 0.05).toFixed(2))))}
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </Button>
+                <span className="px-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{Math.round(fontScale * 100)}%</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-foreground hover:bg-muted"
+                  onClick={() => setFontScale((current) => Math.min(1.2, Number((current + 0.05).toFixed(2))))}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {!isReviewMode ? (
+                <Button
+  	                type="button"
+  	                onClick={handleSubmit}
+  	                disabled={submitDisabled}
+  	                className={cn(
+                    "h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                    theme === "dark"
+                      ? "border border-slate-400 bg-slate-300 text-slate-950 hover:bg-slate-200"
+                      : "border border-border bg-muted/45 text-slate-700 hover:bg-muted/70"
+                  )}
+                >
+                  {isSubmitted ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <SendHorizontal className="mr-1.5 h-3.5 w-3.5" />}
+                  {isSubmitting ? "Submitting" : isSubmitted ? "Submitted" : "Submit"}
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </footer>
-    </div>
-  );
+        </header>
+
+        <main
+          ref={containerRef}
+          style={layoutStyle}
+          className="relative mx-auto flex min-h-0 w-full max-w-[1800px] flex-1 flex-col overflow-hidden lg:flex-row"
+        >
+          {!isSinglePaneListeningMode ? (
+          <section
+            className={cn(
+              "min-h-0 flex-1 overflow-hidden border-b border-border/70 lg:flex lg:w-[var(--reading-pane)] lg:flex-none lg:flex-col lg:border-b-0 lg:border-r lg:border-border/80",
+              theme === "light" ? "bg-[#FBFCFD]" : "bg-card/40"
+            )}
+          >
+            <div
+              ref={readingPaneRef}
+
+              onWheelCapture={handlePaneWheel}
+              className="h-full min-h-0 overflow-y-auto px-5 py-4 overscroll-contain lg:flex-1 lg:px-8 lg:py-5"
+              style={{ scrollbarGutter: "stable" }}
+            >
+              <div className="mb-3">
+                {isAttemptPreview ? null : (
+                  <div className="space-y-2">
+                    <h1 className="text-3xl font-black tracking-tight text-foreground">{examData.title}</h1>
+                    <p className="max-w-3xl text-sm font-medium text-muted-foreground">
+                      {examData.subtitle}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <article className="space-y-5">
+                {currentSection?.audioUrl ? (
+                  <div className="rounded-[1.4rem] border border-border/75 bg-card/70 p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.55)]">
+                    {isListeningPreview && isReviewMode ? (
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant={showListeningTranscript ? "solid" : "outline"}
+                          size="sm"
+                          className="h-8 rounded-xl px-3 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                          onClick={() => setShowListeningTranscript((current) => !current)}
+                        >
+                          {showListeningTranscript ? "Hide Transcript" : "Open Transcript"}
+                        </Button>
+                        {currentTranscriptQuestionLocations.length > 0 ? (
+                          <Button
+                            type="button"
+                            variant={showTranscriptAnswerLocations ? "solid" : "outline"}
+                            size="sm"
+                            aria-label={showTranscriptAnswerLocations ? "Hide answer locations" : "Show answer locations"}
+                            title={showTranscriptAnswerLocations ? "Hide answer locations" : "Show answer locations"}
+                            className="h-8 w-8 rounded-xl p-0"
+                            disabled={!showListeningTranscript}
+                            onClick={() => setShowTranscriptAnswerLocations((current) => !current)}
+                          >
+                            <Lightbulb className={cn("h-4 w-4", showTranscriptAnswerLocations && "fill-current")} />
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <audio
+                      ref={listeningAudioRef}
+                      controls
+                      preload="metadata"
+                      controlsList="nodownload noplaybackrate"
+                      onContextMenu={(event) => event.preventDefault()}
+                      className="w-full"
+                      src={currentSection.audioUrl}
+                    />
+                  </div>
+                ) : null}
+
+                {isListeningPreview && showListeningTranscript && currentTranscriptSegments.length > 0 ? (
+                  <ListeningTranscriptPanel
+                    audioRef={listeningAudioRef}
+                    segments={currentTranscriptSegments}
+                    questionLocations={currentTranscriptQuestionLocations}
+                    showAnswerLocations={showTranscriptAnswerLocations}
+                  />
+                ) : null}
+
+                {(!isListeningPreview || (showListeningTranscript && currentTranscriptSegments.length === 0)) && currentParagraphs.length > 0 ? currentParagraphs.map((paragraph, paragraphIndex) => {
+                  const paragraphStyle = parsePassageBlockStyle(paragraph.text);
+                  const passageBlockKey = `passage-${sectionKeyForParagraph(paragraph)}-${paragraph.paragraphKey}`;
+
+                  return (
+                    <div key={`${paragraph.label ?? paragraphIndex}`} className="px-1 py-1">
+                      {paragraph.sectionPreviewLabel ? (
+                        <div className="mb-3 space-y-1">
+                          <p className="text-lg font-semibold text-foreground">
+                            {renderFormattedText(paragraph.sectionPreviewLabel, `section-label-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
+                          </p>
+                          {paragraph.sectionIntro ? (
+                            <p className="border-l-2 border-primary/40 py-0.5 pl-3 text-sm font-medium italic leading-relaxed text-muted-foreground">
+                              {renderFormattedText(paragraph.sectionIntro, `section-intro-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
+                            </p>
+                          ) : null}
+                          {paragraph.sectionTitle ? (
+                            <h2 className="pt-1 text-center text-2xl font-semibold tracking-tight text-foreground">
+                              {renderFormattedText(paragraph.sectionTitle, `section-title-${paragraph.sectionId ?? paragraph.paragraphKey}`)}
+                            </h2>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {renderMatchingHeadingDropArea(paragraph)}
+                      <p
+                        className={cn(
+                          "select-text font-sans text-foreground",
+                          paragraphStyle.center && "text-center",
+                          paragraphStyle.italic && "italic",
+                          paragraphStyle.bold && "font-bold"
+                        )}
+                        style={{
+                          fontSize: `${bodyFontSize}px`,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {paragraph.label ? (
+                          <span className="mr-3 inline-flex min-w-9 items-center justify-center rounded-md border border-border/70 bg-muted/30 px-2.5 py-1 align-[0.08em] text-sm font-black leading-none text-foreground">
+                            {paragraph.label}
+                          </span>
+                        ) : null}
+                        <span
+                          ref={(node) => {
+                            textBlockRefs.current[passageBlockKey] = node;
+                          }}
+                          data-highlight-text
+                          onMouseUp={(event) => handleTextBlockMouseUp(passageBlockKey, event)}
+                        >
+                          {renderHighlightedText(passageBlockKey, paragraphStyle.text)}
+                        </span>
+                      </p>
+                    </div>
+                  );
+                }) : null}
+              </article>
+            </div>
+          </section>
+          ) : null}
+
+          <section
+            className={cn(
+              "min-h-0 flex-1 overflow-hidden lg:flex lg:flex-col",
+              isSinglePaneListeningMode || (isReviewMode && isListeningPreview) ? "lg:w-full lg:flex-1" : "lg:w-[var(--question-pane)] lg:flex-none",
+              theme === "light" ? "bg-[#FBFCFD]" : "bg-muted/15"
+            )}
+          >
+            <div
+              ref={questionPaneRef}
+
+              onWheelCapture={handlePaneWheel}
+              className="h-full min-h-0 overflow-y-auto px-4 py-5 overscroll-contain lg:flex-1 lg:px-6 lg:py-6"
+              style={{ scrollbarGutter: "stable" }}
+            >
+              <div className="space-y-8">
+                {isSinglePaneListeningMode ? (
+                  <div className="space-y-4">
+                    {isAttemptPreview ? null : (
+                      <div className="space-y-2">
+                        <h1 className="text-3xl font-black tracking-tight text-foreground">{examData.title}</h1>
+                        <p className="max-w-3xl text-sm font-medium text-muted-foreground">
+                          {examData.subtitle}
+                        </p>
+                      </div>
+                    )}
+                    {currentSection?.previewLabel ? (
+                      <div className="space-y-2 rounded-2xl border border-border/75 bg-card/55 px-4 py-3">
+                        <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                          {currentSection.previewLabel}
+                        </h2>
+                        {currentSection?.label ? (
+                          <p className="border-l-2 border-primary/70 pl-3 text-sm font-medium leading-6 text-foreground">
+                            {(() => {
+                              const sectionQuestionNumbers = currentSection?.questions.map((question) => question.number) ?? [];
+                              const sectionQuestionStart = sectionQuestionNumbers.length > 0 ? Math.min(...sectionQuestionNumbers) : null;
+                              const sectionQuestionEnd = sectionQuestionNumbers.length > 0 ? Math.max(...sectionQuestionNumbers) : null;
+                              return sectionQuestionStart !== null && sectionQuestionEnd !== null
+                                ? `${currentSection.label}. Questions ${sectionQuestionStart}-${sectionQuestionEnd}.`
+                                : `${currentSection.label}.`;
+                            })()}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {isListeningPreview && showListeningTranscript && currentTranscriptSegments.length > 0 ? (
+                      <ListeningTranscriptPanel
+                        audioRef={listeningAudioRef}
+                        segments={currentTranscriptSegments}
+                        questionLocations={currentTranscriptQuestionLocations}
+                        showAnswerLocations={showTranscriptAnswerLocations}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+                {currentQuestionGroups.map((group, groupIndex) => (
+                  <div key={group.id} className="rounded-none border-0 bg-transparent p-0 shadow-none">
+                    {(() => {
+                      const isListeningMatchingGroup = group.type.includes("listening_matching");
+                      const isPlanMapGroup = group.type.includes("plan_map_labeling");
+                      return (
+                        <>
+                    <div className="border-l-2 border-primary/70 pl-3">
+                      <p className="text-base font-black tracking-tight text-foreground">
+                        {questionRangeLabelForGroup(group)}
+                      </p>
+                      <div className="mt-2 whitespace-pre-wrap text-[14px] font-medium leading-6 text-foreground md:text-[15px]">
+                        {(() => {
+                          const instructionBlockKey = `group-instruction-${group.id}`;
+                          const binaryLayout = parseBinaryInstructionLayout(softenInstructionText(group.instruction));
+
+                          if (binaryLayout) {
+                            return renderInstructionText(instructionBlockKey, group.instruction);
+                          }
+
+                          return (
+                            <div
+                              ref={(node) => {
+                                textBlockRefs.current[instructionBlockKey] = node;
+                              }}
+                              data-highlight-text
+                              onMouseUp={(event) => handleTextBlockMouseUp(instructionBlockKey, event)}
+                              className="select-text"
+                              style={{ fontSize: `${Math.max(bodyFontSize - 1, 14)}px`, lineHeight: 1.55 }}
+                            >
+                              {renderHighlightedText(instructionBlockKey, softenInstructionText(group.instruction))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "mt-5 px-0 py-2",
+                      isListeningMatchingGroup ? "inline-flex max-w-full items-start gap-3" : "space-y-4"
+                    )}>
+                      <div className={cn(
+                        "min-w-0",
+                        isListeningMatchingGroup ? "w-[32rem] max-w-full flex-none space-y-4" : "space-y-4"
+                      )}>
+                      {isPlanMapGroup ? (
+                        <div className="grid gap-3 lg:grid-cols-[560px_312px] lg:items-start lg:justify-start">
+                          <div className="min-w-0 w-[560px] justify-self-start">
+                            {renderDiagramBlock(group)}
+                          </div>
+                          <div className="min-w-0 justify-self-start space-y-3 lg:self-center">
+                            {renderCustomGroupTitle(group)}
+                            {renderGroupQuestionList(group)}
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {renderDiagramBlock(group)}
+                          {!isListeningMatchingGroup ? renderOptionBank(group) : null}
+                          {renderCustomGroupTitle(group)}
+                          {renderGroupQuestionList(group)}
+                        </>
+                      )}
+                      </div>
+                      {isListeningMatchingGroup ? (
+                        <div
+                          className="shrink-0 rounded-2xl border border-border/70 bg-muted/20 p-3"
+                          style={{ width: optionBankWidthForGroup(group) }}
+                        >
+                          {renderOptionBank(group)}
+                        </div>
+                      ) : null}
+                    </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {!isSinglePaneListeningMode ? (
+            <div
+              className="pointer-events-none absolute inset-y-0 z-20 hidden lg:flex"
+              style={{ left: `calc(${splitRatio}% - 18px)` }}
+            >
+              <div className="relative flex w-9 items-center justify-center">
+                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/80" />
+                <button
+                  type="button"
+                  aria-label="Adjust split layout"
+                  onPointerDown={startSplitDrag}
+                  className={cn(
+                    "pointer-events-auto relative flex h-8 w-8 cursor-ew-resize items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[0_10px_28px_-18px_rgba(15,23,42,0.65)] transition hover:bg-muted hover:text-foreground",
+                    isDraggingSplit && "border-primary/40 bg-primary/10 text-primary"
+                  )}
+                >
+                  <MoveHorizontal className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </main>
+
+        <footer className="z-30 shrink-0 border-t border-border/80 bg-background/95 backdrop-blur-xl">
+          <div className="mx-auto max-w-[1800px] px-4 py-2 lg:px-6">
+            <div className="flex w-full flex-col gap-2">
+              <div className="flex min-h-[2.25rem] items-center justify-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {previewSections.length > 1 ? (
+                  <div className="flex w-full items-stretch gap-0">
+                    {previewSections.map((section, index) => {
+                      const sectionAnsweredCount = section.questions.reduce(
+                        (count, question) => count + answeredQuestionWeight(question, answers[question.id]),
+                        0
+                      );
+                      const sectionTotalQuestions = section.questions.reduce(
+                        (count, question) => count + (isMcqMultiple(question.type) ? mcMultipleQuestionWeight(question) : 1),
+                        0
+                      );
+                      const active = section.id === currentSection?.id;
+                      const completed = sectionAnsweredCount === sectionTotalQuestions;
+
+                      return (
+                        <div
+                          key={section.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => selectSection(section.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              selectSection(section.id);
+                            }
+                          }}
+                          className={cn(
+                            "min-w-0 cursor-pointer px-3 py-2 transition",
+                            active && showPassageQuestionNav ? "flex-[2.2]" : "flex-1",
+                            active
+                              ? completed
+                                ? "bg-emerald-500/10 text-foreground"
+                                : "bg-card text-foreground"
+                              : completed
+                                ? "bg-emerald-500/8 text-foreground hover:bg-emerald-500/12"
+                                : "bg-card/55 text-foreground hover:bg-muted/40"
+                          )}
+                        >
+                          <div className={cn("flex items-center gap-3", active && showPassageQuestionNav ? "justify-between" : "justify-center")}>
+                            <div className="flex min-w-0 shrink-0 items-center gap-2 text-left">
+                              <span
+                                className={cn(
+                                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition",
+                                  completed
+                                    ? "border-emerald-500/45 bg-emerald-500/10 text-emerald-500"
+                                    : "border-transparent bg-transparent text-transparent"
+                                )}
+                              >
+                                {completed ? <Check className="h-3.5 w-3.5" /> : null}
+                              </span>
+                              <span className="text-[14px] font-semibold text-foreground whitespace-nowrap">
+                                {section.label ?? `Passage ${index + 1}`}
+                              </span>
+                              <span className="text-[12px] text-muted-foreground whitespace-nowrap">
+                                {sectionAnsweredCount} of {sectionTotalQuestions}
+                              </span>
+                            </div>
+
+                          {active && showPassageQuestionNav ? (
+                            <div className="flex min-w-0 flex-1 items-center justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                              <div className="flex min-w-max items-center gap-1">
+                              {section.questions.map((question) => {
+                                const answered = isQuestionFullyAnswered(question, answers[question.id]);
+                                const questionActive = activeQuestionId === question.id;
+                                const navLabel = question.label ?? String(question.number);
+                                const isRangeLabel = String(navLabel).includes("-");
+
+                                return (
+                                  <button
+                                    key={question.id}
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      navigateToQuestion(question.id);
+                                    }}
+                                    className={cn(
+                                      "flex h-7 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-0 transition",
+                                      isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
+                                      questionActive
+                                        ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
+                                        : answered
+                                          ? "border-transparent bg-transparent text-foreground"
+                                          : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/35"
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "mb-0.5 h-1 rounded-full transition",
+                                        isRangeLabel ? "w-8" : "w-3.5",
+                                        answered ? "bg-emerald-500" : "bg-transparent"
+                                      )}
+                                    />
+                                    <span className="text-[12px] font-bold leading-none whitespace-nowrap text-current">{navLabel}</span>
+                                  </button>
+                                );
+                              })}
+                              </div>
+                            </div>
+                          ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex min-h-[2.25rem] w-full items-center justify-center gap-3">
+                    <div className="flex shrink-0 items-center gap-1.5 pr-1">
+                      <span
+                        className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-full border",
+                          currentAnsweredCount === currentTotalQuestions
+                            ? "border-emerald-500/45 text-emerald-500"
+                            : "border-primary/35 text-primary"
+                        )}
+                      >
+                        {currentAnsweredCount === currentTotalQuestions ? <Check className="h-3.5 w-3.5" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+                      </span>
+                      <span className="whitespace-nowrap text-[14px] font-semibold tracking-tight text-foreground">{currentSection?.label ?? examData.partLabel}</span>
+                      <span className="whitespace-nowrap text-[13px] font-medium text-muted-foreground">{currentAnsweredCount} of {currentTotalQuestions}</span>
+                    </div>
+
+                    <div className="flex min-w-0 max-w-full items-center justify-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="flex min-w-max items-center gap-px">
+                        {currentQuestions.map((question) => {
+                          const answered = isQuestionFullyAnswered(question, answers[question.id]);
+                          const active = activeQuestionId === question.id;
+                          const navLabel = question.label ?? String(question.number);
+                          const isRangeLabel = String(navLabel).includes("-");
+
+                          return (
+                            <button
+                              key={question.id}
+                              type="button"
+                              onClick={() => navigateToQuestion(question.id)}
+                              className={cn(
+                                "flex h-7 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 py-0 transition",
+                                isRangeLabel ? "min-w-[42px]" : "min-w-[30px]",
+                                active
+                                  ? "border-slate-900/45 bg-transparent text-slate-900 dark:border-slate-100/35 dark:text-slate-100"
+                                  : answered
+                                    ? "border-transparent bg-transparent text-foreground"
+                                    : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/35"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "mb-0.5 h-1 rounded-full transition",
+                                  isRangeLabel ? "w-8" : "w-3.5",
+                                  answered
+                                    ? "bg-emerald-500"
+                                    : "bg-transparent"
+                                )}
+                              />
+                              <span className="text-[12px] font-bold leading-none whitespace-nowrap text-current">{navLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
+    );
 }
