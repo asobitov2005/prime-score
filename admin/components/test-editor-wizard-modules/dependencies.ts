@@ -38,3 +38,5 @@ export type { AdminTestDraftState } from "@/lib/types";
 export type { PreviewMode } from "@/lib/types";
 export type { WizardStepId } from "@/lib/types";
 export { cn } from "@/lib/utils";
+export { ContentPanel } from "./test-editor-wizard-modules/content-panel";
+export { QuestionsPanel } from "./test-editor-wizard-modules/questions-panel";

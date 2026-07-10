@@ -1,6 +1,6 @@
 "use client";
 import type { TestEditorWizardScope } from "./controller";
-import { Button, SectionHeader, cn } from "../dependencies";
+import { Button, ContentPanel, QuestionsPanel, SectionHeader, cn } from "../dependencies";
 import { MetadataPanel, ReviewPanel, stepLabel, stepOrder } from "../shared";
 
 export function TestEditorWizardView1({ scope }: { scope: TestEditorWizardScope }) {
