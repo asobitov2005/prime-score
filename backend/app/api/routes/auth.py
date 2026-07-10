@@ -26,11 +26,9 @@ from app.api.routes.auth_support import (
 from app.api.routes.auth_webapp import router as webapp_router, telegram_webapp_login
 
 router = APIRouter()
-router.include_router(code_router)
-router.include_router(webapp_router)
-router.include_router(sessions_router)
+for child_router in (code_router, webapp_router, sessions_router):
+    router.routes.extend(child_router.routes)
 
-# Backward-compatible private aliases for existing tests and scripts.
 _upsert_user_from_login = upsert_user_from_login
 _fetch_telegram_avatar_url = fetch_telegram_avatar_url
 _resolve_telegram_avatar_url = resolve_telegram_avatar_url
