@@ -1,4 +1,3 @@
 lines	path
 5669	admin/components/test-editor-wizard.tsx
 5265	frontend/components/exam/reading-exam-preview.tsx
-1878	frontend/app/(app)/writing/submissions/[submissionId]/result/result-client.tsx
