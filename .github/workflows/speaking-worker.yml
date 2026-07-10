@@ -43,7 +43,11 @@ jobs:
               count=1,
               flags=re.S,
           )
-          text = text.replace("const MAX_BODY_LINES = 220;", "const MAX_BODY_LINES = 270;")
+          text = text.replace("const MAX_BODY_LINES = 220;", "const MAX_BODY_LINES = 285;")
+          text = text.replace(
+              "const controllerParts = packGroups(controllerUnits, groups, 255);",
+              "const controllerParts = packGroups(controllerUnits, groups, 285);",
+          )
           text = text.replace(
               "if (lineCount(nodeText) > 210 && children.length > 1) {",
               "if (lineCount(nodeText) > 175 && children.length > 0) {",
