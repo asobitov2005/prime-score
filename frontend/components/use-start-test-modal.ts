@@ -73,13 +73,6 @@ export function useStartTestModal(
     };
   }, [open, showPremiumModal]);
 
-  function requestExamFullscreen() {
-    if (typeof document === "undefined" || document.fullscreenElement) {
-      return;
-    }
-    void document.documentElement.requestFullscreen().catch(() => undefined);
-  }
-
   function openAttempt(attempt: TestCardAttemptSummary) {
     const resumeToken = Date.now();
     setIsSubmitting(true);
@@ -131,9 +124,6 @@ export function useStartTestModal(
     setIsSubmitting(true);
     setOpen(false);
     setShowRules(false);
-    if (effectiveMode === "exam") {
-      requestExamFullscreen();
-    }
     const href = buildExamStartHref({
       testType: test.type,
       testId: test.id,
