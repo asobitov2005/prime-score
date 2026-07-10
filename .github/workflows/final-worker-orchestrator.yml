@@ -3,6 +3,7 @@ name: Final editor and exam workers
 on:
   push:
     branches:
+      - master
       - refactor/zero-oversized-source-files
   pull_request:
     branches:
