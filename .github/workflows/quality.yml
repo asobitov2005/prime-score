@@ -77,10 +77,14 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
       - name: Migrate test database
-        run: alembic upgrade head
-      - name: Ruff
         run: |
           mkdir -p ../ci-logs
+          set +e
+          alembic upgrade head 2>&1 | tee ../ci-logs/backend-migrate.log
+          echo ${PIPESTATUS[0]} > ../ci-logs/backend-migrate.status
+          exit 0
+      - name: Ruff
+        run: |
           set +e
           ruff check app tests --output-format=concise 2>&1 | tee ../ci-logs/backend-ruff.log
           echo ${PIPESTATUS[0]} > ../ci-logs/backend-ruff.status
@@ -99,6 +103,7 @@ jobs:
           path: ci-logs/backend-*
       - name: Verify backend results
         run: |
+          test "$(cat ../ci-logs/backend-migrate.status)" = "0"
           test "$(cat ../ci-logs/backend-ruff.status)" = "0"
           test "$(cat ../ci-logs/backend-pytest.status)" = "0"
 
