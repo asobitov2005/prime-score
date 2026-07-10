@@ -1,16 +1,3 @@
 status	components	shared_parts	path	detail
-failed	0	0	admin/components/test-editor-wizard.tsx	command=node scripts/finish_test_editor_content_panel.cjs; line=67; status=1
-/home/runner/work/prime-score/prime-score/scripts/finish_test_editor_content_panel.cjs:215
-  throw new Error("Content section card return not found");
-  ^
+failed	0	0	admin/components/test-editor-wizard.tsx	command=grep -q '^split	' artifacts/medium-ui-architecture-report.tsv; line=137; status=1
 
-Error: Content section card return not found
-    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/finish_test_editor_content_panel.cjs:215:9)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
-    at node:internal/main/run_main_module:28:49
-
-Node.js v20.20.2
