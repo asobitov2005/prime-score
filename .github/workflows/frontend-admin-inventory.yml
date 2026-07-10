@@ -1,0 +1,46 @@
+name: Frontend admin source inventory
+
+on:
+  push:
+    branches:
+      - refactor/frontend-admin-large-files-batch-1
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Generate TypeScript inventory
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          rows = []
+          for root in (Path('frontend'), Path('admin')):
+              for path in root.rglob('*'):
+                  if not path.is_file() or path.suffix not in {'.ts', '.tsx', '.js', '.jsx'}:
+                      continue
+                  if any(part in {'node_modules', '.next', 'dist', 'build', 'coverage'} for part in path.parts):
+                      continue
+                  count = sum(1 for _ in path.open('r', encoding='utf-8', errors='replace'))
+                  if count > 300:
+                      rows.append((count, path.as_posix()))
+          rows.sort(reverse=True)
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/frontend-admin-oversized.tsv').write_text(
+              'lines\tpath\n' + ''.join(f'{count}\t{path}\n' for count, path in rows)
+          )
+          PY
+      - name: Commit inventory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/frontend-admin-oversized.tsv
+          git commit -m "chore: inventory oversized frontend and admin files"
+          git push origin HEAD:${{ github.ref_name }}
