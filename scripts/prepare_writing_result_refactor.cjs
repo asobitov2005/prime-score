@@ -106,6 +106,19 @@ function importNames(statement) {
   return output;
 }
 
+function containsReturn(node) {
+  let found = false;
+  function visit(current) {
+    if (ts.isReturnStatement(current)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(current, visit);
+  }
+  visit(node);
+  return found;
+}
+
 const component = sourceFile.statements.find(
   (statement) =>
     ts.isFunctionDeclaration(statement) &&
@@ -114,24 +127,27 @@ const component = sourceFile.statements.find(
 if (!component || !component.body) throw new Error("WritingResultClient not found");
 
 const statements = [...component.body.statements];
-const returnIndexes = statements
-  .map((statement, index) => (ts.isReturnStatement(statement) ? index : -1))
+const guardIndexes = statements
+  .map((statement, index) =>
+    ts.isIfStatement(statement) && containsReturn(statement) ? index : -1,
+  )
   .filter((index) => index >= 0);
-if (returnIndexes.length !== 3) {
-  throw new Error(`Expected 3 top-level returns, found ${returnIndexes.length}`);
+if (guardIndexes.length < 2) {
+  throw new Error(`Expected failed and grading guards, found ${guardIndexes.length}`);
 }
-const [failedReturnIndex, gradingReturnIndex, finalReturnIndex] = returnIndexes;
-const failedIf = statements[failedReturnIndex - 1];
-const gradingIf = statements[gradingReturnIndex - 1];
-if (!ts.isIfStatement(failedIf) || !ts.isIfStatement(gradingIf)) {
-  throw new Error("Expected failed and grading guard statements");
+const failedGuardIndex = guardIndexes[guardIndexes.length - 2];
+const gradingGuardIndex = guardIndexes[guardIndexes.length - 1];
+const finalReturnIndex = statements.findLastIndex(ts.isReturnStatement);
+if (finalReturnIndex <= gradingGuardIndex) {
+  throw new Error("Final ready-result return not found");
 }
-
-const preReadyStatements = statements.slice(0, failedReturnIndex - 1);
-const readyStatements = statements.slice(gradingReturnIndex + 1, finalReturnIndex);
+const failedIf = statements[failedGuardIndex];
+const gradingIf = statements[gradingGuardIndex];
 const finalReturn = statements[finalReturnIndex];
 if (!finalReturn.expression) throw new Error("Final result return is empty");
 
+const preReadyStatements = statements.slice(0, failedGuardIndex);
+const readyStatements = statements.slice(gradingGuardIndex + 1, finalReturnIndex);
 const parameter = component.parameters[0];
 if (!parameter || !parameter.type) throw new Error("Result component props are not typed");
 const bindingText = source.slice(parameter.name.getStart(), parameter.name.end);
@@ -194,7 +210,7 @@ const depImport = dependencyRefs.length
 const sharedImport = sharedRefs.length
   ? `import { ${[...new Set(sharedRefs)].sort().join(", ")} } from "./result-client-modules/shared";\n`
   : "";
-const readySource = `"use client";\n\n${depImport}${sharedImport}import type { WritingResultClientState } from "./result-client-modules/shared";\n\ntype WritingResultReadyScope = WritingResultClientState & {\n  result: NonNullable<WritingResultClientState["result"]>;\n};\n\nexport function WritingResultReadyView({ scope }: { scope: WritingResultReadyScope }) {\n  const { ${scopeRefs.join(", ")} } = scope;\n\n${readyBody
+const readySource = `"use client";\n\n${depImport}${sharedImport}import type { WritingResultClientState } from "./result-client";\n\ntype WritingResultReadyScope = WritingResultClientState & {\n  result: NonNullable<WritingResultClientState["result"]>;\n};\n\nexport function WritingResultReadyView({ scope }: { scope: WritingResultReadyScope }) {\n  const { ${scopeRefs.join(", ")} } = scope;\n\n${readyBody
   .split("\n")
   .map((line) => `  ${line}`)
   .join("\n")}\n\n  return (\n${finalExpression
