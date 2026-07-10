@@ -1,0 +1,10 @@
+lines	path
+5669	admin/components/test-editor-wizard.tsx
+5265	frontend/components/exam/reading-exam-preview.tsx
+2460	frontend/app/(app)/speaking/speaking-page-client.tsx
+1878	frontend/app/(app)/writing/submissions/[submissionId]/result/result-client.tsx
+1423	admin/app/(dashboard)/promo-codes/page.tsx
+714	frontend/app/(app)/dashboard/page.tsx
+361	admin/app/(dashboard)/dashboard/page.tsx
+329	admin/app/(dashboard)/analytics/page.tsx
+308	frontend/app/(app)/tests/practice-catalog-utils.ts
