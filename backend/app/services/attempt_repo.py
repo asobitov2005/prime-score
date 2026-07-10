@@ -2,8 +2,6 @@
 
 from app.services.attempt_repo_commands import save_answer_in_db, start_attempt_in_db
 from app.services.attempt_repo_progress import (
-    normalize_text_highlights,
-    normalize_ui_state,
     save_progress_in_db,
 )
 from app.services.attempt_repo_runtime import (
