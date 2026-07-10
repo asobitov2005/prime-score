@@ -36,10 +36,12 @@ jobs:
           runtime_text = runtime_store.read_text()
           runtime_text = runtime_text.replace(
               "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score\n\nband_for_raw_score = _band_for_raw_score\n",
-              "from app.services.attempt_runtime import (\n"
-              "    AttemptRuntime,\n"
-              "    _band_for_raw_score as band_for_raw_score,\n"
-              ")\n",
+              "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score as band_for_raw_score\n",
+              1,
+          )
+          runtime_text = runtime_text.replace(
+              "from app.services.attempt_runtime import (\n    AttemptRuntime,\n    _band_for_raw_score as band_for_raw_score,\n)\n",
+              "from app.services.attempt_runtime import AttemptRuntime, _band_for_raw_score as band_for_raw_score\n",
               1,
           )
           runtime_store.write_text(runtime_text)
