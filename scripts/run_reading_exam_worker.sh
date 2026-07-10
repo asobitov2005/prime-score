@@ -32,6 +32,7 @@ trap on_error ERR
 
 node scripts/reorder_reading_exam_effects.cjs
 node scripts/split_reading_question_control.cjs
+node scripts/reorder_reading_renderer_group.cjs
 node scripts/analyze_reading_renderer_group.cjs
 
 python - <<'PY'
