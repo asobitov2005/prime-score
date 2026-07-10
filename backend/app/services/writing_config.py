@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.enums import (
     WritingConfigEntityType,
     WritingConfigStatus,
-    WritingPromptFormat,
     WritingPromptKey,
     WritingTaskType,
     WritingTaskTypeScope,

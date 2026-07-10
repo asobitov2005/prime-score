@@ -639,7 +639,7 @@ def _build_question_location_prompt(
         "correct_answer should echo the provided accepted answer(s).\n\n"
         f"Transcript:\n{transcript}\n\n"
         f"Segments:\n" + "\n".join(segment_lines) + "\n\n"
-        f"Questions:\n" + "\n".join(question_lines)
+        "Questions:\n" + "\n".join(question_lines)
     )
 
 

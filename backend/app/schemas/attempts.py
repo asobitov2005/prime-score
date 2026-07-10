@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from app.core.enums import AttemptStatus, TestMode, TestScope, TestSource, TestType
 from app.schemas.tests import TestSnapshotRead

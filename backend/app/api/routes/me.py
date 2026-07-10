@@ -88,7 +88,6 @@ from app.services.xp import (
     PERIOD_ALL_TIME,
     PERIOD_MONTHLY,
     PERIOD_WEEKLY,
-    badge_for_user,
     leaderboard_rows,
     level_bounds,
     list_user_xp_transactions,

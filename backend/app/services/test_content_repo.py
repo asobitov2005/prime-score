@@ -31,7 +31,6 @@ from app.services.admin_example_reading_seed import (
 from app.services.fixtures import (
     LISTENING_TEST_ID,
     TEST_CATALOG_FIXTURES,
-    get_question_fixture,
     get_test_questions,
     get_test_sections,
 )
