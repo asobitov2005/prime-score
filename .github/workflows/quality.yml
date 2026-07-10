@@ -15,15 +15,15 @@ permissions:
 
 jobs:
   source-size:
-    name: Source file size
+    name: Repository source size
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Enforce 300-line limit for changed source files
-        run: python scripts/check_changed_file_lengths.py
+      - name: Enforce 300-line limit for all source files
+        run: FULL_SOURCE_SCAN=1 python scripts/check_changed_file_lengths.py
 
   backend:
     name: Backend lint and tests
