@@ -1,3 +1,9 @@
 "use client";
 
-export { useWritingResultClientState, WritingResultClientState, WritingResultClient } from "./result-client-modules/shared";
+export {
+  useWritingResultClientState,
+  WritingResultClient,
+} from "./result-client-modules/shared";
+export type {
+  WritingResultClientState,
+} from "./result-client-modules/shared";
