@@ -1,11 +1,11 @@
 status	components	shared_parts	path	detail
-failed	0	0	admin/components/test-editor-wizard.tsx	command=node scripts/finish_test_editor_questions_panel.cjs; line=105; status=1
+failed	0	0	admin/components/test-editor-wizard.tsx	command=node scripts/finish_test_editor_questions_panel.cjs; line=121; status=1
 
 /home/runner/work/prime-score/prime-score/scripts/finish_test_editor_questions_panel.cjs:110
   if (lineCount(content) > 290) throw new Error(`${target} has ${lineCount(content)} lines`);
                                 ^
 
-Error: admin/components/test-editor-wizard-modules/questions-panel/question-group-section-07.tsx has 377 lines
+Error: admin/components/test-editor-wizard-modules/questions-panel/question-group-section-11.tsx has 377 lines
     at write (/home/runner/work/prime-score/prime-score/scripts/finish_test_editor_questions_panel.cjs:110:39)
     at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/finish_test_editor_questions_panel.cjs:192:34)
     at Module._compile (node:internal/modules/cjs/loader:1521:14)
