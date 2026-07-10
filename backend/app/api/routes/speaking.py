@@ -69,10 +69,8 @@ from app.services.speaking_prompt import (
 )
 
 router = APIRouter()
-router.include_router(catalog_router)
-router.include_router(sessions_router)
-router.include_router(live_router)
-router.include_router(results_router)
+for child_router in (catalog_router, sessions_router, live_router, results_router):
+    router.routes.extend(child_router.routes)
 
 _entry_mode_parts = entry_mode_parts
 _resolve_planned_question_count = resolve_planned_question_count
