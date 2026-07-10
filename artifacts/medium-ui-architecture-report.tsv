@@ -1,3 +1,15 @@
 status	components	shared_parts	path	detail
-failed	0	0	admin/components/test-editor-wizard.tsx	command=grep -q '^split	' artifacts/medium-ui-architecture-report.tsv; line=137; status=1
+failed	0	0	admin/components/test-editor-wizard.tsx	command=grep -q '^split	' artifacts/medium-ui-architecture-report.tsv; line=140; status=1
+status	components	shared_parts	path	detail
+failed	0	0	admin/components/test-editor-wizard.tsx	Error: QuestionsPanel JSX section remains 656 lines
+    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:557:17)
+    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:551:31)
+    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:551:31)
+    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:551:31)
+    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:580:31)
+    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:647:20)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
 
