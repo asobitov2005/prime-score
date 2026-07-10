@@ -1,0 +1,47 @@
+status	parts	path	detail
+skipped	0	frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx	contains a declaration above the safe limit
+split	16	frontend/app/(app)/analytics/overview-client.tsx	
+skipped	0	frontend/app/(app)/dashboard/page.tsx	contains a declaration above the safe limit
+split	5	frontend/app/(app)/dashboard/skill-performance.tsx	
+skipped	0	frontend/app/(app)/dashboard/streak-heatmap.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/(app)/settings/page.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/(app)/speaking/microphone-check/microphone-check-client.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/(app)/speaking/speaking-page-client.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/(app)/speaking/topics/speaking-topic-picker-client.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/(app)/tests/practice-catalog-utils.ts	contains a declaration above the safe limit
+skipped	0	frontend/app/(app)/writing/custom-task-card.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/(app)/writing/submissions/[submissionId]/result/result-client.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/admin/(panel)/tests/page.tsx	contains a declaration above the safe limit
+skipped	0	frontend/app/exam-preview/writing/writing-exam-client.tsx	contains a declaration above the safe limit
+skipped	0	frontend/components/attempt-workspaces.tsx	contains a declaration above the safe limit
+skipped	0	frontend/components/exam/listening-transcript-panel.tsx	contains a declaration above the safe limit
+skipped	0	frontend/components/exam/reading-exam-preview.tsx	contains a declaration above the safe limit
+split	50	frontend/components/layout/app-loading-placeholder.tsx	
+skipped	0	frontend/components/layout/app-shell.tsx	contains a declaration above the safe limit
+skipped	0	frontend/components/layout/site-shell.tsx	contains a declaration above the safe limit
+split	7	frontend/components/leaderboard/user-profile-modal.tsx	
+split	7	frontend/components/marketing/landing-motion.tsx	
+skipped	0	frontend/components/marketing/login-page-client.tsx	contains a declaration above the safe limit
+skipped	0	frontend/components/marketing/pricing-plan-grid.tsx	contains a declaration above the safe limit
+skipped	0	frontend/components/start-test-modal.tsx	contains a declaration above the safe limit
+skipped	0	frontend/components/subscription/subscription-workspace.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/analytics/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/dashboard/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/promo-codes/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/reviews/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/settings/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/speaking/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/tests/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/users/[id]/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/users/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/writing/[taskId]/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/writing/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/writing/submissions/[submissionId]/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/app/(dashboard)/writing/submissions/page.tsx	contains a declaration above the safe limit
+skipped	0	admin/components/ai-settings-dashboard.tsx	contains a declaration above the safe limit
+skipped	0	admin/components/login-flow.tsx	contains a declaration above the safe limit
+skipped	0	admin/components/payments-manager.tsx	contains a declaration above the safe limit
+skipped	0	admin/components/plans/plan-manager.tsx	contains a declaration above the safe limit
+split	4	admin/components/speaking-categories-panel.tsx	
+skipped	0	admin/components/test-editor-wizard.tsx	contains a declaration above the safe limit
+skipped	0	admin/components/writing-task-form.tsx	contains a declaration above the safe limit
