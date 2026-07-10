@@ -1,16 +1,5 @@
 status	components	shared_parts	path	detail
-failed	0	0	admin/app/(dashboard)/promo-codes/page.tsx	Error: PromoCodesPage JSX section remains 315 lines
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:561:17)
-    at createSection (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:555:31)
-    at processTarget (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:584:31)
-    at Object.<anonymous> (/home/runner/work/prime-score/prime-score/scripts/refactor_medium_ui_architecture.cjs:651:20)
-    at Module._compile (node:internal/modules/cjs/loader:1521:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-    at Module.load (node:internal/modules/cjs/loader:1266:32)
-    at Module._load (node:internal/modules/cjs/loader:1091:12)
-    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
-    at node:internal/main/run_main_module:28:49
-split	2	3	frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx	
-split	1	2	frontend/components/layout/site-shell.tsx	
-split	1	1	frontend/app/(app)/dashboard/streak-heatmap.tsx	
-split	1	0	frontend/app/(app)/settings/page.tsx	
+split	0	0	frontend/app/(app)/analytics/[skill]/skill-analytics-client.tsx	
+split	0	0	frontend/components/layout/site-shell.tsx	
+split	0	0	frontend/app/(app)/dashboard/streak-heatmap.tsx	
+split	0	0	frontend/app/(app)/settings/page.tsx	
