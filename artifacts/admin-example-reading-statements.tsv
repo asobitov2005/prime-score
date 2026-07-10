@@ -1,0 +1,16 @@
+index	kind	start	end	lines	assigned
+1	Assign	109	125	17	section_one
+2	Assign	127	143	17	section_two
+3	Assign	145	161	17	section_three
+4	Assign	163	169	7	passage_one_headings
+5	Assign	171	180	10	passage_two_word_bank
+6	Assign	182	346	165	passage_one_groups
+7	Assign	348	517	170	passage_two_groups
+8	Assign	519	592	74	passage_three_mc_questions
+9	AnnAssign	594	594	1	
+10	AnnAssign	595	595	1	
+11	AnnAssign	596	596	1	
+12	For	597	612	16	
+13	Assign	614	741	128	passage_three_groups
+14	Assign	743	747	5	question_groups
+15	Return	749	765	17	
