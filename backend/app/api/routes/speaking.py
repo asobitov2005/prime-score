@@ -7,10 +7,7 @@ from app.api.routes.speaking_catalog import (
     list_speaking_topics,
     router as catalog_router,
 )
-from app.api.routes.speaking_live import (
-    router as live_router,
-    speaking_live_websocket,
-)
+from app.api.routes.speaking_live import router as live_router, speaking_live_websocket
 from app.api.routes.speaking_results import (
     delete_speaking_session,
     get_speaking_session_result,
@@ -77,7 +74,6 @@ router.include_router(sessions_router)
 router.include_router(live_router)
 router.include_router(results_router)
 
-# Legacy private aliases retained for tests and internal imports.
 _entry_mode_parts = entry_mode_parts
 _resolve_planned_question_count = resolve_planned_question_count
 _is_part1_closing_message = is_part1_closing_message
@@ -112,6 +108,13 @@ _persist_speaking_audio_asset = persist_speaking_audio_asset
 _websocket_user_id = websocket_user_id
 
 __all__ = [
+    "LIVE_INPUT_RATE",
+    "LIVE_OUTPUT_RATE",
+    "PCM_SAMPLE_WIDTH_BYTES",
+    "PART_1_PLANNED_QUESTIONS",
+    "PART_1_PREAMBLE_TURNS",
+    "SPEAKING_MODE_ALIASES",
+    "SPEAKING_MODES",
     "router",
     "list_published_speaking_tests",
     "list_speaking_topics",
