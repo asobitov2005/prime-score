@@ -7,8 +7,18 @@ from app.api.routes.admin_dependencies import *
 from app.api.routes.admin_contracts import *
 from app.api.routes.admin_common import *
 from app.api.routes.admin_commerce_support import *
-from app.api.routes.admin_auth_support import *
 from app.api.routes.admin_user_support import *
+
+ADMIN_OTP_SUCCESS_MESSAGE = "🎉 Successfully logged in!"
+ADMIN_OTP_EXPIRED_MESSAGE = "❌ Admin code expired."
+ADMIN_PASSWORD_RESET_GENERIC_MESSAGE = (
+    "If this phone number is linked to an admin account, the Telegram bot will send a reset link."
+)
+ADMIN_PASSWORD_RESET_REPLACED_MESSAGE = "❌ Admin password reset request was replaced by a newer request."
+ADMIN_OTP_EXPIRY_SWEEP_INTERVAL_SECONDS = 10
+_admin_otp_expiry_sweeper_task: asyncio.Task | None = None
+
+
 def _build_admin_token_claims(admin: AdminPrincipal) -> dict[str, object]:
     return {
         "scope": "admin",
@@ -17,6 +27,7 @@ def _build_admin_token_claims(admin: AdminPrincipal) -> dict[str, object]:
         "email": admin.email,
         "auth_version": admin.auth_version,
     }
+
 
 async def _edit_admin_otp_message_by_ids(chat_id: int, message_id: int | None, text: str) -> bool:
     if not message_id:
@@ -31,12 +42,14 @@ async def _edit_admin_otp_message_by_ids(chat_id: int, message_id: int | None, t
         logger.debug("Admin OTP Telegram edit skipped for message %s: %s", message_id, exc)
         return False
 
+
 async def _edit_admin_otp_message(challenge: AdminLoginOtp, text: str) -> bool:
     return await _edit_admin_otp_message_by_ids(
         chat_id=challenge.telegram_id,
         message_id=challenge.telegram_message_id,
         text=text,
     )
+
 
 async def _delete_admin_telegram_message_by_ids(chat_id: int, message_id: int | None) -> bool:
     if not message_id:
@@ -49,6 +62,7 @@ async def _delete_admin_telegram_message_by_ids(chat_id: int, message_id: int | 
     except Exception as exc:
         logger.debug("Admin Telegram delete skipped for message %s: %s", message_id, exc)
         return False
+
 
 async def _expire_stale_admin_otp_messages(session: AsyncSession, *, now: datetime | None = None) -> int:
     current_time = now or datetime.now(UTC)
@@ -83,6 +97,7 @@ async def _expire_stale_admin_otp_messages(session: AsyncSession, *, now: dateti
         await session.commit()
 
     return len(expired_rows)
+
 
 async def _delete_expired_admin_password_reset_messages(session: AsyncSession, *, now: datetime | None = None) -> int:
     current_time = now or datetime.now(UTC)
@@ -120,6 +135,7 @@ async def _delete_expired_admin_password_reset_messages(session: AsyncSession, *
 
     return len(deleted_ids)
 
+
 async def _send_admin_otp_expiry_notice(challenge_id: UUID) -> None:
     delay = ADMIN_LOGIN_OTP_TTL_SECONDS
     while delay > 0:
@@ -143,11 +159,13 @@ async def _send_admin_otp_expiry_notice(challenge_id: UUID) -> None:
             await _delete_expired_admin_password_reset_messages(session, now=now)
             return
 
+
 def _schedule_admin_otp_expiry_notice(challenge_id: UUID) -> None:
     try:
         asyncio.create_task(_send_admin_otp_expiry_notice(challenge_id))
     except RuntimeError as exc:
         logger.debug("Admin OTP expiry task was not scheduled for %s: %s", challenge_id, exc)
+
 
 async def _run_admin_otp_expiry_sweeper() -> None:
     while True:
@@ -163,6 +181,7 @@ async def _run_admin_otp_expiry_sweeper() -> None:
 
         await asyncio.sleep(ADMIN_OTP_EXPIRY_SWEEP_INTERVAL_SECONDS)
 
+
 def start_admin_otp_expiry_sweeper() -> None:
     global _admin_otp_expiry_sweeper_task
     if _admin_otp_expiry_sweeper_task is not None and not _admin_otp_expiry_sweeper_task.done():
@@ -171,5 +190,6 @@ def start_admin_otp_expiry_sweeper() -> None:
         _admin_otp_expiry_sweeper_task = asyncio.create_task(_run_admin_otp_expiry_sweeper())
     except RuntimeError as exc:
         logger.debug("Admin OTP expiry sweeper was not scheduled: %s", exc)
+
 
 __all__ = [name for name in globals() if not name.startswith('__')]
