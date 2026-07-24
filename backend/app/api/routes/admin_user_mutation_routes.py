@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.patch("/users/bulk-premium", response_model=MessageResponse)
 async def bulk_grant_premium(
     payload: BulkPremiumRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -53,6 +54,7 @@ async def bulk_grant_premium(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Bulk premium failed.") from exc
 
+@router.patch("/users/{user_id}/revoke-premium", response_model=MessageResponse)
 async def revoke_premium(
     user_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -76,6 +78,7 @@ async def revoke_premium(
     await session.commit()
     return MessageResponse(message="Premium bekor qilindi.")
 
+@router.patch("/users/{user_id}/toggle-leaderboard", response_model=MessageResponse)
 async def toggle_leaderboard(
     user_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -89,6 +92,7 @@ async def toggle_leaderboard(
     await session.commit()
     return MessageResponse(message=f"Leaderboard: {'visible' if user.show_on_leaderboard else 'hidden'}.")
 
+@router.post("/users", response_model=AdminUserDetailRead, status_code=201)
 async def create_user(
     payload: AdminUserCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -152,6 +156,7 @@ async def create_user(
 
     return await _build_admin_user_detail(session, user, params)
 
+@router.delete("/users/{user_id}", response_model=MessageResponse)
 async def delete_user(
     user_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -175,6 +180,7 @@ async def delete_user(
     await session.commit()
     return MessageResponse(message="User deleted.")
 
+@router.post("/check-premiums", response_model=MessageResponse)
 async def check_premiums(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),

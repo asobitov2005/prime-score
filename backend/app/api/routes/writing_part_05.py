@@ -8,6 +8,7 @@ from app.api.routes.writing_part_03 import _build_revision_diff, _parse_sentence
 
 router = APIRouter()
 
+@router.get("/submissions/{submission_id}/result", response_model=WritingEvaluationRead)
 async def get_submission_result(
     submission_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -180,6 +181,7 @@ async def get_submission_result(
         xp_current_streak=int(user.current_streak or 0) if user is not None else None,
     )
 
+@router.get("/history", response_model=WritingHistoryResponse)
 async def list_history(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),

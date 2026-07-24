@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/users/{user_id}", response_model=AdminUserDetailRead)
 async def get_user(
     user_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -31,6 +32,7 @@ async def get_user(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load user.")
 
+@router.get("/users/{user_id}/activity", response_model=AdminUserActivityRead)
 async def get_user_activity(
     user_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),

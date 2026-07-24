@@ -78,6 +78,7 @@ async def _cached_board_entries(
         pass
     return entries
 
+@router.get("", response_model=LeaderboardResponse)
 async def get_leaderboard(
     period: str = Query(default="all_time"),
     current_user: DebugPrincipal = Depends(get_current_user),

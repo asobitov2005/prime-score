@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/gift-codes", response_model=list[AdminGiftCodeRead])
 async def list_gift_codes(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -39,6 +40,7 @@ async def list_gift_codes(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load redeem codes.") from exc
 
+@router.post("/gift-codes", response_model=AdminGiftCodeCreateResponse, status_code=201)
 async def create_gift_codes(
     payload: AdminGiftCodeCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -118,6 +120,7 @@ async def create_gift_codes(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create redeem codes.") from exc
 
+@router.patch("/gift-codes/{gift_code_id}", response_model=AdminGiftCodeRead)
 async def update_gift_code(
     gift_code_id: UUID,
     payload: AdminGiftCodeUpdateRequest,

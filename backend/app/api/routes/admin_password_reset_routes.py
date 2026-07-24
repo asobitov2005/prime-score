@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.post("/auth/forgot-password", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
 async def request_admin_password_reset(
     payload: AdminPasswordResetRequest,
     request: Request,
@@ -88,6 +89,7 @@ async def request_admin_password_reset(
 
     return MessageResponse(message=ADMIN_PASSWORD_RESET_GENERIC_MESSAGE)
 
+@router.get("/auth/reset-password/{token}", response_model=AdminPasswordResetTokenStatusResponse)
 async def read_admin_password_reset_token(
     token: str,
     session: AsyncSession = Depends(get_db_session),
@@ -104,6 +106,7 @@ async def read_admin_password_reset_token(
     expires_in_seconds = max(0, int((challenge.expires_at - now).total_seconds()))
     return AdminPasswordResetTokenStatusResponse(expires_in_seconds=expires_in_seconds)
 
+@router.post("/auth/reset-password", response_model=MessageResponse)
 async def complete_admin_password_reset(
     payload: AdminPasswordResetCompleteRequest,
     session: AsyncSession = Depends(get_db_session),

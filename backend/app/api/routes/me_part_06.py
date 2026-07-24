@@ -147,6 +147,7 @@ async def _load_speaking_attempts(current_user: DebugPrincipal, session: AsyncSe
 
     return adapters
 
+@router.get("/stats", response_model=MeStatsRead)
 async def get_stats(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -193,6 +194,7 @@ async def get_stats(
         monthly_xp=monthly_xp,
     )
 
+@router.get("/xp-summary", response_model=MeXpSummaryRead)
 async def get_xp_summary(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -202,6 +204,7 @@ async def get_xp_summary(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account was not found.")
     return await _user_xp_summary(session, user)
 
+@router.get("/xp-transactions", response_model=list[MeXpTransactionRead])
 async def get_xp_transactions(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -210,6 +213,7 @@ async def get_xp_transactions(
     rows = await list_user_xp_transactions(session, user_id=current_user.id, limit=limit)
     return [_serialize_xp_transaction(row) for row in rows]
 
+@router.get("/activity", response_model=list[MeActivityPointRead])
 async def get_activity(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

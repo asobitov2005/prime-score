@@ -6,6 +6,7 @@ from app.api.routes.me_part_04 import _serialize_me_gift_code_summary, _serializ
 
 router = APIRouter()
 
+@router.post("/gift-codes/generate", response_model=MeGenerateGiftCodeResponse)
 async def generate_my_gift_code(
     payload: MeGenerateGiftCodeRequest,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -46,6 +47,7 @@ async def generate_my_gift_code(
         summary=_serialize_me_gift_code_summary(summary),
     )
 
+@router.post("/redeem-code", response_model=MeRedeemCodeResponse)
 async def redeem_code(
     payload: MeRedeemCodeRequest,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -154,6 +156,7 @@ async def redeem_code(
         premium_until=premium_until,
     )
 
+@router.get("/payments", response_model=list[MePaymentRead])
 async def list_my_payments(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -176,6 +179,7 @@ async def list_my_payments(
     ).all()
     return [_serialize_me_payment(payment, plan) for payment, plan in rows]
 
+@router.post("/payments", response_model=MePaymentCreateResponse, status_code=201)
 async def create_my_payment(
     payload: MePaymentCreateRequest,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -216,6 +220,7 @@ async def create_my_payment(
         ),
     )
 
+@router.post("/payments/{payment_id}/cancel", response_model=MePaymentCancelResponse)
 async def cancel_my_payment(
     payment_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),

@@ -8,6 +8,7 @@ from app.api.routes.me_part_06 import _effective_attempt_band_score
 
 router = APIRouter()
 
+@router.get("/attempts", response_model=list[MeAttemptSummaryRead])
 async def get_attempts(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

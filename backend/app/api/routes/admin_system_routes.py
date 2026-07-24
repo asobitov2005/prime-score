@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/admins", response_model=list[AdminUserRead])
 async def list_admins(
     current_admin: AdminPrincipal = Depends(get_current_super_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -20,6 +21,7 @@ async def list_admins(
     admins = list((await session.scalars(select(Admin).order_by(Admin.created_at.desc()))).all())
     return [_admin_account_read(admin) for admin in admins]
 
+@router.post("/admins", response_model=AdminUserRead, status_code=201)
 async def create_admin(
     payload: AdminAccountCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_super_admin),
@@ -59,6 +61,7 @@ async def create_admin(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+@router.get("/audit-log", response_model=list[AdminAuditLogRead])
 async def audit_log(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -73,6 +76,7 @@ async def audit_log(
     )
     return [_serialize_audit_log(entry) for entry in entries]
 
+@router.post("/broadcast-notification", response_model=MessageResponse)
 async def broadcast_notification(
     payload: BroadcastNotificationRequest,
     current_admin: AdminPrincipal = Depends(get_current_super_admin),
@@ -90,6 +94,7 @@ async def broadcast_notification(
     )
     return MessageResponse(message=f"Notification sent to {count} users.")
 
+@router.get("/export-users-csv")
 async def export_users_csv(
     current_admin: AdminPrincipal = Depends(get_current_super_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -116,6 +121,7 @@ async def export_users_csv(
         ])
     return PlainTextResponse(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=users_export.csv"})
 
+@router.post("/clear-sessions", response_model=MessageResponse)
 async def clear_sessions(
     current_admin: AdminPrincipal = Depends(get_current_super_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -126,6 +132,7 @@ async def clear_sessions(
     await session.commit()
     return MessageResponse(message="All user sessions have been cleared.")
 
+@router.delete("/draft-tests", response_model=MessageResponse)
 async def purge_draft_tests(
     current_admin: AdminPrincipal = Depends(get_current_super_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -150,12 +157,14 @@ async def purge_draft_tests(
     await session.commit()
     return MessageResponse(message=f"Purged {len(to_delete)} draft tests.")
 
+@router.post("/sync-leaderboard", response_model=MessageResponse)
 async def sync_leaderboard(
     current_admin: AdminPrincipal = Depends(get_current_super_admin),
 ) -> MessageResponse:
     _ = current_admin
     return MessageResponse(message="Leaderboard successfully synchronized.")
 
+@router.patch("/settings", response_model=MessageResponse)
 async def update_settings(
     payload: AdminSettingsUpdate,
     current_admin: AdminPrincipal = Depends(get_current_super_admin),

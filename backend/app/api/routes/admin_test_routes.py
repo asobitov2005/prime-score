@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/tests", response_model=list[AdminTestRead])
 async def list_tests(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -27,12 +28,14 @@ async def list_tests(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load test catalog.") from exc
     return [AdminTestRead(**item) for item in items]
 
+@router.post("/tests", response_model=AdminTestRead, status_code=201)
 async def create_test(
     payload: AdminTestUpsertRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> AdminTestRead:
     _ = current_admin
     return AdminTestRead(id=uuid4(), **payload.model_dump(), review_status="needs_review")
 
+@router.patch("/tests/bulk-status", response_model=MessageResponse)
 async def bulk_update_test_status(
     payload: BulkStatusRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -56,6 +59,7 @@ async def bulk_update_test_status(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Bulk update failed.") from exc
 
+@router.patch("/tests/bulk-publish", response_model=MessageResponse)
 async def bulk_publish_tests(
     payload: BulkPublishRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -85,6 +89,7 @@ async def bulk_publish_tests(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Bulk publish failed.") from exc
 
+@router.post("/tests/draft", response_model=AdminTestRead, status_code=201)
 async def create_test_draft(
     payload: AdminTestDraftUpsertRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -112,6 +117,7 @@ async def create_test_draft(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Draft save failed.") from exc
     return AdminTestRead(**saved)
 
+@router.get("/tests/{test_id}", response_model=AdminTestRead)
 async def get_test(
     test_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -130,6 +136,7 @@ async def get_test(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
     return AdminTestRead(**fixture)
 
+@router.get("/tests/{test_id}/draft", response_model=AdminTestDraftRead)
 async def get_test_draft(
     test_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -148,6 +155,7 @@ async def get_test_draft(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
     return AdminTestDraftRead(**draft)
 
+@router.patch("/tests/{test_id}", response_model=AdminTestRead)
 async def update_test(
     test_id: UUID,
     payload: AdminTestUpsertRequest,
@@ -156,6 +164,7 @@ async def update_test(
     _ = current_admin
     return AdminTestRead(id=test_id, **payload.model_dump(), status=TestStatus.draft, review_status="needs_review", version=2)
 
+@router.put("/tests/{test_id}/draft", response_model=AdminTestRead)
 async def update_test_draft(
     test_id: UUID,
     payload: AdminTestDraftUpsertRequest,
@@ -190,6 +199,7 @@ async def update_test_draft(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Draft update failed.") from exc
     return AdminTestRead(**saved)
 
+@router.put("/tests/{test_id}/quick-fix", response_model=AdminTestRead)
 async def quick_fix_test(
     test_id: UUID,
     payload: AdminTestDraftUpsertRequest,
@@ -224,6 +234,7 @@ async def quick_fix_test(
     _enqueue_test_explanations(test_id, saved.get("type"))
     return AdminTestRead(**saved)
 
+@router.delete("/tests/{test_id}", response_model=MessageResponse)
 async def delete_test(
     test_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -252,6 +263,7 @@ async def delete_test(
 
     return MessageResponse(message="Draft deleted.")
 
+@router.post("/tests/{test_id}/publish", response_model=AdminTestRead)
 async def publish_test(
     test_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),

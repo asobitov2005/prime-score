@@ -7,6 +7,7 @@ from app.api.routes.attempts_part_02 import _extract_question_labels, _require_a
 
 router = APIRouter()
 
+@router.get("/{attempt_id}/result", response_model=AttemptResultRead)
 async def get_result(
     attempt_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -82,6 +83,7 @@ async def get_result(
         ),
     )
 
+@router.get("/{attempt_id}/review", response_model=AttemptReviewRead)
 async def get_review(
     attempt_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),

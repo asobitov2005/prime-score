@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/telegram-users", response_model=list[AdminTelegramUserRead])
 async def list_telegram_users(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -56,6 +57,7 @@ async def list_telegram_users(
         )
     return result
 
+@router.get("/users", response_model=list[AdminUserDetailRead])
 async def list_users(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -76,6 +78,7 @@ async def list_users(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load users.") from exc
 
+@router.get("/reviews", response_model=list[AdminReviewRead])
 async def list_reviews(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -112,6 +115,7 @@ async def list_reviews(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load reviews.") from exc
 
+@router.post("/reviews", response_model=AdminReviewRead, status_code=status.HTTP_201_CREATED)
 async def create_review(
     payload: AdminReviewCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -162,6 +166,7 @@ async def create_review(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create review.") from exc
 
+@router.patch("/reviews/{review_id}/visibility", response_model=AdminReviewRead)
 async def update_review_visibility(
     review_id: UUID,
     payload: AdminReviewVisibilityRequest,

@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/plans", response_model=list[AdminPlanRead])
 async def list_plans(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -27,6 +28,7 @@ async def list_plans(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load subscription plans.") from exc
 
+@router.get("/gift-code-plans", response_model=list[AdminPlanRead])
 async def list_gift_code_plans(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -42,6 +44,7 @@ async def list_gift_code_plans(
             pass
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load redeem plans.") from exc
 
+@router.post("/plans", response_model=AdminPlanRead, status_code=201)
 async def create_plan(
     payload: AdminPlanUpsertRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -79,6 +82,7 @@ async def create_plan(
 
     return _serialize_admin_plan(plan)
 
+@router.patch("/plans/{plan_id}", response_model=AdminPlanRead)
 async def update_plan(
     plan_id: UUID,
     payload: AdminPlanUpsertRequest,

@@ -12,10 +12,12 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.post("/tests/{test_id}/archive", response_model=MessageResponse)
 async def archive_test(test_id: UUID, current_admin: AdminPrincipal = Depends(get_current_admin)) -> MessageResponse:
     _ = (test_id, current_admin)
     return MessageResponse(message="Test archived.")
 
+@router.post("/tests/{test_id}/duplicate", response_model=AdminTestRead)
 async def duplicate_test(
     test_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -23,36 +25,42 @@ async def duplicate_test(
     _ = (test_id, current_admin)
     raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Duplicate endpoint is not implemented.")
 
+@router.post("/sections", response_model=CreatedEntityResponse, status_code=201)
 async def create_section(
     payload: AdminContentCreateRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> CreatedEntityResponse:
     _ = current_admin
     return CreatedEntityResponse(resource="sections", id=uuid4(), payload=payload.payload)
 
+@router.post("/passages", response_model=CreatedEntityResponse, status_code=201)
 async def create_passage(
     payload: AdminContentCreateRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> CreatedEntityResponse:
     _ = current_admin
     return CreatedEntityResponse(resource="passages", id=uuid4(), payload=payload.payload)
 
+@router.post("/paragraphs", response_model=CreatedEntityResponse, status_code=201)
 async def create_paragraph(
     payload: AdminContentCreateRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> CreatedEntityResponse:
     _ = current_admin
     return CreatedEntityResponse(resource="paragraphs", id=uuid4(), payload=payload.payload)
 
+@router.post("/question-groups", response_model=CreatedEntityResponse, status_code=201)
 async def create_question_group(
     payload: AdminContentCreateRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> CreatedEntityResponse:
     _ = current_admin
     return CreatedEntityResponse(resource="question-groups", id=uuid4(), payload=payload.payload)
 
+@router.post("/questions", response_model=CreatedEntityResponse, status_code=201)
 async def create_question(
     payload: AdminContentCreateRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> CreatedEntityResponse:
     _ = current_admin
     return CreatedEntityResponse(resource="questions", id=uuid4(), payload=payload.payload)
 
+@router.post("/answers", response_model=CreatedEntityResponse, status_code=201)
 async def create_answer(
     payload: AdminContentCreateRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> CreatedEntityResponse:
