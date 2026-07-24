@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import sys
 import types
+from dataclasses import dataclass
 
 from fastapi import APIRouter
 
 from app.services import ai_config_part_01 as _part_01
-from app.services import ai_config_part_02 as _part_02
-from app.services import ai_config_part_03 as _part_03
+
+_part_01.ResolvedAiUseCaseConfig = dataclass(slots=True)(_part_01.ResolvedAiUseCaseConfig)
+
+from app.services import ai_config_part_02 as _part_02  # noqa: E402
+from app.services import ai_config_part_03 as _part_03  # noqa: E402
 
 _PARTS = (_part_01, _part_02, _part_03,)
 router = APIRouter()
