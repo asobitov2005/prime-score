@@ -17,6 +17,7 @@ MAPPINGS = (
     SplitMapping("cba60c5^", "backend/app/api/routes/attempts.py", "backend/app/api/routes/attempts_part_*.py"),
     SplitMapping("cba60c5^", "backend/app/api/routes/me.py", "backend/app/api/routes/me_part_*.py"),
     SplitMapping("cba60c5^", "backend/app/api/routes/writing.py", "backend/app/api/routes/writing_part_*.py"),
+    SplitMapping("cba60c5^", "backend/app/api/routes/admin_speaking.py", "backend/app/api/routes/admin_speaking_part_*.py"),
     SplitMapping("2b2d3218^", "backend/app/api/routes/admin.py", "backend/app/api/routes/admin_*_routes.py"),
     SplitMapping("911c7001^", "backend/app/api/routes/leaderboard.py", "backend/app/api/routes/leaderboard_part_*.py"),
 )
@@ -42,48 +43,57 @@ def route_decorators_by_function(source: str) -> dict[str, list[str]]:
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        decorators = []
-        for decorator in node.decorator_list:
-            text = decorator_text(source, decorator)
-            if text.startswith("@router."):
-                decorators.append(text)
+        decorators = [
+            decorator_text(source, decorator)
+            for decorator in node.decorator_list
+            if decorator_text(source, decorator).startswith("@router.")
+        ]
         if decorators:
             result[node.name] = decorators
     return result
-
-
-def existing_decorator_texts(source: str, node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
-    return {decorator_text(source, decorator) for decorator in node.decorator_list}
 
 
 def restore_file(path: Path, wanted: dict[str, list[str]]) -> int:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     lines = source.splitlines(keepends=True)
-    insertions: list[tuple[int, str]] = []
+    changes = 0
 
-    for node in tree.body:
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in wanted
+    ]
+    for node in sorted(functions, key=lambda item: item.lineno, reverse=True):
+        desired = wanted[node.name]
+        current_route_decorators = [
+            decorator
+            for decorator in node.decorator_list
+            if decorator_text(source, decorator).startswith("@router.")
+        ]
+        current = [decorator_text(source, decorator) for decorator in current_route_decorators]
+        if current == desired:
             continue
-        decorators = wanted.get(node.name)
-        if not decorators:
-            continue
-        existing = existing_decorator_texts(source, node)
-        missing = [decorator for decorator in decorators if decorator not in existing]
-        if not missing:
-            continue
-        first_line = min(
+
+        insertion_index = min(
             [decorator.lineno for decorator in node.decorator_list] or [node.lineno]
-        )
-        insertion = "\n".join(missing) + "\n"
-        insertions.append((first_line - 1, insertion))
+        ) - 1
+        for decorator in sorted(
+            current_route_decorators,
+            key=lambda item: item.lineno,
+            reverse=True,
+        ):
+            start = decorator.lineno - 1
+            end = decorator.end_lineno or decorator.lineno
+            del lines[start:end]
 
-    for index, insertion in sorted(insertions, reverse=True):
-        lines.insert(index, insertion)
+        lines.insert(insertion_index, "\n".join(desired) + "\n")
+        changes += 1
 
-    if insertions:
+    if changes:
         path.write_text("".join(lines), encoding="utf-8")
-    return len(insertions)
+    return changes
 
 
 def main() -> int:
@@ -95,7 +105,7 @@ def main() -> int:
         for part_path in sorted(root.glob(mapping.part_glob)):
             count = restore_file(part_path, wanted)
             if count:
-                print(f"{part_path}: restored {count} route decorator block(s)")
+                print(f"{part_path}: restored {count} exact route decorator block(s)")
                 restored += count
     print(f"Restored {restored} route decorator block(s) total.")
     return 0
