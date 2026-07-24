@@ -2,6 +2,8 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.services.admin_example_reading_common import *
+from app.services.admin_example_reading_common import _make_section
+
 
 def build_sections_and_options():
     section_one = _make_section(

@@ -7,6 +7,7 @@ from app.api.routes.leaderboard_part_02 import _cached_board_entries
 
 router = APIRouter()
 
+@router.get("/users/{user_id}", response_model=LeaderboardUserProfileRead)
 async def get_leaderboard_user_profile(
     user_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),

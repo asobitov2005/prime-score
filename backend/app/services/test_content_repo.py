@@ -24,6 +24,14 @@ for _part in _PARTS:
         globals().setdefault(_name, _value)
 
 
+_ensure_fixture_catalog_seeded = _part_03.ensure_fixture_tests_seeded
+
+
+async def ensure_fixture_tests_seeded(session) -> None:
+    await _ensure_fixture_catalog_seeded(session)
+    await _part_03.ensure_admin_example_tests_seeded(session)
+
+
 class _FacadeModule(types.ModuleType):
     def __setattr__(self, name: str, value: object) -> None:
         super().__setattr__(name, value)

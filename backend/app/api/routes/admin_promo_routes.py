@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/promo-codes", response_model=list[AdminPromoCodeRead])
 async def list_promo_codes(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -26,6 +27,7 @@ async def list_promo_codes(
     )
     return [_serialize_promo_code(item) for item in promo_codes]
 
+@router.post("/promo-codes", response_model=AdminPromoCodeRead, status_code=201)
 async def create_promo_code(
     payload: AdminPromoCodeCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -69,6 +71,7 @@ async def create_promo_code(
     await session.refresh(promo_code)
     return _serialize_promo_code(promo_code)
 
+@router.patch("/promo-codes/{promo_code_id}", response_model=AdminPromoCodeRead)
 async def update_promo_code(
     promo_code_id: UUID,
     payload: AdminPromoCodeCreateRequest,

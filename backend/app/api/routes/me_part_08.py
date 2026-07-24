@@ -11,6 +11,7 @@ from app.api.routes.me_part_07 import _build_accuracy_trend, _build_improvement_
 
 router = APIRouter()
 
+@router.get("/analytics", response_model=MeDashboardAnalyticsRead)
 async def get_dashboard_analytics(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -114,14 +115,17 @@ def _build_speaking_criteria(attempts) -> MeSpeakingCriteriaRead | None:
         pronunciation=round(totals["pronunciation"] / counts["pronunciation"], 2) if counts["pronunciation"] > 0 else None,
     )
 
+@router.get("/favorites", response_model=list[FavoriteTestRead])
 async def get_favorites(current_user: DebugPrincipal = Depends(get_current_user)) -> list[FavoriteTestRead]:
     _ = current_user
     return []
 
+@router.post("/favorites/{test_id}", response_model=MessageResponse)
 async def add_favorite(test_id: UUID, current_user: DebugPrincipal = Depends(get_current_user)) -> MessageResponse:
     _ = (test_id, current_user)
     return MessageResponse(message="Favorite added.")
 
+@router.delete("/favorites/{test_id}", response_model=MessageResponse)
 async def remove_favorite(test_id: UUID, current_user: DebugPrincipal = Depends(get_current_user)) -> MessageResponse:
     _ = (test_id, current_user)
     return MessageResponse(message="Favorite removed.")
@@ -134,6 +138,7 @@ class NotificationRead(BaseModel):
     is_read: bool
     created_at: str
 
+@router.get("/notifications", response_model=list[NotificationRead])
 async def list_notifications(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -160,6 +165,7 @@ async def list_notifications(
     except Exception:
         return []
 
+@router.patch("/notifications/{notification_id}/read", response_model=MessageResponse)
 async def mark_notification_read(
     notification_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -171,6 +177,7 @@ async def mark_notification_read(
         await session.commit()
     return MessageResponse(message="Marked as read.")
 
+@router.patch("/notifications/read-all", response_model=MessageResponse)
 async def mark_all_read(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

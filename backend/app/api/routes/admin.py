@@ -51,27 +51,29 @@ _COMPAT_MODULES = (
     _admin_commerce_support,
     _admin_auth_support,
     _admin_user_support,
-    _admin_password_reset_routes,
-    _admin_auth_session_routes,
-    _admin_dashboard_routes,
-    _admin_analytics_routes,
-    _admin_test_routes,
-    _admin_content_routes,
-    _admin_media_routes,
-    _admin_directory_review_routes,
-    _admin_user_activity_routes,
-    _admin_user_mutation_routes,
-    _admin_settings_routes,
-    _admin_plan_routes,
-    _admin_gift_code_routes,
-    _admin_payment_routes,
-    _admin_promo_routes,
-    _admin_system_routes,
+    *_ROUTE_MODULES,
 )
 
 router = APIRouter()
 for _module in _ROUTE_MODULES:
     router.routes.extend(_module.router.routes)
+
+# Preserve method contracts that existed before the generated route split.
+router.add_api_route(
+    "/users/bulk-premium",
+    _admin_user_mutation_routes.bulk_grant_premium,
+    methods=["POST"],
+)
+router.add_api_route(
+    "/users/{user_id}/revoke-premium",
+    _admin_user_mutation_routes.revoke_premium,
+    methods=["POST"],
+)
+router.add_api_route(
+    "/tests/{test_id}",
+    _admin_test_routes.update_test,
+    methods=["PUT"],
+)
 
 for _module in _COMPAT_MODULES:
     for _name, _value in vars(_module).items():
@@ -91,4 +93,4 @@ class _AdminFacadeModule(types.ModuleType):
 
 
 sys.modules[__name__].__class__ = _AdminFacadeModule
-__all__ = ["router"]
+__all__ = [name for name in globals() if not name.startswith("_")]

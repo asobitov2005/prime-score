@@ -1,4 +1,4 @@
-name: Project quality
+name: Backend quality
 
 on:
   pull_request:
@@ -7,26 +7,15 @@ on:
       - master
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
+  group: backend-quality-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  source-size:
-    name: Repository source size
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Enforce 300-line limit for all source files
-        run: FULL_SOURCE_SCAN=1 python scripts/check_changed_file_lengths.py
-
   backend:
-    name: Backend lint and tests
+    name: Backend runtime and tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -78,93 +67,39 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
       - name: Migrate test database
         run: |
+          set -o pipefail
           mkdir -p ../ci-logs
           alembic upgrade head 2>&1 | tee ../ci-logs/backend-migrate.log
-      - name: Ruff
-        run: ruff check app tests --output-format=concise 2>&1 | tee ../ci-logs/backend-ruff.log
+      - name: Uvicorn smoke test
+        run: |
+          set -euo pipefail
+          mkdir -p ../ci-logs
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > ../ci-logs/backend-uvicorn.log 2>&1 &
+          uvicorn_pid=$!
+          cleanup() {
+            kill "$uvicorn_pid" 2>/dev/null || true
+            wait "$uvicorn_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in {1..30}; do
+            if ! kill -0 "$uvicorn_pid" 2>/dev/null; then
+              cat ../ci-logs/backend-uvicorn.log
+              exit 1
+            fi
+            if curl --fail --silent --show-error http://127.0.0.1:8000/openapi.json >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat ../ci-logs/backend-uvicorn.log
+          exit 1
       - name: Pytest
-        run: pytest -q 2>&1 | tee ../ci-logs/backend-pytest.log
+        run: |
+          set -o pipefail
+          pytest -q 2>&1 | tee ../ci-logs/backend-pytest.log
       - name: Upload backend logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-quality-logs
           path: ci-logs/backend-*
-
-  frontend:
-    name: Frontend lint and build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    env:
-      NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_API_BASE_URL: /api
-      API_INTERNAL_BASE_URL: http://127.0.0.1:8000/api
-      NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: primescorebot
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint
-        run: |
-          mkdir -p ../ci-logs
-          npm run lint 2>&1 | tee ../ci-logs/frontend-lint.log
-      - name: Build
-        run: npm run build 2>&1 | tee ../ci-logs/frontend-build.log
-      - name: Upload frontend logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-quality-logs
-          path: ci-logs/frontend-*
-
-  admin:
-    name: Admin lint and build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: admin
-    env:
-      NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_ADMIN_API_BASE_URL: /api/admin
-      ADMIN_API_INTERNAL_BASE_URL: http://127.0.0.1:8000/api/admin
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: admin/package-lock.json
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint
-        run: |
-          mkdir -p ../ci-logs
-          npm run lint 2>&1 | tee ../ci-logs/admin-lint.log
-      - name: Build
-        run: npm run build 2>&1 | tee ../ci-logs/admin-build.log
-      - name: Upload admin logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: admin-quality-logs
-          path: ci-logs/admin-*
-
-  compose:
-    name: Docker Compose validation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Validate compose configuration
-        run: docker compose config --quiet

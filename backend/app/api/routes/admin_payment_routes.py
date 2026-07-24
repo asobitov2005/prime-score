@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/payments", response_model=AdminPaymentListResponse)
 async def list_payments(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -46,6 +47,7 @@ async def list_payments(
         page_size=limit,
     )
 
+@router.patch("/payments/{payment_id}", response_model=AdminPaymentRead)
 async def update_payment(
     payment_id: UUID,
     payload: AdminPaymentUpdateRequest,
@@ -83,6 +85,7 @@ async def update_payment(
     plan = await session.get(Plan, payment.plan_id) if payment.plan_id else None
     return _serialize_admin_payment(payment, user=user, plan=plan)
 
+@router.get("/payment-cards", response_model=list[PaymentCardRead])
 async def list_payment_cards(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -99,6 +102,7 @@ async def list_payment_cards(
     )
     return [_serialize_payment_card(card) for card in cards]
 
+@router.post("/payment-cards", response_model=PaymentCardRead, status_code=201)
 async def create_payment_card(
     payload: PaymentCardCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -121,6 +125,7 @@ async def create_payment_card(
     await session.refresh(card)
     return _serialize_payment_card(card)
 
+@router.patch("/payment-cards/{card_id}", response_model=PaymentCardRead)
 async def update_payment_card(
     card_id: UUID,
     payload: PaymentCardUpdateRequest,
@@ -143,6 +148,7 @@ async def update_payment_card(
     await session.refresh(card)
     return _serialize_payment_card(card)
 
+@router.get("/payment-settings", response_model=PaymentSettingsRead)
 async def get_payment_settings(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -153,6 +159,7 @@ async def get_payment_settings(
     await session.refresh(setting)
     return _serialize_payment_settings(setting)
 
+@router.patch("/payment-settings", response_model=PaymentSettingsRead)
 async def update_payment_settings(
     payload: PaymentSettingsUpdateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),

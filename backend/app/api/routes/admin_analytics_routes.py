@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/analytics", response_model=AdminAnalyticsReportRead)
 async def analytics(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),

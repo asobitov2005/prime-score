@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app import models  # noqa: F401
-from app.api.routes.admin import start_admin_otp_expiry_sweeper
+from app.api.routes import admin_auth_support
 from app.services.admin_ai_agent import resume_pending_admin_ai_jobs
 
 
@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     # Keep app assembly centralized so the API boot path stays predictable.
-    # Test comment: backend app factory entrypoint.
     settings = get_settings()
 
     app = FastAPI(
@@ -66,7 +65,9 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup_admin_otp_expiry_sweeper() -> None:
-        start_admin_otp_expiry_sweeper()
+        if not hasattr(admin_auth_support, "_admin_otp_expiry_sweeper_task"):
+            admin_auth_support._admin_otp_expiry_sweeper_task = None
+        admin_auth_support.start_admin_otp_expiry_sweeper()
 
     app.include_router(api_router, prefix="/api")
     return app

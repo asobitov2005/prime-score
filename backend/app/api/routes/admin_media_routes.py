@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.post("/audio/upload-url", response_model=AdminUploadUrlResponse)
 async def create_audio_upload_url(
     payload: AdminUploadUrlRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> AdminUploadUrlResponse:
@@ -22,6 +23,7 @@ async def create_audio_upload_url(
         fields={"filename": payload.filename, "content_type": payload.content_type},
     )
 
+@router.post("/audio/upload", response_model=AdminUploadedAssetResponse)
 async def upload_audio_file(
     file: UploadFile = File(...),
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -52,6 +54,7 @@ async def upload_audio_file(
         content_type=file.content_type or "audio/mpeg",
     )
 
+@router.post("/audio/transcribe", response_model=AdminAudioTranscriptResponse)
 async def transcribe_audio_file(
     payload: AdminAudioTranscriptRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -125,6 +128,7 @@ async def _run_transcript_job(job_id: str, payload: AdminAudioTranscriptRequest)
         logger.exception("Listening transcript job %s failed", job_id)
         mark_transcript_job_failed(job_id, str(exc))
 
+@router.post("/audio/transcribe/jobs", response_model=AdminAudioTranscriptJobCreateResponse, status_code=202)
 async def create_transcribe_audio_job(
     payload: AdminAudioTranscriptRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -138,6 +142,7 @@ async def create_transcribe_audio_job(
     attach_transcript_job_task(job.id, task)
     return AdminAudioTranscriptJobCreateResponse(job_id=job.id, status=job.status)
 
+@router.get("/audio/transcribe/jobs/{job_id}", response_model=AdminAudioTranscriptJobRead)
 async def get_transcribe_audio_job(
     job_id: str,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -155,6 +160,7 @@ async def get_transcribe_audio_job(
         error=job.error,
     )
 
+@router.post("/audio/transcribe/jobs/{job_id}/cancel", response_model=AdminAudioTranscriptJobRead)
 async def cancel_transcribe_audio_job(
     job_id: str,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -172,6 +178,7 @@ async def cancel_transcribe_audio_job(
         error=job.error,
     )
 
+@router.post("/images/upload-url", response_model=AdminUploadUrlResponse)
 async def create_image_upload_url(
     payload: AdminUploadUrlRequest, current_admin: AdminPrincipal = Depends(get_current_admin)
 ) -> AdminUploadUrlResponse:
@@ -182,6 +189,7 @@ async def create_image_upload_url(
         fields={"filename": payload.filename, "content_type": payload.content_type},
     )
 
+@router.post("/images/upload", response_model=AdminUploadedAssetResponse)
 async def upload_image_file(
     file: UploadFile = File(...),
     current_admin: AdminPrincipal = Depends(get_current_admin),

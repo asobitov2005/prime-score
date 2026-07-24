@@ -4,7 +4,7 @@ from __future__ import annotations
 from app.services.writing_checker_dependencies import *
 from app.services.writing_checker_part_01 import _ALLOWED_SEVERITIES, _DEFAULT_ANNOTATION_MAX_OUTPUT_TOKENS, _DEFAULT_GRADER_MAX_OUTPUT_TOKENS, _DEFAULT_IMPROVED_MAX_OUTPUT_TOKENS, _DEFAULT_REPAIR_MAX_OUTPUT_TOKENS, _GROQ_ANNOTATION_MAX_OUTPUT_TOKENS, _GROQ_GRADER_MAX_OUTPUT_TOKENS, _GROQ_IMPROVED_MAX_OUTPUT_TOKENS, _GROQ_REPAIR_MAX_OUTPUT_TOKENS
 from app.services.writing_checker_part_02 import _criterion_schema
-from app.services.writing_checker_part_04 import _clean_text
+
 
 def _annotation_schema() -> genai_types.Schema:
     return genai_types.Schema(
@@ -43,6 +43,7 @@ def _annotation_schema() -> genai_types.Schema:
         },
     )
 
+
 def _vocabulary_suggestion_schema() -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.OBJECT,
@@ -65,6 +66,7 @@ def _vocabulary_suggestion_schema() -> genai_types.Schema:
         },
     )
 
+
 def _target_action_schema() -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.OBJECT,
@@ -78,6 +80,7 @@ def _target_action_schema() -> genai_types.Schema:
         },
     )
 
+
 def _band_boundary_schema() -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.OBJECT,
@@ -90,6 +93,7 @@ def _band_boundary_schema() -> genai_types.Schema:
         },
     )
 
+
 def _checklist_schema() -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.OBJECT,
@@ -100,6 +104,7 @@ def _checklist_schema() -> genai_types.Schema:
             "how_to_fix": genai_types.Schema(type=genai_types.Type.STRING),
         },
     )
+
 
 def _error_taxonomy_schema() -> genai_types.Schema:
     return genai_types.Schema(
@@ -117,6 +122,7 @@ def _error_taxonomy_schema() -> genai_types.Schema:
         },
     )
 
+
 def _sentence_fix_schema() -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.OBJECT,
@@ -131,6 +137,7 @@ def _sentence_fix_schema() -> genai_types.Schema:
         },
     )
 
+
 def _score_booster_schema() -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.OBJECT,
@@ -142,6 +149,7 @@ def _score_booster_schema() -> genai_types.Schema:
             "band_value": genai_types.Schema(type=genai_types.Type.STRING),
         },
     )
+
 
 def _response_schema() -> genai_types.Schema:
     criterion = _criterion_schema()
@@ -208,45 +216,57 @@ def _response_schema() -> genai_types.Schema:
         },
     )
 
+
 def _annotation_list_schema() -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.ARRAY,
         items=_annotation_schema(),
     )
 
+
 def _seed_from_hash(essay_hash: str) -> int:
     return int(essay_hash[:8], 16) % (2**31)
+
 
 def _essay_word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text or ""))
 
+
 def _is_groq_config(config: ResolvedAiUseCaseConfig | None) -> bool:
     return config is not None and config.provider == AiProvider.GROQ
+
 
 def _grader_max_output_tokens(config: ResolvedAiUseCaseConfig | None) -> int:
     if _is_groq_config(config):
         return _GROQ_GRADER_MAX_OUTPUT_TOKENS
     return _DEFAULT_GRADER_MAX_OUTPUT_TOKENS
 
+
 def _annotation_max_output_tokens(config: ResolvedAiUseCaseConfig | None) -> int:
     if _is_groq_config(config):
         return _GROQ_ANNOTATION_MAX_OUTPUT_TOKENS
     return _DEFAULT_ANNOTATION_MAX_OUTPUT_TOKENS
+
 
 def _repair_max_output_tokens(config: ResolvedAiUseCaseConfig | None) -> int:
     if _is_groq_config(config):
         return _GROQ_REPAIR_MAX_OUTPUT_TOKENS
     return _DEFAULT_REPAIR_MAX_OUTPUT_TOKENS
 
+
 def _improved_max_output_tokens(config: ResolvedAiUseCaseConfig) -> int:
     if _is_groq_config(config):
         return _GROQ_IMPROVED_MAX_OUTPUT_TOKENS
     return _DEFAULT_IMPROVED_MAX_OUTPUT_TOKENS
 
+
 def _skip_groq_aux_call(config: ResolvedAiUseCaseConfig | None) -> bool:
     return _is_groq_config(config)
 
+
 def _compact_text_block(value: str | None, *, limit: int) -> str:
+    from app.services.writing_checker_part_04 import _clean_text
+
     cleaned = _clean_text(value)
     if len(cleaned) <= limit:
         return cleaned

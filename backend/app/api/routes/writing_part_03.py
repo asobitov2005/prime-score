@@ -116,6 +116,7 @@ def _build_custom_task(
         created_by=None,
     )
 
+@router.post("/upload-image", response_model=WritingUploadImageResponse)
 async def upload_image(
     file: UploadFile = File(...),
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -155,6 +156,7 @@ async def upload_image(
 
     return WritingUploadImageResponse(url=url)
 
+@router.get("/limits", response_model=WritingLimitRead)
 async def get_writing_limits(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -162,6 +164,7 @@ async def get_writing_limits(
     limit_status = await resolve_writing_limit_status(session, principal=current_user)
     return _serialize_limit_status(limit_status)
 
+@router.get("/tasks", response_model=WritingTaskListResponse)
 async def list_published_tasks(
     task_type: WritingTaskType | None = Query(default=None),
     question_subtype: WritingQuestionSubtype | None = Query(default=None),
@@ -194,6 +197,7 @@ async def list_published_tasks(
         total=int(total),
     )
 
+@router.get("/tasks/{task_id}", response_model=WritingTaskRead)
 async def get_published_task(
     task_id: UUID,
     session: AsyncSession = Depends(get_db_session),
@@ -203,6 +207,7 @@ async def get_published_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writing task not found.")
     return _serialize_task_read(task)
 
+@router.get("/drafts/{draft_key}", response_model=WritingDraftRead)
 async def get_writing_draft(
     draft_key: str,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -244,6 +249,7 @@ async def get_writing_draft(
         )
     return _serialize_draft(draft)
 
+@router.get("/drafts", response_model=WritingDraftListResponse)
 async def list_writing_drafts(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

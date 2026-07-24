@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.post("/auth/login", response_model=AdminAuthChallengeResponse, status_code=status.HTTP_202_ACCEPTED)
 async def login_admin(
     payload: AdminAuthLoginRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -93,6 +94,7 @@ async def login_admin(
 
     return AdminAuthChallengeResponse(challenge_id=challenge.id)
 
+@router.post("/auth/verify-otp", response_model=AdminAuthResponse)
 async def verify_admin_otp(
     payload: AdminAuthVerifyOtpRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -147,6 +149,7 @@ async def verify_admin_otp(
     await _edit_admin_otp_message(challenge, ADMIN_OTP_SUCCESS_MESSAGE)
     return response
 
+@router.post("/auth/refresh", response_model=AdminAuthResponse)
 async def refresh_admin_session(
     payload: AdminAuthRefreshRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -190,5 +193,6 @@ async def refresh_admin_session(
         refresh_expires_in_seconds=ADMIN_REFRESH_EXPIRES_IN_SECONDS,
     )
 
+@router.get("/auth/me", response_model=AdminPrincipal)
 async def read_current_admin(current_admin: AdminPrincipal = Depends(get_current_admin)) -> AdminPrincipal:
     return current_admin

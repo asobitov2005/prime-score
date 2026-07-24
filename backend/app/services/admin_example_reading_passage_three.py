@@ -3,7 +3,28 @@ from __future__ import annotations
 # ruff: noqa: F401,F403,F405,E501
 from app.services.admin_example_reading_common import *
 
+
 def build_passage_three_groups(passage_three_mc_questions):
+    mc_question_block_parts: list[str] = []
+    passage_three_mc_built_questions: list[dict[str, object]] = []
+    mc_answer_lines: list[str] = []
+    for number, prompt, variants, accepted_answers, explanation in passage_three_mc_questions:
+        mc_question_block_parts.append(
+            "\n".join(
+                [f"<{prompt}>", *[f"{chr(65 + index)}. {option}" for index, option in enumerate(variants)]]
+            )
+        )
+        mc_answer_lines.extend(accepted_answers)
+        passage_three_mc_built_questions.append(
+            _make_question(
+                number=number,
+                prompt=prompt,
+                accepted_answers=accepted_answers,
+                explanation=explanation,
+                variants=variants,
+            )
+        )
+
     passage_three_groups = [
             _make_group(
                 key="passage-3-mc-single",

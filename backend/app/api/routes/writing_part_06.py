@@ -5,6 +5,7 @@ from app.api.routes.writing_dependencies import *
 
 router = APIRouter()
 
+@router.get("/dashboard-summary", response_model=WritingDashboardSummary)
 async def dashboard_summary(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

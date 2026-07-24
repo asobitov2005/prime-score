@@ -7,6 +7,7 @@ from app.api.routes.writing_part_03 import _build_custom_task
 
 router = APIRouter()
 
+@router.put("/drafts/{draft_key}", response_model=WritingDraftRead)
 async def save_writing_draft(
     draft_key: str,
     payload: WritingDraftUpsertRequest,
@@ -49,6 +50,7 @@ async def save_writing_draft(
     await session.refresh(draft)
     return _serialize_draft(draft)
 
+@router.delete("/drafts/{draft_key}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_writing_draft(
     draft_key: str,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -66,6 +68,11 @@ async def delete_writing_draft(
     await session.commit()
     return None
 
+@router.post(
+    "/submissions",
+    response_model=WritingSubmissionRead,
+    status_code=status.HTTP_201_CREATED,
+)
 async def submit_writing(
     payload: WritingSubmitRequest,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -130,6 +137,7 @@ async def submit_writing(
 
     return WritingSubmissionRead.model_validate(submission)
 
+@router.get("/submissions/{submission_id}", response_model=WritingSubmissionRead)
 async def get_submission(
     submission_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -140,6 +148,10 @@ async def get_submission(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found.")
     return WritingSubmissionRead.model_validate(submission)
 
+@router.post(
+    "/submissions/{submission_id}/retry",
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def retry_submission(
     submission_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),

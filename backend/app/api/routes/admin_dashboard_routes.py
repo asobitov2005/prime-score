@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/dashboard", response_model=AdminDashboardRead)
 async def dashboard(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),

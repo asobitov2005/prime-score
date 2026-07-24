@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: F401,F403,F405,E501
 from app.services.ai_config_dependencies import *
 from app.services.ai_config_part_01 import ResolvedAiUseCaseConfig, _google_capabilities_from_payload, _is_vertex_google_enabled, _normalize_cerebras_family, _strip_model_prefix, build_cerebras_client, build_google_client, invalidate_ai_config_cache
-from app.services.ai_config_part_03 import _sync_groq_models
+
 
 def build_groq_client(config: ResolvedAiUseCaseConfig) -> Any:
     if Groq is None:
@@ -12,6 +12,7 @@ def build_groq_client(config: ResolvedAiUseCaseConfig) -> Any:
     if config.base_url:
         kwargs["base_url"] = config.base_url
     return Groq(**kwargs)
+
 
 async def validate_provider_credentials(
     *,
@@ -76,6 +77,7 @@ async def validate_provider_credentials(
     data = getattr(models, "data", None) or []
     return {"ok": True, "provider": provider.value, "models_seen": len(list(data))}
 
+
 async def sync_provider_models(
     session: AsyncSession,
     *,
@@ -87,6 +89,8 @@ async def sync_provider_models(
         elif provider_config.provider == AiProvider.CEREBRAS:
             models_payload = await _sync_cerebras_models(provider_config)
         else:
+            from app.services.ai_config_part_03 import _sync_groq_models
+
             models_payload = await _sync_groq_models(provider_config)
         now = datetime.now(UTC)
         existing_rows = (
@@ -145,6 +149,7 @@ async def sync_provider_models(
     ).all()
     return list(refreshed)
 
+
 async def _sync_google_models(provider_config: AiProviderConfig) -> list[dict[str, Any]]:
     client = build_google_client(
         ResolvedAiUseCaseConfig(
@@ -179,6 +184,7 @@ async def _sync_google_models(provider_config: AiProviderConfig) -> list[dict[st
             }
         )
     return rows
+
 
 async def _sync_cerebras_models(provider_config: AiProviderConfig) -> list[dict[str, Any]]:
     config = ResolvedAiUseCaseConfig(

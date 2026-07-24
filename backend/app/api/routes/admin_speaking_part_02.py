@@ -6,6 +6,7 @@ from app.api.routes.admin_speaking_part_01 import _category_topic_count, _normal
 
 router = APIRouter()
 
+@router.delete("/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_speaking_topic(
     topic_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -27,6 +28,7 @@ async def delete_speaking_topic(
     await session.delete(topic)
     await session.commit()
 
+@router.get("/categories", response_model=AdminSpeakingCategoryListResponse)
 async def list_speaking_categories(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -45,6 +47,7 @@ async def list_speaking_categories(
 
     return AdminSpeakingCategoryListResponse(items=items, total=len(items))
 
+@router.post("/categories", response_model=AdminSpeakingCategoryRead, status_code=status.HTTP_201_CREATED)
 async def create_speaking_category(
     payload: AdminSpeakingCategoryCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -70,6 +73,7 @@ async def create_speaking_category(
     await session.refresh(category)
     return _serialize_category(category, topic_count=0)
 
+@router.delete("/categories/{slug}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_speaking_category(
     slug: str,
     current_admin: AdminPrincipal = Depends(get_current_admin),

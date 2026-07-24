@@ -128,6 +128,7 @@ def _serialize_me_gift_code_summary(payload: dict[str, object]) -> MeGiftCodeSum
         can_generate=bool(payload.get("can_generate", False)),
     )
 
+@router.get("", response_model=MeProfileRead)
 async def get_me(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -144,6 +145,7 @@ async def get_me(
     await session.refresh(user)
     return _profile_from_user(user)
 
+@router.patch("", response_model=MeProfileRead)
 async def update_me(
     payload: MeProfileUpdateRequest,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -187,6 +189,7 @@ async def _read_avatar_upload(file: UploadFile) -> bytes:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Avatar image must be under 5 MB.")
     return payload
 
+@router.post("/avatar", response_model=MeProfileRead)
 async def upload_my_avatar(
     file: UploadFile = File(...),
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -213,6 +216,7 @@ async def upload_my_avatar(
     await session.refresh(user)
     return _profile_from_user(user)
 
+@router.delete("/avatar", response_model=MeProfileRead)
 async def delete_my_avatar(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
@@ -229,6 +233,7 @@ async def delete_my_avatar(
     await session.refresh(user)
     return _profile_from_user(user)
 
+@router.get("/gift-codes", response_model=MeGiftCodeSummaryRead)
 async def list_my_gift_codes(
     current_user: DebugPrincipal = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),

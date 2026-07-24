@@ -4,10 +4,11 @@ from __future__ import annotations
 from app.api.routes.me_dependencies import *
 from app.api.routes.me_part_01 import LISTENING_FOCUS_CATEGORIES
 from app.api.routes.me_part_02 import _build_unanswered_average
-from app.api.routes.me_part_05 import _attempt_scope_value
-from app.api.routes.me_part_08 import _build_speaking_criteria
+
 
 def _build_time_analysis(attempts, test_type: TestType | None, section_analysis: list[MeSectionAnalysisItemRead]) -> MeSkillTimeAnalysisRead:
+    from app.api.routes.me_part_05 import _attempt_scope_value
+
     scoped_attempts = [
         attempt for attempt in attempts
         if test_type is None or (attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}).get("test_type") == test_type
@@ -48,6 +49,7 @@ def _build_time_analysis(attempts, test_type: TestType | None, section_analysis:
         unanswered_avg_percent=_build_unanswered_average(scoped_attempts, test_type),
     )
 
+
 def _build_listening_focus(attempts) -> list[MeSkillFocusItemRead]:
     buckets: dict[str, dict[str, object]] = {
         key: {"label": label, "correct": 0.0, "total": 0}
@@ -87,12 +89,15 @@ def _build_listening_focus(attempts) -> list[MeSkillFocusItemRead]:
         )
     return focus
 
+
 def _build_skill_focus(
     attempts,
     test_type: TestType | None,
     section_analysis: list[MeSectionAnalysisItemRead],
 ) -> list[MeSkillFocusItemRead]:
     if test_type == TestType.speaking:
+        from app.api.routes.me_part_08 import _build_speaking_criteria
+
         criteria = _build_speaking_criteria(attempts)
         if criteria is None:
             return []
@@ -152,6 +157,7 @@ def _build_skill_focus(
         focus[1:1] = _build_listening_focus(attempts)
 
     return focus
+
 
 def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
     reading = MePerformanceTestCountBucketRead()
@@ -224,6 +230,7 @@ def _build_performance_summary(attempts) -> MePerformanceSummaryRead:
 
     return MePerformanceSummaryRead(study_time=study_time, reading=reading, listening=listening, writing=writing, speaking=speaking)
 
+
 def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
     return MeProfileRead(
         id=principal.id,
@@ -240,6 +247,7 @@ def _profile_from_principal(principal: DebugPrincipal) -> MeProfileRead:
         language=principal.language,
         created_at=principal.created_at,
     )
+
 
 def _profile_from_user(user: User) -> MeProfileRead:
     return MeProfileRead(

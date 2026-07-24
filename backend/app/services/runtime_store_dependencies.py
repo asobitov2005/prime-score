@@ -10,6 +10,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - unavailable on Windows
+    fcntl = None
+
 from app.core.config import get_settings
 from app.core.enums import AttemptStatus, TestMode, TestScope, TestType
 from app.services.fixtures import build_test_snapshot, get_question_fixture

@@ -12,6 +12,7 @@ from app.api.routes.admin_user_support import *
 
 router = APIRouter()
 
+@router.get("/settings", response_model=AdminSettingsRead)
 async def get_settings_view(
     current_admin: AdminPrincipal = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
@@ -37,6 +38,7 @@ async def get_settings_view(
         total_attempts=int(attempts_total),
     )
 
+@router.patch("/auth/security", response_model=MessageResponse)
 async def update_admin_security(
     payload: AdminSecurityUpdateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),

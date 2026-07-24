@@ -45,6 +45,7 @@ async def _require_attempt_owner(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attempt not found.")
     return attempt
 
+@router.get("/{attempt_id}", response_model=AttemptRead)
 async def get_attempt_view(
     attempt_id: UUID,
     current_user: DebugPrincipal = Depends(get_current_user),
@@ -105,6 +106,7 @@ async def get_attempt_view(
         test_snapshot=TestSnapshotRead(**normalized_snapshot),
     )
 
+@router.patch("/{attempt_id}/answer", response_model=AttemptAnswerResponse)
 async def save_attempt_answer(
     attempt_id: UUID,
     payload: AttemptAnswerRequest,
@@ -143,6 +145,7 @@ async def save_attempt_answer(
         score_status=str(attempt.metadata.get("score_status", "draft")),
     )
 
+@router.patch("/{attempt_id}/progress", response_model=AttemptProgressResponse)
 async def save_attempt_progress(
     attempt_id: UUID,
     payload: AttemptProgressRequest,
@@ -188,6 +191,7 @@ async def save_attempt_progress(
         time_spent_sec=attempt.time_spent_sec,
     )
 
+@router.post("/{attempt_id}/events", response_model=AttemptEventRead)
 async def record_attempt_event(
     attempt_id: UUID,
     payload: AttemptEventCreate,
@@ -212,6 +216,7 @@ async def record_attempt_event(
         created_at=event.created_at,
     )
 
+@router.post("/{attempt_id}/submit", response_model=AttemptSubmitResponse)
 async def submit_attempt_view(
     attempt_id: UUID,
     payload: AttemptSubmitRequest | None = None,
