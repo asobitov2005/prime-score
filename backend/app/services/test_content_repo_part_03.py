@@ -4,7 +4,7 @@ from __future__ import annotations
 from app.services.test_content_repo_dependencies import *
 from app.services.test_content_repo_part_01 import _extract_custom_test_number, _model_access_type, _model_test_status, _model_test_type, _title_number_parts
 from app.services.test_content_repo_part_02 import _serialize_catalog_item
-from app.services.test_content_repo_part_05 import save_test_draft_to_db
+
 
 async def ensure_fixture_tests_seeded(session: AsyncSession) -> None:
     fixture_ids = [UUID(str(fixture["id"])) for fixture in TEST_CATALOG_FIXTURES]
@@ -107,7 +107,10 @@ async def ensure_fixture_tests_seeded(session: AsyncSession) -> None:
 
     await session.commit()
 
+
 async def ensure_admin_example_tests_seeded(session: AsyncSession) -> None:
+    from app.services.test_content_repo_part_05 import save_test_draft_to_db
+
     existing = await session.get(Test, ADMIN_EXAMPLE_READING_TEST_ID)
     if existing is not None:
         return
@@ -117,6 +120,7 @@ async def ensure_admin_example_tests_seeded(session: AsyncSession) -> None:
         draft=build_admin_example_reading_draft(),
         test_id=ADMIN_EXAMPLE_READING_TEST_ID,
     )
+
 
 async def ensure_test_admins_seeded(session: AsyncSession) -> None:
     seeded_contact = {
@@ -132,7 +136,7 @@ async def ensure_test_admins_seeded(session: AsyncSession) -> None:
     admin_password_hash = hash_password("TestAdmin123!")
     super_admin_password_hash = hash_password("TestSuperAdmin123!")
     simple_admin_password_hash = hash_password("admin")
-    
+
     if "admin" not in existing:
         session.add(
             Admin(
@@ -149,7 +153,7 @@ async def ensure_test_admins_seeded(session: AsyncSession) -> None:
     elif not existing["admin"].password_hash.startswith("$2"):
         existing["admin"].password_hash = simple_admin_password_hash
         changed = True
-        
+
     if "test_admin" not in existing:
         session.add(
             Admin(
@@ -197,6 +201,7 @@ async def ensure_test_admins_seeded(session: AsyncSession) -> None:
     if changed:
         await session.commit()
 
+
 def _tests_query() -> Select[tuple[Test]]:
     return (
         select(Test)
@@ -208,6 +213,7 @@ def _tests_query() -> Select[tuple[Test]]:
         )
         .order_by(Test.created_at.desc())
     )
+
 
 async def list_tests_from_db(
     session: AsyncSession,
@@ -249,8 +255,8 @@ async def list_tests_from_db(
     )
     return [_serialize_catalog_item(test) for test in tests]
 
+
 async def get_test_from_db(session: AsyncSession, test_id: UUID) -> dict[str, object] | None:
-    
     query = _tests_query().where(Test.id == test_id)
     test = (await session.scalars(query)).unique().first()
     if test is None or test.id == LISTENING_TEST_ID:
