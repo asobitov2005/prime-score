@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: F401,F403,F405,E501
 from app.api.routes.me_dependencies import *
 from app.api.routes.me_part_01 import _attempt_type_stats, _question_type_catalog, _safe_accuracy
-from app.api.routes.me_part_05 import _attempt_scope_value
+
 
 def _build_comparison(attempts, test_type: TestType | None) -> MeQuestionTypeComparisonRead:
     completed_attempts = sorted(
@@ -75,6 +75,7 @@ def _build_comparison(attempts, test_type: TestType | None) -> MeQuestionTypeCom
         items=items,
     )
 
+
 def _build_error_distribution(analysis: list[MeQuestionTypeAnalysisItemRead]) -> list[MeErrorDistributionItemRead]:
     total_errors = sum(item.error_count for item in analysis)
     if total_errors <= 0:
@@ -90,6 +91,7 @@ def _build_error_distribution(analysis: list[MeQuestionTypeAnalysisItemRead]) ->
     ]
     return sorted(items, key=lambda item: (-item.error_count, item.label))
 
+
 def _section_label(test_type: TestType | None, section_number: int) -> str:
     if test_type == TestType.reading:
         return f"Passage {section_number}"
@@ -99,6 +101,7 @@ def _section_label(test_type: TestType | None, section_number: int) -> str:
         return f"Task {section_number}"
     return f"Section {section_number}"
 
+
 def _section_number_from_title(title: str) -> int | None:
     match = re.search(r"\b(?:passage|part|section|task)\s*(\d)\b", title, re.I)
     if not match:
@@ -107,6 +110,7 @@ def _section_number_from_title(title: str) -> int | None:
         return int(match.group(1))
     except ValueError:
         return None
+
 
 def _section_map(snapshot: dict[str, object]) -> dict[str, int]:
     mapped: dict[str, int] = {}
@@ -124,6 +128,7 @@ def _section_map(snapshot: dict[str, object]) -> dict[str, int]:
         if section_id:
             mapped[section_id] = number
     return mapped
+
 
 def _section_number_for_item(attempt, item: dict[str, object]) -> int:
     snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
@@ -149,10 +154,14 @@ def _section_number_for_item(attempt, item: dict[str, object]) -> int:
         return max(1, min(4, ((max(question_number, 1) - 1) // 10) + 1))
     return 1
 
+
 def _is_answered(value: object) -> bool:
     return value is not None and str(value).strip() != ""
 
+
 def _build_section_analysis(attempts, test_type: TestType | None) -> list[MeSectionAnalysisItemRead]:
+    from app.api.routes.me_part_05 import _attempt_scope_value
+
     if test_type not in {TestType.reading, TestType.listening, TestType.writing}:
         return []
 
@@ -228,6 +237,7 @@ def _build_section_analysis(attempts, test_type: TestType | None) -> list[MeSect
             )
         )
     return items
+
 
 def _build_unanswered_average(attempts, test_type: TestType | None) -> float | None:
     percentages: list[float] = []
