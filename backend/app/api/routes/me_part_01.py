@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.api.routes.me_dependencies import *
-from app.api.routes.me_part_06 import _effective_attempt_band_score
 
 MAX_AVATAR_IMAGE_BYTES = 5 * 1024 * 1024
 
@@ -54,6 +53,7 @@ LISTENING_FOCUS_CATEGORIES = {
     "listening_short_answer": ("spelling_accuracy", "Spelling Accuracy"),
 }
 
+
 def _question_type_label(question_type: str, include_module_prefix: bool = False) -> str:
     if question_type in READING_QUESTION_TYPE_LABELS:
         label = READING_QUESTION_TYPE_LABELS[question_type]
@@ -63,6 +63,7 @@ def _question_type_label(question_type: str, include_module_prefix: bool = False
         return f"Listening - {label}" if include_module_prefix else label
     cleaned = question_type.removeprefix("reading_").removeprefix("listening_").replace("_", " ")
     return cleaned.title()
+
 
 def _question_type_catalog(test_type: TestType | None) -> list[tuple[str, str]]:
     if test_type == TestType.reading:
@@ -76,10 +77,12 @@ def _question_type_catalog(test_type: TestType | None) -> list[tuple[str, str]]:
         *((key, f"Listening - {label}") for key, label in LISTENING_QUESTION_TYPE_LABELS.items()),
     ]
 
+
 def _safe_accuracy(correct_count: int, worked_count: int) -> float:
     if worked_count <= 0:
         return 0.0
     return round((correct_count / worked_count) * 100, 1)
+
 
 def _count_answered_slots(snapshot: dict[str, object], answers: dict[str, str] | None) -> int:
     if not answers:
@@ -110,6 +113,7 @@ def _count_answered_slots(snapshot: dict[str, object], answers: dict[str, str] |
 
     return answered_slots
 
+
 def _attempt_type_stats(attempt, include_module_prefix: bool = False) -> dict[str, dict[str, int]]:
     stats: dict[str, dict[str, int]] = {}
     for item in attempt.scoring_items or []:
@@ -123,7 +127,10 @@ def _attempt_type_stats(attempt, include_module_prefix: bool = False) -> dict[st
         bucket["error_count"] += max(0, worked - correct)
     return stats
 
+
 def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
+    from app.api.routes.me_part_06 import _effective_attempt_band_score
+
     grouped: dict[object, dict[str, object]] = {}
     scored_attempts = sorted(
         [attempt for attempt in attempts if _effective_attempt_band_score(attempt) is not None],
@@ -179,6 +186,7 @@ def _build_progress_series(attempts) -> list[MeBandProgressPointRead]:
         ],
         key=lambda item: item.occurred_at,
     )
+
 
 def _build_question_type_analysis(attempts, test_type: TestType | None) -> list[MeQuestionTypeAnalysisItemRead]:
     aggregate: dict[str, dict[str, int]] = {
