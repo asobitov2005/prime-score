@@ -26,65 +26,56 @@ def build_sections_and_options():
 
     section_two = _make_section(
             index=2,
-            title="Why Some Sounds Feel Louder at Night",
-            show_labels=False,
+            title="When Dry Fields Begin to Recover",
+            show_labels=True,
             marker_count=13,
             content="""
-            People often report that distant traffic, trains or aircraft seem unusually loud after dark. The machines themselves may not be producing more noise, yet the sound reaches listeners with greater clarity. Part of the explanation lies in the way the lower atmosphere changes once the sun has set.
+            Dryland restoration is often introduced through dramatic engineering promises, yet I have seen many expensive schemes do little more than impress visiting officials. This does not mean that large dams or canals are always useless; in some places they protect towns and store vital reserves. My argument is narrower: on scattered farms where soils are already thin, recovery usually begins with methods that villagers can build, test, and repair themselves.
 
-            During the day, the ground warms the air immediately above it. Sound waves passing through these warmer layers tend to bend upward, away from a person standing at street level. At night the ground cools quickly, leaving a colder layer near the surface and warmer air above. This temperature inversion can bend sound back toward the ground, allowing it to travel further before fading.
+            One of the most effective techniques is the stone line. Farmers lay fist-sized rocks across a field by following its contour rather than its boundary. When rain arrives, the line slows runoff, traps moving sediment, and gives water enough time to sink into the soil instead of racing away. After several storms, a strip that looked dead can begin to hold moisture long enough for seeds to survive.
 
-            Wind can strengthen the effect. When air moves faster higher above the ground than it does near the surface, sound travelling downwind is refracted downward. Listeners on the downwind side of a motorway may therefore hear engines that would be much less noticeable under still daytime conditions.
+            The crucial point is that no outsider discovered a single perfect formula. In village after village, farmers adjusted the gap between stones, changed the width of each line, and opened small passages where floodwater hit too hard. Treating cultivators as designers rather than passive recipients makes the work slower at first, but it produces layouts that people understand and trust.
 
-            The surroundings also become quieter at night. Shops close, construction stops and fewer people are moving around outdoors. A single distant sound is easier to notice when it is no longer competing with dozens of nearby sources. The brain's attention system adds another layer: an unexpected noise in a quiet room is more likely to interrupt sleep than the same noise would be during a busy afternoon.
+            Labour also matters. In many communities the main fields are restored by seasonal work parties, while smaller kitchen plots are repaired by families who want vegetables closer to home. Women are often central to that second effort because they decide where daily water, compost, and shade can be managed most efficiently. The practical result is that restoration spreads from demonstration strips into ordinary routines.
 
-            Urban planners use these observations when considering flight paths, road barriers and night-time delivery rules. Measuring only the sound level at its source is not enough; planners also need to understand weather conditions, background noise and the times when residents are most sensitive to disturbance.
+            The method still has limits. A farmer who might lose access to land next year has little reason to wait patiently for soil to improve, and short political funding cycles rarely reward projects that need three or four seasons to show full results. Restoration succeeds best where rights are secure, maintenance is local, and expectations are realistic about how quickly damaged ground can recover.
             """,
         )
 
     section_three = _make_section(
             index=3,
-            title="The Hidden Work of Museum Lighting",
+            title="The City That Mapped Shade",
             show_labels=False,
             marker_count=14,
             content="""
-            Visitors usually notice the objects in a museum, not the light falling on them. For exhibition designers, however, lighting is a technical compromise. It must reveal colour, texture and detail while avoiding the gradual damage that light can cause to fragile materials.
+            For years the planning office in San Telmo relied on one official weather station to describe summer heat. The figures were accurate in a technical sense, but they failed to explain why commuters complained about some routes and praised others only a few streets away. A university team therefore replaced abstract averages with street-level measurements, arguing that pedestrian comfort depends on the conditions people actually move through rather than on a single citywide number.
 
-            Paintings, textiles and manuscripts do not respond to light in the same way. Some modern pigments are relatively stable, whereas many historic dyes fade quickly under strong illumination. Conservators therefore set exposure limits that combine brightness with time. A work shown under dim light for several months may receive the same total exposure as a brighter display lasting only a few weeks.
+            The researchers equipped volunteers with small sensors and asked them to walk fixed routes every fifteen minutes. Each device was mounted two metres above the ground so readings matched the air a standing adult would experience. The first surprise was that several narrow streets were hotter at midday than nearby open squares because masonry released stored warmth into still air. Yet those same streets cooled rapidly once building shadows met across the road.
 
-            Light-emitting diodes have changed exhibition practice because they release less heat than older lamps and can be tuned to different colour temperatures. Yet LEDs are not automatically harmless. Designers still need to control ultraviolet radiation, glare and the direction of each beam. Reflections from glass cases can hide details, while an overly narrow spotlight can make an object appear theatrical rather than informative.
+            The team soon realised that temperature alone was not enough. Volunteers logged whether nearby walls were pale or dark, noted where tree cover ended, and recorded the surface beneath their feet. Dark walls radiated heat long after noon, while fresh stone stayed cooler than expected. Asphalt heated up fastest of all, which helped explain why two pavements with the same amount of shade could feel completely different.
 
-            Digital controls allow museums to reduce light when galleries are empty and raise it gently as visitors enter. Sensors can also track cumulative exposure, helping staff decide when a sensitive item should return to storage. These systems save energy, but their main value is that they connect daily display decisions with long-term conservation records.
+            The most comfortable busy route turned out to be the market arcade. It was not the shortest path, but it offered continuous shade and a gentle current of air from side lanes. Commuters repeatedly said that an uninterrupted shaded stretch mattered more than a single cool doorway. In the evenings, nearby shopkeepers let the team plug data packs into their sockets, making it possible to upload results before the next day's survey.
 
-            The best lighting schemes are rarely dramatic. They guide attention without drawing attention to themselves, support safe movement through the gallery and preserve the collection for future visitors. Their success is measured partly by what the public sees and partly by the damage that never occurs.
+            City officials liked the final map because it pointed to low-cost changes: move a bus stop by twenty metres, protect an arcade entrance, or prioritise trees on one side of a street rather than both. The first study still had an obvious weakness, however, because all measurements were taken in one hot season. A second survey was finally carried out in October so that shaded routes could be compared outside peak summer conditions.
             """,
         )
 
     passage_one_headings = [
-        "i A costly routine before the experiment",
-        "ii A clue discovered in ordinary conditions",
-        "iii Local knowledge reshapes the design",
-        "iv Social benefits beyond water supply",
-        "v Why the system still has limits",
-        "vi A failed attempt to copy foreign technology",
-        "vii The end of all imported water",
-        "viii A plan to remove the collection nets",
-    ]
-    passage_two_word_bank = [
-        "temperature inversion",
-        "upward",
-        "downward",
-        "background noise",
-        "attention",
-        "source level",
-        "barriers",
-        "humidity",
-    ]
+            "i. A local adjustment makes the system practical",
+            "ii. New social effects of a water project",
+            "iii. Why the scheme cannot solve every problem",
+            "iv. The discovery that the weather could be used",
+            "v. A region with a chronic shortage",
+        ]
 
-    return (
-        section_one,
-        section_two,
-        section_three,
-        passage_one_headings,
-        passage_two_word_bank,
-    )
+    passage_two_word_bank = [
+            "A. contour",
+            "B. runoff",
+            "C. harvest",
+            "D. labour",
+            "E. millet",
+            "F. boundary",
+            "G. sediment",
+            "H. grants",
+        ]
+    return section_one, section_two, section_three, passage_one_headings, passage_two_word_bank
