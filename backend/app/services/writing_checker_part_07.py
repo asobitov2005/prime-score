@@ -6,7 +6,7 @@ from app.services.writing_checker_part_01 import _ALLOWED_SEVERITIES, _Annotatio
 from app.services.writing_checker_part_02 import _writing_generate_config
 from app.services.writing_checker_part_03 import _grader_max_output_tokens, _response_schema
 from app.services.writing_checker_part_06 import _assert_grader_payload_integrity
-from app.services.writing_checker_part_08 import _repair_grader_json
+
 
 def _validate_annotations(
     annotations: list[_AnnotationPayload], essay_text: str
@@ -104,6 +104,7 @@ def _validate_annotations(
         )
     return cleaned
 
+
 def _dedupe_annotations(annotations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ordered = sorted(
         annotations,
@@ -125,6 +126,7 @@ def _dedupe_annotations(annotations: list[dict[str, Any]]) -> list[dict[str, Any
             deduped[existing_index] = item
     return deduped
 
+
 def _call_grader(
     *,
     resolved_config: ResolvedAiUseCaseConfig | None = None,
@@ -135,6 +137,8 @@ def _call_grader(
     essay_text: str,
     seed: int,
 ) -> _GraderPayload:
+    from app.services.writing_checker_part_08 import _repair_grader_json
+
     max_output_tokens = _grader_max_output_tokens(resolved_config)
     config = _writing_generate_config(
         systemInstruction=system_instruction,
@@ -199,6 +203,7 @@ def _call_grader(
             continue
     raise RuntimeError(f"Grader returned invalid or incomplete payload: {last_error}")
 
+
 def _extract_json_payload(raw_text: str) -> str:
     text = raw_text.strip()
     if text.startswith("```"):
@@ -214,6 +219,7 @@ def _extract_json_payload(raw_text: str) -> str:
         if end != -1 and end > start:
             return text[start : end + 1]
     return text
+
 
 def _build_annotation_recovery_prompt(*, essay_text: str, hints: list[str]) -> str:
     prompt_parts = [
