@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.services.test_content_repo_dependencies import *
-from app.services.test_content_repo_part_06 import build_test_snapshot_from_db
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +146,8 @@ async def _refresh_in_progress_attempt_snapshots_for_test(
     *,
     test_id: UUID,
 ) -> None:
+    from app.services.test_content_repo_part_06 import build_test_snapshot_from_db
+
     attempts = list(
         (
             await session.scalars(
