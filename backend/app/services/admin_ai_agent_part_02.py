@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.services.admin_ai_agent_dependencies import *
-from app.services.admin_ai_agent_part_01 import _section_requires_paragraph_labels
+
 
 def _serialize_example_group(test: Test, section: TestSection, group: QuestionGroup) -> dict[str, Any]:
     ordered_questions = sorted(group.questions, key=lambda item: item.number)
@@ -43,6 +43,7 @@ def _serialize_example_group(test: Test, section: TestSection, group: QuestionGr
             ],
         },
     }
+
 
 async def _load_question_group_examples(
     session: AsyncSession,
@@ -86,12 +87,15 @@ async def _load_question_group_examples(
                     return examples
     return examples
 
+
 def _compare_group_against_examples(
     *,
     section: AiDraftSectionInput,
     group: AiDraftQuestionGroupInput,
     examples: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    from app.services.admin_ai_agent_part_01 import _section_requires_paragraph_labels
+
     issues: list[str] = []
     recommended_show_labels = _section_requires_paragraph_labels([group.type_id])
     if section.show_labels != recommended_show_labels:
@@ -112,6 +116,7 @@ def _compare_group_against_examples(
         "issues": issues,
         "examples": examples,
     }
+
 
 def _extract_grounding_summary(response: Any) -> dict[str, Any] | None:
     candidates = list(getattr(response, "candidates", []) or [])
@@ -144,6 +149,7 @@ def _extract_grounding_summary(response: Any) -> dict[str, Any] | None:
         "sources": sources[:8],
     }
 
+
 def _append_grounding_sources_to_text(text: str, grounding_summary: dict[str, Any] | None) -> str:
     if not grounding_summary:
         return text
@@ -156,6 +162,7 @@ def _append_grounding_sources_to_text(text: str, grounding_summary: dict[str, An
         uri = source.get("uri") or ""
         lines.append(f"- {title}: {uri}")
     return "\n".join(lines).strip()
+
 
 def _question_type_definitions() -> list[dict[str, str]]:
     return [
@@ -182,6 +189,7 @@ def _question_type_definitions() -> list[dict[str, str]]:
         {"id": "listening_short_answer", "label": "Listening Short Answer", "family": "short-answer", "description": "Concise answer input."},
     ]
 
+
 def _builder_rules() -> list[str]:
     return [
         "Always inspect supported question types before saving a new test draft.",
@@ -194,6 +202,7 @@ def _builder_rules() -> list[str]:
         "Question numbering must be sequential across groups and passages; if unsure, inspect an existing draft example first.",
     ]
 
+
 class AiDraftMetadataInput(BaseModel):
     title: str
     type: Literal["reading", "listening"] = "reading"
@@ -202,6 +211,7 @@ class AiDraftMetadataInput(BaseModel):
     source_detail: str = ""
     access_type: Literal["public", "premium"] = "public"
     time_limit_label: str = "60 min exam"
+
 
 class AiDraftSectionInput(BaseModel):
     local_id: str
@@ -215,6 +225,7 @@ class AiDraftSectionInput(BaseModel):
     media_kind: Literal["text", "audio"] = "text"
     marker_count: int = 0
 
+
 class AiDraftQuestionInput(BaseModel):
     id: str | None = None
     label: str
@@ -222,6 +233,7 @@ class AiDraftQuestionInput(BaseModel):
     accepted_answers: list[str] = Field(default_factory=list)
     explanation: str = ""
     variants: list[str] = Field(default_factory=list)
+
 
 class AiDraftQuestionGroupInput(BaseModel):
     id: str | None = None
@@ -239,18 +251,22 @@ class AiDraftQuestionGroupInput(BaseModel):
     diagram_image_url: str = ""
     questions: list[AiDraftQuestionInput] = Field(default_factory=list)
 
+
 class AiDraftPayloadInput(BaseModel):
     metadata: AiDraftMetadataInput
     sections: list[AiDraftSectionInput] = Field(default_factory=list)
     question_groups: list[AiDraftQuestionGroupInput] = Field(default_factory=list)
+
 
 class GetDraftTemplateArgs(BaseModel):
     test_type: Literal["reading", "listening"] = "reading"
     title: str | None = None
     access_type: Literal["public", "premium"] = "public"
 
+
 class ListQuestionTypesArgs(BaseModel):
     test_type: Literal["reading", "listening", "all"] = "reading"
+
 
 class ListTestsArgs(BaseModel):
     query: str | None = None
