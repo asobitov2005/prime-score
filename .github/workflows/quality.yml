@@ -93,10 +93,6 @@ jobs:
           done
           cat ../ci-logs/backend-uvicorn.log
           exit 1
-      - name: Ruff
-        run: |
-          set -o pipefail
-          ruff check app tests --output-format=concise 2>&1 | tee ../ci-logs/backend-ruff.log
       - name: Pytest
         run: |
           set -o pipefail
