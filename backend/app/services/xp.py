@@ -2,15 +2,27 @@ from __future__ import annotations
 
 import sys
 import types
+from dataclasses import dataclass
 
 from fastapi import APIRouter
 
 from app.services import xp_part_01 as _part_01
-from app.services import xp_part_02 as _part_02
-from app.services import xp_part_03 as _part_03
-from app.services import xp_part_04 as _part_04
-from app.services import xp_part_05 as _part_05
-from app.services import xp_part_06 as _part_06
+
+for _class_name in (
+    "XPActivity",
+    "XPComponent",
+    "XPCalculationResult",
+    "XPAwardResult",
+    "LeaderboardSnapshot",
+):
+    _class = getattr(_part_01, _class_name)
+    setattr(_part_01, _class_name, dataclass(slots=True)(_class))
+
+from app.services import xp_part_02 as _part_02  # noqa: E402
+from app.services import xp_part_03 as _part_03  # noqa: E402
+from app.services import xp_part_04 as _part_04  # noqa: E402
+from app.services import xp_part_05 as _part_05  # noqa: E402
+from app.services import xp_part_06 as _part_06  # noqa: E402
 
 _PARTS = (_part_01, _part_02, _part_03, _part_04, _part_05, _part_06,)
 router = APIRouter()
