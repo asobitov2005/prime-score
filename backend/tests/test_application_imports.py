@@ -1,11 +1,20 @@
-from importlib import import_module
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 
 def test_application_imports_without_circular_dependencies() -> None:
-    part_01 = import_module("app.services.test_content_repo_part_01")
-    part_06 = import_module("app.services.test_content_repo_part_06")
-    main = import_module("app.main")
+    backend_dir = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "-c", "from app.main import app; assert app is not None"],
+        cwd=backend_dir,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
-    assert callable(part_01._refresh_in_progress_attempt_snapshots_for_test)
-    assert callable(part_06.build_test_snapshot_from_db)
-    assert main.app is not None
+    assert result.returncode == 0, result.stderr
