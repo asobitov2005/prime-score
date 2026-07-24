@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.services.gift_entitlements_dependencies import *
-from app.services.gift_entitlements_part_01 import MANUAL_GRANT_INVOICE_PREFIX, MANUAL_PREMIUM_BODY_PATTERN, grant_payment_gift_entitlement
+
 
 async def grant_manual_premium_entitlement(
     session: AsyncSession,
@@ -12,6 +12,8 @@ async def grant_manual_premium_entitlement(
     premium_until: datetime,
     now: datetime | None = None,
 ) -> GiftCodeEntitlement | None:
+    from app.services.gift_entitlements_part_01 import grant_payment_gift_entitlement
+
     now = now or datetime.now(UTC)
     await ensure_default_plans(session)
 
@@ -61,6 +63,7 @@ async def grant_manual_premium_entitlement(
         now=now,
     )
 
+
 async def ensure_manual_premium_entitlement_for_user(
     session: AsyncSession,
     *,
@@ -90,7 +93,10 @@ async def ensure_manual_premium_entitlement_for_user(
         now=now,
     )
 
+
 async def _infer_manual_granted_days(session: AsyncSession, *, user_id: UUID) -> int | None:
+    from app.services.gift_entitlements_part_01 import MANUAL_PREMIUM_BODY_PATTERN
+
     notifications = list(
         (
             await session.execute(
@@ -116,5 +122,8 @@ async def _infer_manual_granted_days(session: AsyncSession, *, user_id: UUID) ->
                 continue
     return None
 
+
 def _build_manual_grant_invoice_code() -> str:
+    from app.services.gift_entitlements_part_01 import MANUAL_GRANT_INVOICE_PREFIX
+
     return f"{MANUAL_GRANT_INVOICE_PREFIX}-{secrets.token_hex(5).upper()}"
