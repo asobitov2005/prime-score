@@ -79,6 +79,7 @@ def _serialize_topic(row: object) -> AdminSpeakingTopicRead:
         updated_at=row.updated_at,
     )
 
+@router.get("/topics", response_model=AdminSpeakingTopicListResponse)
 async def list_speaking_topics(
     part_number: int | None = Query(default=None, ge=1, le=3),
     category: str | None = Query(default=None),
@@ -103,6 +104,7 @@ async def list_speaking_topics(
         total=int(total),
     )
 
+@router.post("/topics", response_model=AdminSpeakingTopicRead, status_code=status.HTTP_201_CREATED)
 async def create_speaking_topic(
     payload: AdminSpeakingTopicCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -205,6 +207,7 @@ def _apply_topic_metadata(
 
     return metadata
 
+@router.patch("/topics/{topic_id}", response_model=AdminSpeakingTopicRead)
 async def update_speaking_topic(
     topic_id: UUID,
     payload: AdminSpeakingTopicUpdateRequest,
