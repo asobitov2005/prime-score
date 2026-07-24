@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.services.test_content_repo_dependencies import *
-from app.services.test_content_repo_part_04 import _normalize_transcript_question_locations, _normalize_transcript_segments, _sanitize_group_option_payload
+
 
 def _serialize_catalog_item(test: Test) -> dict[str, object]:
     def _clean_section_title(value: str | None) -> str | None:
@@ -53,10 +53,14 @@ def _serialize_catalog_item(test: Test) -> dict[str, object]:
         "updated_at": test.updated_at,
     }
 
+
 def _serialize_admin_test(test: Test) -> dict[str, object]:
     return _serialize_catalog_item(test)
 
+
 def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: str) -> dict[str, object]:
+    from app.services.test_content_repo_part_04 import _sanitize_group_option_payload
+
     questions = sorted(group.questions, key=lambda item: item.number)
     type_id = str(group.question_type.value)
     secondary_block, options_title, shared_options = _sanitize_group_option_payload(
@@ -100,12 +104,14 @@ def _serialize_group(group: QuestionGroup, *, section_id: UUID, section_title: s
         ],
     }
 
+
 def _extract_paragraph_text(item: object) -> str:
     if isinstance(item, dict):
         text = item.get("text")
         if text is not None:
             return str(text)
     return str(item)
+
 
 def _serialize_paragraph_item(item: object) -> object:
     if isinstance(item, dict):
@@ -119,6 +125,7 @@ def _serialize_paragraph_item(item: object) -> object:
         return payload
     return _extract_paragraph_text(item)
 
+
 def _serialize_snapshot_from_test(
     test: Test,
     *,
@@ -126,6 +133,12 @@ def _serialize_snapshot_from_test(
     mode: TestMode,
     section_id: UUID | None = None,
 ) -> dict[str, object]:
+    from app.services.test_content_repo_part_04 import (
+        _normalize_transcript_question_locations,
+        _normalize_transcript_segments,
+        _sanitize_group_option_payload,
+    )
+
     ordered_sections = sorted(test.sections, key=lambda item: item.position)
     selected_sections = ordered_sections
     if scope == TestScope.section:
