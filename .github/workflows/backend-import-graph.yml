@@ -1,0 +1,20 @@
+name: Backend import graph
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  split-import-cycles:
+    name: Split import cycles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check split-module import graph
+        run: python backend/scripts/check_split_import_cycles.py
