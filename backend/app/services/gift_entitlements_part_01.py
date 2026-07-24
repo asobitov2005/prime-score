@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.services.gift_entitlements_dependencies import *
-from app.services.gift_entitlements_part_02 import ensure_manual_premium_entitlement_for_user
 
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
@@ -90,6 +89,8 @@ async def generate_user_gift_code(
     gift_days: int,
     now: datetime | None = None,
 ) -> GiftCode:
+    from app.services.gift_entitlements_part_02 import ensure_manual_premium_entitlement_for_user
+
     now = now or datetime.now(UTC)
     await ensure_default_plans(session)
 
