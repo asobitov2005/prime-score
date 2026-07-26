@@ -8,14 +8,15 @@ from app.api.routes.admin_contracts import *
 from app.api.routes.admin_common import *
 from app.api.routes.admin_commerce_support import *
 from app.api.routes.admin_auth_support import *
-# Circular star-imports can leave this unbound at runtime; bind explicitly.
-from app.api.routes.admin_contracts import AdminFilterParams, apply_admin_filters
 
 async def _build_admin_user_detail(
     session: AsyncSession,
     user: User,
     params: AdminFilterParams,
 ) -> AdminUserDetailRead:
+    # Lazy import: circular admin_* star-imports leave this unbound at module import time.
+    from app.api.routes.admin_contracts import apply_admin_filters
+
     if user.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     attempts_total = await session.scalar(
