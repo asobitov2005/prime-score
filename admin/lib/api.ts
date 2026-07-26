@@ -1,19 +1,1516 @@
-import { aiApi } from "@/lib/api/ai";
-import { paymentsApi } from "@/lib/api/payments";
-import { testsApi } from "@/lib/api/tests";
-import { transcriptApi } from "@/lib/api/transcript";
-import { writingApi } from "@/lib/api/writing";
+import type {
+  AdminAiProviderConfig,
+  AdminAiProviderModel,
+  AdminAiUseCaseBinding,
+  AdminWritingAnchorSet,
+  AdminWritingConfigAuditEntry,
+  AdminWritingPromptPreview,
+  AdminWritingPromptProfile,
+  AdminWritingRubric,
+  AdminPaymentCardSummary,
+  AdminPaymentSettingsSummary,
+  AdminPaymentSummary,
+  AdminTranscriptQuestionLocation,
+  AdminTranscriptSegment,
+  PaymentMethod,
+  PaymentStatus,
+  AdminTestDraftState,
+  AdminTestSummary,
+  TestFormat
+} from "@/lib/types";
+import { fetchAdminApi } from "@/lib/auth";
+import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
+import { normalizeAdminTestSourceDetail } from "@/lib/test-source";
+import { sanitizeAdminQuestionGroupOptionFields } from "@/lib/question-group-options";
 
-/**
- * Backward-compatible admin API facade.
- *
- * Domain implementations live in `lib/api/*` while existing callers can keep
- * importing the single `adminApi` object from this module.
- */
+const baseUrl = ADMIN_PUBLIC_API_BASE_URL;
+
+function sanitizeListeningSectionTitle(type: "reading" | "listening", title: string) {
+  const trimmedTitle = title.trim();
+  if (type !== "listening") {
+    return title;
+  }
+  if (/^(Reading Passage|Listening Part|Passage|Part)\s+\d+\s*$/i.test(trimmedTitle)) {
+    return "";
+  }
+  if (/^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(trimmedTitle)) {
+    return "";
+  }
+  return title;
+}
+
+function sanitizeListeningSectionContent(type: "reading" | "listening", content: string) {
+  if (type !== "listening") {
+    return content;
+  }
+  return content
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !/^Part\s+\d+\.\s+Questions\s+\d+\s*-\s*\d+\.?$/i.test(trimmed);
+    })
+    .join("\n")
+    .trim();
+}
+
+function resolveAdminQuestionType(typeId: string, sharedOptions: string[]) {
+  if (typeId === "listening_plan_map_labeling" && sharedOptions.length === 0) {
+    return "listening_plan_map_labeling_free_text";
+  }
+  return typeId;
+}
+
+function sanitizeQuestionGroupTitle(title: string) {
+  const trimmedTitle = title.trim();
+  if (/^Question Group(?:\s+\d+(?:\s*[-,]\s*\d+)*)?$/i.test(trimmedTitle)) {
+    return "";
+  }
+  return trimmedTitle;
+}
+
+type BackendAdminTest = {
+  id: string;
+  title: string;
+  test_type: "reading" | "listening";
+  format: TestFormat;
+  source: "cambridge" | "real_exam" | "custom";
+  source_detail: string;
+  access_type: "public" | "premium";
+  status: "draft" | "published" | "archived";
+  review_status?: "needs_review" | "approved" | "rejected";
+  updated_at?: string | null;
+  total_questions: number;
+  version: number;
+};
+
+type BackendAdminDraftPayload = {
+  metadata: {
+    title: string;
+    type: "reading" | "listening";
+    format: TestFormat;
+    source: "cambridge" | "real_exam" | "custom";
+    source_detail: string;
+    access_type: "public" | "premium";
+    time_limit_label: string;
+  };
+  content: Array<{
+    id?: string;
+    label: string;
+    title: string;
+    subtitle: string;
+    content: string;
+    paragraphs: Array<{ id: string; label: string; text: string }>;
+    showLabels: boolean;
+    media_kind: "text" | "audio";
+      audio_url: string;
+      audio_duration_seconds?: number | null;
+      transcript: string;
+      transcript_segments?: Array<{
+        id?: string;
+        start_sec?: number;
+        end_sec?: number;
+        text?: string;
+      }>;
+      transcript_question_locations?: Array<{
+        question_id?: string | null;
+        question_label?: string;
+        question_prompt?: string;
+        start_sec?: number;
+        end_sec?: number;
+        answer_text?: string;
+        correct_answer?: string;
+      }>;
+      marker_count: number;
+    }>;
+  question_groups: Array<{
+    id?: string;
+    section_id: string;
+    title: string;
+    instructions: string;
+    options_title?: string;
+    type_id: string;
+    question_start: number;
+    question_end: number;
+    shared_options: string[];
+    question_block?: string;
+    answer_block?: string;
+    secondary_block?: string;
+    diagram_title?: string;
+    diagram_image_url?: string;
+    questions: Array<{
+      id?: string;
+      label: string;
+      prompt: string;
+      accepted_answers: string[];
+      explanation: string;
+      variants: string[];
+    }>;
+  }>;
+};
+
+type BackendAdminDraft = {
+  metadata: {
+    title: string;
+    type: "reading" | "listening";
+    format: TestFormat;
+    source: "cambridge" | "real_exam" | "custom";
+    source_detail: string;
+    status: "draft" | "published" | "archived";
+    access_type: "public" | "premium";
+    version: number;
+    time_limit_label: string;
+  };
+  content: {
+    sections: Array<{
+      id: string;
+      label: string;
+      title: string;
+      subtitle: string;
+      content: string;
+      paragraphs?: Array<{ id: string; label: string; text: string }>;
+      showLabels?: boolean;
+      media_kind: "text" | "audio";
+      audio_url?: string;
+      audio_duration_seconds?: number | null;
+      transcript?: string;
+      transcript_segments?: Array<{
+        id?: string;
+        start_sec?: number;
+        end_sec?: number;
+        text?: string;
+      }>;
+      transcript_question_locations?: Array<{
+        question_id?: string | null;
+        question_label?: string;
+        question_prompt?: string;
+        start_sec?: number;
+        end_sec?: number;
+        answer_text?: string;
+        correct_answer?: string;
+      }>;
+      marker_count: number;
+    }>;
+  };
+  questionGroups?: Array<{
+    id: string;
+    section_id: string;
+    title: string;
+    instructions: string;
+    options_title?: string;
+    type_id: string;
+    question_start: number;
+    question_end: number;
+    shared_options: string[];
+    question_block?: string;
+    answer_block?: string;
+    secondary_block?: string;
+    raw_content?: string;
+    diagram_title?: string;
+    diagram_image_url?: string;
+    questions: Array<{
+      id: string;
+      label: string;
+      prompt: string;
+      accepted_answers: string[];
+      explanation: string;
+      variants: string[];
+    }>;
+  }>;
+  questions?: Array<{
+    id: string;
+    section_id: string;
+    label: string;
+    type_id: string;
+    prompt: string;
+    accepted_answers: string[];
+    explanation: string;
+    variants: string[];
+  }>;
+  review: {
+    checklist: Array<{
+      id: string;
+      label: string;
+      status: "ready" | "draft" | "blocked";
+      detail: string;
+    }>;
+    notes: string[];
+  };
+  decisions: {
+    question_bank: {
+      label: string;
+      state: "not_supported";
+      detail: string;
+    };
+    payment: {
+      label: string;
+      state: "paused";
+      detail: string;
+    };
+    listening_timer: {
+      label: string;
+      state: "audio_duration_plus_2_minutes";
+      detail: string;
+    };
+  };
+};
+
+type BackendAdminAiProviderConfig = {
+  id: string;
+  provider: "google" | "cerebras" | "groq";
+  label: string;
+  api_key_masked?: string | null;
+  has_api_key: boolean;
+  base_url?: string | null;
+  is_enabled: boolean;
+  last_sync_at?: string | null;
+  last_sync_status?: string | null;
+  last_sync_error?: string | null;
+};
+
+type BackendAdminAiProviderModel = {
+  id: string;
+  model_id: string;
+  display_name: string;
+  family?: string | null;
+  capabilities?: Record<string, unknown> | null;
+  context_window?: number | null;
+  is_accessible: boolean;
+  is_selectable: boolean;
+  sort_order: number;
+};
+
+type BackendAdminAiUseCaseBinding = {
+  id?: string | null;
+  use_case: AdminAiUseCaseBinding["useCase"];
+  provider_config_id?: string | null;
+  provider?: AdminAiProviderConfig["provider"] | null;
+  provider_label?: string | null;
+  provider_model_id?: string | null;
+  model_id?: string | null;
+  model_display_name?: string | null;
+  settings_json?: Record<string, unknown> | null;
+  resolved_source?: string;
+};
+
+type BackendAdminWritingPromptEntry = {
+  id?: string;
+  key: AdminWritingPromptProfile["entries"][number]["key"];
+  body: string;
+  format: "text" | "json";
+};
+
+type BackendAdminWritingPromptProfile = {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string | null;
+  task_type_scope: AdminWritingPromptProfile["taskTypeScope"];
+  status: AdminWritingPromptProfile["status"];
+  version: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  entries?: BackendAdminWritingPromptEntry[] | null;
+};
+
+type BackendAdminWritingRubric = {
+  id: string;
+  task_type_scope: AdminWritingRubric["taskTypeScope"];
+  version: number;
+  body: string;
+  status: AdminWritingRubric["status"];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type BackendAdminWritingAnchorItem = {
+  id?: string;
+  band: number;
+  essay: string;
+  criteria?: Record<string, unknown> | null;
+  rationale?: string;
+  sort_order?: number;
+};
+
+type BackendAdminWritingAnchorSet = {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string | null;
+  task_type_scope: AdminWritingAnchorSet["taskTypeScope"];
+  version: number;
+  status: AdminWritingAnchorSet["status"];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  items?: BackendAdminWritingAnchorItem[] | null;
+};
+
+type BackendAdminWritingPromptPreview = {
+  grader_system: string;
+  grader_user: string;
+  improved_version: string;
+  roast_system: string;
+  roast_user: string;
+};
+
+type BackendAdminWritingConfigAuditEntry = {
+  id: string;
+  actor_admin_id?: string | null;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  previous_version?: number | null;
+  new_version?: number | null;
+  metadata_json?: Record<string, unknown> | null;
+  created_at: string;
+};
+
+type BackendPayment = {
+  id: string;
+  invoice_code: string;
+  user_name?: string | null;
+  user_username?: string | null;
+  plan_name: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amount: number | string;
+  card_number?: string | null;
+  expires_at?: string | null;
+  status_reason?: string | null;
+  updated_at?: string | null;
+};
+
+type BackendPaymentCard = {
+  id: string;
+  label: string;
+  card_number: string;
+  card_type: string;
+  holder_name?: string | null;
+  is_active: boolean;
+  priority: number;
+};
+
+type BackendAdminAudioTranscriptResponse = {
+  transcript: string;
+  transcript_segments?: Array<{
+    id?: string;
+    start_sec?: number;
+    end_sec?: number;
+    text?: string;
+    confidence?: number;
+    drift_start_sec?: number;
+    drift_end_sec?: number;
+    needs_review?: boolean;
+  }>;
+  transcript_question_locations?: Array<{
+    question_id?: string | null;
+    question_label?: string;
+    question_prompt?: string;
+    start_sec?: number;
+    end_sec?: number;
+    answer_text?: string;
+    correct_answer?: string;
+  }>;
+};
+
+type BackendAdminAudioTranscriptJobCreateResponse = {
+  job_id: string;
+  status: string;
+};
+
+type BackendAdminAudioTranscriptJobRead = {
+  job_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  result?: BackendAdminAudioTranscriptResponse | null;
+  error?: string | null;
+};
+
+function mapTranscriptSegments(
+  segments: Array<{
+    id?: string;
+    start_sec?: number;
+    end_sec?: number;
+    text?: string;
+    confidence?: number;
+    drift_start_sec?: number;
+    drift_end_sec?: number;
+    needs_review?: boolean;
+  }> | undefined | null
+): AdminTranscriptSegment[] {
+  return (segments ?? [])
+    .filter((segment) => typeof segment?.text === "string" && segment.text.trim().length > 0)
+    .map((segment, index) => ({
+      id: String(segment.id ?? `segment-${index + 1}`),
+      startSec: Math.max(0, Number(segment.start_sec ?? 0)),
+      endSec: Math.max(0, Number(segment.end_sec ?? segment.start_sec ?? 0)),
+      text: String(segment.text ?? "").trim(),
+      confidence: segment.confidence == null ? undefined : Number(segment.confidence),
+      driftStartSec: segment.drift_start_sec == null ? undefined : Number(segment.drift_start_sec),
+      driftEndSec: segment.drift_end_sec == null ? undefined : Number(segment.drift_end_sec),
+      needsReview: segment.needs_review == null ? undefined : Boolean(segment.needs_review),
+    }));
+}
+
+function mapTranscriptQuestionLocations(
+  locations:
+    | Array<{
+        question_id?: string | null;
+        question_label?: string;
+        question_prompt?: string;
+        start_sec?: number;
+        end_sec?: number;
+        answer_text?: string;
+        correct_answer?: string;
+      }>
+    | undefined
+    | null
+): AdminTranscriptQuestionLocation[] {
+  return (locations ?? [])
+    .filter((location) => typeof location?.question_label === "string" && location.question_label.trim().length > 0)
+    .map((location) => ({
+      questionId: location.question_id ?? undefined,
+      questionLabel: String(location.question_label ?? "").trim(),
+      questionPrompt: String(location.question_prompt ?? "").trim(),
+      startSec: Math.max(0, Number(location.start_sec ?? 0)),
+      endSec: Math.max(0, Number(location.end_sec ?? location.start_sec ?? 0)),
+      answerText: String(location.answer_text ?? "").trim(),
+      correctAnswer: String(location.correct_answer ?? "").trim(),
+    }));
+}
+
+type BackendPaymentSettings = {
+  id: string;
+  support_contact?: string | null;
+};
+
+type AdminPaymentCardInput = {
+  label: string;
+  cardNumber: string;
+  cardType: "humo" | "uzcard";
+  holderName?: string | null;
+  isActive?: boolean;
+  priority?: number;
+};
+
+type AdminPaymentSettingsInput = {
+  supportContact?: string | null;
+};
+
+const questionTypeAliases: Record<string, string> = {
+  "mc-single": "reading_mc_single",
+  "mc-multiple": "reading_mc_multiple",
+  "tfng": "reading_true_false_not_given",
+  "yng": "reading_yes_no_not_given",
+  "matching-info": "reading_matching_information",
+  "matching-headings": "reading_matching_headings",
+  "matching-features": "reading_matching_features",
+  "matching-endings": "reading_matching_sentence_endings",
+  "sentence-completion": "reading_sentence_completion",
+  "summary-word-bank": "reading_summary_completion_wordbank",
+  "summary-free": "reading_summary_completion_freetext",
+  "note-flow-chart": "reading_note_completion",
+  "diagram-map": "reading_diagram_labeling",
+  "short-answer": "reading_short_answer",
+  "matching": "listening_matching",
+  "labeling": "listening_plan_map_labeling",
+  "completion": "listening_form_completion",
+  "map-free-text": "listening_plan_map_labeling"
+};
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = `${baseUrl}${path}`;
+  console.log(`[Admin API] Requesting: ${url}`, init?.method || "GET");
+  
+  try {
+    const response = await fetchAdminApi(url, {
+      cache: "no-store",
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {})
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      console.error(`[Admin API] Error ${response.status}: ${errorText}`);
+      let detail = errorText.trim();
+      try {
+        const parsed = JSON.parse(errorText) as { detail?: string };
+        if (parsed?.detail?.trim()) {
+          detail = parsed.detail.trim();
+        }
+      } catch {}
+      throw new Error(
+        detail
+          ? `Admin API request failed: ${response.status} ${response.statusText} - ${detail}`
+          : `Admin API request failed: ${response.status} ${response.statusText}`
+      );
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    console.error(`[Admin API] Fetch exception:`, error);
+    throw error;
+  }
+}
+
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function generateUuid() {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+    return [
+      hex.slice(0, 4).join(""),
+      hex.slice(4, 6).join(""),
+      hex.slice(6, 8).join(""),
+      hex.slice(8, 10).join(""),
+      hex.slice(10, 16).join(""),
+    ].join("-");
+  }
+  return `fallback-${Math.random().toString(16).slice(2)}-${Date.now().toString(16)}`;
+}
+
+function getIeltsRange(index: number, type: string) {
+  if (type === "listening") {
+    const start = index * 10 + 1;
+    const end = (index + 1) * 10;
+    return `${start}-${end}`;
+  }
+  // Reading standard: 1-13, 14-26, 27-40
+  if (index === 0) return "1-13";
+  if (index === 1) return "14-26";
+  if (index === 2) return "27-40";
+  return "X-Y";
+}
+
+function parsePassageBlockStyle(rawText: string) {
+  const trimmed = rawText.trim();
+  const hasOuterBraces = trimmed.startsWith("{") && trimmed.endsWith("}");
+  let body = hasOuterBraces ? trimmed.slice(1, -1).trim() : trimmed;
+  let italic = false;
+  let center = false;
+
+  let matched = true;
+  while (matched) {
+    matched = false;
+    if (body.startsWith("<i>")) {
+      italic = true;
+      body = body.slice(3).trimStart();
+      matched = true;
+    }
+    if (body.startsWith("<c>")) {
+      center = true;
+      body = body.slice(3).trimStart();
+      matched = true;
+    }
+  }
+
+  return {
+    isStyled: italic || center,
+  };
+}
+
+function buildParagraphPayloads(content: string, showLabels: boolean): BackendAdminDraftPayload["content"][number]["paragraphs"] {
+  let labelIndex = 0;
+  return content
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, index) => {
+      const isLabelled = !parsePassageBlockStyle(block).isStyled;
+      const label = showLabels && isLabelled ? String.fromCharCode(65 + labelIndex) : "";
+      if (isLabelled) {
+        labelIndex += 1;
+      }
+
+      return {
+        id: `para-${index}`,
+        label,
+        text: block,
+      };
+    });
+}
+
+function detectSharedListeningAudio(
+  sections: Array<{ audioUrl?: string; audioDurationSeconds?: number | null }>
+) {
+  if (sections.length === 0) {
+    return null;
+  }
+
+  const firstUrl = String(sections[0]?.audioUrl ?? "").trim();
+  if (!firstUrl) {
+    return null;
+  }
+
+  if (!sections.every((section) => String(section.audioUrl ?? "").trim() === firstUrl)) {
+    return null;
+  }
+
+  const durationSeconds = sections.find((section) => (section.audioDurationSeconds ?? 0) > 0)?.audioDurationSeconds ?? null;
+  return { audioUrl: firstUrl, audioDurationSeconds: durationSeconds };
+}
+
+function toBackendDraftPayload(draft: AdminTestDraftState): BackendAdminDraftPayload {
+  const resolvedQuestionType = (typeId: string): string => {
+    if (typeId === "listening_plan_map_labeling_free_text") {
+      return "listening_plan_map_labeling";
+    }
+    if (typeId.includes("_")) {
+      return typeId;
+    }
+    if (draft.metadata.type === "listening") {
+      const listeningType = {
+        "mc-single": "listening_mc_single",
+        "mc-multiple": "listening_mc_multiple",
+        "sentence-completion": "listening_sentence_completion",
+        "short-answer": "listening_short_answer",
+        "completion": "listening_form_completion",
+        "labeling": "listening_plan_map_labeling",
+        "matching": "listening_matching",
+        "map-free-text": "listening_plan_map_labeling"
+      }[typeId];
+      if (listeningType) {
+        return listeningType;
+      }
+    }
+    return questionTypeAliases[typeId] ?? typeId;
+  };
+
+  const sectionIdMap = new Map<string, string>();
+  for (const section of draft.content.sections) {
+    sectionIdMap.set(section.id, isUuidLike(section.id) ? section.id : generateUuid());
+  }
+
+  const questionGroups = draft.questionGroups && draft.questionGroups.length > 0 
+    ? draft.questionGroups 
+    : [];
+  const sharedListeningAudio = draft.metadata.type === "listening" && draft.metadata.format === "full"
+    ? detectSharedListeningAudio(draft.content.sections)
+    : null;
+
+  return {
+    metadata: {
+      title: draft.metadata.title,
+      type: draft.metadata.type,
+      format: draft.metadata.format,
+      source: draft.metadata.source,
+      source_detail: normalizeAdminTestSourceDetail(draft.metadata.source, draft.metadata.sourceDetail),
+      access_type: draft.metadata.accessType,
+      time_limit_label: draft.metadata.timeLimitLabel
+    },
+    content: draft.content.sections.map((section, idx) => {
+      const parsedParagraphs = section.content.trim()
+        ? buildParagraphPayloads(section.content, Boolean(section.showLabels))
+        : section.paragraphs || [];
+
+      // Auto-generate standardized IELTS subtitle/intro
+      const range = getIeltsRange(idx, draft.metadata.type);
+      const autoSubtitle = draft.metadata.type === "listening"
+        ? `Part ${idx + 1}. Questions ${range}.`
+        : `You should spend about 20 minutes on Questions ${range}, which are based on Reading Passage ${idx + 1} below.`;
+
+      return {
+        id: sectionIdMap.get(section.id),
+        label: draft.metadata.type === "listening" ? `Part ${idx + 1}` : `Passage ${idx + 1}`,
+        title: section.title, // This is the admin-provided name (e.g. "The Life of Penguins")
+        subtitle: autoSubtitle,
+        content: section.content,
+        paragraphs: parsedParagraphs,
+        showLabels: Boolean(section.showLabels),
+        media_kind: section.mediaKind,
+        audio_url: section.audioUrl || "",
+        audio_duration_seconds: sharedListeningAudio
+          ? (idx === 0 ? (section.audioDurationSeconds ?? sharedListeningAudio.audioDurationSeconds ?? null) : null)
+          : (section.audioDurationSeconds ?? null),
+        transcript: section.transcript || "",
+        transcript_segments: (section.transcriptSegments ?? []).map((segment) => ({
+          id: segment.id,
+          start_sec: segment.startSec,
+          end_sec: segment.endSec,
+          text: segment.text,
+        })),
+        transcript_question_locations: (section.transcriptQuestionLocations ?? []).map((location) => ({
+          question_id: location.questionId,
+          question_label: location.questionLabel,
+          question_prompt: location.questionPrompt,
+          start_sec: location.startSec,
+          end_sec: location.endSec,
+          answer_text: location.answerText,
+          correct_answer: location.correctAnswer,
+        })),
+        marker_count: section.markerCount
+      };
+    }),
+    question_groups: questionGroups.map((group) => {
+      const sanitizedGroup = sanitizeAdminQuestionGroupOptionFields(group);
+      return {
+      id: isUuidLike(sanitizedGroup.id) ? sanitizedGroup.id : undefined,
+      section_id: sectionIdMap.get(sanitizedGroup.sectionId) ?? generateUuid(),
+      title: sanitizeQuestionGroupTitle(sanitizedGroup.title),
+      instructions: sanitizedGroup.instructions,
+      options_title: sanitizedGroup.optionsTitle,
+      type_id: resolvedQuestionType(sanitizedGroup.typeId),
+      question_start: sanitizedGroup.questionStart,
+      question_end: sanitizedGroup.questionEnd,
+      shared_options: sanitizedGroup.typeId === "listening_plan_map_labeling_free_text" ? [] : sanitizedGroup.sharedOptions,
+      question_block: sanitizedGroup.questionBlock,
+      answer_block: sanitizedGroup.answerBlock,
+      secondary_block: sanitizedGroup.secondaryBlock,
+      diagram_title: "",
+      diagram_image_url: sanitizedGroup.diagramImageUrl,
+      questions: sanitizedGroup.questions.map((question) => ({
+        id: isUuidLike(question.id) ? question.id : undefined,
+        label: question.label,
+        prompt: question.prompt,
+        accepted_answers: question.acceptedAnswers,
+        explanation: question.explanation,
+        variants: question.variants || []
+      }))
+    };
+    })
+  };
+}
+
+function mapAdminTest(test: BackendAdminTest): AdminTestSummary {
+  return {
+    id: test.id,
+    title: test.title,
+    type: test.test_type,
+    format: test.format,
+    source: test.source,
+    sourceDetail: normalizeAdminTestSourceDetail(test.source, test.source_detail),
+    accessType: test.access_type,
+    status: test.status,
+    reviewStatus: test.review_status ?? "needs_review",
+    updatedAt: test.updated_at ?? new Date().toISOString(),
+    questions: test.total_questions,
+    version: test.version
+  };
+}
+
+function mapAdminDraft(draft: BackendAdminDraft): AdminTestDraftState {
+  return {
+    metadata: {
+      title: draft.metadata.title,
+      type: draft.metadata.type,
+      format: draft.metadata.format ?? "full",
+      source: draft.metadata.source,
+      sourceDetail: normalizeAdminTestSourceDetail(draft.metadata.source, draft.metadata.source_detail),
+      accessType: draft.metadata.access_type,
+      status: draft.metadata.status,
+      version: draft.metadata.version,
+      timeLimitLabel: draft.metadata.time_limit_label,
+    },
+    content: {
+      sections: draft.content.sections.map((section) => ({
+        id: section.id,
+        label: section.label,
+        title: sanitizeListeningSectionTitle(draft.metadata.type, section.title),
+        subtitle: section.subtitle,
+        content: sanitizeListeningSectionContent(draft.metadata.type, section.content),
+        paragraphs: section.paragraphs,
+        showLabels: section.showLabels,
+        mediaKind: section.media_kind,
+        audioUrl: section.audio_url ?? "",
+        audioDurationSeconds: section.audio_duration_seconds ?? null,
+        transcript: section.transcript ?? "",
+        transcriptSegments: mapTranscriptSegments(section.transcript_segments),
+        transcriptQuestionLocations: mapTranscriptQuestionLocations(section.transcript_question_locations),
+        markerCount: section.marker_count,
+      })),
+    },
+    questionGroups: (draft.questionGroups ?? []).map((group) => sanitizeAdminQuestionGroupOptionFields({
+      id: group.id,
+      sectionId: group.section_id,
+      title: sanitizeQuestionGroupTitle(String(group.title ?? "")),
+      instructions: group.instructions,
+      optionsTitle: group.options_title ?? "",
+      typeId: resolveAdminQuestionType(group.type_id, group.shared_options),
+      questionStart: group.question_start,
+      questionEnd: group.question_end,
+      sharedOptions: group.shared_options,
+      questionBlock: group.question_block,
+      answerBlock: group.answer_block,
+      secondaryBlock: group.secondary_block,
+      rawContent: group.raw_content,
+      diagramTitle: group.diagram_title,
+      diagramImageUrl: group.diagram_image_url,
+      questions: group.questions.map((question) => ({
+        id: question.id,
+        label: question.label,
+        prompt: question.prompt,
+        acceptedAnswers: question.accepted_answers,
+        explanation: question.explanation,
+        variants: question.variants,
+      })),
+    })),
+    questions: (draft.questions ?? []).map((question) => ({
+      id: question.id,
+      label: question.label,
+      prompt: question.prompt,
+      acceptedAnswers: question.accepted_answers,
+      explanation: question.explanation,
+      variants: question.variants,
+    })),
+    review: {
+      checklist: draft.review.checklist,
+      notes: draft.review.notes,
+    },
+    decisions: {
+      questionBank: draft.decisions.question_bank,
+      payment: draft.decisions.payment,
+      listeningTimer: draft.decisions.listening_timer,
+    },
+  };
+}
+
+function fallbackIsoDate(value?: string | null): string {
+  return value ?? new Date().toISOString();
+}
+
+function mapAdminAiProviderConfig(config: BackendAdminAiProviderConfig): AdminAiProviderConfig {
+  return {
+    id: config.id,
+    provider: config.provider,
+    label: config.label,
+    apiKeyMasked: config.api_key_masked ?? null,
+    hasApiKey: config.has_api_key,
+    baseUrl: config.base_url ?? null,
+    isEnabled: config.is_enabled,
+    lastSyncAt: config.last_sync_at ?? null,
+    lastSyncStatus: config.last_sync_status ?? null,
+    lastSyncError: config.last_sync_error ?? null,
+  };
+}
+
+function mapAdminAiProviderModel(model: BackendAdminAiProviderModel): AdminAiProviderModel {
+  return {
+    id: model.id,
+    modelId: model.model_id,
+    displayName: model.display_name,
+    family: model.family ?? null,
+    capabilities: model.capabilities ?? {},
+    contextWindow: model.context_window ?? null,
+    isAccessible: model.is_accessible,
+    isSelectable: model.is_selectable,
+    sortOrder: model.sort_order,
+  };
+}
+
+function mapAdminAiUseCaseBinding(binding: BackendAdminAiUseCaseBinding): AdminAiUseCaseBinding {
+  return {
+    id: binding.id ?? null,
+    useCase: binding.use_case,
+    providerConfigId: binding.provider_config_id ?? null,
+    provider: binding.provider ?? null,
+    providerLabel: binding.provider_label ?? null,
+    providerModelId: binding.provider_model_id ?? null,
+    modelId: binding.model_id ?? null,
+    modelDisplayName: binding.model_display_name ?? null,
+    settingsJson: binding.settings_json ?? {},
+    resolvedSource: binding.resolved_source ?? "missing",
+  };
+}
+
+function mapAdminWritingPromptProfile(profile: BackendAdminWritingPromptProfile): AdminWritingPromptProfile {
+  return {
+    id: profile.id,
+    slug: profile.slug,
+    title: profile.title,
+    description: profile.description ?? null,
+    taskTypeScope: profile.task_type_scope,
+    status: profile.status,
+    version: profile.version,
+    isActive: profile.is_active,
+    createdAt: profile.created_at,
+    updatedAt: profile.updated_at,
+    entries: (profile.entries ?? []).map((entry) => ({
+      id: entry.id,
+      key: entry.key,
+      body: entry.body,
+      format: entry.format,
+    })),
+  };
+}
+
+function mapAdminWritingRubric(rubric: BackendAdminWritingRubric): AdminWritingRubric {
+  return {
+    id: rubric.id,
+    taskTypeScope: rubric.task_type_scope,
+    version: rubric.version,
+    body: rubric.body,
+    status: rubric.status,
+    isActive: rubric.is_active,
+    createdAt: rubric.created_at,
+    updatedAt: rubric.updated_at,
+  };
+}
+
+function mapAdminWritingAnchorSet(anchorSet: BackendAdminWritingAnchorSet): AdminWritingAnchorSet {
+  return {
+    id: anchorSet.id,
+    slug: anchorSet.slug,
+    title: anchorSet.title,
+    description: anchorSet.description ?? null,
+    taskTypeScope: anchorSet.task_type_scope,
+    version: anchorSet.version,
+    status: anchorSet.status,
+    isActive: anchorSet.is_active,
+    createdAt: anchorSet.created_at,
+    updatedAt: anchorSet.updated_at,
+    items: (anchorSet.items ?? []).map((item) => ({
+      id: item.id,
+      band: item.band,
+      essay: item.essay,
+      criteria: item.criteria ?? {},
+      rationale: item.rationale ?? "",
+      sortOrder: item.sort_order ?? 0,
+    })),
+  };
+}
+
+function mapAdminWritingPromptPreview(preview: BackendAdminWritingPromptPreview): AdminWritingPromptPreview {
+  return {
+    graderSystem: preview.grader_system,
+    graderUser: preview.grader_user,
+    improvedVersion: preview.improved_version,
+    roastSystem: preview.roast_system,
+    roastUser: preview.roast_user,
+  };
+}
+
+function mapAdminWritingConfigAuditEntry(entry: BackendAdminWritingConfigAuditEntry): AdminWritingConfigAuditEntry {
+  return {
+    id: entry.id,
+    actorAdminId: entry.actor_admin_id ?? null,
+    entityType: entry.entity_type,
+    entityId: entry.entity_id,
+    action: entry.action,
+    previousVersion: entry.previous_version ?? null,
+    newVersion: entry.new_version ?? null,
+    metadataJson: entry.metadata_json ?? {},
+    createdAt: entry.created_at,
+  };
+}
+
+function mapAdminPayment(payment: BackendPayment): AdminPaymentSummary {
+  return {
+    id: payment.id,
+    invoiceCode: payment.invoice_code,
+    user: payment.user_name ?? (payment.user_username ? `@${payment.user_username}` : "Unknown user"),
+    plan: payment.plan_name,
+    method: payment.method,
+    status: payment.status,
+    amount: typeof payment.amount === "number" ? payment.amount.toLocaleString("en-US") : String(payment.amount),
+    card: payment.card_number ?? "-",
+    expiresAt: payment.expires_at ?? null,
+    statusReason: payment.status_reason ?? null,
+    updatedAt: fallbackIsoDate(payment.updated_at),
+  };
+}
+
+function mapAdminPaymentCard(card: BackendPaymentCard): AdminPaymentCardSummary {
+  return {
+    id: card.id,
+    label: card.label,
+    cardNumber: card.card_number,
+    cardType: card.card_type,
+    holderName: card.holder_name ?? null,
+    isActive: card.is_active,
+    priority: card.priority,
+  };
+}
+
+function mapAdminPaymentSettings(settings: BackendPaymentSettings): AdminPaymentSettingsSummary {
+  return {
+    id: settings.id,
+    supportContact: settings.support_contact ?? null,
+  };
+}
+
 export const adminApi = {
-  ...testsApi,
-  ...transcriptApi,
-  ...aiApi,
-  ...writingApi,
-  ...paymentsApi,
+  async listTests(): Promise<AdminTestSummary[]> {
+    const response = await requestJson<BackendAdminTest[]>("/tests");
+    return response.map(mapAdminTest);
+  },
+  async getDraft(testId: string): Promise<AdminTestDraftState> {
+    const response = await requestJson<BackendAdminDraft>(`/tests/${testId}/draft`);
+    return mapAdminDraft(response);
+  },
+  async uploadImage(file: File): Promise<{ publicUrl: string; filename: string; contentType: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetchAdminApi(`${baseUrl}/images/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) {
+      throw new Error(`Image upload failed: ${response.status} ${response.statusText}`);
+    }
+    const payload = await response.json() as {
+      public_url: string;
+      filename: string;
+      content_type: string;
+    };
+    return {
+      publicUrl: payload.public_url,
+      filename: payload.filename,
+      contentType: payload.content_type,
+    };
+  },
+  async uploadAudio(file: File): Promise<{ publicUrl: string; filename: string; contentType: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetchAdminApi(`${baseUrl}/audio/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const payload = await response.json() as { detail?: string };
+        detail = payload.detail ? ` - ${payload.detail}` : "";
+      } catch {
+        detail = "";
+      }
+      throw new Error(`Audio upload failed: ${response.status} ${response.statusText}${detail}`);
+    }
+    const payload = await response.json() as {
+      public_url: string;
+      filename: string;
+      content_type: string;
+    };
+    return {
+      publicUrl: payload.public_url,
+      filename: payload.filename,
+      contentType: payload.content_type,
+    };
+  },
+  async generateListeningTranscript(input: {
+    audioUrl: string;
+    audioFilename?: string;
+    audioContentType?: string;
+    sectionLabel?: string;
+    sectionTitle?: string;
+    transcript?: string;
+    transcriptSegments?: AdminTranscriptSegment[];
+    onProgress?: (state: { value: number; label: string }) => void;
+    onJobId?: (jobId: string) => void;
+    questions: Array<{
+      questionId?: string;
+      questionLabel: string;
+      questionPrompt: string;
+      acceptedAnswers: string[];
+    }>;
+  }): Promise<{
+    transcript: string;
+    transcriptSegments: AdminTranscriptSegment[];
+    transcriptQuestionLocations: AdminTranscriptQuestionLocation[];
+  }> {
+    const payload = {
+      audio_url: input.audioUrl,
+      audio_filename: input.audioFilename,
+      audio_content_type: input.audioContentType,
+      section_label: input.sectionLabel,
+      section_title: input.sectionTitle,
+      transcript: input.transcript,
+      transcript_segments: (input.transcriptSegments ?? []).map((segment) => ({
+        id: segment.id,
+        start_sec: segment.startSec,
+        end_sec: segment.endSec,
+        text: segment.text,
+      })),
+      questions: input.questions.map((question) => ({
+        question_id: question.questionId,
+        question_label: question.questionLabel,
+        question_prompt: question.questionPrompt,
+        accepted_answers: question.acceptedAnswers,
+      })),
+    };
+
+    const started = await requestJson<BackendAdminAudioTranscriptJobCreateResponse>("/audio/transcribe/jobs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    input.onJobId?.(started.job_id);
+    input.onProgress?.({ value: 8, label: "Queued for transcription" });
+
+    let response: BackendAdminAudioTranscriptResponse | null = null;
+    const maxPolls = 180;
+    for (let poll = 0; poll < maxPolls; poll += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const job = await requestJson<BackendAdminAudioTranscriptJobRead>(`/audio/transcribe/jobs/${started.job_id}`);
+      const progressValue = Math.min(94, 12 + poll * 2);
+      input.onProgress?.({
+        value: job.status === "queued" ? 10 : progressValue,
+        label:
+          job.status === "queued"
+            ? "Preparing audio..."
+            : job.status === "running"
+              ? "Generating transcript and timestamps..."
+              : job.status === "completed"
+                ? "Finalizing transcript..."
+                : "Processing transcript...",
+      });
+      if (job.status === "completed" && job.result) {
+        response = job.result;
+        break;
+      }
+      if (job.status === "failed") {
+        throw new Error(job.error?.trim() || "Transcript generation failed.");
+      }
+      if (job.status === "cancelled") {
+        throw new Error(job.error?.trim() || "Transcript generation cancelled.");
+      }
+    }
+
+    if (!response) {
+      const finalJob = await requestJson<BackendAdminAudioTranscriptJobRead>(`/audio/transcribe/jobs/${started.job_id}`);
+      if (finalJob.status === "completed" && finalJob.result) {
+        response = finalJob.result;
+      } else if (finalJob.status === "failed") {
+        throw new Error(finalJob.error?.trim() || "Transcript generation failed.");
+      } else if (finalJob.status === "cancelled") {
+        throw new Error(finalJob.error?.trim() || "Transcript generation cancelled.");
+      }
+    }
+
+    if (!response) {
+      throw new Error("Transcript generation is still running. Try again in a moment.");
+    }
+    input.onProgress?.({ value: 100, label: "Transcript ready" });
+
+    return {
+      transcript: response.transcript ?? "",
+      transcriptSegments: mapTranscriptSegments(response.transcript_segments),
+      transcriptQuestionLocations: mapTranscriptQuestionLocations(response.transcript_question_locations),
+    };
+  },
+  async cancelListeningTranscriptJob(jobId: string): Promise<void> {
+    await requestJson<BackendAdminAudioTranscriptJobRead>(`/audio/transcribe/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
+  },
+  async listAiProviders(): Promise<AdminAiProviderConfig[]> {
+    const response = await requestJson<BackendAdminAiProviderConfig[]>("/ai/providers");
+    return response.map(mapAdminAiProviderConfig);
+  },
+  async updateAiProvider(
+    provider: AdminAiProviderConfig["provider"],
+    input: { label?: string; apiKey?: string | null; baseUrl?: string | null; isEnabled?: boolean },
+  ): Promise<AdminAiProviderConfig> {
+    const response = await requestJson<BackendAdminAiProviderConfig>(`/ai/providers/${provider}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        label: input.label,
+        api_key: input.apiKey ?? undefined,
+        base_url: input.baseUrl ?? undefined,
+        is_enabled: input.isEnabled,
+      }),
+    });
+    return mapAdminAiProviderConfig(response);
+  },
+  async validateAiProvider(
+    provider: AdminAiProviderConfig["provider"],
+    input: { apiKey?: string | null; baseUrl?: string | null } = {},
+  ): Promise<{ ok: boolean; message: string; modelsSeen: number | null }> {
+    const response = await requestJson<{ ok: boolean; message: string; models_seen?: number | null }>(`/ai/providers/${provider}/validate`, {
+      method: "POST",
+      body: JSON.stringify({
+        api_key: input.apiKey ?? undefined,
+        base_url: input.baseUrl ?? undefined,
+      }),
+    });
+    return { ok: response.ok, message: response.message, modelsSeen: response.models_seen ?? null };
+  },
+  async syncAiProviderModels(provider: AdminAiProviderConfig["provider"]): Promise<AdminAiProviderModel[]> {
+    const response = await requestJson<BackendAdminAiProviderModel[]>(`/ai/providers/${provider}/sync-models`, {
+      method: "POST",
+    });
+    return response.map(mapAdminAiProviderModel);
+  },
+  async listAiProviderModels(provider: AdminAiProviderConfig["provider"]): Promise<AdminAiProviderModel[]> {
+    const response = await requestJson<BackendAdminAiProviderModel[]>(`/ai/providers/${provider}/models`);
+    return response.map(mapAdminAiProviderModel);
+  },
+  async listAiUseCases(): Promise<AdminAiUseCaseBinding[]> {
+    const response = await requestJson<BackendAdminAiUseCaseBinding[]>("/ai/use-cases");
+    return response.map(mapAdminAiUseCaseBinding);
+  },
+  async updateAiUseCase(
+    useCase: AdminAiUseCaseBinding["useCase"],
+    input: { providerConfigId: string; providerModelId: string; settingsJson?: Record<string, unknown> },
+  ): Promise<AdminAiUseCaseBinding> {
+    const response = await requestJson<BackendAdminAiUseCaseBinding>(`/ai/use-cases/${useCase}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        provider_config_id: input.providerConfigId,
+        provider_model_id: input.providerModelId,
+        settings_json: input.settingsJson ?? {},
+      }),
+    });
+    return mapAdminAiUseCaseBinding(response);
+  },
+  async listWritingPromptProfiles(): Promise<AdminWritingPromptProfile[]> {
+    const response = await requestJson<BackendAdminWritingPromptProfile[]>("/writing-config/profiles");
+    return response.map(mapAdminWritingPromptProfile);
+  },
+  async createWritingPromptProfile(input: {
+    slug: string;
+    title: string;
+    description?: string | null;
+    taskTypeScope: AdminWritingPromptProfile["taskTypeScope"];
+    entries: AdminWritingPromptProfile["entries"];
+  }): Promise<AdminWritingPromptProfile> {
+    const response = await requestJson<BackendAdminWritingPromptProfile>("/writing-config/profiles", {
+      method: "POST",
+      body: JSON.stringify({
+        slug: input.slug,
+        title: input.title,
+        description: input.description ?? null,
+        task_type_scope: input.taskTypeScope,
+        entries: input.entries.map((entry) => ({
+          key: entry.key,
+          body: entry.body,
+          format: entry.format,
+        })),
+      }),
+    });
+    return mapAdminWritingPromptProfile(response);
+  },
+  async updateWritingPromptProfile(
+    profileId: string,
+    input: { title?: string; description?: string | null; entries?: AdminWritingPromptProfile["entries"] },
+  ): Promise<AdminWritingPromptProfile> {
+    const response = await requestJson<BackendAdminWritingPromptProfile>(`/writing-config/profiles/${profileId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: input.title,
+        description: input.description ?? undefined,
+        entries: input.entries?.map((entry) => ({
+          key: entry.key,
+          body: entry.body,
+          format: entry.format,
+        })),
+      }),
+    });
+    return mapAdminWritingPromptProfile(response);
+  },
+  async publishWritingPromptProfile(profileId: string): Promise<AdminWritingPromptProfile> {
+    const response = await requestJson<BackendAdminWritingPromptProfile>(`/writing-config/profiles/${profileId}/publish`, {
+      method: "POST",
+    });
+    return mapAdminWritingPromptProfile(response);
+  },
+  async listWritingRubrics(): Promise<AdminWritingRubric[]> {
+    const response = await requestJson<BackendAdminWritingRubric[]>("/writing-config/rubrics");
+    return response.map(mapAdminWritingRubric);
+  },
+  async createWritingRubric(input: { taskTypeScope: AdminWritingRubric["taskTypeScope"]; body: string }): Promise<AdminWritingRubric> {
+    const response = await requestJson<BackendAdminWritingRubric>("/writing-config/rubrics", {
+      method: "POST",
+      body: JSON.stringify({
+        task_type_scope: input.taskTypeScope,
+        body: input.body,
+      }),
+    });
+    return mapAdminWritingRubric(response);
+  },
+  async publishWritingRubric(rubricId: string): Promise<AdminWritingRubric> {
+    const response = await requestJson<BackendAdminWritingRubric>(`/writing-config/rubrics/${rubricId}/publish`, {
+      method: "POST",
+    });
+    return mapAdminWritingRubric(response);
+  },
+  async listWritingAnchorSets(): Promise<AdminWritingAnchorSet[]> {
+    const response = await requestJson<BackendAdminWritingAnchorSet[]>("/writing-config/anchors");
+    return response.map(mapAdminWritingAnchorSet);
+  },
+  async createWritingAnchorSet(input: {
+    slug: string;
+    title: string;
+    description?: string | null;
+    taskTypeScope: AdminWritingAnchorSet["taskTypeScope"];
+    items: AdminWritingAnchorSet["items"];
+  }): Promise<AdminWritingAnchorSet> {
+    const response = await requestJson<BackendAdminWritingAnchorSet>("/writing-config/anchors", {
+      method: "POST",
+      body: JSON.stringify({
+        slug: input.slug,
+        title: input.title,
+        description: input.description ?? null,
+        task_type_scope: input.taskTypeScope,
+        items: input.items.map((item) => ({
+          band: item.band,
+          essay: item.essay,
+          criteria: item.criteria,
+          rationale: item.rationale,
+        })),
+      }),
+    });
+    return mapAdminWritingAnchorSet(response);
+  },
+  async publishWritingAnchorSet(anchorSetId: string): Promise<AdminWritingAnchorSet> {
+    const response = await requestJson<BackendAdminWritingAnchorSet>(`/writing-config/anchors/${anchorSetId}/publish`, {
+      method: "POST",
+    });
+    return mapAdminWritingAnchorSet(response);
+  },
+  async previewWritingPrompts(input: {
+    taskType: AdminWritingPromptProfile["taskTypeScope"];
+    taskPromptText: string;
+    imageSummary?: string;
+    essayText: string;
+  }): Promise<AdminWritingPromptPreview> {
+    const response = await requestJson<BackendAdminWritingPromptPreview>("/writing-config/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        task_type: input.taskType,
+        task_prompt_text: input.taskPromptText,
+        image_summary: input.imageSummary ?? "",
+        essay_text: input.essayText,
+      }),
+    });
+    return mapAdminWritingPromptPreview(response);
+  },
+  async listWritingConfigAuditLog(): Promise<AdminWritingConfigAuditEntry[]> {
+    const response = await requestJson<BackendAdminWritingConfigAuditEntry[]>("/writing-config/audit-log");
+    return response.map(mapAdminWritingConfigAuditEntry);
+  },
+  async createDraft(draft: AdminTestDraftState): Promise<AdminTestSummary> {
+    const response = await requestJson<BackendAdminTest>("/tests/draft", {
+      method: "POST",
+      body: JSON.stringify(toBackendDraftPayload(draft))
+    });
+    return mapAdminTest(response);
+  },
+  async updateDraft(
+    testId: string,
+    draft: AdminTestDraftState,
+    options: { allowNewVersion?: boolean } = {}
+  ): Promise<AdminTestSummary> {
+    const search = new URLSearchParams();
+    if (options.allowNewVersion) {
+      search.set("allow_new_version", "true");
+    }
+    const response = await requestJson<BackendAdminTest>(`/tests/${testId}/draft${search.size ? `?${search.toString()}` : ""}`, {
+      method: "PUT",
+      body: JSON.stringify(toBackendDraftPayload(draft))
+    });
+    return mapAdminTest(response);
+  },
+  async quickFixPublished(testId: string, draft: AdminTestDraftState): Promise<AdminTestSummary> {
+    const response = await requestJson<BackendAdminTest>(`/tests/${testId}/quick-fix`, {
+      method: "PUT",
+      body: JSON.stringify(toBackendDraftPayload(draft))
+    });
+    return mapAdminTest(response);
+  },
+  async publishTest(testId: string): Promise<AdminTestSummary> {
+    const response = await requestJson<BackendAdminTest>(`/tests/${testId}/publish`, {
+      method: "POST"
+    });
+    return mapAdminTest(response);
+  },
+  async deleteDraft(testId: string): Promise<{ message: string }> {
+    return requestJson(`/tests/${testId}`, {
+      method: "DELETE"
+    });
+  },
+  async bulkPublish(ids: string[], status: "published" | "draft" | "archived"): Promise<{ message: string }> {
+    return requestJson(`/tests/bulk-publish`, {
+      method: "PATCH",
+      body: JSON.stringify({ ids, status })
+    });
+  },
+  async bulkAccess(ids: string[], accessType: "public" | "premium"): Promise<{ message: string }> {
+    return requestJson(`/tests/bulk-status`, {
+      method: "PATCH",
+      body: JSON.stringify({ ids, access_type: accessType })
+    });
+  },
+  async listPayments(page: number = 1, limit: number = 20): Promise<{ items: AdminPaymentSummary[], total: number, page: number }> {
+    const response = await requestJson<{ items: BackendPayment[], total: number, page: number }>(`/payments?page=${page}&limit=${limit}`);
+    return {
+      items: response.items.map(mapAdminPayment),
+      total: response.total,
+      page: response.page,
+    };
+  },
+  async updatePaymentStatus(
+    paymentId: string,
+    input: { status: Exclude<PaymentStatus, "paused" | "refunded">; statusReason?: string | null }
+  ): Promise<AdminPaymentSummary> {
+    const response = await requestJson<BackendPayment>(`/payments/${paymentId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: input.status,
+        status_reason: input.statusReason ?? null,
+      })
+    });
+    return mapAdminPayment(response);
+  },
+  async listPaymentCards(): Promise<AdminPaymentCardSummary[]> {
+    const response = await requestJson<BackendPaymentCard[]>("/payment-cards");
+    return response.map(mapAdminPaymentCard);
+  },
+  async createPaymentCard(input: AdminPaymentCardInput): Promise<AdminPaymentCardSummary> {
+    const response = await requestJson<BackendPaymentCard>("/payment-cards", {
+      method: "POST",
+      body: JSON.stringify({
+        label: input.label,
+        card_number: input.cardNumber,
+        card_type: input.cardType,
+        holder_name: input.holderName ?? null,
+        is_active: input.isActive ?? false,
+        priority: input.priority ?? 0,
+      })
+    });
+    return mapAdminPaymentCard(response);
+  },
+  async updatePaymentCard(
+    cardId: string,
+    input: Partial<AdminPaymentCardInput>
+  ): Promise<AdminPaymentCardSummary> {
+    const response = await requestJson<BackendPaymentCard>(`/payment-cards/${cardId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(input.label !== undefined ? { label: input.label } : {}),
+        ...(input.cardNumber !== undefined ? { card_number: input.cardNumber } : {}),
+        ...(input.cardType !== undefined ? { card_type: input.cardType } : {}),
+        ...(input.holderName !== undefined ? { holder_name: input.holderName } : {}),
+        ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
+        ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      })
+    });
+    return mapAdminPaymentCard(response);
+  },
+  async getPaymentSettings(): Promise<AdminPaymentSettingsSummary> {
+    const response = await requestJson<BackendPaymentSettings>("/payment-settings");
+    return mapAdminPaymentSettings(response);
+  },
+  async updatePaymentSettings(input: AdminPaymentSettingsInput): Promise<AdminPaymentSettingsSummary> {
+    const response = await requestJson<BackendPaymentSettings>("/payment-settings", {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(input.supportContact !== undefined ? { support_contact: input.supportContact } : {}),
+      })
+    });
+    return mapAdminPaymentSettings(response);
+  }
 };

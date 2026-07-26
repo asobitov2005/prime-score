@@ -1,26 +1,241 @@
 "use client";
 
-import {
-  ArrowRight,
-  LockKeyhole,
-  Send,
-  ShieldCheck,
-} from "lucide-react";
+import type { FormEvent } from "react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, KeyRound, LockKeyhole, Send, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AdminAuthChallengeResponse, AdminAuthResponse, setAdminSessionCookies } from "@/lib/auth";
+import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui";
-
-import { LoginFlowFields } from "./login-flow-fields";
-import { useLoginFlow } from "./use-login-flow";
+type LoginMode = "sign-in" | "forgot-password";
+type MessageTone = "error" | "success";
 
 export function LoginFlow() {
-  const controller = useLoginFlow();
+  const router = useRouter();
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [password, setPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [challenge, setChallenge] = useState<AdminAuthChallengeResponse | null>(null);
+  const [mode, setMode] = useState<LoginMode>("sign-in");
+  const [expiresRemaining, setExpiresRemaining] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<MessageTone>("error");
+
+  function updatePhoneNumber(value: string) {
+    let digits = value.replace(/\D/g, "");
+    if (digits.startsWith("998") && digits.length > 9) {
+      digits = digits.slice(3);
+    }
+    setPhoneNumber(digits.slice(0, 9));
+  }
+
+  function clearMessage() {
+    setMessage("");
+  }
+
+  function showErrorMessage(value: string) {
+    setMessageTone("error");
+    setMessage(value);
+  }
+
+  function showSuccessMessage(value: string) {
+    setMessageTone("success");
+    setMessage(value);
+  }
+
+  useEffect(() => {
+    if (!challenge || expiresRemaining <= 0) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setExpiresRemaining((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [challenge, expiresRemaining]);
+
+  async function requestOtp() {
+    setIsSubmitting(true);
+    clearMessage();
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const response = await fetch(`${ADMIN_PUBLIC_API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ phone_number: phoneNumber, password }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        showErrorMessage(payload?.detail ?? "Invalid phone number or password.");
+        return;
+      }
+
+      const payload = (await response.json()) as AdminAuthChallengeResponse;
+      setChallenge(payload);
+      setExpiresRemaining(payload.expires_in_seconds);
+      setPassword("");
+      setOtpCode("");
+      clearMessage();
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        showErrorMessage("Admin server is not responding.");
+        return;
+      }
+      showErrorMessage("Unable to connect to the admin server.");
+    } finally {
+      window.clearTimeout(timeoutId);
+      setIsSubmitting(false);
+    }
+  }
+
+  async function verifyOtp() {
+    if (!challenge) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    clearMessage();
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const response = await fetch(`${ADMIN_PUBLIC_API_BASE_URL}/auth/verify-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ challenge_id: challenge.challenge_id, otp_code: otpCode }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        showErrorMessage(payload?.detail ?? "Invalid or expired OTP.");
+        return;
+      }
+
+      const payload = (await response.json()) as AdminAuthResponse;
+      setAdminSessionCookies(payload);
+      router.replace("/dashboard");
+      router.refresh();
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        showErrorMessage("Admin server is not responding.");
+        return;
+      }
+      showErrorMessage("Unable to connect to the admin server.");
+    } finally {
+      window.clearTimeout(timeoutId);
+      setIsSubmitting(false);
+    }
+  }
+
+  async function requestPasswordReset() {
+    setIsSubmitting(true);
+    clearMessage();
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const response = await fetch(`${ADMIN_PUBLIC_API_BASE_URL}/auth/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ phone_number: phoneNumber }),
+        signal: controller.signal,
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        showErrorMessage(payload?.detail ?? "Unable to request password reset.");
+        return;
+      }
+
+      setPassword("");
+      setOtpCode("");
+      showSuccessMessage(
+        payload?.message ??
+          "If this phone number is linked to an admin account, a reset link has been sent."
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        showErrorMessage("Admin server is not responding.");
+        return;
+      }
+      showErrorMessage("Unable to connect to the admin server.");
+    } finally {
+      window.clearTimeout(timeoutId);
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (mode === "forgot-password") {
+      await requestPasswordReset();
+      return;
+    }
+    if (challenge) {
+      await verifyOtp();
+      return;
+    }
+    await requestOtp();
+  }
+
+  function resetChallenge() {
+    setChallenge(null);
+    setOtpCode("");
+    setExpiresRemaining(0);
+    clearMessage();
+  }
+
+  function startPasswordReset() {
+    setMode("forgot-password");
+    setChallenge(null);
+    setPassword("");
+    setOtpCode("");
+    setExpiresRemaining(0);
+    clearMessage();
+  }
+
+  function returnToSignIn() {
+    setMode("sign-in");
+    setPassword("");
+    setOtpCode("");
+    setExpiresRemaining(0);
+    setChallenge(null);
+    clearMessage();
+  }
+
+  const isPasswordResetMode = mode === "forgot-password";
+  const canSubmitCredentials = phoneNumber.trim().length > 0 && password.trim().length > 0;
+  const canSubmitReset = phoneNumber.trim().length > 0;
+  const canSubmitOtp = Boolean(challenge) && otpCode.trim().length === 5 && expiresRemaining > 0;
+  const submitDisabled =
+    isSubmitting || (isPasswordResetMode ? !canSubmitReset : challenge ? !canSubmitOtp : !canSubmitCredentials);
+  const submitLabel = isSubmitting
+    ? isPasswordResetMode
+      ? "Sending..."
+      : "Checking..."
+    : isPasswordResetMode
+      ? "Send reset prompt"
+      : challenge
+        ? "Verify OTP"
+        : "Send Telegram OTP";
+
   return (
     <div className="mx-auto w-full max-w-[460px]">
       <div className="mb-6 flex items-center justify-between gap-4 px-1">
@@ -29,19 +244,14 @@ export function LoginFlow() {
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              PrimeScore Admin
-            </p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">PrimeScore Admin</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-              {controller.isPasswordResetMode ? "Reset password" : "Sign in"}
+              {isPasswordResetMode ? "Reset password" : "Sign in"}
             </h1>
           </div>
         </div>
-        <Badge
-          tone={controller.isPasswordResetMode ? "info" : "neutral"}
-          className="px-3 py-1 text-[11px] uppercase tracking-[0.18em]"
-        >
-          {controller.isPasswordResetMode ? "Telegram" : "Secure"}
+        <Badge tone={isPasswordResetMode ? "info" : "neutral"} className="px-3 py-1 text-[11px] uppercase tracking-[0.18em]">
+          {isPasswordResetMode ? "Telegram" : "Secure"}
         </Badge>
       </div>
 
@@ -49,32 +259,140 @@ export function LoginFlow() {
         <div className="h-px w-full bg-[linear-gradient(90deg,transparent,rgba(255,140,46,0.6),transparent)]" />
         <CardHeader className="space-y-2 pb-6 pt-7">
           <CardTitle className="text-[2rem] tracking-tight">
-            {controller.isPasswordResetMode
-              ? "Recover admin access"
-              : "Control panel access"}
+            {isPasswordResetMode ? "Recover admin access" : "Control panel access"}
           </CardTitle>
         </CardHeader>
+
         <CardContent>
-          <form className="space-y-5" onSubmit={controller.handleSubmit}>
-            <LoginFlowFields controller={controller} />
-            {controller.message ? (
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            {isPasswordResetMode ? (
+              <>
+                <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-muted-foreground">
+                  If this phone number is linked to an admin account, the Telegram bot will send a reset link.
+                </div>
+
+                <div className="space-y-2.5">
+                  <Label htmlFor="reset-phone-number" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Phone number
+                  </Label>
+                  <Input
+                    id="reset-phone-number"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(event) => updatePhoneNumber(event.target.value)}
+                    placeholder="900000001"
+                    inputMode="numeric"
+                    maxLength={9}
+                    autoComplete="username"
+                    autoFocus
+                    className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={returnToSignIn}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to sign in
+                </button>
+              </>
+            ) : !challenge ? (
+              <>
+                <div className="space-y-2.5">
+                  <Label htmlFor="phone-number" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Phone number
+                  </Label>
+                  <Input
+                    id="phone-number"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(event) => updatePhoneNumber(event.target.value)}
+                    placeholder="900000001"
+                    inputMode="numeric"
+                    maxLength={9}
+                    autoComplete="username"
+                    autoFocus
+                    className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
+                  />
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="password" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Password
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={startPasswordReset}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      Forgot password?
+                    </button>
+                  </div>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm shadow-inner placeholder:text-muted-foreground focus-visible:!bg-secondary autofill:[-webkit-text-fill-color:hsl(var(--foreground))] autofill:[box-shadow:0_0_0px_1000px_hsl(var(--secondary))_inset]"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border/70 bg-secondary/70 px-4 py-3 text-sm text-muted-foreground">
+                  OTP sent to Telegram for <span className="font-semibold text-foreground">{phoneNumber}</span>.
+                  {expiresRemaining > 0 ? ` Expires in ${expiresRemaining}s.` : " Code expired."}
+                </div>
+                <div className="space-y-2.5">
+                  <Label htmlFor="otp-code" className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Telegram OTP
+                  </Label>
+                  <Input
+                    id="otp-code"
+                    value={otpCode}
+                    onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 5))}
+                    placeholder="12345"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    className="h-12 rounded-xl border-border/80 !bg-secondary px-4 text-sm tracking-[0.22em] shadow-inner placeholder:tracking-normal placeholder:text-muted-foreground focus-visible:!bg-secondary"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={resetChallenge}
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Use a different phone number
+                </button>
+              </div>
+            )}
+
+            {message ? (
               <div
                 className={
-                  controller.messageTone === "success"
+                  messageTone === "success"
                     ? "rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success"
                     : "rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-medium text-danger"
                 }
               >
-                {controller.message}
+                {message}
               </div>
             ) : null}
+
             <Button
               type="submit"
-              disabled={controller.submitDisabled}
+              disabled={submitDisabled}
               className="group h-12 w-full rounded-xl text-sm font-semibold tracking-[0.02em]"
             >
-              {controller.submitLabel}
-              {controller.isPasswordResetMode ? (
+              {submitLabel}
+              {isPasswordResetMode ? (
                 <Send className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               ) : (
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
