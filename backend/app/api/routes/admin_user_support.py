@@ -8,7 +8,9 @@ from app.api.routes.admin_contracts import *
 from app.api.routes.admin_common import *
 from app.api.routes.admin_commerce_support import *
 from app.api.routes.admin_auth_support import *
-from app.api.routes.admin_user_support import *
+# Circular star-imports can leave this unbound at runtime; bind explicitly.
+from app.api.routes.admin_contracts import AdminFilterParams, apply_admin_filters
+
 async def _build_admin_user_detail(
     session: AsyncSession,
     user: User,
