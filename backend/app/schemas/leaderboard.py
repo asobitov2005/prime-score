@@ -15,6 +15,7 @@ class LeaderboardEntryRead(BaseModel):
     xp: int = 0
     current_streak: int = 0
     badge: str | None = None
+    badge_image: str | None = None
     average_score: float | None = None
     full_mock_completions: int = 0
     achieved_at: datetime | None = None
@@ -76,6 +77,11 @@ class LeaderboardUserStatsRead(BaseModel):
     achievements_unlocked: int = 0
 
 
+class EquipAchievementRequest(BaseModel):
+    # None resets to "auto" (show the most recently unlocked achievement).
+    achievement_id: str | None = None
+
+
 class LeaderboardUserProfileRead(BaseModel):
     user_id: UUID
     avatar_url: str | None = None
@@ -87,6 +93,7 @@ class LeaderboardUserProfileRead(BaseModel):
     is_premium: bool = False
     current_streak: int = 0
     equipped_badge: LeaderboardUserBadgeRead | None = None
+    equipped_achievement_id: str | None = None
     active_titles: list[str] = Field(default_factory=list)
     stats: LeaderboardUserStatsRead = Field(default_factory=LeaderboardUserStatsRead)
     achievements: list[LeaderboardUserAchievementRead] = Field(default_factory=list)

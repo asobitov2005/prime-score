@@ -181,6 +181,7 @@ def _build_achievement_catalog(
     rank: int,
     weekly_rank: int | None,
     leaderboard_size: int,
+    weekly_leaderboard_size: int = 0,
 ) -> list[LeaderboardUserAchievementStateRead]:
     context = AchievementCatalogContext(
         user=user,
@@ -201,8 +202,93 @@ def _build_achievement_catalog(
         rank=rank,
         weekly_rank=weekly_rank,
         leaderboard_size=leaderboard_size,
+        weekly_leaderboard_size=weekly_leaderboard_size,
     )
     return build_achievement_catalog(context)
+
+
+def _achievement_badge_index() -> dict[str, tuple[str, str | None]]:
+    """Static ``{achievement_id: (title, image)}`` for every badge in the catalog."""
+    from types import SimpleNamespace
+
+    dummy = SimpleNamespace(
+        id="00000000-0000-0000-0000-000000000000",
+        current_level=999,
+        total_xp=10**9,
+        current_streak=99999,
+        best_streak=99999,
+        created_at=datetime(2000, 1, 1, tzinfo=UTC),
+    )
+    catalog = _build_achievement_catalog(
+        user=dummy,  # type: ignore[arg-type]
+        reading_attempt_count=10**6,
+        reading_average_accuracy=100.0,
+        listening_perfect_score_reached=True,
+        listening_best_score=40,
+        listening_best_target=40,
+        writing_submission_count=10**6,
+        writing_best_band=9.0,
+        speaking_completed_count=10**6,
+        recent_full_mock_accuracy=100.0,
+        recent_full_mock_count=10**6,
+        full_mock_completions=10**6,
+        weekend_day_count=10**6,
+        early_session_count=10**6,
+        late_session_count=10**6,
+        rank=1,
+        weekly_rank=1,
+        leaderboard_size=10**6,
+        weekly_leaderboard_size=10**6,
+    )
+    return {item.id: (item.title, item.image) for item in catalog}
+
+
+def _resolve_leaderboard_badge(
+    *,
+    equipped_achievement_id: str | None,
+    unlocked: list[tuple[str, datetime]],
+    level: int,
+    current_streak: int,
+    full_mock_completions: int,
+) -> tuple[str | None, str | None]:
+    index = _achievement_badge_index()
+    unlocked_ids = {aid for aid, _ in unlocked}
+
+    chosen_id: str | None = None
+    if equipped_achievement_id and equipped_achievement_id in unlocked_ids:
+        chosen_id = equipped_achievement_id
+    elif unlocked:
+        chosen_id = max(unlocked, key=lambda item: item[1])[0]
+
+    if chosen_id and chosen_id in index:
+        return index[chosen_id]
+
+    milestone = badge_for_user(
+        level=level,
+        current_streak=current_streak,
+        full_mock_completions=full_mock_completions,
+    )
+    return (milestone, _badge_image(milestone)) if milestone else (None, None)
+
+
+async def _unlocked_badges_by_user(
+    session: AsyncSession, user_ids: list[UUID]
+) -> dict[UUID, list[tuple[str, datetime]]]:
+    if not user_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(
+                UserAchievement.user_id,
+                UserAchievement.achievement_id,
+                UserAchievement.unlocked_at,
+            ).where(UserAchievement.user_id.in_(user_ids))
+        )
+    ).all()
+    result: dict[UUID, list[tuple[str, datetime]]] = {}
+    for user_id, achievement_id, unlocked_at in rows:
+        result.setdefault(user_id, []).append((achievement_id, unlocked_at))
+    return result
 
 def _unlocked_achievements_from_catalog(
     catalog: list[LeaderboardUserAchievementStateRead],

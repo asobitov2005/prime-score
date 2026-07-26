@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attempt import Attempt, AttemptEvent, UserAnswer
 from app.models.commerce import GiftCode, GiftCodeRedemption, Payment
-from app.models.gamification import LeaderboardEntry, Streak, XPTransaction
+from app.models.favorite import Favorite
+from app.models.gamification import LeaderboardEntry, Streak, UserAchievement, XPTransaction
 from app.models.notification import NotificationPreference
 from app.models.ops import Notification as OpsNotification
 from app.models.review import Review
@@ -67,6 +68,10 @@ async def purge_user_data(session: AsyncSession, *, user: User) -> None:
         await session.execute(delete(LeaderboardEntry).where(LeaderboardEntry.user_id == user_id))
     if await _table_exists(session, Streak.__tablename__):
         await session.execute(delete(Streak).where(Streak.user_id == user_id))
+    if await _table_exists(session, UserAchievement.__tablename__):
+        await session.execute(delete(UserAchievement).where(UserAchievement.user_id == user_id))
+    if await _table_exists(session, Favorite.__tablename__):
+        await session.execute(delete(Favorite).where(Favorite.user_id == user_id))
 
     if await _table_exists(session, UserSession.__tablename__):
         await session.execute(delete(UserSession).where(UserSession.user_id == user_id))

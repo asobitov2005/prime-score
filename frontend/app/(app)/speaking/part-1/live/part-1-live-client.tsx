@@ -77,19 +77,6 @@ export function Part1LiveClient() {
     ? buildRepeatSpeakingHref(live.result.speakingTestId, live.result.entryMode, aiMode, 1, topics, randomTopic)
     : "/speaking";
 
-  const detailHref = useMemo(() => {
-    if (!live.result) {
-      return "/speaking";
-    }
-    const params = new URLSearchParams({
-      aiMode,
-      part: "1",
-      randomTopic: randomTopic ? "1" : "0",
-    });
-    topics.forEach((topic) => params.append("topics", topic));
-    return `/speaking/sessions/${live.result.sessionId}/result?${params.toString()}`;
-  }, [aiMode, live.result, randomTopic, topics]);
-
   const handleEndTest = useCallback(() => {
     if (live.isDeletingSession || live.status === "finalizing") {
       return;
@@ -131,7 +118,6 @@ export function Part1LiveClient() {
         <SpeakingResultSummary
           result={live.result}
           repeatHref={repeatHref}
-          detailHref={detailHref}
           part={1}
           topics={topics}
           questionCount={resolveSpeakingQuestionsAnswered(live.result)}

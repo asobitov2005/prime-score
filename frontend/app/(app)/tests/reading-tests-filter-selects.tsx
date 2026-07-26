@@ -218,8 +218,8 @@ export function ReadingTestsFilterSelects({
   ] as const;
 
   return (
-    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(14rem,18rem)_minmax(9.75rem,10.75rem)_minmax(9.75rem,10.75rem)] xl:w-auto xl:justify-end">
-      <ReadingTestsSearch query={query} onQueryChange={onQueryChange} testType={testType} className="sm:col-span-2 lg:col-span-1" />
+    <div className="grid w-full min-w-0 grid-cols-2 gap-3 lg:grid-cols-[minmax(14rem,18rem)_minmax(9.75rem,10.75rem)_minmax(9.75rem,10.75rem)] xl:w-auto xl:justify-end">
+      <ReadingTestsSearch query={query} onQueryChange={onQueryChange} testType={testType} className="col-span-2 lg:col-span-1" />
       <CustomFilterDropdown
         id="access"
         label={"Access"}

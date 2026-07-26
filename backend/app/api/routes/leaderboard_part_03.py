@@ -2,10 +2,62 @@ from __future__ import annotations
 
 # ruff: noqa: F401,F403,F405,E501
 from app.api.routes.leaderboard_dependencies import *
-from app.api.routes.leaderboard_part_01 import _attempt_accuracy, _attempt_type, _badge_image, _badge_rarity, _badge_tagline, _build_achievement_catalog, _display_name, _table_exists, _unlocked_achievements_from_catalog
-from app.api.routes.leaderboard_part_02 import _cached_board_entries
+from app.api.routes.leaderboard_part_01 import (
+    _achievement_badge_index,
+    _attempt_accuracy,
+    _attempt_type,
+    _badge_tagline,
+    _build_achievement_catalog,
+    _display_name,
+    _table_exists,
+    _unlocked_achievements_from_catalog,
+    _unlocked_badges_by_user,
+)
+from app.api.routes.leaderboard_part_02 import _cached_board_entries, _leaderboard_cache_redis
 
 router = APIRouter()
+
+
+@router.put("/me/equipped-achievement", response_model=EquipAchievementRequest)
+async def set_equipped_achievement(
+    payload: EquipAchievementRequest,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> EquipAchievementRequest:
+    """Pin the badge shown on the leaderboard. ``achievement_id=null`` resets to auto."""
+    user = await session.get(User, current_user.id)
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    achievement_id = payload.achievement_id or None
+    if achievement_id is not None:
+        if achievement_id not in _achievement_badge_index():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown achievement.")
+        is_unlocked = await session.scalar(
+            select(UserAchievement.id).where(
+                UserAchievement.user_id == user.id,
+                UserAchievement.achievement_id == achievement_id,
+            )
+        )
+        if is_unlocked is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Achievement is not unlocked.",
+            )
+
+    user.equipped_achievement_id = achievement_id
+    await session.commit()
+
+    try:
+        client = _leaderboard_cache_redis()
+        await client.delete(
+            *[f"leaderboard:board:v1:{p}" for p in (PERIOD_ALL_TIME, PERIOD_WEEKLY, PERIOD_MONTHLY)]
+        )
+    except Exception:
+        pass
+
+    return EquipAchievementRequest(achievement_id=achievement_id)
+
 
 @router.get("/users/{user_id}", response_model=LeaderboardUserProfileRead)
 async def get_leaderboard_user_profile(
@@ -122,21 +174,6 @@ async def get_leaderboard_user_profile(
     early_session_count = sum(1 for timestamp in activity_timestamps if timestamp.astimezone(UTC).hour < 8)
     late_session_count = sum(1 for timestamp in activity_timestamps if timestamp.astimezone(UTC).hour >= 22)
 
-    equipped_badge_title = badge_for_user(
-        level=int(user.current_level or 1),
-        current_streak=int(user.current_streak or 0),
-        full_mock_completions=total_mock_tests,
-    )
-    equipped_badge = (
-        LeaderboardUserBadgeRead(
-            title=equipped_badge_title,
-            rarity=_badge_rarity(equipped_badge_title),
-            tagline=_badge_tagline(equipped_badge_title),
-            image=_badge_image(equipped_badge_title),
-        )
-        if equipped_badge_title
-        else None
-    )
     achievement_catalog = _build_achievement_catalog(
         user=user,
         reading_attempt_count=len(reading_attempts),
@@ -156,8 +193,39 @@ async def get_leaderboard_user_profile(
         rank=rank,
         weekly_rank=weekly_rank,
         leaderboard_size=leaderboard_size,
+        weekly_leaderboard_size=len(weekly_entries),
     )
+    if user.id == current_user.id:
+        achievement_catalog = await sync_user_achievements(
+            session, user=user, catalog=achievement_catalog
+        )
     achievements = _unlocked_achievements_from_catalog(achievement_catalog)
+
+    unlocked_at_by_id = {
+        aid: ts
+        for aid, ts in (await _unlocked_badges_by_user(session, [user.id])).get(user.id, [])
+    }
+    unlocked_items = [item for item in achievement_catalog if item.status == "unlocked"]
+    equipped_item = None
+    if unlocked_items:
+        by_id = {item.id: item for item in unlocked_items}
+        if user.equipped_achievement_id and user.equipped_achievement_id in by_id:
+            equipped_item = by_id[user.equipped_achievement_id]
+        else:
+            equipped_item = max(
+                unlocked_items,
+                key=lambda item: unlocked_at_by_id.get(item.id) or datetime.min.replace(tzinfo=UTC),
+            )
+    equipped_badge = (
+        LeaderboardUserBadgeRead(
+            title=equipped_item.title,
+            rarity=equipped_item.rarity,
+            tagline=_badge_tagline(equipped_item.title),
+            image=equipped_item.image,
+        )
+        if equipped_item
+        else None
+    )
 
     return LeaderboardUserProfileRead(
         user_id=user.id,
@@ -170,7 +238,8 @@ async def get_leaderboard_user_profile(
         is_premium=bool(user.is_premium),
         current_streak=int(user.current_streak or 0),
         equipped_badge=equipped_badge,
-        active_titles=[equipped_badge_title] if equipped_badge_title else [],
+        equipped_achievement_id=equipped_item.id if equipped_item else None,
+        active_titles=[equipped_item.title] if equipped_item else [],
         stats=LeaderboardUserStatsRead(
             longest_streak=int(user.best_streak or user.current_streak or 0),
             highest_band=round(highest_band, 1) if highest_band is not None else None,

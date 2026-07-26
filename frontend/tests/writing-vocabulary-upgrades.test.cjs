@@ -24,14 +24,14 @@ test("writing submission result type includes vocabulary suggestions", () => {
   assert.match(source, /vocabulary_suggestions: WritingVocabularySuggestion\[\];/);
 });
 
-test("writing loading screen advances steps every five seconds and holds the last step", () => {
+test("writing loading screen gives rubric checks more room and reserves the final step", () => {
   const filename = path.join(
     __dirname,
     "../app/(app)/writing/submissions/[submissionId]/result/result-client.tsx",
   );
   const source = fs.readFileSync(filename, "utf8");
 
-  assert.match(source, /const STEP_ADVANCE_MS = 5000;/);
+  assert.match(source, /const GRADING_STEP_DELAYS_MS = \[7000, 7000, 6500, 6500, 6000\]/);
   assert.match(source, /if \(activeStep >= GRADING_STEPS\.length - 1\) return;/);
-  assert.match(source, /setTimeout\(\(\) => \{\s*setActiveStep\(\(prev\) => Math\.min\(GRADING_STEPS\.length - 1, prev \+ 1\)\);\s*\}, STEP_ADVANCE_MS\);/s);
+  assert.match(source, /activeStep >= GRADING_STEPS\.length - 2 && stage !== "loading_result"/);
 });

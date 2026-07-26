@@ -116,18 +116,64 @@ def _build_speaking_criteria(attempts) -> MeSpeakingCriteriaRead | None:
     )
 
 @router.get("/favorites", response_model=list[FavoriteTestRead])
-async def get_favorites(current_user: DebugPrincipal = Depends(get_current_user)) -> list[FavoriteTestRead]:
-    _ = current_user
-    return []
+async def get_favorites(
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[FavoriteTestRead]:
+    rows = (
+        await session.execute(
+            select(Test, Favorite.created_at)
+            .join(Favorite, Favorite.test_id == Test.id)
+            .where(Favorite.user_id == current_user.id)
+            .order_by(Favorite.created_at.desc())
+        )
+    ).all()
+    return [
+        FavoriteTestRead(
+            test_id=test.id,
+            title=test.title,
+            test_type=test.type,
+            access_type=test.access_type,
+            status=test.status,
+            saved_at=saved_at,
+        )
+        for test, saved_at in rows
+    ]
 
 @router.post("/favorites/{test_id}", response_model=MessageResponse)
-async def add_favorite(test_id: UUID, current_user: DebugPrincipal = Depends(get_current_user)) -> MessageResponse:
-    _ = (test_id, current_user)
+async def add_favorite(
+    test_id: UUID,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    test = await session.get(Test, test_id)
+    if test is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test not found.")
+
+    existing = await session.scalar(
+        select(Favorite).where(
+            Favorite.user_id == current_user.id,
+            Favorite.test_id == test_id,
+        )
+    )
+    if existing is None:
+        session.add(Favorite(user_id=current_user.id, test_id=test_id))
+        await session.commit()
     return MessageResponse(message="Favorite added.")
 
 @router.delete("/favorites/{test_id}", response_model=MessageResponse)
-async def remove_favorite(test_id: UUID, current_user: DebugPrincipal = Depends(get_current_user)) -> MessageResponse:
-    _ = (test_id, current_user)
+async def remove_favorite(
+    test_id: UUID,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MessageResponse:
+    await session.execute(
+        delete(Favorite).where(
+            Favorite.user_id == current_user.id,
+            Favorite.test_id == test_id,
+        )
+    )
+    await session.commit()
     return MessageResponse(message="Favorite removed.")
 
 class NotificationRead(BaseModel):

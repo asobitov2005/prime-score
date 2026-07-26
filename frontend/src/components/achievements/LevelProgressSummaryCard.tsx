@@ -6,15 +6,31 @@ import { useEffect, useMemo, useState } from "react";
 import type { Achievement } from "@/src/types/achievement";
 import { cn } from "@/lib/utils";
 
+export interface LevelSummary {
+  level: number;
+  nextLevel: number;
+  totalXp: number;
+  rewardsUnlocked: number;
+  xpToNextLevel: number;
+  progressPercent: number;
+  isMaxLevel: boolean;
+}
+
 function isBronzeLearnerBadge(achievement: Achievement): boolean {
   return achievement.id === "level-bronze-learner" || achievement.title === "Bronze Learner";
 }
 
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
 export function LevelProgressSummaryCard({
   achievements,
+  levelSummary,
   onEquip,
 }: {
   achievements: Achievement[];
+  levelSummary: LevelSummary;
   onEquip: (achievement: Achievement) => void;
 }) {
   const featuredBadge = achievements.find((achievement) => achievement.featured) ?? achievements[0];
@@ -47,8 +63,8 @@ export function LevelProgressSummaryCard({
   return (
     <section className="relative w-full rounded-[18px] border border-[#E5E7EB] bg-white px-6 py-6 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)]">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-1 flex-col gap-5 sm:flex-row sm:items-center">
-          <div className="relative h-[76px] w-[70px] shrink-0" aria-label="Current level 6">
+        <div className="flex min-w-0 flex-1 flex-row items-center gap-4 sm:gap-5">
+          <div className="relative h-[76px] w-[70px] shrink-0" aria-label={`Current level ${levelSummary.level}`}>
             <svg className="absolute inset-0 h-full w-full drop-shadow-[0_14px_24px_rgba(49,46,129,0.22)]" viewBox="0 0 76 82" fill="none" aria-hidden="true">
               <path
                 d="M38 2.5c4.4 0 8.8 1.1 12.2 3.1l12.1 7.1c6.8 4 11.2 11.3 11.2 19.2v18.2c0 7.9-4.4 15.2-11.2 19.2l-12.1 7.1c-3.4 2-7.8 3.1-12.2 3.1s-8.8-1.1-12.2-3.1l-12.1-7.1C6.9 65.3 2.5 58 2.5 50.1V31.9c0-7.9 4.4-15.2 11.2-19.2l12.1-7.1c3.4-2 7.8-3.1 12.2-3.1Z"
@@ -79,50 +95,63 @@ export function LevelProgressSummaryCard({
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-[2.35rem] font-bold leading-none tracking-tight text-white drop-shadow-[0_2px_10px_rgba(15,23,42,0.32)]">
-                6
+                {levelSummary.level}
               </span>
             </div>
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-medium text-[#64748B]">Current Level</p>
-            <div className="mt-0.5 max-w-[360px]">
-              <div className="flex items-end justify-between gap-4">
-                <h2 className="text-[2rem] font-bold leading-none tracking-[-0.03em] text-[#6D4CFF]">Level 6</h2>
-                <div className="shrink-0 pb-0.5 text-right">
-                  <p className="text-lg font-bold leading-none tracking-[-0.02em] text-[#0F172A]">985 XP</p>
-                  <p className="mt-1.5 text-xs font-semibold leading-none text-[#64748B]">to reach Level 7</p>
-                </div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#64748B]">Current Level</p>
+            <div className="mt-1 max-w-[420px]">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="whitespace-nowrap text-[1.75rem] font-bold leading-none tracking-[-0.03em] text-[#6D4CFF] sm:text-[2rem]">
+                  Level {levelSummary.level}
+                </h2>
+                <span className="shrink-0 text-sm font-bold leading-none text-[#6D4CFF]">
+                  {Math.round(levelSummary.progressPercent)}%
+                </span>
               </div>
-              <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-[#E5E7EB] shadow-inner">
-                <div className="h-full w-[70%] rounded-full bg-gradient-to-r from-[#7C3AED] to-[#6D4CFF]" />
+              <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-[#E5E7EB] shadow-inner">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#7C3AED] to-[#6D4CFF] transition-[width] duration-500"
+                  style={{ width: `${levelSummary.progressPercent}%` }}
+                />
               </div>
+              <p className="mt-1.5 text-[11px] font-semibold text-[#64748B] sm:text-xs">
+                {levelSummary.isMaxLevel ? (
+                  "Max level reached"
+                ) : (
+                  <>
+                    <span className="text-[#0F172A]">{formatNumber(levelSummary.xpToNextLevel)} XP</span> to reach Level {levelSummary.nextLevel}
+                  </>
+                )}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="hidden h-[60px] w-px shrink-0 bg-[#E5E7EB] lg:block" />
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:items-center xl:gap-8">
-          <div className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 xl:border-0 xl:p-0">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3EFFF] text-[#6D4CFF]">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 xl:flex xl:items-center xl:gap-8">
+          <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white p-3 text-center sm:flex-row sm:gap-3 sm:p-4 sm:text-left xl:border-0 xl:p-0">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F3EFFF] text-[#6D4CFF] sm:h-10 sm:w-10">
               <Star className="h-[18px] w-[18px] fill-current" />
             </span>
-            <div>
-              <p className="text-2xl font-bold leading-none tracking-[-0.03em] text-[#6D4CFF]">2,615 XP</p>
-              <p className="mt-1.5 text-sm font-medium text-[#64748B]">Total XP Earned</p>
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-base font-bold leading-none tracking-[-0.03em] text-[#6D4CFF] sm:text-2xl">{formatNumber(levelSummary.totalXp)} XP</p>
+              <p className="mt-1 text-xs font-medium text-[#64748B] sm:mt-1.5 sm:text-sm">Total XP Earned</p>
             </div>
           </div>
 
           <div className="hidden h-[60px] w-px shrink-0 bg-[#E5E7EB] xl:block" />
 
-          <div className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 xl:border-0 xl:p-0">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[#10B981]">
+          <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white p-3 text-center sm:flex-row sm:gap-3 sm:p-4 sm:text-left xl:border-0 xl:p-0">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[#10B981] sm:h-10 sm:w-10">
               <Unlock className="h-[18px] w-[18px]" />
             </span>
-            <div>
-              <p className="text-2xl font-bold leading-none tracking-[-0.03em] text-[#10B981]">18</p>
-              <p className="mt-1.5 text-sm font-medium text-[#64748B]">Rewards Unlocked</p>
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-base font-bold leading-none tracking-[-0.03em] text-[#10B981] sm:text-2xl">{formatNumber(levelSummary.rewardsUnlocked)}</p>
+              <p className="mt-1 text-xs font-medium text-[#64748B] sm:mt-1.5 sm:text-sm">Rewards Unlocked</p>
             </div>
           </div>
 
@@ -130,15 +159,15 @@ export function LevelProgressSummaryCard({
             <>
               <div className="hidden h-[60px] w-px shrink-0 bg-[#E5E7EB] xl:block" />
 
-              <div className="relative sm:col-span-2">
+              <div className="relative">
                 <button
                   type="button"
                   onClick={() => setPickerOpen(true)}
-                  className="group flex min-w-0 items-center gap-4 rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left transition hover:border-[#C7D2FE] hover:bg-[#F8FAFC] hover:shadow-[0_16px_34px_-28px_rgba(79,70,229,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4CFF]/35 xl:min-w-[240px] xl:border-0 xl:p-0 xl:hover:bg-transparent xl:hover:shadow-none"
+                  className="group flex w-full min-w-0 flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white p-3 text-center transition hover:border-[#C7D2FE] hover:bg-[#F8FAFC] hover:shadow-[0_16px_34px_-28px_rgba(79,70,229,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D4CFF]/35 sm:flex-row sm:gap-4 sm:p-4 sm:text-left xl:min-w-[240px] xl:border-0 xl:p-0 xl:hover:bg-transparent xl:hover:shadow-none"
                   aria-haspopup="dialog"
                   aria-expanded={pickerOpen}
                 >
-                  <div className="flex h-[76px] w-[96px] shrink-0 items-center justify-center rounded-2xl bg-[#F8FAFC]">
+                  <div className="flex h-12 w-14 shrink-0 items-center justify-center rounded-xl bg-[#F8FAFC] sm:h-[76px] sm:w-[96px] sm:rounded-2xl">
                     <Image
                       src={featuredBadge.image}
                       alt={featuredBadge.title}
@@ -147,13 +176,14 @@ export function LevelProgressSummaryCard({
                       draggable={false}
                       onDragStart={(event) => event.preventDefault()}
                       onContextMenu={(event) => event.preventDefault()}
-                      className="h-16 w-auto max-w-[5.5rem] select-none object-contain drop-shadow-lg"
+                      className="h-9 w-auto max-w-[3.25rem] select-none object-contain drop-shadow-lg sm:h-16 sm:max-w-[5.5rem]"
                     />
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-[#64748B]">Featured badge</p>
-                    <p className="mt-1 truncate text-xl font-bold tracking-[-0.02em] text-[#0F172A]">{featuredBadge.title}</p>
-                    <p className="mt-1 text-xs font-semibold text-[#6D4CFF] opacity-0 transition group-hover:opacity-100">
+                  <div className="min-w-0 max-w-full">
+                    <p className="hidden text-[13px] font-medium text-[#64748B] sm:block">Featured badge</p>
+                    <p className="max-w-full truncate text-xs font-bold tracking-[-0.02em] text-[#0F172A] sm:mt-1 sm:text-xl">{featuredBadge.title}</p>
+                    <p className="mt-0.5 text-[11px] font-medium text-[#64748B] sm:hidden">Featured</p>
+                    <p className="mt-1 hidden text-xs font-semibold text-[#6D4CFF] opacity-0 transition group-hover:opacity-100 sm:block">
                       Change badge
                     </p>
                   </div>

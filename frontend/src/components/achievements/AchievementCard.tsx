@@ -61,7 +61,9 @@ function progressMetricLabel(achievement: Achievement): string | null {
     return `${formatNumber(progress.current)} of ${formatNumber(achievement.streakDays ?? progress.target)} days`;
   }
 
-  return progress.label;
+  // Other categories (e.g. performance) carry a raw metric name like "avg accuracy"
+  // in progress.label — don't surface it on the card; the percentage is enough.
+  return null;
 }
 
 function xpToGo(achievement: Achievement): number | null {
@@ -105,90 +107,32 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
     }
   };
 
-  if (achievement.category === "streak" && achievement.streakDays) {
-    return (
-      <>
-        <article
-          role="button"
-          tabIndex={0}
-          onClick={() => setIsModalOpen(true)}
-          onKeyDown={handleCardKeyDown}
-          className={cn(
-            "group relative flex min-h-[210px] cursor-pointer select-none flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
-            rarity.glow,
-            isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90 dark:bg-emerald-950/25 dark:shadow-emerald-950/20",
-          )}
-        >
-          <div className="flex flex-1 items-center gap-2.5">
-            <div className="flex h-20 w-16 shrink-0 items-center justify-center">
-              <Image
-                src={achievement.image}
-                alt={achievement.title}
-                width={120}
-                height={120}
-                draggable={false}
-                onDragStart={(event) => event.preventDefault()}
-                onContextMenu={(event) => event.preventDefault()}
-                className="h-[4.5rem] w-auto max-w-[4.75rem] select-none object-contain drop-shadow-lg transition duration-300 group-hover:scale-105"
-              />
-            </div>
+  const topLabel = achievement.category === "level" && achievement.unlockLevel
+    ? `Level ${achievement.unlockLevel}`
+    : achievement.streakDays
+      ? `${achievement.streakDays} Day Streak`
+      : rarity.label;
+  const description = achievement.description
+    || (achievement.streakDays ? `Keep a ${achievement.streakDays}-day streak` : "");
+  const remainingLabel = achievement.streakDays
+    ? (remainingStreakDays !== null ? `${formatNumber(remainingStreakDays)} days` : null)
+    : (remainingXp !== null ? `${formatNumber(remainingXp)} XP` : null);
 
-            <div className="min-w-[155px] flex-1">
-              <p className={cn("whitespace-nowrap text-base font-semibold leading-tight tracking-tight", rarity.text)}>
-                {achievement.streakDays} Day Streak
-              </p>
-              <h2 className="mt-1 whitespace-nowrap text-[15px] font-semibold leading-tight text-foreground">{achievement.title}</h2>
-              <p className="mt-1 whitespace-nowrap text-xs font-medium leading-5 text-muted-foreground">Keep a {achievement.streakDays}-day streak</p>
-            </div>
-          </div>
-
-          <div className="mt-auto pt-2">
-            <div className="flex min-h-8 items-center">
-              {isUnlocked ? (
-                <div className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300">
-                  <BadgeCheck className="h-3.5 w-3.5" />
-                  Unlocked
-                </div>
-              ) : null}
-
-              {isInProgress && achievement.progress ? (
-                <div className="w-full space-y-1.5">
-                  <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
-                    <span>{progressLabel}</span>
-                    <span>{Math.round(progress)}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted shadow-inner">
-                    <div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-400" style={{ width: `${progress}%` }} />
-                  </div>
-                </div>
-              ) : null}
-
-              {achievement.status === "locked" ? (
-                <div className="flex w-full min-w-0 items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                    <Lock className="h-3.5 w-3.5" />
-                    Locked
-                  </span>
-                  {remainingStreakDays !== null ? (
-                    <span className="text-right text-xs font-semibold text-muted-foreground">
-                      <span className="text-foreground">{formatNumber(remainingStreakDays)} days</span> to go
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </article>
-        <AchievementModal
-          achievement={achievement}
-          open={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          isEquipped={isEquipped}
-          onEquip={onEquip}
-        />
-      </>
-    );
-  }
+  // Skill badge art has inconsistent transparent padding per skill, so each renders
+  // at a different visual size in the same box — normalize with per-skill scaling.
+  const badgeScaleClass = (() => {
+    if (achievement.category !== "skill") {
+      return "group-hover:scale-105";
+    }
+    const hay = `${achievement.skillType ?? ""} ${achievement.image ?? ""} ${achievement.title}`.toLowerCase();
+    if (hay.includes("reading") || hay.includes("listening")) {
+      return "scale-[1.42] group-hover:scale-[1.48]";
+    }
+    if (hay.includes("writing") || hay.includes("speaking")) {
+      return "scale-[1.08] group-hover:scale-[1.14]";
+    }
+    return "scale-[1.28] group-hover:scale-[1.34]";
+  })();
 
   return (
     <>
@@ -198,79 +142,75 @@ export function AchievementCard({ achievement, isEquipped, onEquip }: Achievemen
         onClick={() => setIsModalOpen(true)}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "group relative flex min-h-[210px] cursor-pointer select-none flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-2.5 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-slate-950/80",
+          "group relative flex min-h-[168px] cursor-pointer select-none flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-lg outline-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-[188px] dark:bg-slate-950/80",
           rarity.glow,
           isUnlocked && "bg-emerald-50/80 shadow-emerald-100/90 dark:bg-emerald-950/25 dark:shadow-emerald-950/20",
         )}
       >
-        {achievement.category === "level" && achievement.unlockLevel ? (
-          <div className="absolute left-3 top-3 z-20">
-            <span className={cn("text-xs font-semibold", rarity.text)}>Level {achievement.unlockLevel}</span>
-          </div>
-        ) : null}
-
         {achievement.rarity === "mythic" ? (
-          <div className="absolute inset-x-8 top-5 h-24 rounded-full bg-gradient-to-r from-violet-200/50 to-amber-200/50 blur-2xl dark:from-violet-500/20 dark:to-amber-500/15" />
+          <div className="pointer-events-none absolute inset-x-8 top-5 h-24 rounded-full bg-gradient-to-r from-violet-200/50 to-amber-200/50 blur-2xl dark:from-violet-500/20 dark:to-amber-500/15" />
         ) : null}
 
-        <div className="relative flex justify-center pt-1">
-          <div className="relative flex h-[4.75rem] w-32 items-center justify-center">
+        <div className="relative flex flex-1 items-center gap-3">
+          <div className="flex h-16 w-14 shrink-0 items-center justify-center sm:h-20 sm:w-16">
             <Image
               src={achievement.image}
               alt={achievement.title}
-              width={192}
+              width={120}
               height={120}
               draggable={false}
               onDragStart={(event) => event.preventDefault()}
               onContextMenu={(event) => event.preventDefault()}
               className={cn(
-                "relative z-10 h-16 w-auto max-w-[8rem] select-none object-contain drop-shadow-lg transition duration-300 group-hover:scale-105",
+                "h-14 w-auto max-w-[3.5rem] select-none object-contain drop-shadow-lg transition duration-300 sm:h-[4.5rem] sm:max-w-[4.75rem]",
+                badgeScaleClass,
               )}
             />
           </div>
+
+          <div className="min-w-0 flex-1">
+            <p className={cn("truncate text-[13px] font-semibold leading-tight tracking-tight", rarity.text)}>{topLabel}</p>
+            <h2 className="mt-0.5 line-clamp-2 text-[15px] font-semibold leading-tight text-foreground">{achievement.title}</h2>
+            {description ? (
+              <p className="mt-1 line-clamp-2 text-xs font-medium leading-5 text-muted-foreground">{description}</p>
+            ) : null}
+          </div>
         </div>
 
-        <div className="mt-1 flex flex-1 flex-col">
-          <div className="space-y-1 text-center">
-            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">{achievement.title}</h2>
-            <p className="line-clamp-2 text-xs font-medium leading-5 text-muted-foreground">{achievement.description}</p>
-          </div>
+        <div className="mt-auto pt-2">
+          <div className="flex min-h-8 items-center">
+            {isUnlocked ? (
+              <div className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300">
+                <BadgeCheck className="h-3.5 w-3.5" />
+                Unlocked
+              </div>
+            ) : null}
 
-          <div className="mt-auto pt-1">
-            <div className="flex min-h-8 items-center">
-              {isUnlocked ? (
-                <div className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300">
-                  <BadgeCheck className="h-3.5 w-3.5" />
-                  Unlocked
+            {isInProgress && achievement.progress ? (
+              <div className="w-full space-y-1.5">
+                <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
+                  <span>{progressLabel}</span>
+                  <span>{Math.round(progress)}%</span>
                 </div>
-              ) : null}
-
-              {isInProgress && achievement.progress ? (
-                <div className="w-full space-y-1.5">
-                  <div className="flex items-center justify-between gap-3 text-xs font-semibold text-muted-foreground">
-                    <span>{progressLabel}</span>
-                    <span>{Math.round(progress)}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted shadow-inner">
-                    <div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-400" style={{ width: `${progress}%` }} />
-                  </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted shadow-inner">
+                  <div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-400" style={{ width: `${progress}%` }} />
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
-              {achievement.status === "locked" ? (
-                <div className="flex w-full min-w-0 items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                    <Lock className="h-3.5 w-3.5" />
-                    Locked
+            {achievement.status === "locked" ? (
+              <div className="flex w-full min-w-0 items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <Lock className="h-3.5 w-3.5" />
+                  Locked
+                </span>
+                {remainingLabel ? (
+                  <span className="whitespace-nowrap text-right text-xs font-semibold text-muted-foreground">
+                    <span className="text-foreground">{remainingLabel}</span> to go
                   </span>
-                  {remainingXp !== null ? (
-                    <span className="text-right text-xs font-semibold text-muted-foreground">
-                      <span className="text-foreground">{formatNumber(remainingXp)} XP</span> to go
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </article>

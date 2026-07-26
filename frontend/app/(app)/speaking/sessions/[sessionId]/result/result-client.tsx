@@ -66,24 +66,24 @@ export function SpeakingSessionResultClient({ sessionId }: { sessionId: string }
 
   if (loading) {
     return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[20px] border border-[#E5E7EB] bg-white">
+      <div className="speaking-night flex min-h-[320px] flex-col items-center justify-center rounded-[20px] border border-[#E5E7EB] bg-white dark:border-slate-800 dark:bg-slate-950">
         <Loader2 className="h-8 w-8 animate-spin text-[#7C3AED]" />
-        <p className="mt-4 text-sm font-medium text-[#64748B]">Loading detailed feedback...</p>
+        <p className="mt-4 text-sm font-medium text-[#64748B] dark:text-slate-400">Loading speaking result...</p>
       </div>
     );
   }
 
   if (error || !result) {
     return (
-      <div className="rounded-[20px] border border-red-200 bg-red-50 p-6">
-        <div className="flex items-start gap-3 text-sm font-medium text-red-700">
+      <div className="speaking-night rounded-[20px] border border-red-200 bg-red-50 p-6 dark:border-red-500/30 dark:bg-red-500/10">
+        <div className="flex items-start gap-3 text-sm font-medium text-red-700 dark:text-red-300">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error ?? "Speaking result not found."}</span>
         </div>
         <button
           type="button"
           onClick={() => router.push("/speaking")}
-          className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#0F172A]"
+          className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#0F172A] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Speaking
@@ -93,10 +93,10 @@ export function SpeakingSessionResultClient({ sessionId }: { sessionId: string }
   }
 
   return (
-    <div className="space-y-4">
+    <div className="speaking-night space-y-4">
       <Link
         href="/speaking"
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#0F172A] transition hover:bg-[#F8FAFC]"
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#0F172A] transition hover:bg-[#F8FAFC] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Speaking

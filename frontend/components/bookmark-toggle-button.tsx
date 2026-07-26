@@ -3,14 +3,19 @@
 import { Bookmark } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useBookmarksStore, type BookmarkedTest } from "@/store/bookmarks-store";
+import { useBookmarksStore } from "@/store/bookmarks-store";
 
-type BookmarkInput = Omit<BookmarkedTest, "savedAt"> & {
-  savedAt?: string;
-};
+/**
+ * Minimal shape a bookmark target needs. Callers pass richer test objects;
+ * structural typing accepts the extra fields.
+ */
+interface BookmarkTarget {
+  id: string;
+  title: string;
+}
 
 interface BookmarkToggleButtonProps {
-  item: BookmarkInput;
+  item: BookmarkTarget;
   className?: string;
   iconClassName?: string;
   showLabel?: boolean;
@@ -22,7 +27,7 @@ export function BookmarkToggleButton({
   iconClassName,
   showLabel = false,
 }: BookmarkToggleButtonProps) {
-  const isSaved = useBookmarksStore((state) => state.items.some((entry) => entry.id === item.id));
+  const isSaved = useBookmarksStore((state) => Boolean(state.entries[item.id]));
   const toggleBookmark = useBookmarksStore((state) => state.toggleBookmark);
 
   return (
@@ -33,7 +38,7 @@ export function BookmarkToggleButton({
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        toggleBookmark(item);
+        void toggleBookmark(item.id);
       }}
       className={cn(
         "inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full border text-sm font-semibold shadow-none transition-colors",

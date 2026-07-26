@@ -8,6 +8,7 @@ import {
 } from "@/lib/user-auth-client";
 import type {
   WritingDraftListResponse,
+  WritingHistoryResponse,
   WritingTaskType,
   WritingSubmissionRecord,
   WritingSubmissionResult,
@@ -98,6 +99,10 @@ export function pollWritingSubmission(submissionId: string): Promise<WritingSubm
 
 export function fetchWritingSubmissionResult(submissionId: string): Promise<WritingSubmissionResult> {
   return clientFetch<WritingSubmissionResult>(`/writing/submissions/${submissionId}/result`);
+}
+
+export function fetchWritingHistory(): Promise<WritingHistoryResponse> {
+  return clientFetch<WritingHistoryResponse>(`/writing/history`);
 }
 
 export function fetchWritingLimits(): Promise<WritingLimitStatus> {

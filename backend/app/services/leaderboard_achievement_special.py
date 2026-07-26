@@ -100,8 +100,18 @@ def _early_supporter(
 def _weekly_top_ten(
     context: AchievementCatalogContext,
 ) -> LeaderboardUserAchievementStateRead:
-    unlocked = context.weekly_rank is not None and 0 < context.weekly_rank <= 10
+    from app.services.leaderboard_achievement_common import (
+        MIN_RANKED_FOR_WEEKLY_TOP_10,
+        composite_progress,
+    )
+
+    unlocked = (
+        context.weekly_rank is not None
+        and 0 < context.weekly_rank <= 10
+        and context.weekly_leaderboard_size >= MIN_RANKED_FOR_WEEKLY_TOP_10
+    )
     started = context.weekly_rank is not None and context.weekly_rank > 0
+    weekly_rank = int(context.weekly_rank or 0)
     return achievement(
         id="special-weekly-top-10",
         title="Weekly Top 10",
@@ -113,10 +123,15 @@ def _weekly_top_ten(
         status=achievement_status(unlocked=unlocked, started=started),
         xp_reward=500,
         progress=(
-            achievement_progress(
-                max(0, 11 - int(context.weekly_rank or 0)),
-                10,
-                f"Current weekly rank #{context.weekly_rank}",
+            composite_progress(
+                fractions=[
+                    context.weekly_leaderboard_size / MIN_RANKED_FOR_WEEKLY_TOP_10,
+                    (10 / weekly_rank) if weekly_rank else 0.0,
+                ],
+                label=(
+                    f"Weekly rank #{weekly_rank} • top 10 of "
+                    f"{MIN_RANKED_FOR_WEEKLY_TOP_10}+ competitors"
+                ),
             )
             if started and not unlocked
             else None
@@ -125,7 +140,12 @@ def _weekly_top_ten(
 
 
 def _rank_one(context: AchievementCatalogContext) -> LeaderboardUserAchievementStateRead:
-    unlocked = context.rank == 1
+    from app.services.leaderboard_achievement_common import (
+        MIN_RANKED_FOR_RANK_ONE,
+        composite_progress,
+    )
+
+    unlocked = context.rank == 1 and context.leaderboard_size >= MIN_RANKED_FOR_RANK_ONE
     started = context.rank > 0
     return achievement(
         id="special-rank-1",
@@ -138,10 +158,12 @@ def _rank_one(context: AchievementCatalogContext) -> LeaderboardUserAchievementS
         status=achievement_status(unlocked=unlocked, started=started),
         xp_reward=1_000,
         progress=(
-            achievement_progress(
-                1 if unlocked else 0,
-                1,
-                f"Current rank #{context.rank}",
+            composite_progress(
+                fractions=[
+                    context.leaderboard_size / MIN_RANKED_FOR_RANK_ONE,
+                    1.0 if context.rank == 1 else (1.0 / context.rank if context.rank > 0 else 0.0),
+                ],
+                label=f"Rank #{context.rank} of {context.leaderboard_size}",
             )
             if started and not unlocked
             else None
@@ -152,10 +174,15 @@ def _rank_one(context: AchievementCatalogContext) -> LeaderboardUserAchievementS
 def _top_one_percent(
     context: AchievementCatalogContext,
 ) -> LeaderboardUserAchievementStateRead:
+    from app.services.leaderboard_achievement_common import (
+        MIN_RANKED_FOR_TOP_ONE_PERCENT,
+        composite_progress,
+    )
+
     started = context.rank > 0
     unlocked = (
         started
-        and context.leaderboard_size > 0
+        and context.leaderboard_size >= MIN_RANKED_FOR_TOP_ONE_PERCENT
         and context.rank <= context.top_one_percent_cutoff
     )
     return achievement(
@@ -169,13 +196,17 @@ def _top_one_percent(
         status=achievement_status(unlocked=unlocked, started=started),
         xp_reward=1_200,
         progress=(
-            achievement_progress(
-                max(0, context.top_one_percent_cutoff - context.rank + 1),
-                context.top_one_percent_cutoff,
-                f"Current rank #{context.rank} • target top "
-                f"{context.top_one_percent_cutoff}",
+            composite_progress(
+                fractions=[
+                    context.leaderboard_size / MIN_RANKED_FOR_TOP_ONE_PERCENT,
+                    (context.top_one_percent_cutoff / context.rank) if context.rank > 0 else 0.0,
+                ],
+                label=(
+                    f"Rank #{context.rank} • top 1% of "
+                    f"{MIN_RANKED_FOR_TOP_ONE_PERCENT}+ competitors"
+                ),
             )
-            if started and not unlocked and context.leaderboard_size > 0
+            if started and not unlocked
             else None
         ),
     )

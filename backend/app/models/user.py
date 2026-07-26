@@ -34,6 +34,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     premium_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     show_on_leaderboard: Mapped[bool] = mapped_column(Boolean, default=True)
+    equipped_achievement_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     total_xp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     current_level: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     current_streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

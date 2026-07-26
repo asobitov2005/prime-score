@@ -111,6 +111,7 @@ class FavoriteTestRead(BaseModel):
     test_type: TestType
     access_type: AccessType
     status: TestStatus
+    saved_at: datetime
 
 class MeQuestionTypeAnalysisItemRead(BaseModel):
     label: str

@@ -1,38 +1,398 @@
-export { WritingTaskType } from "./server-writing-part-01";
-export { WritingQuestionSubtype } from "./server-writing-part-01";
-export { WritingSubmissionStatus } from "./server-writing-part-01";
-export { WritingTaskListItem } from "./server-writing-part-01";
-export { WritingTaskListResponse } from "./server-writing-part-01";
-export { WritingTaskDetail } from "./server-writing-part-01";
-export { WritingSubmissionRecord } from "./server-writing-part-01";
-export { WritingCriterionEvaluation } from "./server-writing-part-01";
-export { WritingInlineAnnotation } from "./server-writing-part-01";
-export { WritingVocabularySuggestion } from "./server-writing-part-01";
-export { WritingRoastFeedback } from "./server-writing-part-01";
-export { WritingActionPlan } from "./server-writing-part-01";
-export { WritingTargetAction } from "./server-writing-part-01";
-export { WritingBandBoundary } from "./server-writing-part-01";
-export { WritingScoreBooster } from "./server-writing-part-01";
-export { WritingChecklistItem } from "./server-writing-part-01";
-export { WritingErrorPattern } from "./server-writing-part-01";
-export { WritingSentenceFix } from "./server-writing-part-01";
-export { WritingRevisionDiff } from "./server-writing-part-01";
-export { WritingSelectedBenchmark } from "./server-writing-part-02";
-export { WritingSubmissionResult } from "./server-writing-part-02";
-export { WritingDraftListItem } from "./server-writing-part-02";
-export { WritingDraftListResponse } from "./server-writing-part-02";
-export { WritingHistoryItem } from "./server-writing-part-02";
-export { WritingHistoryResponse } from "./server-writing-part-02";
-export { WritingDashboardSummary } from "./server-writing-part-02";
-export { WritingLimitStatus } from "./server-writing-part-02";
-export { listWritingTasks } from "./server-writing-part-02";
-export { getWritingTask } from "./server-writing-part-02";
-export { getWritingSubmission } from "./server-writing-part-02";
-export { getWritingSubmissionResult } from "./server-writing-part-02";
-export { getWritingHistory } from "./server-writing-part-02";
-export { getWritingDashboardSummary } from "./server-writing-part-02";
-export { getWritingLimits } from "./server-writing-part-03";
-export { getWritingDrafts } from "./server-writing-part-03";
-export { resolveWritingAssetUrl } from "./server-writing-part-03";
-export { QUESTION_SUBTYPES_TASK1 } from "./server-writing-part-03";
-export { QUESTION_SUBTYPES_TASK2 } from "./server-writing-part-03";
+import { FRONTEND_API_TIMEOUT_MS, getFrontendServerApiBaseUrl } from "@/lib/api-base";
+import { requestServerUserApi } from "@/lib/server-user-auth";
+
+export type WritingTaskType = "task_1" | "task_2";
+export type WritingQuestionSubtype =
+  | "bar_chart" | "line_graph" | "pie_chart" | "table"
+  | "process" | "map" | "two_charts"
+  | "opinion" | "advantages_disadvantages" | "discussion"
+  | "problem_solution" | "two_part" | "causes_effects" | "direct_question";
+export type WritingSubmissionStatus =
+  | "queued"
+  | "QUEUED"
+  | "processing"
+  | "PROCESSING"
+  | "completed"
+  | "COMPLETED"
+  | "failed"
+  | "FAILED";
+
+export interface WritingTaskListItem {
+  id: string;
+  title: string;
+  task_type: WritingTaskType;
+  image_url?: string | null;
+  word_minimum: number;
+  time_limit_seconds: number;
+  question_subtype?: WritingQuestionSubtype | null;
+  source?: string | null;
+  description?: string | null;
+  created_at?: string;
+}
+
+export interface WritingTaskListResponse {
+  items: WritingTaskListItem[];
+  total: number;
+}
+
+export interface WritingTaskDetail extends WritingTaskListItem {
+  prompt_html: string;
+  image_summary?: string | null;
+}
+
+export interface WritingSubmissionRecord {
+  id: string;
+  status: WritingSubmissionStatus;
+  error_message?: string | null;
+  task_id?: string;
+  task_title?: string;
+  task_type?: WritingTaskType;
+  word_count?: number | null;
+  desired_score?: number | string | null;
+  overall_band?: number | string | null;
+  submitted_at?: string | null;
+  graded_at?: string | null;
+}
+
+export interface WritingCriterionEvaluation {
+  band: number | string;
+  summary: string;
+  strengths: string[];
+  improvements: string[];
+  evidence_quotes: string[];
+  reasoning: string;
+}
+
+export interface WritingInlineAnnotation {
+  offset: number;
+  length: number;
+  original: string;
+  replacements: string[];
+  category: string;
+  severity?: string | null;
+  short_message?: string | null;
+  explanation?: string | null;
+  band_impact?: string | null;
+  examiner_tip?: string | null;
+  improved_sentence?: string | null;
+}
+
+export interface WritingVocabularySuggestion {
+  current_phrase: string;
+  improved_phrase: string;
+  level: string;
+  why_it_works: string;
+  example_sentence: string;
+}
+
+export interface WritingRoastFeedback {
+  overall_roast: string;
+  one_liner: string;
+  task_achievement_zinger: string;
+  coherence_zinger: string;
+  lexical_zinger: string;
+  grammar_zinger: string;
+  savage_tips: string[];
+  pep_talk: string;
+}
+
+export interface WritingActionPlan {
+  main_limiter: string;
+  main_limiter_band: number | string;
+  strongest_area: string;
+  strongest_area_band: number | string;
+  fixes: string[];
+}
+
+export interface WritingTargetAction {
+  title: string;
+  why: string;
+  how: string;
+  example: string;
+  band_impact: string;
+  priority: number;
+}
+
+export interface WritingBandBoundary {
+  criterion: string;
+  current_band: number | string;
+  next_band: number | string;
+  why_current: string;
+  required_for_next: string;
+}
+
+export interface WritingScoreBooster {
+  criterion: string;
+  original: string;
+  why_it_scores: string;
+  keep_doing: string;
+  band_value: string;
+}
+
+export interface WritingChecklistItem {
+  label: string;
+  status: "met" | "partial" | "missing" | string;
+  detail: string;
+  how_to_fix?: string;
+}
+
+export interface WritingErrorPattern {
+  category: string;
+  subcategory?: string;
+  label: string;
+  count: number;
+  percentage: number;
+  examples: string[];
+  fix?: string;
+}
+
+export interface WritingSentenceFix {
+  priority: number;
+  original: string;
+  replacement: string;
+  corrected_sentence: string;
+  why: string;
+  band_impact: string;
+  category: string;
+}
+
+export interface WritingRevisionDiff {
+  original: string;
+  revised: string;
+  reason: string;
+  criterion: string;
+}
+
+export interface WritingSelectedBenchmark {
+  card_id: string;
+  title: string;
+  band: number | string;
+  use_when: string;
+  tolerance_lesson: string;
+  band_limiting_signs: string[];
+}
+
+export interface WritingSubmissionResult {
+  submission_id: string;
+  task_id: string;
+  task_type: WritingTaskType;
+  task_title: string;
+  word_count: number;
+  word_minimum: number;
+  desired_score?: number | string | null;
+  time_spent_seconds: number;
+  submitted_at: string | null;
+  graded_at: string | null;
+  essay_text: string;
+  overall_band: number | string;
+  potential_band?: number | string | null;
+  word_count_penalty?: number | string | null;
+  task_achievement: WritingCriterionEvaluation;
+  coherence: WritingCriterionEvaluation;
+  lexical: WritingCriterionEvaluation;
+  grammar: WritingCriterionEvaluation;
+  inline_annotations: WritingInlineAnnotation[];
+  vocabulary_suggestions: WritingVocabularySuggestion[];
+  improved_version: string;
+  overall_summary: string;
+  next_steps: string[];
+  action_plan?: WritingActionPlan | null;
+  target_action_plan?: WritingTargetAction[];
+  band_boundaries?: WritingBandBoundary[];
+  score_boosters?: WritingScoreBooster[];
+  checklist?: WritingChecklistItem[];
+  error_patterns?: WritingErrorPattern[];
+  history_error_trends?: WritingErrorPattern[];
+  sentence_fixes?: WritingSentenceFix[];
+  revision_diff?: WritingRevisionDiff[];
+  roast?: WritingRoastFeedback | null;
+  is_ai_estimate?: boolean;
+  confidence?: string;
+  possible_score_range?: string;
+  score_limiting_criterion?: string | null;
+  benchmark_coverage?: number | string | null;
+  flags?: {
+    under_length?: boolean;
+    non_english?: boolean;
+    injection_attempt_detected?: boolean;
+    [key: string]: unknown;
+  } | null;
+  pipeline_status?: string | null;
+  mode?: string | null;
+  selected_benchmarks?: WritingSelectedBenchmark[];
+  calibration_result?: Record<string, unknown>;
+  audit_result?: Record<string, unknown>;
+  meta_learning_note?: string;
+  xp_awarded_total?: number;
+  xp_breakdown?: Record<string, unknown>;
+  xp_level_after?: number | null;
+  xp_current_streak?: number | null;
+}
+
+export interface WritingDraftListItem {
+  draft_key: string;
+  task_id?: string | null;
+  task_type: WritingTaskType;
+  task_title?: string | null;
+  topic: string;
+  essay_text: string;
+  image_data_url?: string | null;
+  started: boolean;
+  time_spent_seconds: number;
+  updated_at: string;
+}
+
+export interface WritingDraftListResponse {
+  items: WritingDraftListItem[];
+}
+
+export interface WritingHistoryItem {
+  submission_id: string;
+  task_id: string;
+  task_title: string;
+  task_type: WritingTaskType;
+  word_count: number;
+  time_spent_seconds: number;
+  overall_band: number | string | null;
+  status: WritingSubmissionStatus;
+  submitted_at: string;
+  graded_at?: string | null;
+}
+
+export interface WritingHistoryResponse {
+  items: WritingHistoryItem[];
+  total: number;
+}
+
+export interface WritingDashboardSummary {
+  total_submissions: number;
+  average_band?: number | null;
+  best_band?: number | null;
+  last_band?: number | null;
+  last_submitted_at?: string | null;
+  task_1_average?: number | null;
+  task_2_average?: number | null;
+  task_1_best?: number | null;
+  task_2_best?: number | null;
+  task_1_last?: number | null;
+  task_2_last?: number | null;
+}
+
+export interface WritingLimitStatus {
+  is_premium: boolean;
+  premium_until?: string | null;
+  daily_limit: number | null;
+  used_today: number;
+  remaining_today: number | null;
+  can_submit: boolean;
+  reset_at: string;
+  plan_name?: string | null;
+}
+
+async function requestPublicWritingApi<T>(path: string): Promise<T> {
+  const baseUrl = getFrontendServerApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FRONTEND_API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed for ${path}`);
+    }
+
+    return (await response.json()) as T;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export async function listWritingTasks(params: {
+  task_type?: WritingTaskType;
+  question_subtype?: WritingQuestionSubtype;
+  page?: number;
+  page_size?: number;
+}): Promise<WritingTaskListResponse> {
+  const search = new URLSearchParams();
+  if (params.task_type) search.set("task_type", params.task_type);
+  if (params.question_subtype) search.set("question_subtype", params.question_subtype);
+  if (params.page) search.set("page", String(params.page));
+  if (params.page_size) search.set("page_size", String(params.page_size));
+  const qs = search.toString();
+  return requestPublicWritingApi<WritingTaskListResponse>(`/writing/tasks${qs ? `?${qs}` : ""}`);
+}
+
+export async function getWritingTask(taskId: string): Promise<WritingTaskDetail> {
+  return requestPublicWritingApi<WritingTaskDetail>(`/writing/tasks/${taskId}`);
+}
+
+export async function getWritingSubmission(submissionId: string): Promise<WritingSubmissionRecord> {
+  return requestServerUserApi<WritingSubmissionRecord>(`/writing/submissions/${submissionId}`);
+}
+
+export async function getWritingSubmissionResult(submissionId: string): Promise<WritingSubmissionResult> {
+  return requestServerUserApi<WritingSubmissionResult>(`/writing/submissions/${submissionId}/result`);
+}
+
+export async function getWritingHistory(): Promise<WritingHistoryResponse> {
+  return requestServerUserApi<WritingHistoryResponse>(`/writing/history`);
+}
+
+export async function getWritingDashboardSummary(): Promise<WritingDashboardSummary> {
+  return requestServerUserApi<WritingDashboardSummary>(`/writing/dashboard-summary`);
+}
+
+export async function getWritingLimits(): Promise<WritingLimitStatus> {
+  return requestServerUserApi<WritingLimitStatus>(`/writing/limits`);
+}
+
+export async function getWritingDrafts(): Promise<WritingDraftListResponse> {
+  return requestServerUserApi<WritingDraftListResponse>(`/writing/drafts`);
+}
+
+const STORAGE_PREFIX = "/api/storage/";
+
+export function resolveWritingAssetUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = (
+    process.env.NEXT_PUBLIC_BACKEND_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    "http://127.0.0.1:8000"
+  )
+    .replace(/\/$/, "")
+    .replace(/\/api$/, "");
+  if (url.startsWith(STORAGE_PREFIX) || url.startsWith("/api/")) {
+    return `${base}${url}`;
+  }
+  if (url.startsWith("/")) {
+    return `${base}${url}`;
+  }
+  return `${base}/${url}`;
+}
+
+export const QUESTION_SUBTYPES_TASK1: { value: WritingQuestionSubtype; label: string }[] = [
+  { value: "bar_chart", label: "Bar Chart" },
+  { value: "line_graph", label: "Line Graph" },
+  { value: "pie_chart", label: "Pie Chart" },
+  { value: "table", label: "Table" },
+  { value: "process", label: "Process" },
+  { value: "map", label: "Map" },
+  { value: "two_charts", label: "Two Charts" },
+];
+
+export const QUESTION_SUBTYPES_TASK2: { value: WritingQuestionSubtype; label: string }[] = [
+  { value: "opinion", label: "Opinion Essay" },
+  { value: "advantages_disadvantages", label: "Advantages & Disadvantages" },
+  { value: "discussion", label: "Discussion Essay" },
+  { value: "problem_solution", label: "Problem & Solution" },
+  { value: "two_part", label: "Two-Part Question" },
+  { value: "causes_effects", label: "Causes & Effects" },
+  { value: "direct_question", label: "Direct Question" },
+];

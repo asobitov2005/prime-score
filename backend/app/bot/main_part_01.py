@@ -243,6 +243,8 @@ async def _fetch_telegram_avatar_url(bot: Bot, telegram_id: int) -> str | None:
             filename=f"telegram-{telegram_id}.jpg",
             content_type="image/jpeg",
         )
-    except (TelegramAPIError, RuntimeError):
+    except Exception:
+        # Avatar enrichment is best-effort — a Telegram/aiohttp/MinIO failure
+        # here must never block the login code from being issued.
         logger.exception("Failed to fetch Telegram avatar for %s", telegram_id)
         return None

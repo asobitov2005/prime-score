@@ -83,7 +83,7 @@ export function AchievementGrid({ achievements, equippedAchievementId, onEquip }
               className="flex gap-4 overflow-x-auto pb-2 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {group.items.map((achievement) => (
-                <div key={achievement.id} className={achievement.category === "streak" ? "w-[250px] flex-none sm:w-[270px]" : "w-[200px] flex-none sm:w-[215px]"}>
+                <div key={achievement.id} className="w-[230px] flex-none sm:w-[270px]">
                   <AchievementCard
                     achievement={achievement}
                     isEquipped={achievement.id === equippedAchievementId}

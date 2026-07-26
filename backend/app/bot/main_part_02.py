@@ -149,16 +149,23 @@ async def run_bot() -> None:
             )
             return
 
-        avatar_url = await _fetch_telegram_avatar_url(bot, contact["telegram_id"])
-        if avatar_url:
-            contact["avatar_url"] = avatar_url
-            await store.save_contact(
-                telegram_id=contact["telegram_id"],
-                phone=contact["phone"],
-                username=contact.get("username"),
-                first_name=contact["first_name"],
-                last_name=contact.get("last_name"),
-                avatar_url=avatar_url,
+        # Best-effort profile-picture enrichment. Must never block code delivery.
+        try:
+            avatar_url = await _fetch_telegram_avatar_url(bot, contact["telegram_id"])
+            if avatar_url:
+                contact["avatar_url"] = avatar_url
+                await store.save_contact(
+                    telegram_id=contact["telegram_id"],
+                    phone=contact["phone"],
+                    username=contact.get("username"),
+                    first_name=contact["first_name"],
+                    last_name=contact.get("last_name"),
+                    avatar_url=avatar_url,
+                )
+        except Exception:
+            logger.exception(
+                "Avatar enrichment failed for %s; issuing code anyway",
+                contact["telegram_id"],
             )
 
         try:

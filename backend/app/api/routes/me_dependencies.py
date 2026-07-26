@@ -6,13 +6,14 @@ from decimal import Decimal
 from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user
 from app.core.enums import AttemptStatus, NotificationType, PaymentMethod, TestMode, TestScope, TestType
 from app.db.session import get_db_session
 from app.models.commerce import GiftCode, GiftCodeRedemption, Payment, Plan
 from app.models.enums import PaymentStatus
+from app.models.favorite import Favorite
 from app.models.ops import Notification
 from app.models.test import Test
 from app.models.user import User

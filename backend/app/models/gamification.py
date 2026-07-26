@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,4 +65,33 @@ class LeaderboardEntry(UUIDMixin, TimestampMixin, Base):
     average_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     full_mock_completions: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     achieved_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+
+class UserAchievement(UUIDMixin, TimestampMixin, Base):
+    """Durable record of an achievement a user has unlocked.
+
+    The achievement catalog is computed on the fly from live stats. This table
+    only persists unlock facts so unlock time, XP reward, and sticky status stay
+    stable even if underlying stats later regress.
+    """
+
+    __tablename__ = "user_achievements"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "achievement_id",
+            name="uq_user_achievements_user_id_achievement_id",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    achievement_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    unlocked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+    xp_awarded: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    notified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)

@@ -94,6 +94,13 @@ export function AchievementsPageClient() {
     staleTime: 60_000,
   });
 
+  const xpQuery = useQuery({
+    queryKey: ["xp-summary", userId],
+    queryFn: () => api.getXpSummary(),
+    enabled: hasHydrated && isAuthenticated && Boolean(userId),
+    staleTime: 60_000,
+  });
+
   if (!hasHydrated) {
     return <AchievementsLoadingSkeleton />;
   }
@@ -123,5 +130,27 @@ export function AchievementsPageClient() {
   }
 
   const achievements = profileQuery.data.achievement_catalog.map(mapAchievementCatalogItem);
-  return <AchievementsClient achievements={achievements} />;
+  const profile = profileQuery.data;
+  const xp = xpQuery.data;
+
+  const level = xp?.level ?? profile.level;
+  const totalXp = xp?.totalXp ?? profile.total_xp;
+  const nextLevelXp = xp?.progress.nextLevelXp ?? 0;
+  const levelSummary = {
+    level,
+    nextLevel: level + 1,
+    totalXp,
+    rewardsUnlocked: profile.stats.achievements_unlocked,
+    xpToNextLevel: xp?.progress.xpNeededForNextLevel ?? 0,
+    progressPercent: xp ? Math.max(0, Math.min(xp.progress.progressPercent, 100)) : 0,
+    isMaxLevel: Boolean(xp) && nextLevelXp <= (xp?.progress.levelFloorXp ?? 0),
+  };
+
+  return (
+    <AchievementsClient
+      achievements={achievements}
+      levelSummary={levelSummary}
+      equippedAchievementId={profile.equipped_achievement_id ?? null}
+    />
+  );
 }

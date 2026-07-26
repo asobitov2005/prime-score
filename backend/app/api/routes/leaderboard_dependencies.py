@@ -17,7 +17,9 @@ from app.models.speaking import SpeakingSession
 from app.models.user import User
 from app.models.writing import WritingEvaluation, WritingSubmission
 from app.schemas.common import DebugPrincipal
+from app.models.gamification import UserAchievement
 from app.schemas.leaderboard import (
+    EquipAchievementRequest,
     LeaderboardEntryRead,
     LeaderboardResponse,
     LeaderboardUserAchievementRead,
@@ -27,6 +29,7 @@ from app.schemas.leaderboard import (
     LeaderboardUserProfileRead,
     LeaderboardUserStatsRead,
 )
+from app.services.achievements import sync_user_achievements
 from app.services.leaderboard_achievement_catalog import build_achievement_catalog
 from app.services.leaderboard_achievement_common import AchievementCatalogContext
 from app.services.xp import (

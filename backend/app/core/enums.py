@@ -115,6 +115,7 @@ class NotificationType(StrEnum):
     premium_expired = "premium_expired"
     new_test = "new_test"
     gift_received = "gift_received"
+    achievement_unlocked = "achievement_unlocked"
     system_alert = "system_alert"
 
 

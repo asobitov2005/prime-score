@@ -9,6 +9,10 @@ from app.schemas.leaderboard import (
     LeaderboardUserAchievementStateRead,
 )
 
+MIN_RANKED_FOR_RANK_ONE = 10
+MIN_RANKED_FOR_TOP_ONE_PERCENT = 100
+MIN_RANKED_FOR_WEEKLY_TOP_10 = 15
+
 
 @dataclass(slots=True)
 class AchievementCatalogContext:
@@ -30,6 +34,7 @@ class AchievementCatalogContext:
     rank: int
     weekly_rank: int | None
     leaderboard_size: int
+    weekly_leaderboard_size: int = 0
 
     @property
     def level(self) -> int:
@@ -64,6 +69,13 @@ def achievement_progress(
         target=max(0, int(target)),
         label=label,
     )
+
+
+def composite_progress(*, fractions: list[float], label: str) -> LeaderboardUserAchievementProgressRead:
+    """Progress gated by multiple requirements — bar tracks the least satisfied one."""
+    ratio = min(fractions) if fractions else 0.0
+    ratio = max(0.0, min(0.99, ratio))
+    return achievement_progress(round(ratio * 100), 100, label)
 
 
 def achievement_status(*, unlocked: bool, started: bool) -> str:

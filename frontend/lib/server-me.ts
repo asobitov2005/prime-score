@@ -1,9 +1,740 @@
-export { LeaderboardPreviewSummary } from "./server-me-part-02";
-export { getDashboardStats } from "./server-me-part-03";
-export { getXpSummary } from "./server-me-part-04";
-export { getLeaderboardRank } from "./server-me-part-04";
-export { getWeeklyLeaderboardPreview } from "./server-me-part-04";
-export { getDashboardAnalytics } from "./server-me-part-04";
-export { getDashboardActivity } from "./server-me-part-05";
-export { getUserAttempts } from "./server-me-part-05";
-export { getSubmittedAttempts } from "./server-me-part-05";
+import { formatDate, formatDateTime } from "@/lib/date-time";
+import { formatIeltsBand, roundIeltsBand } from "@/lib/ielts-band";
+import { requestServerUserApi } from "@/lib/server-user-auth";
+import type {
+  AttemptRow,
+  DashboardAnalytics,
+  DashboardBandProgressPoint,
+  DashboardActivityPoint,
+  DashboardErrorDistributionItem,
+  DashboardPerformanceSummary,
+  DashboardQuestionTypeAnalysisItem,
+  DashboardQuestionTypeComparison,
+  DashboardQuestionTypeComparisonItem,
+  DashboardSectionAnalysisItem,
+  DashboardSkillFocusItem,
+  DashboardSkillTimeAnalysis,
+  DashboardStat,
+  TestType,
+  XpSummary
+} from "@/lib/types";
+
+type BackendMeStats = {
+  attempts_total: number;
+  average_band?: number | null;
+  reading_band?: number | null;
+  listening_band?: number | null;
+  leaderboard_rank?: number | null;
+  active_sessions: number;
+  total_xp?: number;
+  current_level?: number;
+  weekly_xp?: number;
+  monthly_xp?: number;
+};
+
+type BackendXpSummary = {
+  total_xp: number;
+  level: number;
+  current_streak: number;
+  best_streak: number;
+  weekly_xp: number;
+  monthly_xp: number;
+  latest_xp_gain?: number | null;
+  progress: {
+    level: number;
+    level_floor_xp: number;
+    next_level_xp: number;
+    xp_into_level: number;
+    xp_needed_for_next_level: number;
+    progress_percent: number;
+  };
+};
+
+type BackendMeActivityPoint = {
+  activity_date: string;
+  attempts_count: number;
+  time_spent_sec: number;
+  reading_time_sec: number;
+  listening_time_sec: number;
+  writing_time_sec: number;
+  speaking_time_sec?: number;
+};
+
+type BackendMeAttempt = {
+  attempt_id: string;
+  test_id: string;
+  test_title: string;
+  test_type: TestType;
+  test_format?: "full" | "passage_1" | "passage_2" | "passage_3" | "part_1" | "part_2" | "part_3" | "part_4" | null;
+  mode: "practice" | "exam";
+  status: "draft" | "in_progress" | "completed" | "archived" | "auto_submitted";
+  source?: string | null;
+  raw_score?: number | null;
+  band_score?: number | string | null;
+  total_questions?: number | null;
+  time_spent_sec?: number | null;
+  answered_count?: number | null;
+  progress_percent?: number | null;
+  time_limit_seconds?: number | null;
+  last_answered_question_number?: number | null;
+  started_at: string;
+  completed_at?: string | null;
+  updated_at?: string | null;
+  violation_count?: number;
+};
+
+type BackendQuestionTypeAnalysisItem = {
+  label: string;
+  worked_count: number;
+  correct_count: number;
+  accuracy: number;
+  error_count: number;
+};
+
+type BackendQuestionTypeComparisonItem = {
+  label: string;
+  previous_accuracy?: number | null;
+  current_accuracy?: number | null;
+  delta?: number | null;
+  accuracies?: Array<number | null>;
+  current_worked_count?: number;
+  current_error_count?: number;
+};
+
+type BackendQuestionTypeComparisonTest = {
+  test_title: string;
+  test_date: string;
+};
+
+type BackendQuestionTypeComparison = {
+  previous_test_title?: string | null;
+  previous_test_date?: string | null;
+  current_test_title?: string | null;
+  current_test_date?: string | null;
+  tests: BackendQuestionTypeComparisonTest[];
+  items: BackendQuestionTypeComparisonItem[];
+};
+
+type BackendErrorDistributionItem = {
+  label: string;
+  error_count: number;
+  share: number;
+};
+
+type BackendBandProgressPoint = {
+  label: string;
+  occurred_at: string;
+  reading?: number | null;
+  listening?: number | null;
+  writing?: number | null;
+  speaking?: number | null;
+};
+
+type BackendPerformanceStudyTime = {
+  total_time_sec: number;
+  reading_time_sec: number;
+  listening_time_sec: number;
+  writing_time_sec?: number | null;
+  speaking_time_sec?: number | null;
+};
+
+type BackendPerformanceTestCountBucket = {
+  full_count: number;
+  section_1_count: number;
+  section_2_count: number;
+  section_3_count: number;
+  section_4_count: number;
+};
+
+type BackendPerformanceSummary = {
+  study_time: BackendPerformanceStudyTime;
+  reading: BackendPerformanceTestCountBucket;
+  listening: BackendPerformanceTestCountBucket;
+  writing?: BackendPerformanceTestCountBucket | null;
+  speaking?: BackendPerformanceTestCountBucket | null;
+};
+
+type BackendWritingCriteria = {
+  task_achievement?: number | null;
+  coherence_cohesion?: number | null;
+  lexical_resource?: number | null;
+  grammatical_range_accuracy?: number | null;
+};
+
+type BackendSpeakingCriteria = {
+  fluency?: number | null;
+  lexical_resource?: number | null;
+  grammar?: number | null;
+  pronunciation?: number | null;
+};
+
+type BackendDashboardAnalytics = {
+  performance_summary: BackendPerformanceSummary;
+  writing_criteria?: BackendWritingCriteria | null;
+  speaking_criteria?: BackendSpeakingCriteria | null;
+  question_type_analysis: BackendQuestionTypeAnalysisItem[];
+  comparison: BackendQuestionTypeComparison;
+  error_distribution: BackendErrorDistributionItem[];
+  progress_series: BackendBandProgressPoint[];
+  accuracy_trend?: BackendAccuracyTrendPoint[];
+  weekly_activity?: BackendWeeklyActivityPoint[];
+  score_distribution?: BackendScoreDistribution;
+  personal_bests?: BackendPersonalBests;
+  speed_metrics?: BackendSpeedMetrics;
+  improvement_rate?: BackendImprovementRate;
+  section_analysis?: BackendSectionAnalysisItem[];
+  skill_focus?: BackendSkillFocusItem[];
+  time_analysis?: BackendSkillTimeAnalysis | null;
+};
+
+type BackendAccuracyTrendPoint = {
+  date: string;
+  accuracy: number;
+  band?: number | null;
+  test_type?: string | null;
+};
+
+type BackendWeeklyActivityPoint = {
+  week_label: string;
+  attempts_count: number;
+  time_spent_min: number;
+};
+
+type BackendScoreDistribution = {
+  band_1_to_3: number;
+  band_3_5_to_5: number;
+  band_5_to_6_5: number;
+  band_6_5_to_7_5: number;
+  band_7_5_to_9: number;
+};
+
+type BackendPersonalBests = {
+  best_band?: number | null;
+  best_accuracy?: number | null;
+  longest_streak: number;
+  current_streak: number;
+  fastest_full_test_sec?: number | null;
+};
+
+type BackendSpeedMetrics = {
+  avg_time_per_question_sec?: number | null;
+  reading_avg_sec_per_question?: number | null;
+  listening_avg_sec_per_question?: number | null;
+};
+
+type BackendImprovementRate = {
+  last_5_avg_band?: number | null;
+  prev_5_avg_band?: number | null;
+  delta?: number | null;
+  percent_change?: number | null;
+};
+
+type BackendSectionAnalysisItem = {
+  section_number: number;
+  label: string;
+  worked_count: number;
+  correct_count: number;
+  accuracy: number;
+  attempts_count: number;
+  avg_time_sec?: number | null;
+};
+
+type BackendSkillFocusItem = {
+  key: string;
+  label: string;
+  value?: number | null;
+  value_label: string;
+  subtext?: string | null;
+  status?: string | null;
+};
+
+type BackendSkillTimeAnalysis = {
+  avg_time_per_test_sec?: number | null;
+  recommended_time_sec?: number | null;
+  time_management_status: string;
+  slowest_section?: BackendSectionAnalysisItem | null;
+  fastest_section?: BackendSectionAnalysisItem | null;
+  unanswered_avg_percent?: number | null;
+};
+
+type BackendLeaderboardEntry = {
+  rank: number;
+  user_id: string;
+  xp: number;
+};
+
+type BackendLeaderboardResponse = {
+  items: BackendLeaderboardEntry[];
+  current_user?: BackendLeaderboardEntry | null;
+};
+
+export interface LeaderboardPreviewSummary {
+  rank: number | null;
+  topPercent: number | null;
+}
+
+async function requestBackend<T>(path: string): Promise<T> {
+  return requestServerUserApi<T>(path);
+}
+
+function formatAttemptDuration(totalSeconds: number | null | undefined): string {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds ?? 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatBandScore(value: number | string | null | undefined): string | null {
+  const formatted = formatIeltsBand(value, "");
+  return formatted || null;
+}
+
+function normalizeAttemptSource(source: string | null | undefined, title: string): string {
+  const normalized = `${source ?? ""} ${title}`.toLowerCase();
+  if (normalized.includes("cambridge")) {
+    return "Cambridge Official";
+  }
+  if (normalized.includes("real_exam") || normalized.includes("real exam")) {
+    return "Recent Exam Papers";
+  }
+  return "Exam Practice Tests";
+}
+
+function isSubmittedBackendAttempt(attempt: BackendMeAttempt): boolean {
+  return attempt.status === "completed" || attempt.status === "auto_submitted";
+}
+
+function mapBackendAttempt(attempt: BackendMeAttempt): AttemptRow {
+  const isSubmitted = isSubmittedBackendAttempt(attempt);
+  return {
+    id: attempt.attempt_id,
+    testId: attempt.test_id,
+    testTitle: attempt.test_title,
+    type: attempt.test_type,
+    testFormat: attempt.test_format ?? "full",
+    source: normalizeAttemptSource(attempt.source, attempt.test_title),
+    mode: attempt.mode,
+    date: formatDate(attempt.started_at),
+    lastSavedAt: formatDateTime(
+      isSubmitted
+        ? attempt.completed_at ?? attempt.updated_at ?? attempt.started_at
+        : attempt.updated_at ?? attempt.started_at
+    ),
+    score: attempt.raw_score !== null && attempt.raw_score !== undefined ? String(attempt.raw_score) : "Pending",
+    band: formatBandScore(attempt.band_score),
+    totalQuestions: attempt.total_questions ?? null,
+    timeSpent: formatAttemptDuration(attempt.time_spent_sec),
+    timeSpentSec: attempt.time_spent_sec ?? null,
+    answeredCount: attempt.answered_count ?? 0,
+    progressPercent: attempt.progress_percent ?? 0,
+    timeLimitSeconds: attempt.time_limit_seconds ?? 0,
+    lastAnsweredQuestionNumber: attempt.last_answered_question_number ?? null,
+    status: attempt.status === "auto_submitted" ? "submitted" : attempt.status === "completed" ? "completed" : "in_progress",
+    violationCount: attempt.violation_count ?? 0
+  };
+}
+
+function mapQuestionTypeAnalysis(
+  items: BackendQuestionTypeAnalysisItem[]
+): DashboardQuestionTypeAnalysisItem[] {
+  return items.map((item) => ({
+    label: item.label,
+    workedCount: item.worked_count,
+    correctCount: item.correct_count,
+    accuracy: item.accuracy,
+    errorCount: item.error_count
+  }));
+}
+
+function mapComparison(
+  comparison: BackendQuestionTypeComparison
+): DashboardQuestionTypeComparison {
+  return {
+    previousTestTitle: comparison.previous_test_title ?? null,
+    previousTestDate: comparison.previous_test_date ?? null,
+    currentTestTitle: comparison.current_test_title ?? null,
+    currentTestDate: comparison.current_test_date ?? null,
+    tests: comparison.tests.map((test) => ({
+      testTitle: test.test_title,
+      testDate: test.test_date
+    })),
+    items: comparison.items.map<DashboardQuestionTypeComparisonItem>((item) => ({
+      label: item.label,
+      previousAccuracy: item.previous_accuracy ?? null,
+      currentAccuracy: item.current_accuracy ?? null,
+      delta: item.delta ?? null,
+      accuracies: item.accuracies ?? [],
+      currentWorkedCount: item.current_worked_count ?? 0,
+      currentErrorCount: item.current_error_count ?? 0,
+    }))
+  };
+}
+
+function mapErrorDistribution(
+  items: BackendErrorDistributionItem[]
+): DashboardErrorDistributionItem[] {
+  return items.map((item) => ({
+    label: item.label,
+    errorCount: item.error_count,
+    share: item.share
+  }));
+}
+
+function mapProgressSeries(
+  items: BackendBandProgressPoint[]
+): DashboardBandProgressPoint[] {
+  return items.map((item) => ({
+    label: item.label,
+    occurredAt: item.occurred_at,
+    reading: roundIeltsBand(item.reading),
+    listening: roundIeltsBand(item.listening),
+    writing: roundIeltsBand(item.writing),
+    speaking: roundIeltsBand(item.speaking)
+  }));
+}
+
+function mapPerformanceSummary(
+  summary: BackendPerformanceSummary
+): DashboardPerformanceSummary {
+  return {
+    studyTime: {
+      totalTimeSec: summary.study_time.total_time_sec,
+      readingTimeSec: summary.study_time.reading_time_sec,
+      listeningTimeSec: summary.study_time.listening_time_sec,
+      writingTimeSec: summary.study_time.writing_time_sec ?? 0,
+      speakingTimeSec: summary.study_time.speaking_time_sec ?? 0
+    },
+    reading: {
+      fullCount: summary.reading.full_count,
+      section1Count: summary.reading.section_1_count,
+      section2Count: summary.reading.section_2_count,
+      section3Count: summary.reading.section_3_count,
+      section4Count: summary.reading.section_4_count
+    },
+    listening: {
+      fullCount: summary.listening.full_count,
+      section1Count: summary.listening.section_1_count,
+      section2Count: summary.listening.section_2_count,
+      section3Count: summary.listening.section_3_count,
+      section4Count: summary.listening.section_4_count
+    },
+    writing: summary.writing ? {
+      fullCount: summary.writing.full_count,
+      section1Count: summary.writing.section_1_count,
+      section2Count: summary.writing.section_2_count,
+      section3Count: summary.writing.section_3_count,
+      section4Count: summary.writing.section_4_count
+    } : undefined,
+    speaking: summary.speaking ? {
+      fullCount: summary.speaking.full_count,
+      section1Count: summary.speaking.section_1_count,
+      section2Count: summary.speaking.section_2_count,
+      section3Count: summary.speaking.section_3_count,
+      section4Count: summary.speaking.section_4_count
+    } : undefined
+  };
+}
+
+function mapSectionAnalysisItem(item: BackendSectionAnalysisItem): DashboardSectionAnalysisItem {
+  return {
+    sectionNumber: item.section_number,
+    label: item.label,
+    workedCount: item.worked_count,
+    correctCount: item.correct_count,
+    accuracy: item.accuracy,
+    attemptsCount: item.attempts_count,
+    avgTimeSec: item.avg_time_sec ?? null,
+  };
+}
+
+function mapSkillFocusItem(item: BackendSkillFocusItem): DashboardSkillFocusItem {
+  return {
+    key: item.key,
+    label: item.label,
+    value: item.value ?? null,
+    valueLabel: item.value_label,
+    subtext: item.subtext ?? null,
+    status: item.status ?? null,
+  };
+}
+
+function mapSkillTimeAnalysis(item: BackendSkillTimeAnalysis | null | undefined): DashboardSkillTimeAnalysis {
+  return {
+    avgTimePerTestSec: item?.avg_time_per_test_sec ?? null,
+    recommendedTimeSec: item?.recommended_time_sec ?? null,
+    timeManagementStatus: item?.time_management_status ?? "No timing data",
+    slowestSection: item?.slowest_section ? mapSectionAnalysisItem(item.slowest_section) : null,
+    fastestSection: item?.fastest_section ? mapSectionAnalysisItem(item.fastest_section) : null,
+    unansweredAvgPercent: item?.unanswered_avg_percent ?? null,
+  };
+}
+
+export async function getDashboardStats(): Promise<DashboardStat[]> {
+  try {
+    const stats = await requestBackend<BackendMeStats>("/me/stats");
+    return [
+      {
+        label: "Attempts",
+        value: String(stats.attempts_total),
+        detail: "All recorded Reading and Listening attempts."
+      },
+      {
+        label: "Average band",
+        value: formatIeltsBand(stats.average_band, "N/A"),
+        detail: "Calculated from completed full attempts."
+      },
+      {
+        label: "Best Reading",
+        value: formatIeltsBand(stats.reading_band, "N/A"),
+        detail: "Highest completed Reading band."
+      },
+      {
+        label: "Sessions",
+        value: String(stats.active_sessions),
+        detail: stats.leaderboard_rank ? `Leaderboard rank #${stats.leaderboard_rank}` : "Leaderboard hidden or not ranked yet."
+      }
+    ];
+  } catch {
+    return [
+      { label: "Attempts", value: "0", detail: "Backend profile stats unavailable." },
+      { label: "Average band", value: "N/A", detail: "Complete a full attempt to see averages." },
+      { label: "Best Reading", value: "N/A", detail: "Reading band will appear after scoring." },
+      { label: "Sessions", value: "0", detail: "No active user session data is available." }
+    ];
+  }
+}
+
+export async function getXpSummary(): Promise<XpSummary> {
+  try {
+    const summary = await requestBackend<BackendXpSummary>("/me/xp-summary");
+    return {
+      totalXp: summary.total_xp,
+      level: summary.level,
+      currentStreak: summary.current_streak,
+      bestStreak: summary.best_streak,
+      weeklyXp: summary.weekly_xp,
+      monthlyXp: summary.monthly_xp,
+      latestXpGain: summary.latest_xp_gain ?? null,
+      progress: {
+        level: summary.progress.level,
+        levelFloorXp: summary.progress.level_floor_xp,
+        nextLevelXp: summary.progress.next_level_xp,
+        xpIntoLevel: summary.progress.xp_into_level,
+        xpNeededForNextLevel: summary.progress.xp_needed_for_next_level,
+        progressPercent: summary.progress.progress_percent,
+      },
+    };
+  } catch {
+    return {
+      totalXp: 0,
+      level: 1,
+      currentStreak: 0,
+      bestStreak: 0,
+      weeklyXp: 0,
+      monthlyXp: 0,
+      latestXpGain: null,
+      progress: {
+        level: 1,
+        levelFloorXp: 0,
+        nextLevelXp: 100,
+        xpIntoLevel: 0,
+        xpNeededForNextLevel: 100,
+        progressPercent: 0,
+      },
+    };
+  }
+}
+
+export async function getLeaderboardRank(type: "combined" | TestType = "combined"): Promise<number | null> {
+  try {
+    const payload = await requestBackend<BackendLeaderboardResponse>(`/leaderboard?type=${encodeURIComponent(type)}&period=all_time`);
+    return effectiveCurrentUserRank(payload);
+  } catch {
+    return null;
+  }
+}
+
+function effectiveCurrentUserRank(payload: BackendLeaderboardResponse): number | null {
+  const rank = payload.current_user?.rank ?? null;
+  if (typeof rank === "number" && rank > 0) {
+    return rank;
+  }
+  if (payload.current_user) {
+    return payload.items.length + 1;
+  }
+  return null;
+}
+
+export async function getWeeklyLeaderboardPreview(): Promise<LeaderboardPreviewSummary> {
+  try {
+    const payload = await requestBackend<BackendLeaderboardResponse>("/leaderboard?period=week");
+    const rank = effectiveCurrentUserRank(payload);
+    if (rank === null) {
+      return { rank: null, topPercent: null };
+    }
+
+    const leaderboardSize = Math.max(payload.items.length, rank);
+    const topPercent = leaderboardSize > 0
+      ? Math.max(1, Math.min(100, Math.ceil((rank / leaderboardSize) * 100)))
+      : null;
+
+    return { rank, topPercent };
+  } catch {
+    return { rank: null, topPercent: null };
+  }
+}
+
+export async function getDashboardAnalytics(testType?: TestType): Promise<DashboardAnalytics> {
+  try {
+    const suffix = testType ? `?test_type=${encodeURIComponent(testType)}` : "";
+    const analytics = await requestBackend<BackendDashboardAnalytics>(`/me/analytics${suffix}`);
+    const sd = analytics.score_distribution;
+    const pb = analytics.personal_bests;
+    const sm = analytics.speed_metrics;
+    const ir = analytics.improvement_rate;
+    return {
+      performanceSummary: mapPerformanceSummary(analytics.performance_summary),
+      writingCriteria: analytics.writing_criteria ? {
+        taskAchievement: roundIeltsBand(analytics.writing_criteria.task_achievement),
+        coherenceCohesion: roundIeltsBand(analytics.writing_criteria.coherence_cohesion),
+        lexicalResource: roundIeltsBand(analytics.writing_criteria.lexical_resource),
+        grammaticalRangeAccuracy: roundIeltsBand(analytics.writing_criteria.grammatical_range_accuracy),
+      } : null,
+      speakingCriteria: analytics.speaking_criteria ? {
+        fluency: roundIeltsBand(analytics.speaking_criteria.fluency),
+        lexicalResource: roundIeltsBand(analytics.speaking_criteria.lexical_resource),
+        grammar: roundIeltsBand(analytics.speaking_criteria.grammar),
+        pronunciation: roundIeltsBand(analytics.speaking_criteria.pronunciation),
+      } : null,
+      questionTypeAnalysis: mapQuestionTypeAnalysis(analytics.question_type_analysis),
+      comparison: mapComparison(analytics.comparison),
+      errorDistribution: mapErrorDistribution(analytics.error_distribution),
+      progressSeries: mapProgressSeries(analytics.progress_series),
+      accuracyTrend: (analytics.accuracy_trend ?? []).map((p) => ({
+        date: p.date,
+        accuracy: p.accuracy,
+        band: roundIeltsBand(p.band),
+        testType: p.test_type ?? null,
+      })),
+      weeklyActivity: (analytics.weekly_activity ?? []).map((p) => ({
+        weekLabel: p.week_label,
+        attemptsCount: p.attempts_count,
+        timeSpentMin: p.time_spent_min,
+      })),
+      scoreDistribution: {
+        band1To3: sd?.band_1_to_3 ?? 0,
+        band3_5To5: sd?.band_3_5_to_5 ?? 0,
+        band5To6_5: sd?.band_5_to_6_5 ?? 0,
+        band6_5To7_5: sd?.band_6_5_to_7_5 ?? 0,
+        band7_5To9: sd?.band_7_5_to_9 ?? 0,
+      },
+      personalBests: {
+        bestBand: roundIeltsBand(pb?.best_band),
+        bestAccuracy: pb?.best_accuracy ?? null,
+        longestStreak: pb?.longest_streak ?? 0,
+        currentStreak: pb?.current_streak ?? 0,
+        fastestFullTestSec: pb?.fastest_full_test_sec ?? null,
+      },
+      speedMetrics: {
+        avgTimePerQuestionSec: sm?.avg_time_per_question_sec ?? null,
+        readingAvgSecPerQuestion: sm?.reading_avg_sec_per_question ?? null,
+        listeningAvgSecPerQuestion: sm?.listening_avg_sec_per_question ?? null,
+      },
+      improvementRate: {
+        last5AvgBand: ir?.last_5_avg_band ?? null,
+        prev5AvgBand: ir?.prev_5_avg_band ?? null,
+        delta: ir?.delta ?? null,
+        percentChange: ir?.percent_change ?? null,
+      },
+      sectionAnalysis: (analytics.section_analysis ?? []).map(mapSectionAnalysisItem),
+      skillFocus: (analytics.skill_focus ?? []).map(mapSkillFocusItem),
+      timeAnalysis: mapSkillTimeAnalysis(analytics.time_analysis),
+    };
+  } catch {
+    return {
+      performanceSummary: {
+        studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0, writingTimeSec: 0, speakingTimeSec: 0 },
+        reading: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
+        listening: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
+        writing: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 },
+        speaking: { fullCount: 0, section1Count: 0, section2Count: 0, section3Count: 0, section4Count: 0 }
+      },
+      writingCriteria: null,
+      speakingCriteria: null,
+      questionTypeAnalysis: [],
+      comparison: {
+        previousTestTitle: null,
+        previousTestDate: null,
+        currentTestTitle: null,
+        currentTestDate: null,
+        tests: [],
+        items: []
+      },
+      errorDistribution: [],
+      progressSeries: [],
+      accuracyTrend: [],
+      weeklyActivity: [],
+      scoreDistribution: { band1To3: 0, band3_5To5: 0, band5To6_5: 0, band6_5To7_5: 0, band7_5To9: 0 },
+      personalBests: { bestBand: null, bestAccuracy: null, longestStreak: 0, currentStreak: 0, fastestFullTestSec: null },
+      speedMetrics: { avgTimePerQuestionSec: null, readingAvgSecPerQuestion: null, listeningAvgSecPerQuestion: null },
+      improvementRate: { last5AvgBand: null, prev5AvgBand: null, delta: null, percentChange: null },
+      sectionAnalysis: [],
+      skillFocus: [],
+      timeAnalysis: {
+        avgTimePerTestSec: null,
+        recommendedTimeSec: null,
+        timeManagementStatus: "No timing data",
+        slowestSection: null,
+        fastestSection: null,
+        unansweredAvgPercent: null,
+      },
+    };
+  }
+}
+
+export async function getDashboardActivity(): Promise<DashboardActivityPoint[]> {
+  try {
+    const activity = await requestBackend<BackendMeActivityPoint[]>("/me/activity");
+    return activity.map((point) => ({
+      activityDate: point.activity_date,
+      attemptsCount: point.attempts_count,
+      timeSpentSec: point.time_spent_sec,
+      readingTimeSec: point.reading_time_sec ?? 0,
+      listeningTimeSec: point.listening_time_sec ?? 0,
+      writingTimeSec: point.writing_time_sec ?? 0,
+      speakingTimeSec: point.speaking_time_sec ?? 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getUserAttempts(): Promise<AttemptRow[]> {
+  try {
+    const attempts = await requestBackend<BackendMeAttempt[]>("/me/attempts");
+    const activeTestIds = new Set<string>();
+    return attempts
+      .filter((attempt) => {
+        if (isSubmittedBackendAttempt(attempt)) {
+          return true;
+        }
+        if (attempt.status !== "in_progress" || activeTestIds.has(attempt.test_id)) {
+          return false;
+        }
+        activeTestIds.add(attempt.test_id);
+        return true;
+      })
+      .map(mapBackendAttempt);
+  } catch {
+    return [];
+  }
+}
+
+export async function getSubmittedAttempts(): Promise<AttemptRow[]> {
+  try {
+    const attempts = await requestBackend<BackendMeAttempt[]>("/me/attempts");
+    return attempts.filter(isSubmittedBackendAttempt).map(mapBackendAttempt);
+  } catch {
+    return [];
+  }
+}

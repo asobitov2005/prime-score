@@ -4,7 +4,10 @@ const encoder = new TextEncoder();
 function stepIndexFor(status: string, tick: number): number {
   if (status === "queued") return 0;
   if (status === "completed" || status === "failed") return 5;
-  return Math.min(5, 1 + tick);
+  // Keep the final "Compiling feedback" step reserved for the completed
+  // event. Otherwise the progress UI reaches it early and appears stuck
+  // while the actual rubric evaluation is still running.
+  return Math.min(4, 1 + tick);
 }
 
 async function fetchSubmission(submissionId: string): Promise<{ status?: string; error_message?: string | null }> {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { BookmarkCheck, ChevronRight, Lock, SearchCheck } from "lucide-react";
 
 import { BookmarkToggleButton } from "@/components/bookmark-toggle-button";
@@ -10,13 +10,17 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getTestSourceLabel } from "@/lib/test-source";
 import type { TestCatalogItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useBookmarksStore, type BookmarkedTest } from "@/store/bookmarks-store";
+import { useAuthStore } from "@/store/auth-store";
+import { useBookmarksStore } from "@/store/bookmarks-store";
 
 interface BookmarksClientProps {
   catalogTests: TestCatalogItem[];
 }
 
-function formatDisplay(format: BookmarkedTest["format"], type: BookmarkedTest["type"]) {
+/** A catalog test the user has bookmarked, plus when they saved it. */
+type BookmarkView = TestCatalogItem & { savedAt: string };
+
+function formatDisplay(format: TestCatalogItem["format"], type: TestCatalogItem["type"]) {
   if (!format || format === "full") {
     return "Full Test";
   }
@@ -28,7 +32,7 @@ function formatDisplay(format: BookmarkedTest["format"], type: BookmarkedTest["t
   return type === "listening" ? label.replace("Part", "Section") : label;
 }
 
-function formatSkill(type: BookmarkedTest["type"]) {
+function formatSkill(type: TestCatalogItem["type"]) {
   return type.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
@@ -43,27 +47,6 @@ function formatSavedAt(savedAt: string) {
     month: "short",
     year: "numeric",
   }).format(date);
-}
-
-function getMergedBookmark(item: BookmarkedTest, catalogTest: TestCatalogItem | undefined): BookmarkedTest {
-  if (!catalogTest) {
-    return item;
-  }
-
-  return {
-    ...item,
-    slug: catalogTest.slug,
-    title: catalogTest.title,
-    type: catalogTest.type,
-    format: catalogTest.format,
-    accessType: catalogTest.accessType,
-    source: catalogTest.source,
-    sourceLabel: getTestSourceLabel(catalogTest.source),
-    description: catalogTest.description,
-    questionCount: catalogTest.questionCount,
-    estimatedMinutes: catalogTest.estimatedMinutes,
-    href: `/tests/${catalogTest.slug || catalogTest.id}`,
-  };
 }
 
 function BookmarkSkeleton() {
@@ -96,13 +79,26 @@ function BookmarkSkeleton() {
 }
 
 export function BookmarksClient({ catalogTests }: BookmarksClientProps) {
-  const items = useBookmarksStore((state) => state.items);
+  const userId = useAuthStore((state) => state.userId);
+  const entries = useBookmarksStore((state) => state.entries);
   const hasHydrated = useBookmarksStore((state) => state.hasHydrated);
+  const ensureHydrated = useBookmarksStore((state) => state.ensureHydrated);
+
+  useEffect(() => {
+    void ensureHydrated(userId);
+  }, [ensureHydrated, userId]);
 
   const catalogById = useMemo(() => new Map(catalogTests.map((test) => [test.id, test])), [catalogTests]);
-  const bookmarks = useMemo(
-    () => items.map((item) => getMergedBookmark(item, catalogById.get(item.id))),
-    [catalogById, items],
+  const bookmarks = useMemo<BookmarkView[]>(
+    () =>
+      Object.entries(entries)
+        .map(([testId, savedAt]) => {
+          const test = catalogById.get(testId);
+          return test ? { ...test, savedAt } : null;
+        })
+        .filter((item): item is BookmarkView => item !== null)
+        .sort((left, right) => new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime()),
+    [catalogById, entries],
   );
 
   return (
@@ -147,8 +143,9 @@ export function BookmarksClient({ catalogTests }: BookmarksClientProps) {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {bookmarks.map((item) => {
-                const actionLabel = item.actionLabel ?? (item.accessType === "premium" ? "Unlock" : "Open Test");
                 const isPremium = item.accessType === "premium";
+                const actionLabel = isPremium ? "Unlock" : "Open Test";
+                const href = `/tests/${item.slug || item.id}`;
                 return (
                   <article
                     key={item.id}
@@ -188,7 +185,7 @@ export function BookmarksClient({ catalogTests }: BookmarksClientProps) {
                     </div>
 
                     <p className="mt-2 line-clamp-1 text-sm text-slate-500 dark:text-slate-400">
-                      {item.sourceLabel} · {formatDisplay(item.format, item.type)}
+                      {getTestSourceLabel(item.source)} · {formatDisplay(item.format, item.type)}
                     </p>
 
                     <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-400 dark:text-slate-500">
@@ -205,7 +202,7 @@ export function BookmarksClient({ catalogTests }: BookmarksClientProps) {
                           : "border border-orange-500 bg-orange-500 text-white hover:bg-orange-600",
                       )}
                     >
-                      <Link href={item.href}>{actionLabel}</Link>
+                      <Link href={href}>{actionLabel}</Link>
                     </Button>
                   </article>
                 );
