@@ -53,7 +53,15 @@ async def test_leaderboard_route_returns_xp_rankings(app, monkeypatch) -> None:
             ),
         ]
 
+    async def fake_unlocked_badges(*args, **kwargs):
+        return {}
+
     monkeypatch.setattr(leaderboard_route, "leaderboard_rows", fake_rows)
+    monkeypatch.setattr(
+        leaderboard_route,
+        "_unlocked_badges_by_user",
+        fake_unlocked_badges,
+    )
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_db_session] = override_db_session
     try:
