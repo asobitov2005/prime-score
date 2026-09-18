@@ -126,5 +126,14 @@ Real local login uchun admin recorddagi `phone_number` va `telegram_id` bot orqa
 
 - `AGENTS.md` — AI agentlar uchun qisqa repo guide
 - `docs/context/README.md` — faqat qisqa pointer
+- `docs/server-systemd.md` — production backend service va deploy xaritasi
+
+## Production
+
+Production server faqat backendni ishlatadi. FastAPI, Celery worker/beat, Telegram
+bot, PostgreSQL, Redis va MinIO native systemd servislaridir. `frontend/` va
+`admin/` Vercel orqali deploy qilinadi. `master` push backend testlardan o'tgach
+`scripts/deploy-systemd.sh` atomik release yaratadi va API health-check
+muvaffaqiyatsiz bo'lsa oldingi releasega qaytadi.
 
 Bu repo intentionally kichik docs bilan yuradi. Agar docs o'zgarsa, katta PRD yozish o'rniga `README.md` va `AGENTS.md` ni yangilang.

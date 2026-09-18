@@ -1,0 +1,24 @@
+[Unit]
+Description=PrimeScore Celery beat
+After=network-online.target postgresql.service primescore-redis.service
+Requires=postgresql.service primescore-redis.service
+PartOf=primescore.target
+
+[Service]
+Type=simple
+User=primescore
+Group=primescore
+WorkingDirectory=/opt/primescore/current/backend
+EnvironmentFile=/etc/primescore/primescore.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/primescore/current/backend/.venv/bin/celery -A app.tasks.celery_app beat --loglevel=info --schedule=/var/lib/primescore/celerybeat-schedule
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/primescore
+
+[Install]
+WantedBy=primescore.target

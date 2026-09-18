@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-/root/projects/prime-score}"
 BACKUP_ROOT="${BACKUP_ROOT:-/root/projects/prime-score-backups/daily}"
-COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_DIR/docker-compose.prod.yml}"
-ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env}"
+ENV_FILE="${ENV_FILE:-/etc/primescore/primescore.env}"
+MINIO_DATA_DIR="${MINIO_DATA_DIR:-/var/lib/primescore/minio}"
 RETENTION_COUNT="${RETENTION_COUNT:-3}"
 LOCK_FILE="${LOCK_FILE:-/run/primescore-daily-backup.lock}"
 LOG_PREFIX="[primescore-backup]"
@@ -41,8 +40,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cd "$PROJECT_DIR"
-
 zip_dir() {
   local source_dir="$1"
   local output_file="$2"
@@ -62,8 +59,8 @@ PY
 
 create_db_backup() {
   echo "$LOG_PREFIX creating database dump $TS"
-  docker-compose -f "$COMPOSE_FILE" exec -T postgres pg_dump -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-primescore}" -Fc > "$DB_WORK_DIR/primescore-db-$TS.dump"
-  docker-compose -f "$COMPOSE_FILE" exec -T postgres pg_dumpall -U "${POSTGRES_USER:-postgres}" --globals-only > "$DB_WORK_DIR/postgres-globals-$TS.sql"
+  PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}" pg_dump -h 127.0.0.1 -U "${POSTGRES_USER:-primescore}" -d "${POSTGRES_DB:-primescore}" -Fc > "$DB_WORK_DIR/primescore-db-$TS.dump"
+  runuser -u postgres -- pg_dumpall --globals-only > "$DB_WORK_DIR/postgres-globals-$TS.sql"
   sha256sum "$DB_WORK_DIR/primescore-db-$TS.dump" "$DB_WORK_DIR/postgres-globals-$TS.sql" > "$DB_WORK_DIR/SHA256SUMS"
   cat > "$DB_WORK_DIR/README.txt" <<README
 PrimeScore database backup: $TS
@@ -83,20 +80,10 @@ README
   sha256sum "$DB_FINAL_DIR/primescore-db-$TS.tar.gz" "$DB_FINAL_DIR/primescore-db-$TS.zip" > "$DB_FINAL_DIR/SHA256SUMS"
 }
 
-minio_data_source() {
-  local container_id
-  container_id="$(docker-compose -f "$COMPOSE_FILE" ps -q minio)"
-  if [ -z "$container_id" ]; then
-    echo "$LOG_PREFIX minio container not found" >&2
-    return 1
-  fi
-  docker inspect --format '{{ range .Mounts }}{{ if eq .Destination "/data" }}{{ .Source }}{{ end }}{{ end }}' "$container_id"
-}
-
 create_minio_backup() {
   echo "$LOG_PREFIX creating MinIO backup $TS"
   local data_source
-  data_source="$(minio_data_source)"
+  data_source="$MINIO_DATA_DIR"
   if [ -z "$data_source" ] || [ ! -d "$data_source" ]; then
     echo "$LOG_PREFIX MinIO data source not found: $data_source" >&2
     return 1
@@ -127,7 +114,7 @@ resolve_chat_id() {
     printf '%s' "$BACKUP_TELEGRAM_CHAT_ID"
     return 0
   fi
-  docker-compose -f "$COMPOSE_FILE" exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-primescore}" -Atc "select telegram_id from users where lower(username) = 'thebugcreator' and telegram_id is not null order by updated_at desc limit 1;" | tr -d '[:space:]'
+  PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}" psql -h 127.0.0.1 -U "${POSTGRES_USER:-primescore}" -d "${POSTGRES_DB:-primescore}" -Atc "select telegram_id from users where lower(username) = 'thebugcreator' and telegram_id is not null order by updated_at desc limit 1;" | tr -d '[:space:]'
 }
 
 telegram_api() {

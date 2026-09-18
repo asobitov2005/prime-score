@@ -1,0 +1,12 @@
+[Unit]
+Description=PrimeScore daily PostgreSQL and MinIO backup
+After=postgresql.service primescore-minio.service
+Requires=postgresql.service primescore-minio.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/primescore/primescore.env
+ExecStart=/usr/local/sbin/primescore_daily_backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

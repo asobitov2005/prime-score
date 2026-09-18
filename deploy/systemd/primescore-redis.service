@@ -1,0 +1,25 @@
+[Unit]
+Description=PrimeScore dedicated Redis
+After=network-online.target
+Wants=network-online.target
+PartOf=primescore.target
+
+[Service]
+Type=notify
+User=primescore
+Group=primescore
+ExecStart=/usr/bin/redis-server /etc/primescore/redis.conf --supervised systemd
+ExecStop=/bin/kill -s TERM $MAINPID
+Restart=always
+RestartSec=3
+RuntimeDirectory=primescore-redis
+RuntimeDirectoryMode=0750
+LimitNOFILE=65535
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/primescore/redis /run/primescore-redis
+
+[Install]
+WantedBy=primescore.target
