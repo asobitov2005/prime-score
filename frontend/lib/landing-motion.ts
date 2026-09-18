@@ -56,7 +56,12 @@ export function setupLandingMotion(root: HTMLElement): () => void {
       (entries, observer) => {
         let order = 0;
         for (const entry of entries) {
-          if (!entry.isIntersecting || seen.has(entry.target)) continue;
+          if (
+            !entry.isIntersecting ||
+            entry.intersectionRatio < 0.12 ||
+            seen.has(entry.target)
+          )
+            continue;
           observer.unobserve(entry.target);
           seen.add(entry.target);
           if (document.visibilityState === "hidden" || !root.isConnected)
@@ -68,13 +73,13 @@ export function setupLandingMotion(root: HTMLElement): () => void {
             [
               {
                 transform: `translateY(${compact ? 12 : 18}px)`,
-                opacity: 0.55,
+                opacity: 0.8,
               },
               { transform: "none", opacity: 1 },
             ],
             {
-              duration: compact ? 420 : 540,
-              delay: (order++ % 3) * (compact ? 35 : 65),
+              duration: compact ? 380 : 480,
+              delay: 120 + (order++ % 3) * (compact ? 45 : 60),
               easing: "cubic-bezier(0.22, 1, 0.36, 1)",
               fill: "backwards",
             },
@@ -84,7 +89,8 @@ export function setupLandingMotion(root: HTMLElement): () => void {
             running.delete(animation);
         }
       },
-      { rootMargin: "0px 0px 24px 0px", threshold: 0 },
+      // Start inside the viewport, not before the visitor can see the element.
+      { rootMargin: "0px 0px -32px 0px", threshold: 0.12 },
     );
 
     // Read positions once, not on scroll. Already-visible content never flashes on hydration.

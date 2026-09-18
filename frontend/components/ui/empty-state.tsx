@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import type { DotLottie, EventType } from "@lottiefiles/dotlottie-web";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+// The root not-found boundary is bundled on every route; load its player only when rendered.
+const DotLottieReact = dynamic(
+  () => import("@lottiefiles/dotlottie-react").then((module) => module.DotLottieReact),
+  { ssr: false },
+);
 
 interface EmptyStateAction {
   href: string;

@@ -98,7 +98,11 @@ function fixture(t, { reduced = false, width = 1440 } = {}) {
     }
     enter(...targets) {
       this.callback(
-        targets.map((target) => ({ target, isIntersecting: true })),
+        targets.map((target) => ({
+          target,
+          isIntersecting: true,
+          intersectionRatio: 1,
+        })),
         this,
       );
     }
@@ -195,7 +199,25 @@ test("section tracking selects the incoming section at a shared boundary", (t) =
 test("mobile reveals are shorter and no polling or animation frame loop is installed", (t) => {
   const f = fixture(t, { width: 390 });
   f.observers[1].enter(f.below);
-  assert.equal(f.below.calls[0].options.duration, 420);
+  assert.equal(f.below.calls[0].options.duration, 380);
+  assert.equal(f.below.calls[0].options.delay, 120);
   assert.equal(f.windowListeners.has("scroll"), false);
   assert.doesNotMatch(source, /requestAnimationFrame|setInterval|setTimeout/);
+});
+
+test("reveals wait until content is visibly inside the viewport, then use a short bounded delay", (t) => {
+  const f = fixture(t);
+  const observer = f.observers[1];
+  assert.equal(observer.options.rootMargin, "0px 0px -32px 0px");
+  assert.equal(observer.options.threshold, 0.12);
+  observer.callback(
+    [{ target: f.below, isIntersecting: true, intersectionRatio: 0.04 }],
+    observer,
+  );
+  assert.equal(f.below.calls.length, 0);
+  assert.ok(observer.targets.has(f.below));
+  observer.enter(f.below);
+  assert.equal(f.below.calls[0].options.delay, 120);
+  assert.equal(f.below.calls[0].options.duration, 480);
+  assert.ok(f.below.calls[0].frames[0].opacity >= 0.8);
 });
