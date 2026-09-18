@@ -26,6 +26,9 @@ flock -n 9 || { echo "another PrimeScore deploy is running" >&2; exit 1; }
 
 previous_release="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
 install -d -o primescore -g primescore "$INSTALL_ROOT/releases" "$RELEASE_DIR/backend"
+install -o root -g root -m 0644 "$SOURCE_DIR"/deploy/systemd/* /etc/systemd/system/
+install -o root -g root -m 0755 "$SOURCE_DIR/scripts/primescore_daily_backup.sh" /usr/local/sbin/primescore_daily_backup.sh
+systemctl daemon-reload
 
 rsync -a --delete \
   --exclude '.env' \
@@ -44,11 +47,13 @@ set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
-runuser -u primescore --preserve-environment -- "$RELEASE_DIR/backend/.venv/bin/alembic" -c "$RELEASE_DIR/backend/alembic.ini" upgrade head
+(
+  cd "$RELEASE_DIR/backend"
+  runuser -u primescore --preserve-environment -- env HOME=/var/lib/primescore ./.venv/bin/alembic upgrade head
+)
 
 ln -sfn "$RELEASE_DIR" "$INSTALL_ROOT/current.new"
 mv -Tf "$INSTALL_ROOT/current.new" "$CURRENT_LINK"
-systemctl daemon-reload
 systemctl restart primescore-api.service primescore-worker.service primescore-beat.service primescore-bot.service
 
 healthy=false

@@ -32,3 +32,7 @@ class _FacadeModule(types.ModuleType):
 
 sys.modules[__name__].__class__ = _FacadeModule
 __all__ = [name for name in globals() if not name.startswith("_")]
+
+
+if __name__ == "__main__":
+    _part_03.main()

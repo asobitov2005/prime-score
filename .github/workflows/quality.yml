@@ -103,3 +103,29 @@ jobs:
         with:
           name: backend-quality-logs
           path: ci-logs/backend-*
+
+  deploy-backend:
+    name: Deploy backend with systemd
+    needs: backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Load deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Add production host key
+        run: |
+          install -d -m 700 ~/.ssh
+          echo "84.247.183.218 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILiu+/8PgiM27M2CbDexFqfzqt9lb0BAcj+6cL3XgJRm" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy current master
+        run: |
+          ssh root@84.247.183.218 'set -euo pipefail
+            cd /root/projects/prime-score
+            git fetch --prune origin master
+            git checkout master
+            git merge --ff-only origin/master
+            RELEASE_ID=${{ github.sha }} ./scripts/deploy-systemd.sh'
