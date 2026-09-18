@@ -15,7 +15,7 @@ async def _build_admin_user_detail(
     params: AdminFilterParams,
 ) -> AdminUserDetailRead:
     # Lazy import: circular admin_* star-imports leave this unbound at module import time.
-    from app.api.routes.admin_contracts import apply_admin_filters
+    from app.api.routes.admin_contracts import AdminUserDetailRead, apply_admin_filters
 
     if user.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
