@@ -11,11 +11,11 @@ const VIEWPORT = { width: 1440, height: 900 };
 const SECTIONS = [
   { name: "01-home-full", path: "/", fullPage: true },
   { name: "02-hero", path: "/", selector: "main > section:nth-of-type(1)" },
-  { name: "03-stats", path: "/", selector: "main > section:nth-of-type(2)" },
-  { name: "04-features", path: "/#features", selector: "#features" },
-  { name: "05-how-it-works", path: "/", selector: "main > section:nth-of-type(4)" },
+  { name: "03-sample", path: "/#sample", selector: "#sample" },
+  { name: "04-practice", path: "/#practice", selector: "#practice" },
+  { name: "05-how-it-works", path: "/#how-it-works", selector: "#how-it-works" },
   { name: "06-pricing", path: "/#pricing", selector: "#pricing" },
-  { name: "07-reviews", path: "/#reviews", selector: "#reviews" },
+  { name: "07-faq", path: "/#faq", selector: "#faq" },
   { name: "08-about-final-cta", path: "/#about", selector: "#about" },
   { name: "09-login-full", path: "/login", fullPage: true },
 ];

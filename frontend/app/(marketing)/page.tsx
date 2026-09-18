@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { LandingPageClient } from "@/components/marketing/landing-page-client";
-import { getLandingTotalUsers } from "@/lib/server-live-stats";
+import { LandingPage as LandingContent } from "@/components/marketing/landing-page";
 import { getPublicPlans } from "@/lib/server-plans";
-import { getPublicReviews } from "@/lib/server-reviews";
 import { getLandingFeaturedTests } from "@/lib/server-data";
 import {
   absoluteUrl,
@@ -18,7 +16,8 @@ import {
 export const revalidate = 900;
 
 export const metadata: Metadata = {
-  title: "Free IELTS Mock Tests Online | Reading, Listening, Writing & Speaking",
+  title:
+    "Free IELTS Mock Tests Online | Reading, Listening, Writing & Speaking",
   description:
     "Prepare for IELTS online with free mock tests, Reading and Listening practice, Writing feedback, Speaking mock preparation, answer review, and band score improvement on PrimeScore.",
   keywords: landingKeywords,
@@ -50,30 +49,50 @@ export const metadata: Metadata = {
 };
 
 export default async function LandingPage() {
-  const [plans, reviews, totalUsers, allTests] = await Promise.all([
-    getPublicPlans(),
-    getPublicReviews(6),
-    getLandingTotalUsers(),
+  const [plans, allTests] = await Promise.all([
+    getPublicPlans({ revalidate: 300 }),
     getLandingFeaturedTests(),
   ]);
 
-  const featuredTests = allTests.filter((t) => t.status === "published").map((t) => ({
-    id: t.id,
-    slug: t.slug,
-    title: t.title,
-    type: t.type,
-    source: t.source,
-    questionCount: t.questionCount,
-    estimatedMinutes: t.estimatedMinutes,
-    isPremiumLocked: t.accessType === "premium",
-    createdAt: t.createdAt,
-  }));
+  const publishedTests = allTests.filter((t) => t.status === "published");
+  const candidates = publishedTests.filter(
+    (test) =>
+      test.slug &&
+      test.slug !== test.id &&
+      (test.type === "reading" || test.type === "listening"),
+  );
+  // Mix both skills and prefer free content. Selection uses catalog metadata only.
+  const bySkill = ["reading", "listening"].map((type) =>
+    candidates
+      .filter((test) => test.type === type)
+      .sort(
+        (a, b) =>
+          Number(a.accessType === "premium") -
+          Number(b.accessType === "premium"),
+      ),
+  );
+  const featuredTests = Array.from({ length: 3 }, (_, index) =>
+    bySkill.map((items) => items[index]),
+  )
+    .flat()
+    .filter((test): test is (typeof candidates)[number] => Boolean(test))
+    .map((t) => ({
+      id: t.id,
+      slug: t.slug,
+      title: t.title,
+      type: t.type,
+      source: t.source,
+      questionCount: t.questionCount,
+      estimatedMinutes: t.estimatedMinutes,
+      isPremiumLocked: t.accessType === "premium",
+      createdAt: t.createdAt,
+    }));
   const structuredDataBlocks = [
     buildOrganizationStructuredData(),
     buildWebsiteStructuredData(),
     buildLandingWebPageStructuredData(),
     buildFaqStructuredData(),
-    buildLandingPracticeItemListStructuredData(featuredTests.slice(0, 8)),
+    buildLandingPracticeItemListStructuredData(featuredTests),
   ];
 
   return (
@@ -82,11 +101,17 @@ export default async function LandingPage() {
         <script
           key={index}
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(payload) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(payload).replace(/</g, "\\u003c"),
+          }}
         />
       ))}
 
-      <LandingPageClient plans={plans} reviews={reviews} totalUsers={totalUsers} initialTests={featuredTests} />
+      <LandingContent
+        plans={plans}
+        tests={featuredTests}
+        publishedCount={publishedTests.length}
+      />
     </>
   );
 }

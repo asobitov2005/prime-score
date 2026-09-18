@@ -27,10 +27,10 @@ const publicProductLinks: LlmLink[] = [
       "Browsable catalogue of IELTS Reading and Listening mock tests, including public and premium practice items.",
   },
   {
-    title: "Reviews",
-    path: "/#reviews",
+    title: "Frequently Asked Questions",
+    path: "/#faq",
     description:
-      "Learner reviews and IELTS band score outcomes shown as social proof on the homepage.",
+      "Answers about free practice, accounts, estimated scores, mobile access and one-time Premium payments.",
   },
   {
     title: "Login",

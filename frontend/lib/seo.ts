@@ -76,29 +76,29 @@ export const pricingKeywords = [
 
 export const landingFaqs = [
   {
-    question: "What can I practice on PrimeScore?",
+    question: "Can I try PrimeScore for free?",
     answer:
-      "PrimeScore is an online IELTS mock platform for Reading, Listening, Writing, and Speaking preparation, with exam-style practice, writing feedback, review tools, and band-score focused study.",
+      "Yes. Explore the public test previews and choose a test marked free to start practising. Premium tests and features are labelled separately. The sample question on this page does not require an account.",
   },
   {
-    question: "Is PrimeScore useful for computer-delivered IELTS preparation?",
+    question: "Do I need an account to take a test?",
     answer:
-      "Yes. PrimeScore is designed around a computer-delivered IELTS workflow so learners can practice Reading, Listening, Writing, and Speaking preparation online.",
+      "You can browse the library and preview public tests before signing in. Sign in with Telegram when you are ready to answer questions, save your attempts and return to your progress.",
   },
   {
-    question: "Does PrimeScore help with IELTS Writing and Speaking mock preparation?",
+    question: "Are the band scores official IELTS results?",
     answer:
-      "Yes. PrimeScore includes Writing practice with custom topics and feedback, and provides a dedicated route for Speaking mock online preparation inside the IELTS platform.",
+      "No. PrimeScore is an independent practice platform. Practice scores and AI writing feedback are estimates to help you prepare, not official IELTS results or a guarantee of your exam score.",
   },
   {
-    question: "Can students in Uzbekistan or Tashkent use PrimeScore for IELTS mock online?",
+    question: "Can I practise on my phone?",
     answer:
-      "Yes. PrimeScore is fully online for IELTS learners in Uzbekistan, Tashkent, and beyond who want structured IELTS mock practice without relying on a physical mock center schedule.",
+      "Yes, you can open PrimeScore in a mobile browser. For longer Reading and Writing sessions, a laptop gives you more room and feels closer to the computer-delivered exam. Headphones are helpful for Listening practice.",
   },
   {
-    question: "Are there free IELTS practice tests on PrimeScore?",
+    question: "How does a Premium payment work?",
     answer:
-      "Yes. PrimeScore includes free access content and premium practice options so learners can start IELTS mock preparation online and upgrade when they need deeper review.",
+      "Choose a plan in your account, follow the card-payment instructions and send your payment screenshot to @TheBugCreator on Telegram for verification. Plans are one-time purchases and do not renew automatically.",
   },
 ];
 

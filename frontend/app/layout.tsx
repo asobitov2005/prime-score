@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Suspense, type ReactNode } from "react";
 import { Providers } from "@/app/providers";
 import { PageViewTracker } from "@/components/analytics/page-view-tracker";
-import { SiteShell } from "@/components/layout/site-shell";
+import { GoogleTagManager } from "@/components/analytics/google-tag-manager";
+import { RouteShell } from "@/components/layout/route-shell";
 import { SmoothScroll } from "@/components/smooth-scroll";
 import { buildDefaultMetadata } from "@/lib/seo";
 import "@/app/globals.css";
@@ -31,15 +31,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
             `,
           }}
         />
-        <Script id="google-tag-manager" strategy="afterInteractive">
-          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','${GTM_ID}');`}
-        </Script>
       </head>
       <body>
+        <GoogleTagManager id={GTM_ID} />
         <noscript>
           <iframe
             src={`https://www.googletagmanager.com/ns.html?id=${GTM_ID}`}
@@ -53,7 +47,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         </Suspense>
         <Providers>
           <SmoothScroll>
-            <SiteShell>{children}</SiteShell>
+            <RouteShell>{children}</RouteShell>
           </SmoothScroll>
         </Providers>
       </body>

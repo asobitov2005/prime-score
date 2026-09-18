@@ -402,9 +402,9 @@ export function SiteShell({ children }: SiteShellProps) {
               onOpenChange={setIsMockTestsOpen}
               variant="marketing"
             />
-            <NavLink href="/#features" label={"Features"} variant="marketing" />
+            <NavLink href="/#practice" label={"Practice"} variant="marketing" />
             <NavLink href="/#pricing" label={"Pricing"} variant="marketing" />
-            <NavLink href="/#reviews" label={"Reviews"} variant="marketing" />
+            <NavLink href="/#faq" label={"FAQ"} variant="marketing" />
             <NavLink href="/#about" label={"About"} variant="marketing" />
           </nav>
           ) : null}
@@ -693,9 +693,9 @@ export function SiteShell({ children }: SiteShellProps) {
               <div className="my-2 h-px bg-slate-200 dark:bg-slate-800" />
 
               <p className="px-3 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{"Explore"}</p>
-              <MobileNavLink href="/#features" label={"Features"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
+              <MobileNavLink href="/#practice" label={"Practice"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
               <MobileNavLink href="/#pricing" label={"Pricing"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
-              <MobileNavLink href="/#reviews" label={"Reviews"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
+              <MobileNavLink href="/#faq" label={"FAQ"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
               <MobileNavLink href="/#about" label={"About"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
 
               <div className="my-2 h-px bg-slate-200 dark:bg-slate-800" />
