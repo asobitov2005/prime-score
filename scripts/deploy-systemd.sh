@@ -28,6 +28,7 @@ previous_release="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
 install -d -o primescore -g primescore "$INSTALL_ROOT/releases" "$RELEASE_DIR/backend"
 install -o root -g root -m 0644 "$SOURCE_DIR"/deploy/systemd/* /etc/systemd/system/
 install -o root -g root -m 0755 "$SOURCE_DIR/scripts/primescore_daily_backup.sh" /usr/local/sbin/primescore_daily_backup.sh
+install -o root -g root -m 0644 "$SOURCE_DIR/docs/server-projects.md" /root/SERVER_PROJECTS.md
 systemctl daemon-reload
 
 rsync -a --delete \

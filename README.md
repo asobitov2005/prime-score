@@ -127,6 +127,7 @@ Real local login uchun admin recorddagi `phone_number` va `telegram_id` bot orqa
 - `AGENTS.md` — AI agentlar uchun qisqa repo guide
 - `docs/context/README.md` — faqat qisqa pointer
 - `docs/server-systemd.md` — production backend service va deploy xaritasi
+- `docs/server-projects.md` — serverdagi loyiha, service va domain inventariysi
 
 ## Production
 
