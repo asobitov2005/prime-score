@@ -8,7 +8,7 @@ import { DashboardTrendLineChart } from "@/components/dashboard/dashboard-trend-
 import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 import type { AttemptRow, DashboardAnalytics } from "@/lib/types";
 import type { WritingHistoryItem } from "@/lib/server-writing";
-import { getAverageBand } from "@/components/charts/use-dashboard-analytics";
+import { getAverageBand } from "@/lib/dashboard-metrics";
 import { getDayTrendPoints, type DashboardTrendPoint } from "@/lib/dashboard-trend";
 import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
 import { cn } from "@/lib/utils";

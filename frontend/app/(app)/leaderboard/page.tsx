@@ -42,7 +42,7 @@ function profileModalData(entry: LeaderboardEntry, period: LeaderboardPeriod): U
     avatarUrl: entry.avatarUrl,
     username: entry.name,
     level: entry.level,
-    totalXp: entry.xp,
+    periodXp: entry.xp,
     rank: entry.rank,
     currentStreak: entry.currentStreak,
     averageScore: entry.averageScore,

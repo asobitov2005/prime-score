@@ -4,29 +4,12 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createApiClient } from "@/lib/api/client";
 import type { DashboardAnalyticsResponse } from "@/lib/api/types";
+import { getAverageBand, roundToIeltsBand } from "@/lib/dashboard-metrics";
 import type { DashboardAnalytics, TestType } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
 
 export type DashboardAnalyticsFilter = "all" | TestType;
-
-export function roundToIeltsBand(value: number): number {
-  if (!Number.isFinite(value) || value <= 0) {
-    return 0;
-  }
-  if (value >= 9) {
-    return 9;
-  }
-
-  const whole = Math.floor(value);
-  const fraction = value - whole;
-  if (fraction < 0.25) {
-    return whole;
-  }
-  if (fraction < 0.75) {
-    return whole + 0.5;
-  }
-  return Math.min(9, whole + 1);
-}
+export { getAverageBand, roundToIeltsBand };
 
 function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAnalytics {
   return {
@@ -196,27 +179,6 @@ function mapAnalyticsResponse(response: DashboardAnalyticsResponse): DashboardAn
       unansweredAvgPercent: response.time_analysis?.unanswered_avg_percent ?? null,
     },
   };
-}
-
-export function getAverageBand(analytics: DashboardAnalytics, type: TestType): number | null {
-  const values = analytics.progressSeries
-    .map((point) => (
-      type === "reading"
-        ? point.reading
-        : type === "listening"
-          ? point.listening
-          : type === "writing"
-            ? point.writing
-            : point.speaking
-    ))
-    .filter((value): value is number => value !== null && value !== undefined);
-
-  if (values.length === 0) {
-    return null;
-  }
-
-  const total = values.reduce((sum, value) => sum + value, 0);
-  return roundToIeltsBand(total / values.length);
 }
 
 export function useDashboardAnalytics(

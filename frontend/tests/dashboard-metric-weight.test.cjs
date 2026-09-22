@@ -27,3 +27,32 @@ test("achievement badges are removed from the app navigation and leaderboard", (
   assert.doesNotMatch(profileModal, /badge|achievement/i);
   assert.doesNotMatch(leaderboard, /getLeaderboardUserProfile/);
 });
+
+test("server-rendered dashboard metrics do not import the client analytics hook", () => {
+  const files = [
+    "../app/(app)/dashboard/dashboard-average-cards.tsx",
+    "../app/(app)/dashboard/skill-performance.tsx",
+    "../lib/dashboard-trend.ts",
+  ];
+
+  for (const relativePath of files) {
+    const source = fs.readFileSync(path.join(__dirname, relativePath), "utf8");
+    assert.doesNotMatch(source, /@\/components\/charts\/use-dashboard-analytics/);
+  }
+});
+
+test("dashboard trend date grouping uses the app timezone", () => {
+  const trend = fs.readFileSync(path.join(__dirname, "../lib/dashboard-trend.ts"), "utf8");
+  assert.match(trend, /getDateKeyInTimeZone\(date, APP_TIME_ZONE\)/);
+  assert.match(trend, /trendByDay\.set\(toAppDayKey\(occurredAt\), value\)/);
+  assert.doesNotMatch(trend, /getFullYear\(\)|getMonth\(\)|getDate\(\)/);
+});
+
+test("leaderboard profile labels XP with the selected period", () => {
+  const profile = fs.readFileSync(path.join(__dirname, "../components/leaderboard/user-profile-modal.tsx"), "utf8");
+  const leaderboard = fs.readFileSync(path.join(__dirname, "../app/(app)/leaderboard/page.tsx"), "utf8");
+  assert.match(profile, /periodXp/);
+  assert.match(profile, /user\.periodLabel\} XP/);
+  assert.doesNotMatch(profile, /totalXp/);
+  assert.match(leaderboard, /periodXp: entry\.xp/);
+});

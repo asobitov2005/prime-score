@@ -5,9 +5,8 @@ import { Check, ChevronDown, Clock, TrendingDown, TrendingUp } from "lucide-reac
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { DashboardActivityPoint } from "@/lib/types";
-import { useAuthStore } from "@/store/auth-store";
 import { APP_TIME_ZONE } from "@/lib/date-time";
-import { summarizeStudyTime } from "./dashboard-metrics";
+import { summarizeStudyTime } from "@/lib/dashboard-metrics";
 
 interface StudyTimeCardProps {
   activity: DashboardActivityPoint[];
@@ -129,7 +128,6 @@ function StudyTimeRangeDropdown({
 }
 
 export function StudyTimeCard({ activity, className }: StudyTimeCardProps) {
-  const createdAt = useAuthStore((state) => state.createdAt);
   const [range, setRange] = useState<StudyTimeRange>("all_time");
   const studyMetrics = useMemo(
     () => summarizeStudyTime(activity, new Date(), APP_TIME_ZONE),
@@ -137,15 +135,8 @@ export function StudyTimeCard({ activity, className }: StudyTimeCardProps) {
   );
   const monthlyData = studyMetrics.monthlyData;
   const totalHours = studyMetrics.totalHours;
-  const { thisWeekHours, previousWeekHours, thisMonthHours, previousMonthHours } = studyMetrics;
-  const joinedDate = createdAt ? new Date(createdAt) : null;
-  const joinedTime = joinedDate && !Number.isNaN(joinedDate.getTime()) ? joinedDate.getTime() : null;
-  const daysSinceJoined = joinedTime
-    ? Math.max(1, Math.ceil((Date.now() - joinedTime) / (1000 * 60 * 60 * 24)))
-    : 7;
-  const dailyAverageHours = totalHours > 0
-    ? totalHours / daysSinceJoined
-    : thisWeekHours / 7;
+  const { thisWeekHours, thisWeekDaysElapsed, previousWeekHours, thisMonthHours, previousMonthHours } = studyMetrics;
+  const dailyAverageHours = thisWeekHours / thisWeekDaysElapsed;
   const previousDailyAverageHours = previousWeekHours / 7;
   const selectedHours = {
     all_time: totalHours,
@@ -207,7 +198,7 @@ export function StudyTimeCard({ activity, className }: StudyTimeCardProps) {
           {[
             { label: "This week", value: formatHours(thisWeekHours), trend: thisWeekHours - previousWeekHours },
             { label: "This month", value: formatHours(thisMonthHours), trend: thisMonthHours - previousMonthHours },
-            { label: "Daily average", value: formatHours(dailyAverageHours), trend: dailyAverageHours - previousDailyAverageHours },
+            { label: "Daily avg / week", value: formatHours(dailyAverageHours), trend: dailyAverageHours - previousDailyAverageHours },
           ].map((item) => {
             const isDown = item.trend < 0;
             const TrendIcon = isDown ? TrendingDown : TrendingUp;

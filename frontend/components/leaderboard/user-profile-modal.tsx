@@ -8,7 +8,7 @@ export interface UserProfileModalData {
   avatarUrl?: string | null;
   username: string;
   level: number;
-  totalXp: number;
+  periodXp: number;
   rank: number;
   currentStreak: number;
   averageScore: number | null;
@@ -51,7 +51,7 @@ export function LeaderboardUserProfileModal({ isOpen, onClose, user }: Leaderboa
 
   const stats = [
     { label: "Level", value: String(user.level) },
-    { label: "XP", value: new Intl.NumberFormat("en-US").format(user.totalXp) },
+    { label: `${user.periodLabel} XP`, value: new Intl.NumberFormat("en-US").format(user.periodXp) },
     { label: "Streak", value: `${user.currentStreak} days` },
     { label: "Avg. score", value: user.averageScore?.toFixed(1) ?? "—" },
   ];

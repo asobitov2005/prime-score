@@ -1,15 +1,16 @@
-import type { DashboardActivityPoint } from "@/lib/types";
+import type { DashboardActivityPoint, DashboardAnalytics, TestType } from "@/lib/types";
 
 export interface StudyTimeSummary {
   totalHours: number;
   thisWeekHours: number;
+  thisWeekDaysElapsed: number;
   previousWeekHours: number;
   thisMonthHours: number;
   previousMonthHours: number;
   monthlyData: Array<{ month: string; hours: number }>;
 }
 
-function dateKeyInTimeZone(date: Date, timeZone: string): string {
+export function getDateKeyInTimeZone(date: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -18,6 +19,25 @@ function dateKeyInTimeZone(date: Date, timeZone: string): string {
   }).formatToParts(date);
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
   return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+export function roundToIeltsBand(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (value >= 9) return 9;
+
+  const whole = Math.floor(value);
+  const fraction = value - whole;
+  if (fraction < 0.25) return whole;
+  if (fraction < 0.75) return whole + 0.5;
+  return Math.min(9, whole + 1);
+}
+
+export function getAverageBand(analytics: DashboardAnalytics, type: TestType): number | null {
+  const values = analytics.progressSeries
+    .map((point) => point[type])
+    .filter((value): value is number => value !== null && value !== undefined && value > 0);
+  if (values.length === 0) return null;
+  return roundToIeltsBand(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
 function shiftDateKey(dateKey: string, amount: number): string {
@@ -56,8 +76,9 @@ export function summarizeStudyTime(
     );
   }
 
-  const today = dateKeyInTimeZone(now, timeZone);
+  const today = getDateKeyInTimeZone(now, timeZone);
   const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+  const thisWeekDaysElapsed = ((weekday + 6) % 7) + 1;
   const thisWeekStart = shiftDateKey(today, -((weekday + 6) % 7));
   const previousWeekEnd = shiftDateKey(thisWeekStart, -1);
   const previousWeekStart = shiftDateKey(previousWeekEnd, -6);
@@ -85,6 +106,7 @@ export function summarizeStudyTime(
   return {
     totalHours: [...secondsByDate.values()].reduce((total, seconds) => total + seconds, 0) / 3600,
     thisWeekHours: sumBetween(secondsByDate, thisWeekStart, today),
+    thisWeekDaysElapsed,
     previousWeekHours: sumBetween(secondsByDate, previousWeekStart, previousWeekEnd),
     thisMonthHours: sumBetween(secondsByDate, thisMonthStart, today),
     previousMonthHours: sumBetween(secondsByDate, previousMonthStart, previousMonthEnd),

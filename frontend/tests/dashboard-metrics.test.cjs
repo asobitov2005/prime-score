@@ -6,7 +6,7 @@ const test = require("node:test");
 const ts = require("typescript");
 
 function loadDashboardMetrics() {
-  const filename = path.join(__dirname, "../app/(app)/dashboard/dashboard-metrics.ts");
+  const filename = path.join(__dirname, "../lib/dashboard-metrics.ts");
   const source = fs.readFileSync(filename, "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -35,6 +35,7 @@ test("study time uses Tashkent calendar week and calendar months", () => {
   );
 
   assert.equal(result.thisWeekHours, 3.5);
+  assert.equal(result.thisWeekDaysElapsed, 4);
   assert.equal(result.totalHours, 4.5);
   assert.equal(result.previousWeekHours, 1);
   assert.equal(result.thisMonthHours, 0.5);
@@ -50,4 +51,9 @@ test("average skill band includes Speaking when it has a score", () => {
   assert.equal(getAverageSkillBand([7, 6.5, 7.5, 8]), 7.25);
   assert.equal(getAverageSkillBand([7, null, 9, null]), 8);
   assert.equal(getAverageSkillBand([null, null]), null);
+});
+
+test("dashboard dates are keyed in the configured timezone", () => {
+  const { getDateKeyInTimeZone } = loadDashboardMetrics();
+  assert.equal(getDateKeyInTimeZone(new Date("2026-01-01T20:30:00Z"), "Asia/Tashkent"), "2026-01-02");
 });

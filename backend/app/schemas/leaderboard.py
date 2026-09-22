@@ -13,6 +13,8 @@ class LeaderboardEntryRead(BaseModel):
     display_name: str
     level: int = 1
     xp: int = 0
+    badge: str | None = None
+    badge_image: str | None = None
     current_streak: int = 0
     average_score: float | None = None
     full_mock_completions: int = 0

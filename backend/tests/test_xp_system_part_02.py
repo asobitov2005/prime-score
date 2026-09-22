@@ -68,5 +68,5 @@ async def test_leaderboard_route_returns_xp_rankings(app, monkeypatch) -> None:
     assert payload["items"][0]["xp"] == 980
     assert payload["current_user"]["xp"] == 760
     assert payload["current_user"]["level"] == 4
-    assert "badge" not in payload["items"][0]
-    assert "badge_image" not in payload["items"][0]
+    assert payload["items"][0]["badge"] is None
+    assert payload["items"][0]["badge_image"] is None

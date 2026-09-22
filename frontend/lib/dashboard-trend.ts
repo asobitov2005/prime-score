@@ -1,4 +1,5 @@
-import { roundToIeltsBand } from "@/components/charts/use-dashboard-analytics";
+import { getDateKeyInTimeZone, roundToIeltsBand } from "@/lib/dashboard-metrics";
+import { APP_TIME_ZONE } from "@/lib/date-time";
 import type { DashboardAnalytics } from "@/lib/types";
 
 export type DashboardTrendSkill = "overall" | "reading" | "listening" | "writing" | "speaking";
@@ -10,35 +11,32 @@ export interface DashboardTrendPoint {
   value: number | null;
 }
 
-function toLocalDayKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function toAppDayKey(date: Date) {
+  return getDateKeyInTimeZone(date, APP_TIME_ZONE);
 }
 
 function buildLastDays(count: number): Date[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayKey = toAppDayKey(new Date());
+  const today = new Date(`${todayKey}T00:00:00Z`);
 
   return Array.from({ length: count }, (_, index) => {
     const day = new Date(today);
-    day.setDate(today.getDate() - (count - 1 - index));
+    day.setUTCDate(today.getUTCDate() - (count - 1 - index));
     return day;
   });
 }
 
 function formatAxisLabel(day: Date): string {
-  return new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit" }).format(day).replace("/", ".");
+  return new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", timeZone: "UTC" }).format(day).replace("/", ".");
 }
 
 function formatCompactAxisLabel(day: Date): string {
-  const month = new Intl.DateTimeFormat("en-US", { month: "short" }).format(day).slice(0, 3);
-  return `${month} ${day.getDate()}`;
+  const month = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(day).slice(0, 3);
+  return `${month} ${day.getUTCDate()}`;
 }
 
 function formatTooltipDate(day: Date): string {
-  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(day);
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }).format(day);
 }
 
 function getSkillValueForPoint(
@@ -82,11 +80,11 @@ export function getDayTrendPoints(
       return;
     }
 
-    trendByDay.set(toLocalDayKey(occurredAt), value);
+    trendByDay.set(toAppDayKey(occurredAt), value);
   });
 
   return buildLastDays(dayCount).map((day) => {
-    const dayKey = toLocalDayKey(day);
+    const dayKey = toAppDayKey(day);
     return {
       label: formatAxisLabel(day),
       shortLabel: formatCompactAxisLabel(day),

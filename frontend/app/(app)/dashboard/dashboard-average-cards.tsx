@@ -1,10 +1,9 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { DashboardTrendLineChart } from "@/components/dashboard/dashboard-trend-line-chart";
-import { getAverageBand, roundToIeltsBand } from "@/components/charts/use-dashboard-analytics";
+import { getAverageBand, getAverageSkillBand, roundToIeltsBand } from "@/lib/dashboard-metrics";
 import { getDayTrendPoints } from "@/lib/dashboard-trend";
 import type { DashboardAnalytics } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { getAverageSkillBand } from "./dashboard-metrics";
 
 interface DashboardAverageCardsProps {
   initialAnalytics: DashboardAnalytics;
