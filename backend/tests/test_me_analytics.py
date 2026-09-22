@@ -132,6 +132,50 @@ def test_build_progress_series_averages_daily_full_and_section_attempts() -> Non
     assert series[0].writing is None
 
 
+def test_build_weekly_activity_uses_tashkent_calendar_weeks() -> None:
+    from app.api.routes.me_part_07 import _build_weekly_activity
+
+    attempts = [
+        SimpleNamespace(
+            started_at=datetime(2025, 12, 28, 19, 30, tzinfo=UTC),
+            time_spent_sec=3600,
+        ),
+        SimpleNamespace(
+            started_at=datetime(2025, 12, 28, 18, 30, tzinfo=UTC),
+            time_spent_sec=1800,
+        ),
+    ]
+
+    activity = _build_weekly_activity(attempts, now=datetime(2026, 1, 1, 1, 0, tzinfo=UTC))
+
+    assert activity[-1].week_label == "29 Dec"
+    assert activity[-1].time_spent_min == 60
+    assert activity[-2].week_label == "22 Dec"
+    assert activity[-2].time_spent_min == 30
+
+
+def test_activity_date_uses_configured_timezone() -> None:
+    from app.api.routes.me_part_06 import _activity_date_for_timezone
+
+    assert _activity_date_for_timezone(datetime(2026, 5, 31, 20, 30, tzinfo=UTC), "Asia/Tashkent").isoformat() == "2026-06-01"
+    assert _activity_date_for_timezone(datetime(2026, 6, 1, 1, 0), "Asia/Tashkent").isoformat() == "2026-06-01"
+
+
+def test_current_streak_remains_active_through_local_yesterday() -> None:
+    from app.api.routes.me_part_07 import _build_personal_bests
+
+    yesterday_local_attempt = SimpleNamespace(
+        started_at=datetime(2026, 5, 31, 20, 30, tzinfo=UTC),
+    )
+    summary = _build_personal_bests(
+        [yesterday_local_attempt],
+        [],
+        now=datetime(2026, 6, 1, 19, 30, tzinfo=UTC),
+    )
+
+    assert summary.current_streak == 1
+
+
 @pytest.mark.asyncio
 async def test_load_writing_attempts_maps_time_spent_seconds() -> None:
     current_user = DebugPrincipal(

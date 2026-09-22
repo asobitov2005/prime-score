@@ -8,40 +8,7 @@ import { cn } from "@/lib/utils";
 import { createApiClient } from "@/lib/api/client";
 import type { LeaderboardEntry, LeaderboardResponseData, LeaderboardPeriod } from "@/lib/types";
 import { useAuthStore } from "@/store/auth-store";
-import { LeaderboardUserProfileModal, type UserProfileModalData, type Rarity } from "@/components/leaderboard/user-profile-modal";
-import type { LeaderboardUserProfileResponse } from "@/lib/api/types";
-
-const BADGE_IMAGE_BY_TITLE: Record<string, string> = {
-  "Bronze Learner": "/badges/level/badge-level-bronze-learner.png",
-  "Silver Scholar": "/badges/level/badge-level-silver-scholar.png",
-  "Gold Achiever": "/badges/level/badge-level-gold-achiever.png",
-  "Platinum Master": "/badges/level/badge-level-platinum-master.png",
-  "Prime Legend": "/badges/level/badge-level-prime-legend.png",
-  "3 Day Streak": "/badges/streak/day-3.png",
-  "7 Day Warrior": "/badges/streak/day-7.png",
-  "14 Day Consistent Learner": "/badges/streak/day-14.png",
-  "30 Day Streak": "/badges/streak/day-30.png",
-  "60 Day Discipline Master": "/badges/streak/day-60.png",
-  "90 Day Unbreakable": "/badges/streak/day-60.png",
-  "180 Day Iron Mind": "/badges/streak/day-180.png",
-  "365 Day Prime Legend": "/badges/streak/day-360.png",
-  "Reading Beast": "/badges/skill/reading.png",
-  "Perfect Listening": "/badges/skill/listening.png",
-  "Writing Excellence": "/badges/skill/writing.png",
-  "Speaking Elite": "/badges/skill/speaking.png",
-  "Accuracy Monster": "/badges/performance/performance-accuracy-monster.png",
-  "Mock Warrior": "/badges/special/special-mock-warrior.png",
-  "Mock Addict": "/badges/special/special-mock-addict.png",
-  "Early Supporter": "/badges/special/special-early-supporter.png",
-  "Weekly Top 10": "/badges/special/special-weekly-top-10.png",
-  "Rank #1": "/badges/special/special-rank-1.png",
-  "Top 1%": "/badges/special/special-top-1.png",
-  "XP Hunter": "/badges/special/special-xp-hunter.png",
-  "XP Machine": "/badges/special/special-xp-machine.png",
-  "Weekend Grinder": "/badges/special/special-weekend-grinder.png",
-  "Early Bird": "/badges/special/special-early-bird.png",
-  "Night Owl": "/badges/special/special-night-owl.png",
-};
+import { LeaderboardUserProfileModal, type UserProfileModalData } from "@/components/leaderboard/user-profile-modal";
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
@@ -69,90 +36,27 @@ function topRankIcon(rank: number) {
   return null;
 }
 
-function leaderboardBadgeImage(badge: string | null): string | null {
-  if (!badge) {
-    return null;
-  }
-  const aliases: Record<string, string> = {
-    "Consistency Builder": "/badges/streak/day-7.png",
-    "Mock Master": "/badges/special/special-mock-warrior.png",
-  };
-  return BADGE_IMAGE_BY_TITLE[badge] ?? aliases[badge] ?? null;
-}
-
-function leaderboardBadgeTextClass(badge: string | null): string {
-  switch (badge) {
-    case "Bronze Learner":
-      return "text-orange-700";
-    case "Silver Scholar":
-      return "text-slate-500";
-    case "Gold Achiever":
-      return "text-amber-600";
-    case "Platinum Master":
-      return "text-cyan-600";
-    case "Prime Legend":
-      return "text-violet-600";
-    case "30 Day Streak":
-    case "Consistency Builder":
-      return "text-orange-600";
-    case "Mock Master":
-      return "text-indigo-600";
-    default:
-      return "text-muted-foreground";
-  }
-}
-
-function normalizeRarity(value?: string | null): Rarity {
-  if (value === "Legendary" || value === "Mythic" || value === "Epic" || value === "Rare" || value === "Common") {
-    return value;
-  }
-  return "Common";
-}
-
-function mapLeaderboardProfileCatalog(profile: LeaderboardUserProfileResponse): UserProfileModalData {
-  const equippedBadgeTitle = profile.equipped_badge?.title ?? "No badge equipped";
-
+function profileModalData(entry: LeaderboardEntry, period: LeaderboardPeriod): UserProfileModalData {
+  const periodLabel = period === "week" ? "This week" : period === "month" ? "This month" : "All-time";
   return {
-    avatarUrl: profile.avatar_url ?? undefined,
-    username: profile.display_name,
-    level: profile.level,
-    totalXp: profile.total_xp,
-    rank: profile.rank,
-    isOnline: profile.is_online,
-    isPremium: profile.is_premium,
-    equippedBadge: {
-      image: profile.equipped_badge?.image ?? leaderboardBadgeImage(profile.equipped_badge?.title ?? null) ?? undefined,
-      title: equippedBadgeTitle,
-      tagline: profile.equipped_badge?.tagline ?? "Complete more practice to unlock your first badge.",
-      rarity: normalizeRarity(profile.equipped_badge?.rarity),
-    },
-    activeTitles: profile.active_titles.length > 0 ? profile.active_titles : [],
-    stats: {
-      longestStreak: profile.stats.longest_streak,
-      highestBand: profile.stats.highest_band ?? 0,
-      totalMockTests: profile.stats.total_mock_tests,
-      totalStudyHours: profile.stats.total_study_hours,
-      accuracy: profile.stats.accuracy ?? 0,
-      achievementsUnlocked: profile.stats.achievements_unlocked,
-    },
-    achievements: profile.achievements.map((achievement) => ({
-      id: achievement.id,
-      image: achievement.image ?? leaderboardBadgeImage(achievement.title) ?? undefined,
-      title: achievement.title,
-      rarity: normalizeRarity(achievement.rarity),
-    })),
+    avatarUrl: entry.avatarUrl,
+    username: entry.name,
+    level: entry.level,
+    totalXp: entry.xp,
+    rank: entry.rank,
+    currentStreak: entry.currentStreak,
+    averageScore: entry.averageScore,
+    periodLabel,
   };
 }
 
 function EntryRow({ entry, isCurrentUser = false, onClick }: { entry: LeaderboardEntry; isCurrentUser?: boolean; onClick?: () => void }) {
   const icon = topRankIcon(entry.rank);
-  const badgeImage = entry.badgeImage ?? leaderboardBadgeImage(entry.badge);
-  const badgeTextClass = leaderboardBadgeTextClass(entry.badge);
   return (
     <div
       onClick={onClick}
       className={cn(
-        "grid grid-cols-[40px_minmax(0,1fr)_auto] gap-3 px-3 py-4 md:grid-cols-[56px_minmax(0,1.6fr)_110px_88px_110px_138px] md:gap-3 md:px-6 cursor-pointer transition-colors",
+        "grid grid-cols-[40px_minmax(0,1fr)_auto] gap-3 px-3 py-4 md:grid-cols-[56px_minmax(0,1.6fr)_110px_88px_110px] md:gap-3 md:px-6 cursor-pointer transition-colors",
         isCurrentUser ? "bg-primary/[0.05]" : "hover:bg-muted/30"
       )}
     >
@@ -213,21 +117,6 @@ function EntryRow({ entry, isCurrentUser = false, onClick }: { entry: Leaderboar
         <span className="font-semibold text-foreground">{entry.averageScore?.toFixed(1) ?? "—"}</span>
       </div>
 
-      <div className="hidden items-center justify-center md:flex">
-        {entry.badge ? (
-          <span className="inline-flex max-w-[138px] flex-col items-center justify-center gap-1 px-2 py-0.5 text-center">
-            {badgeImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={badgeImage} alt={entry.badge} className="h-9 w-9 shrink-0 object-contain" />
-            ) : null}
-            <span className={cn("max-w-full truncate text-[11px] font-bold leading-none", badgeTextClass)}>
-              {entry.badge}
-            </span>
-          </span>
-        ) : (
-          <span className="text-xs font-semibold text-muted-foreground">No badge</span>
-        )}
-      </div>
     </div>
   );
 }
@@ -308,7 +197,7 @@ function LeaderboardRowsSkeleton() {
       {Array.from({ length: 8 }).map((_, index) => (
         <div
           key={index}
-          className="grid grid-cols-[40px_minmax(0,1fr)_auto] gap-3 px-3 py-4 md:grid-cols-[56px_minmax(0,1.6fr)_110px_88px_110px_138px] md:px-6"
+          className="grid grid-cols-[40px_minmax(0,1fr)_auto] gap-3 px-3 py-4 md:grid-cols-[56px_minmax(0,1.6fr)_110px_88px_110px] md:px-6"
         >
           <div className="flex items-center justify-center">
             <div className="h-5 w-7 rounded-md bg-muted animate-pulse" />
@@ -328,9 +217,6 @@ function LeaderboardRowsSkeleton() {
           </div>
           <div className="hidden items-center justify-center md:flex">
             <div className="h-5 w-12 rounded-md bg-muted animate-pulse" />
-          </div>
-          <div className="hidden items-center justify-center md:flex">
-            <div className="h-10 w-16 rounded-xl bg-muted animate-pulse" />
           </div>
         </div>
       ))}
@@ -352,14 +238,6 @@ export default function LeaderboardPage() {
     enabled: hasHydrated && isAuthenticated,
   });
 
-  const profileQuery = useQuery({
-    queryKey: ["leaderboard-user-profile", selectedEntry?.userId],
-    queryFn: () => api.getLeaderboardUserProfile(selectedEntry!.userId),
-    enabled: Boolean(selectedEntry?.userId),
-    staleTime: 60_000,
-  });
-  // The badge shown for each entry (including the manually equipped one) is
-  // resolved server-side and arrives on the entry itself.
   const topRows = query.data?.items.slice(0, 25) ?? [];
   const currentUser = query.data?.currentUser ?? null;
   const isCurrentUserInTopRows = currentUser ? topRows.some((entry) => entry.userId === currentUser.userId) : false;
@@ -444,7 +322,6 @@ export default function LeaderboardPage() {
             <div className="text-right md:text-center">XP</div>
             <div className="hidden text-center md:block">Streak</div>
             <div className="hidden text-center md:block">Avg Score</div>
-            <div className="hidden text-center md:block">Badge</div>
           </div>
 
           <div className="divide-y divide-border/40">
@@ -514,8 +391,7 @@ export default function LeaderboardPage() {
       <LeaderboardUserProfileModal
         isOpen={!!selectedEntry}
         onClose={() => setSelectedEntry(null)}
-        user={profileQuery.data ? mapLeaderboardProfileCatalog(profileQuery.data) : null}
-        isLoading={profileQuery.isLoading}
+        user={selectedEntry ? profileModalData(selectedEntry, period) : null}
       />
     </>
   );

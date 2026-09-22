@@ -27,10 +27,17 @@ function loadServerMeModule(mockPayload) {
         formatDateTime: (value) => value,
       };
     }
+    if (request === "@/lib/ielts-band") {
+      return {
+        formatIeltsBand: (value, fallback = "—") => value == null ? fallback : Number(value).toFixed(1),
+        roundIeltsBand: (value) => value == null ? null : Math.round(Number(value) * 2) / 2,
+      };
+    }
     if (request === "@/lib/server-user-auth") {
       return {
         requestServerUserApi: async (path) => {
           if (path === "/me/analytics") {
+            if (mockPayload instanceof Error) throw mockPayload;
             return mockPayload;
           }
           throw new Error(`Unexpected path: ${path}`);
@@ -130,4 +137,13 @@ test("server dashboard analytics preserves writing metrics", async () => {
     lexicalResource: 6.5,
     grammaticalRangeAccuracy: 6.0,
   });
+});
+
+test("dashboard analytics can preserve API errors for visible error states", async () => {
+  const serverMe = loadServerMeModule(new Error("Backend unavailable"));
+
+  await assert.rejects(
+    serverMe.getDashboardAnalytics(undefined, { throwOnError: true }),
+    /Backend unavailable/,
+  );
 });

@@ -141,7 +141,10 @@ function mapTestDetail(item: BackendTestDetail): TestCatalogItem {
   };
 }
 
-export async function getCatalogTests(query: { type?: string; access?: string; format?: string; source?: string } = {}): Promise<TestCatalogItem[]> {
+export async function getCatalogTests(
+  query: { type?: string; access?: string; format?: string; source?: string } = {},
+  options: { throwOnError?: boolean } = {},
+): Promise<TestCatalogItem[]> {
   const search = new URLSearchParams();
   if (query.type === "reading" || query.type === "listening") {
     search.set("type", query.type);
@@ -166,7 +169,8 @@ export async function getCatalogTests(query: { type?: string; access?: string; f
       "catalog-tests",
     );
     return items.map(mapCatalogItem);
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return [];
   }
 }

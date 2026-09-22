@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Award, BarChart3, BookMarked, BookOpenText, CreditCard, Flame, Gauge, History, Mic, PenTool, Sparkles, Trophy, X, Settings2 } from "lucide-react";
+import { BarChart3, BookMarked, BookOpenText, CreditCard, Gauge, History, Mic, PenTool, Sparkles, Trophy, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createApiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,6 @@ export function AppShell({ children }: AppShellProps) {
     { href: "/bookmarks", label: "Bookmarks", icon: BookMarked },
     { href: "/analytics", label: "Analytics", icon: BarChart3, badge: "Premium" },
     { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
-    { href: "/achievements", label: "Achievements", icon: Award },
     { href: "/subscription", label: "Subscription", icon: CreditCard },
     { href: "/settings", label: "Settings", icon: Settings2 },
   ] as const;
@@ -75,7 +74,7 @@ export function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     setIsMobileOpen(false);
-  }, [pathname]);
+  }, [pathname, setIsMobileOpen]);
 
   useEffect(() => {
     setPendingNavigationHref(null);
@@ -134,23 +133,7 @@ export function AppShell({ children }: AppShellProps) {
       })
       .catch(() => {
         if (!ignore) {
-          setXpSummary({
-            totalXp: 0,
-            level: 1,
-            currentStreak: 0,
-            bestStreak: 0,
-            weeklyXp: 0,
-            monthlyXp: 0,
-            latestXpGain: null,
-            progress: {
-              level: 1,
-              levelFloorXp: 0,
-              nextLevelXp: 100,
-              xpIntoLevel: 0,
-              xpNeededForNextLevel: 100,
-              progressPercent: 0,
-            },
-          });
+          setXpSummary(null);
         }
       });
 
@@ -361,15 +344,9 @@ export function AppShell({ children }: AppShellProps) {
             <Trophy className="h-5 w-5" />
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold">
-          <div className="rounded-lg border border-border/50 bg-background/70 px-2.5 py-2">
-            <span className="text-muted-foreground">{"Level"}</span>
-            <span className="ml-1 text-foreground">{xpSummary.level}</span>
-          </div>
-          <div className="rounded-lg border border-border/50 bg-background/70 px-2.5 py-2">
-            <Flame className="mr-1 inline h-3.5 w-3.5 text-orange-500" />
-            <span className="text-foreground">{xpSummary.currentStreak}d</span>
-          </div>
+        <div className="mt-3 rounded-lg border border-border/50 bg-background/70 px-2.5 py-2 text-xs font-semibold">
+          <span className="text-muted-foreground">Level</span>
+          <span className="ml-1 text-foreground">{xpSummary.level}</span>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
           <div

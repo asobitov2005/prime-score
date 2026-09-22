@@ -1,6 +1,3 @@
-import Link from "next/link";
-import Image from "next/image";
-import { ArrowRight } from "lucide-react";
 import type { XpSummary } from "@/lib/types";
 
 function formatNumber(value: number): string {
@@ -99,29 +96,6 @@ export function XpSummaryCard({ summary }: { summary: XpSummary }) {
             </div>
           </div>
 
-          <div className="pt-6 flex items-center justify-between gap-4">
-            <div className="flex h-10 min-w-0 items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.035] px-3">
-              <Image
-                src="/badges/streak/day-14.png"
-                alt="Next reward badge"
-                width={72}
-                height={72}
-                className="h-8 w-auto shrink-0 object-contain"
-              />
-              <div className="min-w-0 leading-none">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/50">Next reward</p>
-                <p className="mt-0.5 truncate text-sm font-semibold tracking-tight text-white/90">Consistent Learner</p>
-              </div>
-            </div>
-
-            <Link
-              href="/achievements"
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.035] px-3.5 text-sm font-semibold text-white/70 transition hover:border-white/10 hover:bg-white/[0.055] hover:text-white"
-            >
-              View all rewards
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
         </div>
       </div>
     </section>

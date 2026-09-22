@@ -366,8 +366,6 @@ export interface LeaderboardEntry {
   level: number;
   xp: number;
   currentStreak: number;
-  badge: string | null;
-  badgeImage: string | null;
   averageScore: number | null;
   fullMockCompletions: number;
   achievedAt: string | null;

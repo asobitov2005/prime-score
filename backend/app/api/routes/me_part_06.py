@@ -4,8 +4,19 @@ from __future__ import annotations
 from app.api.routes.me_dependencies import *
 from app.api.routes.me_part_04 import _leaderboard_rank_for_user, _serialize_xp_transaction, _user_xp_summary
 from app.api.routes.me_part_05 import _attempt_scope_value, _load_attempts
+from app.core.config import get_settings
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 router = APIRouter()
+
+
+def _activity_date_for_timezone(value: datetime, timezone_name: str) -> date:
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        timezone = UTC
+    occurred_at = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return occurred_at.astimezone(timezone).date()
 
 def _effective_attempt_band_score(attempt) -> Decimal | float | None:
     snapshot = attempt.test_snapshot if isinstance(attempt.test_snapshot, dict) else {}
@@ -222,8 +233,9 @@ async def get_activity(
     attempts.extend(await _load_writing_attempts(current_user, session))
     attempts.extend(await _load_speaking_attempts(current_user, session))
     grouped: dict[date, dict[str, int]] = {}
+    timezone_name = get_settings().timezone
     for attempt in attempts:
-        key = attempt.started_at.date()
+        key = _activity_date_for_timezone(attempt.started_at, timezone_name)
         entry = grouped.setdefault(key, {
             "attempts_count": 0, 
             "time_spent_sec": 0,

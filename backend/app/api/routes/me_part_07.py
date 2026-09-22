@@ -4,7 +4,9 @@ from __future__ import annotations
 from app.api.routes.me_dependencies import *
 from app.api.routes.me_part_01 import _count_answered_slots
 from app.api.routes.me_part_05 import _load_attempts
-from app.api.routes.me_part_06 import _effective_attempt_band_score
+from app.api.routes.me_part_06 import _activity_date_for_timezone, _effective_attempt_band_score
+from app.core.config import get_settings
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 router = APIRouter()
 
@@ -107,17 +109,25 @@ def _build_accuracy_trend(attempts) -> list[MeAccuracyTrendPointRead]:
         ))
     return items
 
-def _build_weekly_activity(attempts) -> list[MeWeeklyActivityPointRead]:
-    now = datetime.now(UTC)
+def _build_weekly_activity(attempts, now: datetime | None = None) -> list[MeWeeklyActivityPointRead]:
+    timezone_name = get_settings().timezone
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        timezone = UTC
+    current_date = (now or datetime.now(UTC)).astimezone(timezone).date()
+    current_week_start = current_date - timedelta(days=current_date.weekday())
+    attempt_dates = [
+        (attempt, _activity_date_for_timezone(attempt.started_at, timezone_name))
+        for attempt in attempts
+        if attempt.started_at
+    ]
     items: list[MeWeeklyActivityPointRead] = []
     for week_offset in range(11, -1, -1):
-        week_end = now - timedelta(days=week_offset * 7)
-        week_start = week_end - timedelta(days=7)
-        week_attempts = [
-            a for a in attempts
-            if (a.started_at and week_start <= a.started_at <= week_end)
-        ]
-        total_time = sum(max(0, int(getattr(a, "time_spent_sec", 0) or 0)) for a in week_attempts)
+        week_start = current_week_start - timedelta(weeks=week_offset)
+        week_end = week_start + timedelta(days=7)
+        week_attempts = [(attempt, attempt_date) for attempt, attempt_date in attempt_dates if week_start <= attempt_date < week_end]
+        total_time = sum(max(0, int(getattr(a, "time_spent_sec", 0) or 0)) for a, _ in week_attempts)
         label = week_start.strftime("%d %b")
         items.append(MeWeeklyActivityPointRead(
             week_label=label,
@@ -145,7 +155,11 @@ def _build_score_distribution(attempts) -> MeScoreDistributionRead:
             dist.band_7_5_to_9 += 1
     return dist
 
-def _build_personal_bests(all_attempts, completed_attempts) -> MePersonalBestsRead:
+def _build_personal_bests(
+    all_attempts,
+    completed_attempts,
+    now: datetime | None = None,
+) -> MePersonalBestsRead:
     bands = [
         float(band)
         for attempt in completed_attempts
@@ -157,19 +171,23 @@ def _build_personal_bests(all_attempts, completed_attempts) -> MePersonalBestsRe
     ]
 
     # Streak calculation
-    dates_set: set[str] = set()
+    timezone_name = get_settings().timezone
+    dates_set: set[date] = set()
     for a in all_attempts:
-        d = a.started_at
-        if d:
-            dates_set.add(d.strftime("%Y-%m-%d"))
+        if a.started_at:
+            dates_set.add(_activity_date_for_timezone(a.started_at, timezone_name))
 
-    today = datetime.now(UTC).date()
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        timezone = UTC
+    today = (now or datetime.now(UTC)).astimezone(timezone).date()
     current_streak = 0
     longest_streak = 0
     streak = 0
-    check_date = today
+    check_date = today if today in dates_set else today - timedelta(days=1)
     while True:
-        if check_date.isoformat() in dates_set:
+        if check_date in dates_set:
             streak += 1
             check_date -= timedelta(days=1)
         else:
@@ -181,8 +199,8 @@ def _build_personal_bests(all_attempts, completed_attempts) -> MePersonalBestsRe
         sorted_dates = sorted(dates_set)
         streak = 1
         for i in range(1, len(sorted_dates)):
-            prev = datetime.strptime(sorted_dates[i - 1], "%Y-%m-%d").date()
-            curr = datetime.strptime(sorted_dates[i], "%Y-%m-%d").date()
+            prev = sorted_dates[i - 1]
+            curr = sorted_dates[i]
             if (curr - prev).days == 1:
                 streak += 1
             else:

@@ -3,27 +3,15 @@
 import { PrimePremiumIcon } from "@/components/ui/prime-premium-icon";
 import { useAuthStore } from "@/store/auth-store";
 import type { DashboardAnalytics } from "@/lib/types";
-import { TrendingUp } from "lucide-react";
+import { Flame } from "lucide-react";
 
 interface WelcomeHeaderProps {
   analytics: DashboardAnalytics;
 }
 
-function getLearnerPercentile(analytics: DashboardAnalytics): number {
-  const percentChange = analytics.improvementRate.percentChange;
-
-  if (typeof percentChange === "number" && Number.isFinite(percentChange)) {
-    return Math.min(96, Math.max(58, Math.round(72 + percentChange)));
-  }
-
-  const streak = analytics.personalBests.currentStreak;
-  return Math.min(92, Math.max(68, 68 + streak * 3));
-}
-
 export function WelcomeHeader({ analytics }: WelcomeHeaderProps) {
   const { name, isPremium } = useAuthStore();
   const displayName = name?.trim() || "Candidate";
-  const learnerPercentile = getLearnerPercentile(analytics);
   const currentStreak = analytics.personalBests.currentStreak;
 
   return (
@@ -49,9 +37,11 @@ export function WelcomeHeader({ analytics }: WelcomeHeaderProps) {
           </div>
 
           <p className="flex max-w-2xl items-start gap-2 text-sm font-medium leading-6 text-muted-foreground">
-            <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <Flame className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
             <span>
-              You're improving faster than <span className="font-bold text-foreground">{learnerPercentile}%</span> of learners. Keep it up!
+              {currentStreak > 0
+                ? `You have practiced ${currentStreak} ${currentStreak === 1 ? "day" : "days"} in a row. Keep it going!`
+                : "Complete a practice test to start tracking your study streak."}
             </span>
           </p>
         </div>

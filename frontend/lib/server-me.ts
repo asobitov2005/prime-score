@@ -270,7 +270,10 @@ type BackendLeaderboardResponse = {
 
 export interface LeaderboardPreviewSummary {
   rank: number | null;
-  topPercent: number | null;
+}
+
+interface ServerDataOptions {
+  throwOnError?: boolean;
 }
 
 async function requestBackend<T>(path: string): Promise<T> {
@@ -504,7 +507,7 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   }
 }
 
-export async function getXpSummary(): Promise<XpSummary> {
+export async function getXpSummary(options: ServerDataOptions = {}): Promise<XpSummary> {
   try {
     const summary = await requestBackend<BackendXpSummary>("/me/xp-summary");
     return {
@@ -524,7 +527,8 @@ export async function getXpSummary(): Promise<XpSummary> {
         progressPercent: summary.progress.progress_percent,
       },
     };
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return {
       totalXp: 0,
       level: 1,
@@ -565,26 +569,21 @@ function effectiveCurrentUserRank(payload: BackendLeaderboardResponse): number |
   return null;
 }
 
-export async function getWeeklyLeaderboardPreview(): Promise<LeaderboardPreviewSummary> {
+export async function getWeeklyLeaderboardPreview(options: ServerDataOptions = {}): Promise<LeaderboardPreviewSummary> {
   try {
     const payload = await requestBackend<BackendLeaderboardResponse>("/leaderboard?period=week");
     const rank = effectiveCurrentUserRank(payload);
-    if (rank === null) {
-      return { rank: null, topPercent: null };
-    }
-
-    const leaderboardSize = Math.max(payload.items.length, rank);
-    const topPercent = leaderboardSize > 0
-      ? Math.max(1, Math.min(100, Math.ceil((rank / leaderboardSize) * 100)))
-      : null;
-
-    return { rank, topPercent };
-  } catch {
-    return { rank: null, topPercent: null };
+    return { rank };
+  } catch (error) {
+    if (options.throwOnError) throw error;
+    return { rank: null };
   }
 }
 
-export async function getDashboardAnalytics(testType?: TestType): Promise<DashboardAnalytics> {
+export async function getDashboardAnalytics(
+  testType?: TestType,
+  options: ServerDataOptions = {},
+): Promise<DashboardAnalytics> {
   try {
     const suffix = testType ? `?test_type=${encodeURIComponent(testType)}` : "";
     const analytics = await requestBackend<BackendDashboardAnalytics>(`/me/analytics${suffix}`);
@@ -650,7 +649,8 @@ export async function getDashboardAnalytics(testType?: TestType): Promise<Dashbo
       skillFocus: (analytics.skill_focus ?? []).map(mapSkillFocusItem),
       timeAnalysis: mapSkillTimeAnalysis(analytics.time_analysis),
     };
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return {
       performanceSummary: {
         studyTime: { totalTimeSec: 0, readingTimeSec: 0, listeningTimeSec: 0, writingTimeSec: 0, speakingTimeSec: 0 },
@@ -692,7 +692,7 @@ export async function getDashboardAnalytics(testType?: TestType): Promise<Dashbo
   }
 }
 
-export async function getDashboardActivity(): Promise<DashboardActivityPoint[]> {
+export async function getDashboardActivity(options: ServerDataOptions = {}): Promise<DashboardActivityPoint[]> {
   try {
     const activity = await requestBackend<BackendMeActivityPoint[]>("/me/activity");
     return activity.map((point) => ({
@@ -704,12 +704,13 @@ export async function getDashboardActivity(): Promise<DashboardActivityPoint[]> 
       writingTimeSec: point.writing_time_sec ?? 0,
       speakingTimeSec: point.speaking_time_sec ?? 0,
     }));
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return [];
   }
 }
 
-export async function getUserAttempts(): Promise<AttemptRow[]> {
+export async function getUserAttempts(options: ServerDataOptions = {}): Promise<AttemptRow[]> {
   try {
     const attempts = await requestBackend<BackendMeAttempt[]>("/me/attempts");
     const activeTestIds = new Set<string>();
@@ -725,7 +726,8 @@ export async function getUserAttempts(): Promise<AttemptRow[]> {
         return true;
       })
       .map(mapBackendAttempt);
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return [];
   }
 }

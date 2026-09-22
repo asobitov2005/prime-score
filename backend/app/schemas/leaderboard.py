@@ -14,8 +14,6 @@ class LeaderboardEntryRead(BaseModel):
     level: int = 1
     xp: int = 0
     current_streak: int = 0
-    badge: str | None = None
-    badge_image: str | None = None
     average_score: float | None = None
     full_mock_completions: int = 0
     achieved_at: datetime | None = None

@@ -5,9 +5,7 @@ from app.api.routes.leaderboard_dependencies import *
 from app.api.routes.leaderboard_part_01 import (
     PUBLIC_PERIOD_MAP,
     _display_name,
-    _resolve_leaderboard_badge,
     _sort_key,
-    _unlocked_badges_by_user,
 )
 
 router = APIRouter()
@@ -18,15 +16,7 @@ def _serialize_row(
     user: User,
     rank: int,
     is_current_user: bool,
-    unlocked: list[tuple[str, datetime]] | None = None,
 ) -> LeaderboardEntryRead:
-    badge_title, badge_image = _resolve_leaderboard_badge(
-        equipped_achievement_id=getattr(user, "equipped_achievement_id", None),
-        unlocked=unlocked or [],
-        level=int(user.current_level or 1),
-        current_streak=int(user.current_streak or 0),
-        full_mock_completions=int(row.full_mock_completions or 0),
-    )
     return LeaderboardEntryRead(
         rank=rank,
         user_id=user.id,
@@ -35,8 +25,6 @@ def _serialize_row(
         level=int(user.current_level or 1),
         xp=int(row.xp_total or 0),
         current_streak=int(user.current_streak or 0),
-        badge=badge_title,
-        badge_image=badge_image,
         average_score=round(float(row.average_score), 2) if row.average_score is not None else None,
         full_mock_completions=int(row.full_mock_completions or 0),
         achieved_at=row.achieved_at,
@@ -59,7 +47,7 @@ async def _cached_board_entries(
     ``_LEADERBOARD_CACHE_TTL``; callers personalise (``is_current_user``) on
     top of the returned entries. Any Redis error degrades to a live compute.
     """
-    cache_key = f"leaderboard:board:v1:{period_type}"
+    cache_key = f"leaderboard:board:v2:{period_type}"
     client = _leaderboard_cache_redis()
 
     try:
@@ -74,16 +62,12 @@ async def _cached_board_entries(
 
     rows = await leaderboard_rows(session, period_type=period_type)
     sorted_rows = sorted(rows, key=_sort_key, reverse=True)
-    unlocked_by_user = await _unlocked_badges_by_user(
-        session, [user.id for _, user in sorted_rows]
-    )
     entries = [
         _serialize_row(
             row=row,
             user=user,
             rank=index,
             is_current_user=False,
-            unlocked=unlocked_by_user.get(user.id, []),
         )
         for index, (row, user) in enumerate(sorted_rows, start=1)
     ]
@@ -131,14 +115,6 @@ async def get_leaderboard(
                 if internal_period == PERIOD_ALL_TIME
                 else await get_user_period_xp(session, user_id=user.id, period_type=internal_period)
             )
-            unlocked = (await _unlocked_badges_by_user(session, [user.id])).get(user.id, [])
-            fallback_badge, fallback_badge_image = _resolve_leaderboard_badge(
-                equipped_achievement_id=user.equipped_achievement_id,
-                unlocked=unlocked,
-                level=int(user.current_level or 1),
-                current_streak=int(user.current_streak or 0),
-                full_mock_completions=0,
-            )
             current_user_entry = LeaderboardEntryRead(
                 rank=fallback_rank,
                 user_id=user.id,
@@ -147,8 +123,6 @@ async def get_leaderboard(
                 level=int(user.current_level or 1),
                 xp=period_xp,
                 current_streak=int(user.current_streak or 0),
-                badge=fallback_badge,
-                badge_image=fallback_badge_image,
                 average_score=None,
                 full_mock_completions=0,
                 achieved_at=None,

@@ -103,10 +103,6 @@ export function getSevenDayTrendPoints(
   return getDayTrendPoints(analytics, skill, 7);
 }
 
-export function trendPointToChartValue(value: number | null): number {
-  return value ?? 0;
-}
-
 export function formatTrendBandValue(value: number | null): string {
-  return (value ?? 0).toFixed(1);
+  return value === null ? "No score" : value.toFixed(1);
 }

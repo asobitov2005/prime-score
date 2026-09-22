@@ -53,15 +53,7 @@ async def test_leaderboard_route_returns_xp_rankings(app, monkeypatch) -> None:
             ),
         ]
 
-    async def fake_unlocked_badges(*args, **kwargs):
-        return {}
-
     monkeypatch.setattr(leaderboard_route, "leaderboard_rows", fake_rows)
-    monkeypatch.setattr(
-        leaderboard_route,
-        "_unlocked_badges_by_user",
-        fake_unlocked_badges,
-    )
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_db_session] = override_db_session
     try:
@@ -76,3 +68,5 @@ async def test_leaderboard_route_returns_xp_rankings(app, monkeypatch) -> None:
     assert payload["items"][0]["xp"] == 980
     assert payload["current_user"]["xp"] == 760
     assert payload["current_user"]["level"] == 4
+    assert "badge" not in payload["items"][0]
+    assert "badge_image" not in payload["items"][0]

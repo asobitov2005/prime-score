@@ -37,6 +37,19 @@ type RecentActivityItem =
   | { kind: "attempt"; key: string; sortAt: string; attempt: AttemptRow }
   | { kind: "writing"; key: string; sortAt: string; submission: WritingHistoryItem };
 
+interface DashboardLoadResult<T> {
+  value: T | null;
+  failed: boolean;
+}
+
+async function loadDashboardData<T>(load: () => Promise<T>): Promise<DashboardLoadResult<T>> {
+  try {
+    return { value: await load(), failed: false };
+  } catch {
+    return { value: null, failed: true };
+  }
+}
+
 function formatSecondsAsClock(totalSeconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(safeSeconds / 3600);
@@ -113,9 +126,9 @@ function getDashboardBookmarkItem(test: TestCatalogItem) {
   };
 }
 
-function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummary }) {
+function LeaderboardPreviewCard({ summary, unavailable = false }: { summary: LeaderboardPreviewSummary; unavailable?: boolean }) {
   const rankLabel = summary.rank ? `#${summary.rank}` : "—";
-  const topLabel = summary.topPercent ? `Top ${summary.topPercent}%` : "Not ranked yet";
+  const statusLabel = unavailable ? "Ranking unavailable" : summary.rank ? "Ranked this week" : "Not ranked yet";
 
   return (
     <section className="relative h-full overflow-hidden rounded-[1.2rem] border border-orange-200/60 bg-card p-4 text-foreground shadow-xl shadow-orange-950/8 dark:border-orange-500/20 dark:bg-slate-950/80 dark:shadow-black/30">
@@ -129,7 +142,7 @@ function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummar
             <div className="mt-2">
               <p className="text-4xl font-semibold leading-none tracking-tight text-orange-600">{rankLabel}</p>
               <span className="mt-2 inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                {topLabel}
+                {statusLabel}
               </span>
             </div>
           </div>
@@ -148,15 +161,45 @@ function LeaderboardPreviewCard({ summary }: { summary: LeaderboardPreviewSummar
 }
 
 export default async function DashboardPage() {
-  const [attempts, analytics, writingHistory, catalogTests, activity, xpSummary, leaderboardPreview] = await Promise.all([
-    getUserAttempts(),
-    getDashboardAnalytics(),
-    getWritingHistory().catch(() => ({ items: [], total: 0 })),
-    getCatalogTests().catch(() => []),
-    getDashboardActivity(),
-    getXpSummary(),
-    getWeeklyLeaderboardPreview(),
+  const [attemptsResult, analyticsResult, writingResult, catalogResult, activityResult, xpResult, leaderboardResult] = await Promise.all([
+    loadDashboardData(() => getUserAttempts({ throwOnError: true })),
+    loadDashboardData(() => getDashboardAnalytics(undefined, { throwOnError: true })),
+    loadDashboardData(() => getWritingHistory()),
+    loadDashboardData(() => getCatalogTests({}, { throwOnError: true })),
+    loadDashboardData(() => getDashboardActivity({ throwOnError: true })),
+    loadDashboardData(() => getXpSummary({ throwOnError: true })),
+    loadDashboardData(() => getWeeklyLeaderboardPreview({ throwOnError: true })),
   ]);
+  const analytics = analyticsResult.value;
+  if (!analytics) {
+    return (
+      <Card role="alert" className="mx-auto mt-10 max-w-xl rounded-2xl border-amber-500/30 bg-amber-50 dark:bg-slate-950">
+        <CardContent className="flex flex-col items-start gap-3 p-6">
+          <AlertTriangle className="h-5 w-5 text-amber-600" />
+          <div>
+            <h1 className="font-semibold text-foreground">Dashboard data could not load</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Your practice data is temporarily unavailable. Refresh to try again.</p>
+          </div>
+          <Button asChild size="sm"><Link href="/dashboard">Refresh dashboard</Link></Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const attempts = attemptsResult.value ?? [];
+  const writingHistory = writingResult.value ?? { items: [], total: 0 };
+  const catalogTests = catalogResult.value ?? [];
+  const activity = activityResult.value ?? [];
+  const xpSummary = xpResult.value;
+  const leaderboardPreview = leaderboardResult.value ?? { rank: null };
+  const failedSources = [
+    attemptsResult.failed && "test history",
+    writingResult.failed && "writing history",
+    catalogResult.failed && "test catalog",
+    activityResult.failed && "study activity",
+    xpResult.failed && "XP",
+    leaderboardResult.failed && "weekly rank",
+  ].filter((source): source is string => Boolean(source));
   const recentAttempts = attempts.filter((attempt) => attempt.status === "completed" || attempt.status === "submitted");
   const recentActivity: RecentActivityItem[] = [
     ...recentAttempts.map((attempt) => ({
@@ -188,7 +231,7 @@ export default async function DashboardPage() {
     (attempt) => attempt.status === "completed" || attempt.status === "submitted",
   );
   const now = new Date();
-  const hasTests = completedAttempts.length > 0;
+  const hasTests = completedAttempts.length > 0 || analytics.progressSeries.length > 0 || writingHistory.items.length > 0;
   const lastAttempt = hasTests ? completedAttempts[0] : null;
 
   let daysSinceLast = 0;
@@ -201,8 +244,7 @@ export default async function DashboardPage() {
 
   const lastBand = lastAttempt && lastAttempt.band ? parseFloat(lastAttempt.band) : 0;
 
-  // Mock weak type logic
-  const weakType = analytics.errorDistribution[0]?.label ?? (lastAttempt?.type === "reading" ? "True / False / Not Given" : "Map / Diagram");
+  const weakType = analytics.errorDistribution[0]?.label ?? "";
   const hasWeakType = analytics.errorDistribution.length > 0;
 
   let recTitle = "";
@@ -210,7 +252,11 @@ export default async function DashboardPage() {
   let recBtnText = "";
   let recHref = "/tests";
 
-  if (!hasTests) {
+  if (attemptsResult.failed) {
+    recTitle = "Practice history unavailable";
+    recDesc = "Your recent tests could not load. Refresh the dashboard to get a tailored recommendation.";
+    recBtnText = "Browse Tests";
+  } else if (!hasTests) {
     recTitle = "Start your first test";
     recDesc = "Take your first IELTS mock test to establish your baseline score and identify your weak areas.";
     recBtnText = "Explore Tests";
@@ -229,9 +275,11 @@ export default async function DashboardPage() {
     recBtnText = "Practice targeted skills";
     recHref = `/tests?type=${lastAttempt?.type}`;
   } else {
-    recTitle = "Try a full mock test";
-    recDesc = "You are scoring consistently well! Challenge yourself with a full mock test under strict exam conditions.";
-    recBtnText = "Start Full Mock";
+    recTitle = "Keep your practice moving";
+    recDesc = lastBand > 0
+      ? `Your latest ${lastAttempt?.type} score was ${lastBand}. Try another test to track your progress.`
+      : "Complete another scored test to build a useful progress trend.";
+    recBtnText = "Explore Tests";
   }
 
   const weaknessDiagnosis = buildWeaknessDiagnosis(analytics, attempts, daysSinceLast);
@@ -255,6 +303,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5 pb-12">
+      {failedSources.length > 0 ? (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+          <span>Some dashboard data could not load: {failedSources.join(", ")}.</span>
+          <Link href="/dashboard" className="font-semibold underline underline-offset-2">Refresh</Link>
+        </div>
+      ) : null}
 
       {/* 1. Welcome + Quick Action & Continue Test */}
       <div className="space-y-6">
@@ -263,9 +317,13 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_340px_210px] xl:items-stretch">
-          <XpSummaryCard summary={xpSummary} />
+          {xpSummary ? <XpSummaryCard summary={xpSummary} /> : (
+            <Card role="status" className="flex min-h-36 items-center rounded-[1.2rem] border-border/50 bg-card/70 p-4 text-sm text-muted-foreground">
+              XP summary is unavailable.
+            </Card>
+          )}
           <OverallBandKpiCard initialAnalytics={analytics} />
-          <LeaderboardPreviewCard summary={leaderboardPreview} />
+          <LeaderboardPreviewCard summary={leaderboardPreview} unavailable={leaderboardResult.failed} />
         </div>
 
         {/* Top Row: Continue progress + study analytics */}
@@ -378,7 +436,11 @@ export default async function DashboardPage() {
               </Card>
             )}
 
-            <StudyTimeCard analytics={analytics} className="h-full min-h-[176px]" />
+            {activityResult.failed ? (
+              <Card role="status" className="flex min-h-[176px] items-center rounded-2xl border-border/50 bg-card/70 p-4 text-sm text-muted-foreground">
+                Study activity is unavailable.
+              </Card>
+            ) : <StudyTimeCard activity={activity} className="h-full min-h-[176px]" />}
           </div>
 
         </div>
@@ -394,11 +456,17 @@ export default async function DashboardPage() {
         {/* Second Row: Remaining widgets */}
         <div className="grid grid-cols-1 gap-6 items-start [content-visibility:auto] [contain-intrinsic-size:900px]">
           <div className="w-full">
-            <StreakHeatmap
-              activity={activity}
-              currentStreak={analytics.personalBests.currentStreak}
-              longestStreak={analytics.personalBests.longestStreak}
-            />
+            {activityResult.failed ? (
+              <Card role="status" className="rounded-2xl border-border/50 bg-card/70 p-5 text-sm text-muted-foreground">
+                Practice history could not load.
+              </Card>
+            ) : (
+              <StreakHeatmap
+                activity={activity}
+                currentStreak={analytics.personalBests.currentStreak}
+                longestStreak={analytics.personalBests.longestStreak}
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-6 items-start">
@@ -556,7 +624,9 @@ export default async function DashboardPage() {
           </div>
 
           <Card className="flex-1 border-border/40 shadow-sm overflow-hidden rounded-3xl bg-card/30">
-            {recentActivity.length === 0 ? (
+            {recentActivity.length === 0 && (attemptsResult.failed || writingResult.failed) ? (
+              <div role="status" className="p-6 text-sm text-muted-foreground">Recent activity could not load.</div>
+            ) : recentActivity.length === 0 ? (
               <EmptyState
                 icon="clock"
                 title="No activity yet"
@@ -655,7 +725,9 @@ export default async function DashboardPage() {
           </div>
 
           <Card className="flex-1 overflow-hidden rounded-3xl border-border/40 bg-card/30 shadow-sm">
-            {featuredTests.length === 0 ? (
+            {catalogResult.failed ? (
+              <div role="status" className="p-6 text-sm text-muted-foreground">Published tests could not load.</div>
+            ) : featuredTests.length === 0 ? (
               <EmptyState
                 icon="book"
                 title="No quick tests available"

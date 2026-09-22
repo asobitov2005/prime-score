@@ -35,19 +35,7 @@ interface SkillCardData {
   sparklineColor: string;
   sparkPoints: DashboardTrendPoint[];
   lastTestText: string;
-  xpText: string;
   href: string;
-}
-
-// Check if a date string represents a timestamp within the last 7 days
-function isWithinLast7Days(dateStr: string | null | undefined): boolean {
-  if (!dateStr) return false;
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  const timeDiff = now.getTime() - date.getTime();
-  const daysDiff = timeDiff / (1000 * 3600 * 24);
-  return daysDiff >= 0 && daysDiff <= 7;
 }
 
 // Calculate the number of days ago for a given date
@@ -97,7 +85,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const readingHasScore = avgReading !== null && avgReading > 0;
   const readingAttempts = attempts.filter(a => a.type === "reading" && (a.status === "completed" || a.status === "submitted"));
   const lastReadingDate = readingAttempts.length > 0 ? readingAttempts[0].lastSavedAt : null;
-  const readingThisWeekCount = readingAttempts.filter(a => isWithinLast7Days(a.lastSavedAt)).length;
   
   // 2. Listening calculations
   const avgListening = getAverageBand(analytics, "listening");
@@ -105,7 +92,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const listeningHasScore = avgListening !== null && avgListening > 0;
   const listeningAttempts = attempts.filter(a => a.type === "listening" && (a.status === "completed" || a.status === "submitted"));
   const lastListeningDate = listeningAttempts.length > 0 ? listeningAttempts[0].lastSavedAt : null;
-  const listeningThisWeekCount = listeningAttempts.filter(a => isWithinLast7Days(a.lastSavedAt)).length;
 
   // 3. Writing calculations
   const avgWriting = getAverageBand(analytics, "writing");
@@ -113,7 +99,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const writingHasScore = avgWriting !== null && avgWriting > 0;
   const writingSubmissions = writingHistory.items.filter(w => String(w.status).toLowerCase() === "completed");
   const lastWritingDate = writingSubmissions.length > 0 ? (writingSubmissions[0].graded_at ?? writingSubmissions[0].submitted_at) : null;
-  const writingThisWeekCount = writingHistory.items.filter(w => isWithinLast7Days(w.submitted_at)).length;
 
   // 4. Speaking calculations
   const avgSpeaking = getAverageBand(analytics, "speaking");
@@ -121,7 +106,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
   const speakingHasScore = avgSpeaking !== null && avgSpeaking > 0;
   const speakingProgressPoints = analytics.progressSeries.filter((point) => point.speaking !== null && point.speaking !== undefined);
   const lastSpeakingDate = speakingProgressPoints.length > 0 ? speakingProgressPoints[speakingProgressPoints.length - 1].occurredAt : null;
-  const speakingThisWeekCount = speakingProgressPoints.filter((point) => isWithinLast7Days(point.occurredAt)).length;
 
   // Render status helper
   const getSkillBadge = (score: number | null) => {
@@ -168,7 +152,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       sparklineColor: "#6366F1", // Indigo
       sparkPoints: readingTrendPoints,
       lastTestText: lastReadingDate ? `Last test: ${getDaysAgoText(lastReadingDate)}` : "Last test: Never",
-      xpText: `+${readingThisWeekCount * 20} XP this week`,
       href: "/analytics/reading"
     },
     {
@@ -183,7 +166,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       sparklineColor: "#10B981", // Emerald
       sparkPoints: listeningTrendPoints,
       lastTestText: lastListeningDate ? `Last test: ${getDaysAgoText(lastListeningDate)}` : "Last test: Never",
-      xpText: `+${listeningThisWeekCount * 20} XP this week`,
       href: "/analytics/listening"
     },
     {
@@ -198,7 +180,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       sparklineColor: "#8B5CF6", // Violet
       sparkPoints: writingTrendPoints,
       lastTestText: lastWritingDate ? `Last test: ${getDaysAgoText(lastWritingDate)}` : "Last test: Never",
-      xpText: `+${writingThisWeekCount * 30} XP this week`,
       href: "/analytics/writing"
     },
     {
@@ -213,7 +194,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
       sparklineColor: "#F59E0B", // Amber/Orange
       sparkPoints: speakingTrendPoints,
       lastTestText: lastSpeakingDate ? `Last test: ${getDaysAgoText(lastSpeakingDate)}` : "Last test: Never",
-      xpText: `+${speakingThisWeekCount * 90} XP this week`,
       href: "/analytics/speaking"
     }
   ];
@@ -282,9 +262,6 @@ export function SkillPerformance({ analytics, attempts, writingHistory }: SkillP
                   <div className="space-y-0.5 pt-0.5">
                     <p className="text-[11.5px] font-medium text-slate-400 dark:text-slate-500">
                       {skill.lastTestText}
-                    </p>
-                    <p className="text-[11.5px] font-bold text-indigo-600 dark:text-indigo-400">
-                      {skill.xpText}
                     </p>
                   </div>
                 </div>

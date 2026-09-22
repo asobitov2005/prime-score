@@ -17,7 +17,6 @@ import type {
   PaymentRecordResponse,
   AuthVerifyCodeBody,
   LeaderboardQuery,
-  LeaderboardUserProfileResponse,
   XpSummaryResponse,
   RedeemBody,
   SaveAnswerBody,
@@ -75,8 +74,6 @@ type BackendLeaderboardEntry = {
   level: number;
   xp: number;
   current_streak: number;
-  badge?: string | null;
-  badge_image?: string | null;
   average_score?: number | null;
   full_mock_completions: number;
   achieved_at?: string | null;
@@ -360,8 +357,6 @@ function mapBackendLeaderboardEntry(entry: BackendLeaderboardEntry): Leaderboard
     level: entry.level,
     xp: entry.xp,
     currentStreak: entry.current_streak,
-    badge: entry.badge ?? null,
-    badgeImage: entry.badge_image ?? null,
     averageScore: entry.average_score ?? null,
     fullMockCompletions: entry.full_mock_completions,
     achievedAt: entry.achieved_at ?? null,
@@ -841,13 +836,6 @@ export function createApiClient(config: ApiClientConfig = {}) {
             ? mapCurrentUserLeaderboardEntry(payload.current_user, payload.items.length)
             : null,
         })),
-    getLeaderboardUserProfile: (userId: string) =>
-      request<LeaderboardUserProfileResponse>(`/leaderboard/users/${encodeURIComponent(userId)}`, { method: "GET" }),
-    setEquippedAchievement: (achievementId: string | null) =>
-      request<{ achievement_id: string | null }>(`/leaderboard/me/equipped-achievement`, {
-        method: "PUT",
-        body: JSON.stringify({ achievement_id: achievementId }),
-      }),
     getTestCatalog: (type?: string, access?: AccessType) => {
       const search = new URLSearchParams();
       if (type === "reading" || type === "listening" || type === "writing") {
