@@ -214,6 +214,51 @@
   font-size: 15px;
   line-height: 1.9;
 }
+.heroMockLinks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 480px;
+  margin-top: 24px;
+}
+.heroMockLinks a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 15px 12px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.heroMockLinks a:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.heroMockLinks svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.heroMockLinks span {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+}
+.heroMockLinks strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.heroMockLinks small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+@media (max-width: 380px) {
+  .heroMockLinks a { gap: 7px; padding: 12px 9px; }
+  .heroMockLinks a > svg:last-child { display: none; }
+}
 .heroActions {
   display: flex;
   flex-wrap: wrap;
@@ -721,8 +766,9 @@
 
 .processSection {
   padding-block: 72px;
-  color: #f3f2e6;
-  background: #214c40;
+  color: var(--ink);
+  background: var(--surface);
+  border-block: 1px solid var(--line);
 }
 .processGrid {
   display: grid;
@@ -731,32 +777,32 @@
   align-items: center;
 }
 .processSection .eyebrow {
-  color: #c4d3be;
+  color: var(--muted);
 }
 .processSection h2 {
   font-size: clamp(32px, 3.3vw, 46px);
   margin-top: 20px;
 }
 .processSection h2 em {
-  color: #edcda0;
+  color: var(--accent);
   font-size: 1.13em;
 }
 .processIntro {
   max-width: 390px;
-  color: #d3dfd2;
+  color: var(--muted);
   margin-top: 22px !important;
   font-size: 12px;
   line-height: 1.9;
 }
 .processSection .textLink {
-  color: #edcda0;
+  color: var(--accent);
   margin-top: 25px;
 }
 .processSection .textLink:hover {
-  color: #fff;
+  color: var(--ink);
 }
 .processSection :is(a, button):focus-visible {
-  outline-color: #edcda0;
+  outline-color: var(--accent);
 }
 .steps {
   list-style: none;
@@ -767,7 +813,7 @@
   display: flex;
   gap: 20px;
   padding-block: 24px;
-  border-bottom: 1px solid #ffffff25;
+  border-bottom: 1px solid var(--line);
 }
 .steps > li:first-child {
   padding-top: 0;
@@ -778,7 +824,7 @@
 }
 .steps > li > span {
   padding-top: 2px;
-  color: #edcda0;
+  color: var(--accent);
   font-family: ui-monospace, "Courier New", monospace;
   font-size: 12px;
 }
@@ -788,7 +834,7 @@
   letter-spacing: -0.025em;
 }
 .steps p {
-  color: #d3dfd2;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.9;
   margin-top: 7px;
@@ -1533,10 +1579,10 @@
   width: 138px;
   height: 28px;
   padding: 0 12px;
-  border: 1px solid #bdcda2;
+  border: 1px solid var(--line);
   border-radius: 2px 2px 6px 2px;
-  background: #e4ebcf;
-  color: #31452d;
+  background: var(--marker);
+  color: var(--marker-ink);
   font:
     600 8px/1 ui-monospace,
     "Courier New",
@@ -1617,7 +1663,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: #edcda0;
+  background: var(--accent);
   transform: scaleX(0);
   transform-origin: left;
 }
@@ -2206,7 +2252,7 @@
 .mockTheme p {
   margin: 0;
 }
-.mockDashboardSection {
+.mockAppSection {
   width: 100%;
   margin: 0;
   padding-block: 0;

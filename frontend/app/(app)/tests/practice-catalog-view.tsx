@@ -206,7 +206,7 @@ function PracticeCatalogTestCard({
   const actionClassName = getCatalogActionButtonClassName(fallbackActionLabel, isPremiumCard);
 
   return (
-    <article className="flex min-h-[10rem] flex-col rounded-[14px] border border-slate-200 bg-white p-3.5 shadow-[0_8px_20px_-18px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+    <article className="flex min-h-[10rem] flex-col rounded-xl border border-border bg-card p-3.5">
       <div className="min-w-0">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <h2
@@ -352,7 +352,7 @@ export function PracticeCatalogView({
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-950 transition-colors dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen bg-background text-foreground transition-colors">
       <div className="mx-auto w-full max-w-[82rem] pb-10">
         <section className="pt-1">
           <div className="min-w-0">
@@ -383,7 +383,7 @@ export function PracticeCatalogView({
                 type="button"
                 onClick={() => updateFilters({ source: card.source as PracticeCatalogSource })}
                 className={cn(
-                  "group flex min-h-[5rem] items-center gap-3 rounded-[14px] border border-slate-200 bg-white p-3 text-left shadow-[0_8px_20px_-18px_rgba(15,23,42,0.18)] transition-colors hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none dark:hover:border-slate-700 sm:min-h-[6.25rem] sm:gap-4 sm:p-4",
+                  "group flex min-h-[5rem] items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 sm:min-h-[6.25rem] sm:gap-4 sm:p-4",
                   active && activeCollectionClass,
                 )}
               >
@@ -458,7 +458,7 @@ export function PracticeCatalogView({
           />
         </div>
         {filteredTests.length === 0 ? (
-          <div className="mt-6 rounded-[14px] border border-slate-200 bg-white p-8 text-center shadow-[0_8px_20px_-18px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+          <div className="mt-6 rounded-xl border border-border bg-card p-8 text-center">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{"No tests match these filters."}</p>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{"Try another search, collection, passage, or access type."}</p>
           </div>

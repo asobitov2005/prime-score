@@ -25,6 +25,7 @@ interface HeatmapCell {
   readingTimeSec: number;
   listeningTimeSec: number;
   writingTimeSec: number;
+  speakingTimeSec: number;
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -106,16 +107,16 @@ function getCellTone(attemptsCount: number, isFuture: boolean): string {
     return "bg-muted/5 text-muted-foreground/30 border-transparent";
   }
   if (attemptsCount >= 5) {
-    return "bg-emerald-300 dark:bg-emerald-500/60 text-emerald-900 dark:text-emerald-50 border-emerald-400/30 shadow-sm";
+    return "bg-primary text-primary-foreground border-primary";
   }
   if (attemptsCount >= 3) {
-    return "bg-emerald-200 dark:bg-emerald-500/40 text-emerald-800 dark:text-emerald-100 border-emerald-300/30 shadow-sm";
+    return "bg-primary/30 text-foreground border-primary/30";
   }
   if (attemptsCount >= 2) {
-    return "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 border-emerald-200/30";
+    return "bg-primary/15 text-foreground border-primary/20";
   }
   if (attemptsCount >= 1) {
-    return "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-100/30";
+    return "bg-accent text-primary border-primary/10";
   }
   return "bg-muted/20 text-muted-foreground/40 border-border/30 hover:bg-muted/40 transition-colors";
 }
@@ -157,6 +158,7 @@ function buildMonthCells(
       readingTimeSec: point?.readingTimeSec ?? 0,
       listeningTimeSec: point?.listeningTimeSec ?? 0,
       writingTimeSec: point?.writingTimeSec ?? 0,
+      speakingTimeSec: point?.speakingTimeSec ?? 0,
     });
   }
 
@@ -249,33 +251,32 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
   }
 
   return (
-    <Card className="border-border/40 shadow-sm rounded-2xl bg-card/60 overflow-hidden">
-      <CardContent className="p-5">
+    <Card className="overflow-hidden rounded-lg border-border bg-card shadow-none">
+      <CardContent className="p-5 sm:p-6">
         <div className="space-y-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-primary">
                   <Flame className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {currentStreak > 0 ? `${currentStreak} Day Streak` : "Build Your Streak"}
-                  </h3>
+                  <h2 className="text-base font-semibold tracking-tight text-foreground">Study activity</h2>
                   <p className="text-xs text-muted-foreground">
-                    Monthly activity heatmap with day-by-day consistency.
+                    {currentStreak > 0 ? `${currentStreak} day streak. ` : "Build your streak. "}Select a day to see your practice.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-start rounded-2xl border border-border/50 bg-background/80 p-1.5 shadow-sm">
+            <div className="flex items-center gap-2 self-start rounded-lg border border-border bg-background p-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
                 onClick={() => moveMonth(-1)}
+                aria-label="Previous activity month"
                 disabled={selectedMonthIndex === 0}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -292,6 +293,7 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                 size="icon"
                 className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
                 onClick={() => moveMonth(1)}
+                aria-label="Next activity month"
                 disabled={selectedMonthIndex === monthList.length - 1}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -300,7 +302,7 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
           </div>
 
           <div className="flex flex-col lg:flex-row gap-6 items-start">
-            <div className="min-h-[292px] rounded-3xl border border-border/70 bg-card/50 p-5 shadow-sm ring-1 ring-border/25 w-fit mx-auto lg:mx-0 transition-colors hover:bg-card/60 shrink-0">
+            <div className="mx-auto w-full max-w-sm shrink-0 rounded-lg border border-border bg-background p-3 lg:mx-0 lg:w-[320px]">
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-7 gap-2 text-center mb-1">
                   {WEEKDAYS.map((day) => (
@@ -320,15 +322,16 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                         key={cell.key}
                         type="button"
                         disabled={!cell.inMonth}
+                        aria-pressed={isSelected}
                         onClick={() => setSelectedDayKey(cell.key)}
                         aria-label={`${formatSelectedDay(cell.date)} · ${cell.attemptsCount} attempt${cell.attemptsCount === 1 ? "" : "s"} · ${formatMinutes(cell.timeSpentSec)}`}
                         title={`${formatSelectedDay(cell.date)} · ${cell.attemptsCount} attempt${cell.attemptsCount === 1 ? "" : "s"} · ${formatMinutes(cell.timeSpentSec)}`}
                         className={cn(
-                          "group relative flex h-[28px] w-[40px] sm:h-[30px] sm:w-[46px] rounded-[8px] sm:rounded-[10px] border text-left transition-colors duration-150 disabled:pointer-events-none overflow-hidden",
+                          "group relative flex h-9 w-full min-w-0 overflow-hidden rounded-md border text-left transition-colors duration-150 disabled:pointer-events-none",
                           cell.inMonth ? "opacity-100" : "opacity-0 invisible",
                           toneClass,
-                          isSelected && "ring-2 ring-offset-[1.5px] ring-emerald-500/60 ring-offset-background shadow-sm z-20",
-                          cell.isToday && !isSelected && "ring-1 ring-orange-500/60 ring-offset-1 ring-offset-background",
+                          isSelected && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background z-20",
+                          cell.isToday && !isSelected && "ring-1 ring-primary/40 ring-offset-1 ring-offset-background",
                           !isSelected && !cell.isFuture && cell.inMonth && cell.attemptsCount === 0 && "hover:bg-muted/50 border-border/60",
                           !isSelected && !cell.isFuture && cell.attemptsCount > 0 && "hover:shadow-sm hover:z-20"
                         )}
@@ -364,8 +367,8 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
               </div>
             </div>
 
-            <div className="flex-1 w-full flex flex-col gap-4">
-              <div className="rounded-[1.35rem] border border-border/70 bg-muted/20 p-4 shadow-sm ring-1 ring-border/20">
+            <div className="flex min-w-0 w-full flex-1 flex-col gap-4">
+              <div className="rounded-lg border border-border bg-background p-4">
                 <div className="space-y-1 mb-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <p className="text-xl font-bold text-foreground tracking-tight">
@@ -375,11 +378,11 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                     {selectedCell && selectedCell.attemptsCount > 0 && (
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-background border border-border/60 shadow-sm text-xs font-semibold">
-                          <Target className="h-3.5 w-3.5 text-orange-500" />
+                          <Target className="h-3.5 w-3.5 text-primary" />
                           <span>{selectedCell.attemptsCount} <span className="text-muted-foreground font-medium">attempt{selectedCell.attemptsCount === 1 ? "" : "s"}</span></span>
                         </div>
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-background border border-border/60 shadow-sm text-xs font-semibold">
-                          <Clock className="h-3.5 w-3.5 text-blue-500" />
+                          <Clock className="h-3.5 w-3.5 text-primary" />
                           <span>{formatMinutes(selectedCell.timeSpentSec)} <span className="text-muted-foreground font-medium">studied</span></span>
                         </div>
                       </div>
@@ -394,35 +397,22 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
 
                 {selectedCell && selectedCell.timeSpentSec > 0 && (
                   <div className="pt-3 border-t border-border/40 space-y-2.5">
-                    <div className={cn("space-y-1.5 transition-opacity", selectedCell.readingTimeSec === 0 && "opacity-40 grayscale-[0.5]")}>
-                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-[3px] bg-blue-500 shadow-sm" /> Reading</span>
-                        <span className="text-foreground">{formatMinutes(selectedCell.readingTimeSec)}</span>
+                    {[
+                      ["Reading", selectedCell.readingTimeSec],
+                      ["Listening", selectedCell.listeningTimeSec],
+                      ["Writing", selectedCell.writingTimeSec],
+                      ["Speaking", selectedCell.speakingTimeSec],
+                    ].map(([label, seconds]) => (
+                      <div key={label} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{label}</span>
+                          <span className="tabular-nums text-foreground">{formatMinutes(Number(seconds))}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, Number(seconds) / selectedCell.timeSpentSec * 100)}%` }} />
+                        </div>
                       </div>
-                      <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50 shadow-inner">
-                        <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.readingTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-
-                    <div className={cn("space-y-1.5 transition-opacity", selectedCell.listeningTimeSec === 0 && "opacity-40 grayscale-[0.5]")}>
-                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-[3px] bg-emerald-500 shadow-sm" /> Listening</span>
-                        <span className="text-foreground">{formatMinutes(selectedCell.listeningTimeSec)}</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50 shadow-inner">
-                        <div className="h-full bg-emerald-500 rounded-full transition-[width] duration-200" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.listeningTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
-                      </div>
-                    </div>
-
-                    <div className={cn("space-y-1.5 transition-opacity", selectedCell.writingTimeSec === 0 && "opacity-40 grayscale-[0.5]")}>
-                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-[3px] bg-violet-500 shadow-sm" /> Writing</span>
-                        <span className="text-foreground">{formatMinutes(selectedCell.writingTimeSec)}</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50 shadow-inner">
-                        <div className="h-full bg-violet-500 rounded-full transition-[width] duration-200" style={{ width: `${selectedCell.timeSpentSec > 0 ? (selectedCell.writingTimeSec / selectedCell.timeSpentSec) * 100 : 0}%` }} />
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -458,7 +448,7 @@ export function StreakHeatmap({ activity, currentStreak, longestStreak }: Streak
                     hideDelta: true
                   },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-[1rem] border border-border/50 bg-background/80 px-2 py-3 shadow-sm flex flex-col items-center text-center justify-center relative">
+                  <div key={item.label} className="relative flex flex-col items-center justify-center rounded-lg border border-border bg-card px-2 py-3 text-center">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
                       {item.label}
                     </p>

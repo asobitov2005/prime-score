@@ -251,10 +251,10 @@ export function LatestTestsPanel({ tests, attempts, initialFilter }: LatestTests
     <section id="latest-tests" className="scroll-mt-24 space-y-4">
       <h2 className="text-xl font-bold text-slate-950 dark:text-slate-50">Latest Tests</h2>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_22px_-20px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="border-b border-slate-200 p-5 dark:border-slate-800">
           <div className="flex justify-start">
-            <div className="flex gap-1 overflow-x-auto rounded-full border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex gap-1 overflow-x-auto rounded-full border border-border bg-background p-1">
               {latestTestFilters.map((tab) => {
                 const active = activeFilter === tab.id;
                 return (

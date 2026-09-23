@@ -9,17 +9,28 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
-test("dashboard renders the shared online and offline mock selector", () => {
-  const page = read("app/(app)/dashboard/page.tsx");
+test("mock sessions have a dedicated app page and sidebar destination", () => {
+  const page = read("app/(app)/mock/page.tsx");
+  const dashboard = read("app/(app)/dashboard/page.tsx");
+  const sidebar = read("components/layout/app-shell.tsx");
+  const landing = read("components/marketing/landing-page.tsx");
   const picker = read("components/marketing/mock-sessions.tsx");
 
   assert.match(page, /getLandingFeaturedTests/);
-  assert.match(page, /<MockSessions tests=\{mockTests\} variant="dashboard" showBookingFirst \/>/);
+  assert.match(page, /<MockSessions tests=\{tests\} initialMode=\{initialMode\}/);
+  assert.doesNotMatch(dashboard, /<MockSessions/);
+  assert.match(sidebar, /href: "\/mock", label: "Mock"/);
+  assert.match(sidebar, /window\.location\.pathname.*window\.location\.search.*window\.location\.hash/);
+  assert.match(sidebar, /buildLoginHref\(returnUrl\)/);
+  assert.match(landing, /href="\/mock\?mode=online"/);
+  assert.match(landing, /href="\/mock\?mode=offline"/);
   assert.match(picker, /aria-label="Mock session type"/);
   assert.match(picker, /aria-pressed=\{mode === "online"\}/);
   assert.match(picker, /aria-pressed=\{mode === "offline"\}/);
-  assert.match(picker, /if \(!showBookingFirst \|\| !hasHydrated \|\| !isAuthenticated\) return/);
+  assert.match(picker, /if \(!hasHydrated \|\| !isAuthenticated\) return/);
   assert.match(picker, /fetch\("\/api\/mock\/bookings\/me"/);
+  assert.match(picker, /if \(!initialMode\)/);
+  assert.match(picker, /response\.status === 201/);
 });
 
 test("offline reservation explains Click payment and links the receipt to support", () => {

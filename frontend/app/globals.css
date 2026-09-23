@@ -3,17 +3,19 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --ps-paper: 160 16% 11%;
-    --ps-surface: 153 15% 15%;
-    --ps-ink: 54 26% 93%;
-    --ps-muted: 90 8% 71%;
-    --ps-line: 143 10% 26%;
-    --ps-accent: 17 100% 75%;
-    --ps-accent-soft: 20 26% 21%;
-    --ps-green: 145 30% 73%;
-    --ps-marker: 110 23% 25%;
-    --ps-marker-ink: 71 49% 89%;
+  :root,
+  .light {
+    color-scheme: light;
+    --ps-paper: 0 0% 98%;
+    --ps-surface: 0 0% 100%;
+    --ps-ink: 240 5% 15%;
+    --ps-muted: 240 3% 44%;
+    --ps-line: 240 4% 89%;
+    --ps-accent: 16 70% 40%;
+    --ps-accent-soft: 24 60% 96%;
+    --ps-green: 240 5% 30%;
+    --ps-marker: 30 35% 93%;
+    --ps-marker-ink: 20 15% 25%;
 
     --background: var(--ps-paper);
     --foreground: var(--ps-ink);
@@ -25,12 +27,12 @@
     --popover-foreground: var(--ps-ink);
 
     --primary: var(--ps-accent);
-    --primary-foreground: var(--ps-paper);
+    --primary-foreground: 0 0% 100%;
 
     --secondary: var(--ps-line);
     --secondary-foreground: var(--ps-ink);
 
-    --muted: var(--ps-surface);
+    --muted: 240 4% 96%;
     --muted-foreground: var(--ps-muted);
 
     --accent: var(--ps-accent-soft);
@@ -45,22 +47,21 @@
 
     --radius: 0.5rem;
     
-    /* Grid colors for dark mode */
-    --grid-color: rgba(255, 255, 255, 0.03);
+    --grid-color: rgba(0, 0, 0, 0.03);
   }
 
-  /* Shared warm landing palette for the user-facing app. */
-  .light {
-    --ps-paper: 43 41% 97%;
-    --ps-surface: 45 100% 99%;
-    --ps-ink: 164 15% 15%;
-    --ps-muted: 100 5% 39%;
-    --ps-line: 60 15% 85%;
-    --ps-accent: 13 70% 42%;
-    --ps-accent-soft: 29 63% 92%;
-    --ps-green: 165 42% 22%;
-    --ps-marker: 78 47% 85%;
-    --ps-marker-ink: 103 21% 19%;
+  .dark {
+    color-scheme: dark;
+    --ps-paper: 240 4% 9%;
+    --ps-surface: 240 4% 12%;
+    --ps-ink: 0 0% 94%;
+    --ps-muted: 240 3% 67%;
+    --ps-line: 240 4% 23%;
+    --ps-accent: 20 85% 72%;
+    --ps-accent-soft: 20 12% 17%;
+    --ps-green: 240 3% 78%;
+    --ps-marker: 20 8% 22%;
+    --ps-marker-ink: 30 20% 89%;
 
     --background: var(--ps-paper);
     --foreground: var(--ps-ink);
@@ -72,12 +73,12 @@
     --popover-foreground: var(--ps-ink);
 
     --primary: var(--ps-accent);
-    --primary-foreground: 45 100% 99%;
+    --primary-foreground: 240 4% 9%;
 
     --secondary: var(--ps-line);
     --secondary-foreground: var(--ps-ink);
 
-    --muted: var(--ps-surface);
+    --muted: 240 4% 16%;
     --muted-foreground: var(--ps-muted);
 
     --accent: var(--ps-accent-soft);
@@ -90,8 +91,7 @@
     --input: var(--ps-line);
     --ring: var(--ps-accent);
     
-    /* Grid colors for light mode */
-    --grid-color: rgba(0, 0, 0, 0.03);
+    --grid-color: rgba(255, 255, 255, 0.03);
   }
 
   /* Base smooth scroll for anchor links */

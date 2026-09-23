@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BarChart3, BookMarked, BookOpenText, CreditCard, Gauge, History, Mic, PenTool, Trophy, X, Settings2 } from "lucide-react";
+import { BarChart3, BookMarked, BookOpenText, CalendarDays, CreditCard, Gauge, History, Mic, PenTool, Trophy, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui-store";
@@ -16,7 +16,7 @@ import { consumePendingPublicRedirect, emitNavigationStart, PRIME_NAVIGATION_STA
 import { SidebarPremiumCard } from "@/components/layout/sidebar-premium-card";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
-import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
+import { buildLoginHref, getSubscriptionPageHref } from "@/lib/subscription-navigation";
 
 interface AppShellProps {
   children: ReactNode;
@@ -41,6 +41,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: Gauge },
+    { href: "/mock", label: "Mock", icon: CalendarDays },
     { href: "/tests", label: "Practice Tests", icon: BookOpenText },
     { href: "/writing", label: "Writing", icon: PenTool },
     { href: "/speaking", label: "Speaking", icon: Mic, activePath: "/speaking" },
@@ -57,9 +58,10 @@ export function AppShell({ children }: AppShellProps) {
       return;
     }
     if (!isAuthenticated && !isPublicTestsRoute) {
-      router.replace(consumePendingPublicRedirect() ?? "/login");
+      const returnUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      router.replace(consumePendingPublicRedirect() ?? buildLoginHref(returnUrl));
     }
-  }, [hasHydrated, isAuthenticated, isPublicTestsRoute, router]);
+  }, [hasHydrated, isAuthenticated, isPublicTestsRoute, pathname, router]);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -329,7 +331,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 w-full animate-in fade-in duration-500 ease-out lg:ml-[16.5rem] lg:px-5 lg:py-5 xl:px-6">
+      <main className="min-w-0 flex-1 w-full animate-in fade-in duration-500 ease-out transition-none lg:ml-[16.5rem] lg:px-5 lg:py-5 xl:px-6">
         <div className="mx-auto w-full max-w-[82rem]">
           {isPendingExamPreview ? (
             <ExamRouteLoadingFrame />

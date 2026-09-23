@@ -3,14 +3,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-test("dashboard stays compact and no longer fetches removed XP metrics", () => {
+test("dashboard retains band and activity charts without loading mock sessions", () => {
   const dashboardPage = fs.readFileSync(path.join(__dirname, "../app/(app)/dashboard/page.tsx"), "utf8");
   const appShell = fs.readFileSync(path.join(__dirname, "../components/layout/app-shell.tsx"), "utf8");
 
   assert.match(dashboardPage, /DashboardGreeting/);
-  assert.match(dashboardPage, /MockSessions/);
+  assert.match(dashboardPage, /getDashboardAnalytics/);
+  assert.match(dashboardPage, /getDashboardActivity/);
+  assert.match(dashboardPage, /<OverallBandKpiCard/);
+  assert.match(dashboardPage, /<StudyTimeCard/);
+  assert.match(dashboardPage, /<StreakHeatmap/);
   assert.match(dashboardPage, /getRecentActivity/);
-  assert.doesNotMatch(dashboardPage, /getDashboardAnalytics|getWeeklyLeaderboardPreview|getXpSummary|buildWeaknessDiagnosis|pickQuickTests|OverallBandKpiCard|SkillPerformance|StreakHeatmap|XpSummaryCard/);
+  assert.doesNotMatch(dashboardPage, /MockSessions|getLandingFeaturedTests|getXpSummary/);
   assert.doesNotMatch(appShell, /SidebarXpCard|getXpSummary|setXpSummary/);
 });
 

@@ -1795,6 +1795,7 @@ function resolveLoadingSection(pathname: string): FrontendLoadingSection {
 
   if (
     pathname.startsWith("/dashboard")
+    || pathname.startsWith("/mock")
     || pathname.startsWith("/tests")
     || pathname.startsWith("/attempts")
     || pathname.startsWith("/history")

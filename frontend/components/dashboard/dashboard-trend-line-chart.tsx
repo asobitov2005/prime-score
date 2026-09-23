@@ -92,9 +92,9 @@ export function DashboardTrendLineChart({
           const y = top + ((9 - band) / 9) * plotHeight;
           return (
             <g key={band}>
-              <line x1={left} x2={left + plotWidth} y1={y} y2={y} className="stroke-slate-200 dark:stroke-slate-800" strokeOpacity={compact ? 0.7 : 1} />
+              <line x1={left} x2={left + plotWidth} y1={y} y2={y} className="stroke-border" strokeOpacity={compact ? 0.7 : 1} />
               {!compact && (
-                <text x={left - 5} y={y + 3} textAnchor="end" className="fill-slate-500 dark:fill-slate-400" fontSize="10">
+                <text x={left - 5} y={y + 3} textAnchor="end" className="fill-muted-foreground" fontSize="10">
                   {band.toFixed(1)}
                 </text>
               )}
@@ -118,7 +118,7 @@ export function DashboardTrendLineChart({
               x={x}
               y={chartHeight - 2}
               textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"}
-              className="fill-slate-500 dark:fill-slate-400"
+              className="fill-muted-foreground"
               fontSize={compact ? 8 : 10}
               fontWeight="700"
             >

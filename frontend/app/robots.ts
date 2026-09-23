@@ -12,6 +12,7 @@ export default function robots(): MetadataRoute.Robots {
           "/api/",
           "/internal-api/",
           "/dashboard",
+          "/mock",
           "/history",
           "/settings",
           "/subscription",

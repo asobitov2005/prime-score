@@ -1518,7 +1518,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
   const continueHref = continueAttempt ? getContinueHref(continueAttempt) : "/tests?type=reading";
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-950 transition-colors dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen bg-background text-foreground transition-colors">
       <TestsRefreshOnMount />
       <div className="mx-auto flex w-full max-w-[82rem] flex-col gap-4 pb-10">
         <section className="-mb-2 -mt-4 px-6 pb-0 pt-1 sm:-mt-5 sm:px-7 sm:pb-0 sm:pt-0 lg:-mb-3">
@@ -1533,7 +1533,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_22px_-20px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+        <section className="rounded-xl border border-border bg-card p-3">
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))]">
             {summaryCards.map((card, index) => {
               const Icon = card.icon;
@@ -1559,7 +1559,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_22px_-20px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+        <section className="rounded-xl border border-border bg-card p-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
             <div className="flex min-w-0 flex-row items-start gap-3 sm:items-stretch sm:gap-4">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 text-sky-600 shadow-sm dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-300 dark:shadow-none sm:h-[4.25rem] sm:w-14">
@@ -1595,7 +1595,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                   key={card.title}
                   data-disabled={unavailable ? "true" : undefined}
                   className={cn(
-                    "relative flex min-h-[10.5rem] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_18px_-18px_rgba(15,23,42,0.14)] dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none",
+                    "relative flex min-h-[10.5rem] flex-col rounded-xl border border-border bg-card p-4",
                     unavailable && "border-slate-200/80 bg-slate-50/75 opacity-60 grayscale dark:border-slate-800/70 dark:bg-slate-900/45",
                   )}
                 >

@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { ArrowRight, BookOpenText, Clock3, Headphones, PenSquare } from "lucide-react";
 import { DashboardGreeting } from "@/components/dashboard/dashboard-greeting";
-import { MockSessions } from "@/components/marketing/mock-sessions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getLandingFeaturedTests } from "@/lib/server-data";
-import { getUserAttempts } from "@/lib/server-me";
+import { getDashboardActivity, getDashboardAnalytics, getUserAttempts } from "@/lib/server-me";
 import { getWritingHistory, type WritingHistoryItem } from "@/lib/server-writing";
 import { landingFont } from "@/components/marketing/landing-font";
 import type { AttemptRow } from "@/lib/types";
+import { OverallBandKpiCard } from "./dashboard-average-cards";
+import { StudyTimeCard } from "./activity-summary";
+import { StreakHeatmap } from "./streak-heatmap";
 
 interface InProgressTest {
   title: string;
@@ -104,10 +105,11 @@ function formatActivityDate(value: string): string {
 }
 
 export default async function DashboardPage() {
-  const [attemptsResult, writingResult, mockTests] = await Promise.all([
+  const [attemptsResult, writingResult, analyticsResult, activityResult] = await Promise.all([
     loadDashboardData(() => getUserAttempts({ throwOnError: true })),
     loadDashboardData(() => getWritingHistory()),
-    getLandingFeaturedTests(),
+    loadDashboardData(() => getDashboardAnalytics(undefined, { throwOnError: true })),
+    loadDashboardData(() => getDashboardActivity({ throwOnError: true })),
   ]);
 
   const attempts = attemptsResult.value ?? [];
@@ -117,11 +119,18 @@ export default async function DashboardPage() {
   const unavailableSources = [
     attemptsResult.failed && "test history",
     writingResult.failed && "writing history",
+    analyticsResult.failed && "band progress",
+    activityResult.failed && "study activity",
   ].filter((value): value is string => Boolean(value));
 
   return (
     <div className={`${landingFont.className} space-y-7 pb-10`}>
-      <DashboardGreeting />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <DashboardGreeting />
+        <Button asChild variant="outline" className="rounded-lg border-border bg-card">
+          <Link href="/mock">Explore mock sessions <ArrowRight size={15} className="ml-2" /></Link>
+        </Button>
+      </div>
 
       {unavailableSources.length > 0 ? (
         <div role="status" className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
@@ -129,7 +138,22 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      <MockSessions tests={mockTests} variant="dashboard" showBookingFirst />
+      <section aria-label="Practice progress" className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        {analyticsResult.value ? (
+          <OverallBandKpiCard initialAnalytics={analyticsResult.value} />
+        ) : (
+          <Card className="grid min-h-64 place-items-center rounded-lg border-border bg-card p-6 text-sm text-muted-foreground shadow-none">
+            Band progress could not load. Refresh to try again.
+          </Card>
+        )}
+        {activityResult.value ? (
+          <StudyTimeCard activity={activityResult.value} />
+        ) : (
+          <Card className="grid min-h-64 place-items-center rounded-lg border-border bg-card p-6 text-sm text-muted-foreground shadow-none">
+            Study time could not load. Refresh to try again.
+          </Card>
+        )}
+      </section>
 
       {inProgressTest ? (
         <section className="max-w-3xl" aria-label="Continue your test">
@@ -158,6 +182,14 @@ export default async function DashboardPage() {
         </section>
       ) : null}
 
+      {activityResult.value && analyticsResult.value ? (
+        <StreakHeatmap
+          activity={activityResult.value}
+          currentStreak={analyticsResult.value.personalBests.currentStreak}
+          longestStreak={analyticsResult.value.personalBests.longestStreak}
+        />
+      ) : null}
+
       <section aria-labelledby="recent-activity-title">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -176,7 +208,7 @@ export default async function DashboardPage() {
                 <Clock3 className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
                 <h3 className="mt-3 text-sm font-semibold text-foreground">No practice yet</h3>
                 <p className="mt-1 text-xs text-muted-foreground">Your completed tests and Writing work will appear here.</p>
-                <Link href="/#mock" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                <Link href="/mock?mode=online" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary">
                   Start online practice <ArrowRight size={13} aria-hidden="true" />
                 </Link>
               </div>

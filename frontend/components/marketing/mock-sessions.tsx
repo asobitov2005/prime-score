@@ -58,14 +58,12 @@ function nextMonth(month: MockMonth, offset: number): MockMonth {
 
 export function MockSessions({
   tests,
-  variant = "landing",
-  showBookingFirst = false,
+  initialMode,
 }: {
   tests: LandingFeaturedTest[];
-  variant?: "landing" | "dashboard";
-  showBookingFirst?: boolean;
+  initialMode?: "online" | "offline";
 }) {
-  const [mode, setMode] = useState<"online" | "offline">("online");
+  const [mode, setMode] = useState<"online" | "offline">(initialMode ?? "online");
   const [month, setMonth] = useState<MockMonth>(() => getTashkentMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => getTashkentDateKey(new Date()));
   const [schedules, setSchedules] = useState<OfflineMockSchedule[]>([]);
@@ -83,10 +81,8 @@ export function MockSessions({
   }
 
   useEffect(() => {
-    if (new URL(window.location.href).searchParams.get("mode") === "offline") {
-      setMode("offline");
-    }
-  }, []);
+    setMode(initialMode ?? "online");
+  }, [initialMode]);
 
   useEffect(() => {
     if (mode !== "offline") {
@@ -130,7 +126,8 @@ export function MockSessions({
   }, [mode, month]);
 
   useEffect(() => {
-    if (!showBookingFirst || !hasHydrated || !isAuthenticated) return;
+    if (!hasHydrated || !isAuthenticated) return;
+    if (new URL(window.location.href).searchParams.has("mockBooking")) return;
 
     const controller = new AbortController();
     let active = true;
@@ -143,7 +140,7 @@ export function MockSessions({
       .then(({ items }) => {
         if (!active || !items[0]) return;
         setBooking(items[0]);
-        if (showBookingFirst) {
+        if (!initialMode) {
           setMode("offline");
           setSelectedDate(getTashkentDateKey(new Date(items[0].starts_at)));
           setMonth(getTashkentMonth(new Date(items[0].starts_at)));
@@ -157,7 +154,7 @@ export function MockSessions({
       active = false;
       controller.abort();
     };
-  }, [hasHydrated, isAuthenticated, showBookingFirst]);
+  }, [hasHydrated, isAuthenticated, initialMode]);
 
   useEffect(() => {
     if (mode !== "offline" || isLoading || schedules.length === 0) return;
@@ -212,7 +209,7 @@ export function MockSessions({
   async function reserveSchedule(schedule: OfflineMockSchedule) {
     if (!hasHydrated) return;
     if (!isAuthenticated) {
-      const returnUrl = `/?mockBooking=${encodeURIComponent(schedule.id)}#mock`;
+      const returnUrl = `/mock?mode=offline&mockBooking=${encodeURIComponent(schedule.id)}`;
       window.location.assign(buildLoginHref(returnUrl));
       return;
     }
@@ -228,7 +225,7 @@ export function MockSessions({
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Could not reserve this mock.");
       setBooking(payload as OfflineMockBooking);
-      setSchedules((current) => current.map((item) =>
+      if (response.status === 201) setSchedules((current) => current.map((item) =>
         item.id === schedule.id
           ? { ...item, reserved_count: item.reserved_count + 1, available_seats: Math.max(0, item.available_seats - 1) }
           : item,
@@ -250,14 +247,14 @@ export function MockSessions({
 
   return (
     <section
-      className={`${styles.mockSection} ${variant === "dashboard" ? styles.mockDashboardSection : styles.container} ${variant === "dashboard" ? styles.mockTheme : ""}`}
+      className={`${styles.mockSection} ${styles.mockAppSection} ${styles.mockTheme}`}
       id="mock"
       aria-labelledby="mock-title"
     >
       <div className={styles.mockHeading}>
         <div>
-          <p className={styles.eyebrow}>02 / YOUR MOCK, YOUR WAY</p>
-          <h2 id="mock-title">Practice online. Sit the real thing offline.</h2>
+          <p className={styles.eyebrow}>YOUR MOCK, YOUR WAY</p>
+          <h2 id="mock-title">Mock sessions</h2>
         </div>
         <p>Choose a published online test or book a seat at an in-person session.</p>
       </div>

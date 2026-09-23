@@ -39,6 +39,7 @@ export function SiteShell({ children }: SiteShellProps) {
   const router = useRouter();
   const unreadCount = notifications.filter(n => !n.is_read).length;
   const isAppRoute = currentPath.startsWith("/dashboard")
+    || currentPath.startsWith("/mock")
     || currentPath.startsWith("/tests")
     || currentPath.startsWith("/attempts")
     || currentPath.startsWith("/history")
@@ -457,8 +458,8 @@ export function SiteShell({ children }: SiteShellProps) {
             ) : null}
             
             {isAppRoute && isAuthenticated && isPremium ? (
-              <span className="inline-flex h-10 w-10 shrink-0 cursor-default select-none items-center justify-center rounded-full border border-amber-200 bg-[#FEF3C7] text-sm font-semibold text-amber-800 shadow-none dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200 md:w-auto md:gap-2 md:px-4">
-                <PrimePremiumIcon className="h-5 w-5 text-amber-600 dark:text-amber-300 md:h-4 md:w-4" />
+              <span className="inline-flex h-10 w-10 shrink-0 cursor-default select-none items-center justify-center rounded-full border border-border bg-accent text-sm font-semibold text-primary shadow-none md:w-auto md:gap-2 md:px-4">
+                <PrimePremiumIcon className="h-5 w-5 md:h-4 md:w-4" />
                 <span className="hidden md:inline">{"Premium"}</span>
               </span>
             ) : null}

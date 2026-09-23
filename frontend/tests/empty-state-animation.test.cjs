@@ -36,10 +36,11 @@ test("public catalog does not fall back to mock tests when backend data is unava
   assert.match(source, /export async function getLandingFeaturedTests/);
 });
 
-test("app sidebar does not duplicate the landing mock booking entry", () => {
+test("app sidebar has a dedicated Mock destination", () => {
   const source = read("components/layout/app-shell.tsx");
   const dashboard = read("app/(app)/dashboard/page.tsx");
 
   assert.doesNotMatch(source, /label: "IELTS Mock"/);
-  assert.match(dashboard, /MockSessions/);
+  assert.match(source, /href: "\/mock", label: "Mock"/);
+  assert.doesNotMatch(dashboard, /<MockSessions/);
 });

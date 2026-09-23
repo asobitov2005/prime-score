@@ -113,7 +113,7 @@ function EssayCheckCard({
   limitStatus: WritingLimitStatus | null;
 }) {
   return (
-    <Card className="overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_18px_50px_-36px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950 dark:shadow-none">
+    <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
       <CardContent className="px-6 pb-3 pt-6 md:px-8 md:pb-4 md:pt-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="flex gap-4 sm:items-center">
@@ -205,7 +205,7 @@ function PerformanceStrip({
   ];
 
   return (
-    <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:shadow-none">
+    <Card className="rounded-xl border-border bg-card shadow-none">
       <CardContent className="p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-bold tracking-tight text-slate-950 dark:text-slate-50">Your Writing Performance</h2>

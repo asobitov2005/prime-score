@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   BookOpen,
+  CalendarDays,
   Check,
   CheckCircle2,
   Clock3,
@@ -21,7 +22,6 @@ import { LandingFooter } from "./landing-footer";
 import styles from "./landing.module.css";
 import { landingFont } from "./landing-font";
 import { LandingMotionController } from "./landing-motion-controller";
-import { MockSessions } from "./mock-sessions";
 
 const skills = [
   {
@@ -111,6 +111,18 @@ export function LandingPage({
                 Real practice. Clear explanations. A little more confidence,
                 every time you show up.
               </p>
+              <nav className={styles.heroMockLinks} aria-label="Choose your mock">
+                <Link href="/mock?mode=online" prefetch={false}>
+                  <BookOpen size={19} aria-hidden="true" />
+                  <span><strong>Online</strong><small>Practice at your pace</small></span>
+                  <ArrowUpRight size={17} aria-hidden="true" />
+                </Link>
+                <Link href="/mock?mode=offline" prefetch={false}>
+                  <CalendarDays size={19} aria-hidden="true" />
+                  <span><strong>Offline</strong><small>Book an in-person mock</small></span>
+                  <ArrowUpRight size={17} aria-hidden="true" />
+                </Link>
+              </nav>
               <div className={styles.heroActions}>
                 <Link
                   href={startHref}
@@ -265,7 +277,6 @@ export function LandingPage({
           )}
         </section>
 
-        <MockSessions tests={tests} />
 
         <section
           className={styles.processSection}
