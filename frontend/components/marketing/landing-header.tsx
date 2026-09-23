@@ -73,6 +73,9 @@ export function LandingHeader() {
           <a href="#practice" data-landing-nav>
             Practice
           </a>
+          <a href="#mock" data-landing-nav>
+            Mock
+          </a>
           <a href="#how-it-works" data-landing-nav>
             How it works
           </a>
@@ -121,6 +124,7 @@ export function LandingHeader() {
       >
         {[
           ["#practice", "Practice"],
+          ["#mock", "Mock"],
           ["#how-it-works", "How it works"],
           ["#pricing", "Pricing"],
           ["#faq", "FAQ"],

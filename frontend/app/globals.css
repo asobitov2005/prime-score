@@ -4,33 +4,44 @@
 
 @layer base {
   :root {
-    --background: 222 47% 7%;  /* Deep Navy Background */
-    --foreground: 210 40% 98%;
+    --ps-paper: 160 16% 11%;
+    --ps-surface: 153 15% 15%;
+    --ps-ink: 54 26% 93%;
+    --ps-muted: 90 8% 71%;
+    --ps-line: 143 10% 26%;
+    --ps-accent: 17 100% 75%;
+    --ps-accent-soft: 20 26% 21%;
+    --ps-green: 145 30% 73%;
+    --ps-marker: 110 23% 25%;
+    --ps-marker-ink: 71 49% 89%;
 
-    --card: 222 47% 10%;
-    --card-foreground: 210 40% 98%;
+    --background: var(--ps-paper);
+    --foreground: var(--ps-ink);
 
-    --popover: 222 47% 10%;
-    --popover-foreground: 210 40% 98%;
+    --card: var(--ps-surface);
+    --card-foreground: var(--ps-ink);
 
-    --primary: 24 100% 55%; /* Asl To'q sariq (Orange) */
-    --primary-foreground: 0 0% 100%;
+    --popover: var(--ps-surface);
+    --popover-foreground: var(--ps-ink);
 
-    --secondary: 222 47% 16%;
-    --secondary-foreground: 210 40% 98%;
+    --primary: var(--ps-accent);
+    --primary-foreground: var(--ps-paper);
 
-    --muted: 222 47% 16%;
-    --muted-foreground: 215 20% 65%;
+    --secondary: var(--ps-line);
+    --secondary-foreground: var(--ps-ink);
 
-    --accent: 222 47% 16%;
-    --accent-foreground: 210 40% 98%;
+    --muted: var(--ps-surface);
+    --muted-foreground: var(--ps-muted);
+
+    --accent: var(--ps-accent-soft);
+    --accent-foreground: var(--ps-ink);
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 222 47% 18%;
-    --input: 222 47% 18%;
-    --ring: 24 100% 55%;
+    --border: var(--ps-line);
+    --input: var(--ps-line);
+    --ring: var(--ps-accent);
 
     --radius: 0.5rem;
     
@@ -38,35 +49,46 @@
     --grid-color: rgba(255, 255, 255, 0.03);
   }
 
-  /* Professional Soft Light Mode */
+  /* Shared warm landing palette for the user-facing app. */
   .light {
-    --background: 210 40% 98%;    /* Soft Slate White (F8FAFC) */
-    --foreground: 222 47% 11%;    /* Slate 900 */
+    --ps-paper: 43 41% 97%;
+    --ps-surface: 45 100% 99%;
+    --ps-ink: 164 15% 15%;
+    --ps-muted: 100 5% 39%;
+    --ps-line: 60 15% 85%;
+    --ps-accent: 13 70% 42%;
+    --ps-accent-soft: 29 63% 92%;
+    --ps-green: 165 42% 22%;
+    --ps-marker: 78 47% 85%;
+    --ps-marker-ink: 103 21% 19%;
 
-    --card: 0 0% 100%;            /* Pure White */
-    --card-foreground: 222 47% 11%;
+    --background: var(--ps-paper);
+    --foreground: var(--ps-ink);
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --card: var(--ps-surface);
+    --card-foreground: var(--ps-ink);
 
-    --primary: 24 100% 50%;       /* Slightly deeper orange for better contrast on light */
-    --primary-foreground: 210 40% 98%;
+    --popover: var(--ps-surface);
+    --popover-foreground: var(--ps-ink);
 
-    --secondary: 210 40% 96.1%;   /* Slate 100 */
-    --secondary-foreground: 222 47% 11%;
+    --primary: var(--ps-accent);
+    --primary-foreground: 45 100% 99%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%; /* Slate 500 */
+    --secondary: var(--ps-line);
+    --secondary-foreground: var(--ps-ink);
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222 47% 11%;
+    --muted: var(--ps-surface);
+    --muted-foreground: var(--ps-muted);
+
+    --accent: var(--ps-accent-soft);
+    --accent-foreground: var(--ps-ink);
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;  /* Slate 200 */
-    --input: 214.3 31.8% 91.4%;
-    --ring: 24 100% 50%;
+    --border: var(--ps-line);
+    --input: var(--ps-line);
+    --ring: var(--ps-accent);
     
     /* Grid colors for light mode */
     --grid-color: rgba(0, 0, 0, 0.03);
@@ -164,14 +186,6 @@
     background: linear-gradient(180deg, hsl(var(--primary) / 0.88), hsl(var(--foreground) / 0.26)) padding-box;
   }
 
-  .premium-live-dot {
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 999px;
-    background: #f59e0b;
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.42);
-    animation: premium-live-pulse 1.8s ease-out infinite;
-  }
 }
 
 @layer utilities {
@@ -260,21 +274,6 @@
   }
   100% {
     transform: translateX(320%);
-  }
-}
-
-@keyframes premium-live-pulse {
-  0% {
-    transform: scale(0.96);
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.42);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
-  }
-  100% {
-    transform: scale(0.96);
-    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
   }
 }
 

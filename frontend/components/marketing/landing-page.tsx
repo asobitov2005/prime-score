@@ -21,6 +21,7 @@ import { LandingFooter } from "./landing-footer";
 import styles from "./landing.module.css";
 import { landingFont } from "./landing-font";
 import { LandingMotionController } from "./landing-motion-controller";
+import { MockSessions } from "./mock-sessions";
 
 const skills = [
   {
@@ -264,6 +265,8 @@ export function LandingPage({
           )}
         </section>
 
+        <MockSessions tests={tests} />
+
         <section
           className={styles.processSection}
           id="how-it-works"
@@ -272,7 +275,7 @@ export function LandingPage({
         >
           <div className={`${styles.container} ${styles.processGrid}`}>
             <div data-landing-reveal>
-              <p className={styles.eyebrow}>02 / MAKE PRACTICE COUNT</p>
+              <p className={styles.eyebrow}>03 / MAKE PRACTICE COUNT</p>
               <h2 id="process-title">
                 Not just a score.
                 <br />
@@ -330,7 +333,7 @@ export function LandingPage({
         >
           <div className={styles.sectionHeading} data-landing-reveal>
             <div>
-              <p className={styles.eyebrow}>03 / ROOM TO GO FURTHER</p>
+              <p className={styles.eyebrow}>04 / ROOM TO GO FURTHER</p>
               <h2 id="pricing-title">Start free. Stay for the progress.</h2>
             </div>
             <p>
@@ -413,7 +416,7 @@ export function LandingPage({
         >
           <div className={`${styles.container} ${styles.faqGrid}`}>
             <div data-landing-reveal>
-              <p className={styles.eyebrow}>04 / BEFORE YOU BEGIN</p>
+              <p className={styles.eyebrow}>05 / BEFORE YOU BEGIN</p>
               <h2 id="faq-title">
                 A few good
                 <br />

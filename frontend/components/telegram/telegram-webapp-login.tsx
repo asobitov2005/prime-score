@@ -9,6 +9,7 @@ import { createApiClient } from "@/lib/api/client";
 import { trackLogin } from "@/lib/analytics";
 import { buildUserDisplayName } from "@/lib/user-name";
 import { cn } from "@/lib/utils";
+import { resolveSafeReturnUrl } from "@/lib/subscription-navigation";
 import { useAuthStore } from "@/store/auth-store";
 
 type TelegramWebApp = {
@@ -40,13 +41,6 @@ declare global {
 type LoginState = "loading" | "need_telegram" | "ready" | "requesting_contact" | "signing_in" | "success" | "error";
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "primescorebot";
-
-function resolveSafeReturnUrl(value: string | null): string {
-  if (value?.startsWith("/") && !value.startsWith("//")) {
-    return value;
-  }
-  return "/dashboard";
-}
 
 function getTelegramWebApp(): TelegramWebApp | null {
   if (typeof window === "undefined") {

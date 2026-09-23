@@ -36,8 +36,10 @@ test("public catalog does not fall back to mock tests when backend data is unava
   assert.match(source, /export async function getLandingFeaturedTests/);
 });
 
-test("app sidebar keeps IELTS Mock disabled until the page is ready", () => {
+test("app sidebar does not duplicate the landing mock booking entry", () => {
   const source = read("components/layout/app-shell.tsx");
+  const dashboard = read("app/(app)/dashboard/page.tsx");
 
-  assert.match(source, /label: "IELTS Mock"[^}]+soon: true/s);
+  assert.doesNotMatch(source, /label: "IELTS Mock"/);
+  assert.match(dashboard, /MockSessions/);
 });

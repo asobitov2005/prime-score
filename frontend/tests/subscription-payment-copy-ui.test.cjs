@@ -3,14 +3,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-test("subscription workspace keeps card copying only on the active invoice and hides completed history rows", () => {
+test("subscription workspace exposes copy controls only for the active invoice", () => {
   const filename = path.join(__dirname, "../components/subscription/subscription-workspace.tsx");
   const source = fs.readFileSync(filename, "utf8");
 
   assert.match(source, /navigator\.clipboard\.writeText/);
   assert.match(source, /Copy card/);
-  assert.match(source, /item\.status !== "completed" && item\.id !== activePayment\?\.id/);
-  assert.match(source, /No payment history yet/);
-  assert.doesNotMatch(source, /onClick=\{\(\) => void handleCopyField\(payment\.id, "card", payment\.cardNumber \?\? "-"\)\}/);
-  assert.doesNotMatch(source, /Active until \{payment\.grantedUntil \? formatDateTime\(payment\.grantedUntil\) : "-"\}/);
+  assert.match(source, /payments\.find\(\(item\) => item\.status === "pending" \|\| item\.status === "matched"\)/);
+  assert.match(source, /<ActiveInvoiceModal\s+payment=\{activePayment\}[\s\S]*?onCopy=\{handleCopyField\}/);
+  assert.doesNotMatch(source, /payments\.map\(/);
 });

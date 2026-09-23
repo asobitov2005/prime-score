@@ -26,6 +26,7 @@ from app.api.routes import admin_gift_code_routes as _admin_gift_code_routes
 from app.api.routes import admin_payment_routes as _admin_payment_routes
 from app.api.routes import admin_promo_routes as _admin_promo_routes
 from app.api.routes import admin_system_routes as _admin_system_routes
+from app.api.routes import admin_mock_schedules as _admin_mock_schedules
 
 _ROUTE_MODULES = (
     _admin_password_reset_routes,
@@ -44,6 +45,7 @@ _ROUTE_MODULES = (
     _admin_payment_routes,
     _admin_promo_routes,
     _admin_system_routes,
+    _admin_mock_schedules,
 )
 _COMPAT_MODULES = (
     _admin_contracts,

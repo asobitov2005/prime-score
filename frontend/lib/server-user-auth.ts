@@ -95,7 +95,11 @@ function isUserAuthFailureStatus(status: number): boolean {
   return status === 401;
 }
 
-export async function requestServerUserApi<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestServerUserApi<T>(
+  path: string,
+  init?: RequestInit,
+  options?: { onResponse?: (response: Response) => void },
+): Promise<T> {
   const performRequest = async (accessToken: string | null) => {
     const { controller, timeoutId } = createTimeoutSignal();
 
@@ -132,6 +136,8 @@ export async function requestServerUserApi<T>(path: string, init?: RequestInit):
     accessToken = refreshedAccessToken;
     response = await performRequest(accessToken);
   }
+
+  options?.onResponse?.(response);
 
   if (!response.ok) {
     let message = `Request failed for ${path}`;

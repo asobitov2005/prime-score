@@ -271,10 +271,7 @@ export function SiteShell({ children }: SiteShellProps) {
   return (
     <div
       className={cn(
-        "min-h-screen selection:bg-blue-100 selection:text-blue-700 text-left flex flex-col relative",
-        isAppRoute
-          ? "bg-[#F8FAFC] dark:bg-slate-950 dark:text-slate-100"
-          : "bg-white text-slate-950 dark:bg-slate-950 dark:text-slate-100"
+        "min-h-screen selection:bg-primary/20 selection:text-foreground text-left flex flex-col relative bg-background text-foreground"
       )}
       style={{
         "--app-shell-sticky-top": "4.5rem",
@@ -359,8 +356,8 @@ export function SiteShell({ children }: SiteShellProps) {
         className={cn(
           "sticky top-0 z-50 flex h-14 shrink-0 items-center md:h-16",
           isAppRoute
-            ? "border-b border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/95 lg:ml-[16.5rem] lg:w-[calc(100%-16.5rem)]"
-            : "border-b border-slate-200/60 bg-white/70 shadow-[0_8px_32px_-18px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-950/70"
+            ? "border-b border-border bg-background/95 shadow-sm lg:ml-[16.5rem] lg:w-[calc(100%-16.5rem)]"
+            : "border-b border-border/70 bg-background/85 shadow-sm backdrop-blur-xl"
         )}
       >
         <div
@@ -472,7 +469,7 @@ export function SiteShell({ children }: SiteShellProps) {
                 variant="ghost"
                 size="icon"
                 onClick={toggleTheme}
-                className="hidden h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-500 shadow-none transition-all hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600 active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10 dark:hover:text-orange-300 lg:inline-flex"
+                className="hidden h-10 w-10 rounded-full border border-border bg-card text-muted-foreground shadow-none transition-all hover:border-primary/40 hover:bg-accent hover:text-primary active:scale-95 lg:inline-flex"
                 title={"Toggle Light/Dark Mode"}
                 aria-label={"Toggle Light/Dark Mode"}
               >
@@ -636,7 +633,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   });
                   openMobileSidebar(true);
                 }}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-none transition-all hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600 active:scale-95 lg:hidden dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10 dark:hover:text-orange-300"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-none transition-all hover:border-primary/40 hover:bg-accent hover:text-primary active:scale-95 lg:hidden"
                 aria-label="Open menu"
               >
                 <Menu className="h-5 w-5" />

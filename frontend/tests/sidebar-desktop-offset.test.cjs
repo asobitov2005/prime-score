@@ -3,13 +3,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-test("desktop app shell uses a fixed desktop sidebar aligned to the centered content gutter", () => {
+test("desktop sidebar reserves the same width as the app content offset", () => {
   const filename = path.join(__dirname, "../components/layout/app-shell.tsx");
   const source = fs.readFileSync(filename, "utf8");
 
-  assert.match(
-    source,
-    /<aside className=\{cn\(\s*"relative hidden lg:block w-\[17rem\] shrink-0"/
-  );
-  assert.match(source, /left: "calc\(\(100vw - min\(100vw, 82rem\)\) \/ 2 \+ 1\.5rem\)"/);
+  assert.match(source, /"hidden lg:fixed lg:inset-y-0 lg:left-0[^\"]*w-\[16\.5rem\]/);
+  assert.match(source, /lg:ml-\[16\.5rem\]/);
 });

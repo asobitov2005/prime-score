@@ -21,6 +21,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { AppLoadingPlaceholder } from "@/components/layout/app-loading-placeholder";
 import { trackCtaClick, trackLogin } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
+import { resolveSafeReturnUrl } from "@/lib/subscription-navigation";
 
 const display = Sora({
   subsets: ["latin"],
@@ -37,9 +38,7 @@ export function LoginPageClient() {
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const [step, setStep] = useState<"guide" | "verify">("guide");
   const rawReturnUrl = searchParams.get("returnUrl");
-  const safeReturnUrl = rawReturnUrl?.startsWith("/") && !rawReturnUrl.startsWith("//")
-    ? rawReturnUrl
-    : "/dashboard";
+  const safeReturnUrl = resolveSafeReturnUrl(rawReturnUrl);
 
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) {

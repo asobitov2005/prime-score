@@ -120,6 +120,30 @@ export interface AdminPlanSummary {
   isFeatured: boolean;
 }
 
+export interface AdminOfflineMockSchedule {
+  id: string;
+  title: string;
+  startsAt: string;
+  durationMinutes: number;
+  location: string;
+  capacity: number;
+  reservedCount: number;
+  availableSeats: number;
+  priceAmount: number;
+  currency: "UZS";
+  isPublished: boolean;
+}
+
+export interface AdminOfflineMockScheduleInput {
+  title: string;
+  startsAt: string;
+  durationMinutes: number;
+  location: string;
+  capacity: number;
+  priceAmount: number;
+  isPublished: boolean;
+}
+
 export interface AdminPromoCodeSummary {
   id: string;
   code: string;

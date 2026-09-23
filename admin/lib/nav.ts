@@ -1,6 +1,7 @@
 import type { AdminRole } from "@/lib/types";
 import {
   LayoutDashboard,
+  CalendarDays,
   Bot,
   FileText,
   Users,
@@ -116,6 +117,12 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/promo-codes",
         description: "Premium redeem code creation and control",
         icon: Ticket
+      },
+      {
+        label: "Mock Schedules",
+        href: "/mock-schedules",
+        description: "Manage offline IELTS mock dates, seats, and demo prices",
+        icon: CalendarDays
       }
     ]
   },

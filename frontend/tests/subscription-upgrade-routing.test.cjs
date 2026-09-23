@@ -21,6 +21,6 @@ test("subscription upgrade navigation routes guests through login and members to
   assert.match(pricingGrid, /href: subscriptionHref,\s+label: "Upgrade now"/s);
 
   assert.match(startTestModal, /const subscriptionHref = getSubscriptionPageHref\(isAuthenticated\);/);
-  assert.match(startTestModal, /<Link href=\{subscriptionHref\}>/);
+  assert.match(startTestModal, /<PremiumUpgradeModal subscriptionHref=\{subscriptionHref\}/);
   assert.doesNotMatch(startTestModal, /<Link href="\/pricing">/);
 });

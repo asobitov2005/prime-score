@@ -10,6 +10,8 @@ import type {
   AdminPaymentCardSummary,
   AdminPaymentSettingsSummary,
   AdminPaymentSummary,
+  AdminOfflineMockSchedule,
+  AdminOfflineMockScheduleInput,
   AdminTranscriptQuestionLocation,
   AdminTranscriptSegment,
   PaymentMethod,
@@ -499,6 +501,36 @@ type AdminPaymentCardInput = {
 type AdminPaymentSettingsInput = {
   supportContact?: string | null;
 };
+
+type BackendOfflineMockSchedule = {
+  id: string;
+  title: string;
+  starts_at: string;
+  duration_minutes: number;
+  location: string;
+  capacity: number;
+  reserved_count: number;
+  available_seats: number;
+  price_amount: number | string;
+  currency: "UZS";
+  is_published: boolean;
+};
+
+function mapOfflineMockSchedule(item: BackendOfflineMockSchedule): AdminOfflineMockSchedule {
+  return {
+    id: item.id,
+    title: item.title,
+    startsAt: item.starts_at,
+    durationMinutes: item.duration_minutes,
+    location: item.location,
+    capacity: item.capacity,
+    reservedCount: item.reserved_count,
+    availableSeats: item.available_seats,
+    priceAmount: typeof item.price_amount === "number" ? item.price_amount : Number(item.price_amount),
+    currency: item.currency,
+    isPublished: item.is_published,
+  };
+}
 
 const questionTypeAliases: Record<string, string> = {
   "mc-single": "reading_mc_single",
@@ -1044,6 +1076,40 @@ function mapAdminPaymentSettings(settings: BackendPaymentSettings): AdminPayment
 }
 
 export const adminApi = {
+  async listOfflineMockSchedules(): Promise<AdminOfflineMockSchedule[]> {
+    const response = await requestJson<{ items: BackendOfflineMockSchedule[] }>("/mock/offline-schedules");
+    return response.items.map(mapOfflineMockSchedule);
+  },
+  async createOfflineMockSchedule(input: AdminOfflineMockScheduleInput): Promise<AdminOfflineMockSchedule> {
+    const response = await requestJson<BackendOfflineMockSchedule>("/mock/offline-schedules", {
+      method: "POST",
+      body: JSON.stringify({
+        title: input.title,
+        starts_at: input.startsAt,
+        duration_minutes: input.durationMinutes,
+        location: input.location,
+        capacity: input.capacity,
+        price_amount: input.priceAmount,
+        is_published: input.isPublished,
+      }),
+    });
+    return mapOfflineMockSchedule(response);
+  },
+  async updateOfflineMockSchedule(id: string, input: AdminOfflineMockScheduleInput): Promise<AdminOfflineMockSchedule> {
+    const response = await requestJson<BackendOfflineMockSchedule>(`/mock/offline-schedules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: input.title,
+        starts_at: input.startsAt,
+        duration_minutes: input.durationMinutes,
+        location: input.location,
+        capacity: input.capacity,
+        price_amount: input.priceAmount,
+        is_published: input.isPublished,
+      }),
+    });
+    return mapOfflineMockSchedule(response);
+  },
   async listTests(): Promise<AdminTestSummary[]> {
     const response = await requestJson<BackendAdminTest[]>("/tests");
     return response.map(mapAdminTest);

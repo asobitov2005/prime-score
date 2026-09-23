@@ -3,15 +3,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-test("desktop sidebar keeps the premium card fixed under a scrollable nav area", () => {
+test("desktop sidebar keeps navigation scrollable and premium card outside its scroll area", () => {
   const filename = path.join(__dirname, "../components/layout/app-shell.tsx");
   const source = fs.readFileSync(filename, "utf8");
+  const asideStart = source.indexOf("<aside className={cn(");
+  const asideEnd = source.indexOf("</aside>", asideStart);
+  const desktopAside = source.slice(asideStart, asideEnd);
+  const scrollAreaEnd = desktopAside.indexOf("</div>", desktopAside.indexOf("overflow-y-auto"));
+  const premiumCard = desktopAside.indexOf("<SidebarPremiumCard />");
 
-  assert.match(source, /top: "calc\(var\(--app-shell-sticky-top, 5rem\) \+ 0\.5rem\)"/);
-  assert.match(source, /className="flex flex-col gap-4"/);
-  assert.match(source, /"calc\(100dvh - var\(--app-shell-sticky-top, 5rem\) - 1\.5rem\)"/);
-  assert.match(source, /isTestsSubmenuOpen \? "overflow-y-auto sidebar-scrollbar" : "overflow-y-hidden"/);
-  assert.match(source, /maxHeight: "calc\(100dvh - var\(--app-shell-sticky-top, 5rem\) - 11\.5rem\)"/);
-  assert.match(source, /<SidebarNavigation \/>/);
-  assert.match(source, /<SidebarPremiumCard \/>/);
+  assert.notEqual(asideStart, -1);
+  assert.notEqual(asideEnd, -1);
+  assert.match(desktopAside, /flex-1 min-h-0[^\"]*overflow-y-auto/);
+  assert.ok(scrollAreaEnd > 0 && premiumCard > scrollAreaEnd);
+  assert.match(desktopAside, /<SidebarNavigation \/>/);
 });

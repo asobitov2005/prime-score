@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { BarChart3, BookMarked, BookOpenText, CreditCard, Gauge, History, Mic, PenTool, Sparkles, Trophy, X, Settings2 } from "lucide-react";
+import { BarChart3, BookMarked, BookOpenText, CreditCard, Gauge, History, Mic, PenTool, Trophy, X, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createApiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
@@ -18,17 +17,9 @@ import { SidebarPremiumCard } from "@/components/layout/sidebar-premium-card";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
 import { getSubscriptionPageHref } from "@/lib/subscription-navigation";
-import type { XpSummary } from "@/lib/types";
 
 interface AppShellProps {
   children: ReactNode;
-}
-
-function formatCompactNumber(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    notation: value >= 10000 ? "compact" : "standard",
-    maximumFractionDigits: 1,
-  }).format(value);
 }
 
 export function AppShell({ children }: AppShellProps) {
@@ -39,8 +30,6 @@ export function AppShell({ children }: AppShellProps) {
   const setIsMobileOpen = useUIStore((state) => state.setMobileSidebarOpen);
   const { isAuthenticated, hasHydrated, isPremium, userId } = useAuthStore();
   const ensureBookmarksHydrated = useBookmarksStore((state) => state.ensureHydrated);
-  const [isTestsSubmenuOpen, setIsTestsSubmenuOpen] = useState(false);
-  const [xpSummary, setXpSummary] = useState<XpSummary | null>(null);
   const [pendingNavigationHref, setPendingNavigationHref] = useState<string | null>(null);
   const [showAnalyticsPremiumModal, setShowAnalyticsPremiumModal] = useState(false);
   const isPublicTestsRoute = pathname === "/tests" || pathname.startsWith("/tests/");
@@ -110,39 +99,6 @@ export function AppShell({ children }: AppShellProps) {
   }, [pendingNavigationHref]);
 
   useEffect(() => {
-    if (pathname.startsWith("/tests")) {
-      setIsTestsSubmenuOpen(true);
-      return;
-    }
-    setIsTestsSubmenuOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!hasHydrated || !isAuthenticated) {
-      setXpSummary(null);
-      return;
-    }
-
-    let ignore = false;
-    createApiClient()
-      .getXpSummary()
-      .then((summary) => {
-        if (!ignore) {
-          setXpSummary(summary);
-        }
-      })
-      .catch(() => {
-        if (!ignore) {
-          setXpSummary(null);
-        }
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, [hasHydrated, isAuthenticated]);
-
-  useEffect(() => {
     if (!hasHydrated) {
       return;
     }
@@ -179,7 +135,7 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   const SidebarNavigation = () => (
-    <div className="bg-white dark:bg-slate-950">
+    <div className="bg-background">
       <nav className="space-y-1">
         {navItems.map((item) => {
           const isExternal = "external" in item && item.external;
@@ -195,18 +151,14 @@ export function AppShell({ children }: AppShellProps) {
           const itemClassName = cn(
             "flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
             disabled
-              ? "cursor-not-allowed text-slate-400 opacity-55 grayscale dark:text-slate-600"
+              ? "cursor-not-allowed text-muted-foreground/50 opacity-55 grayscale"
               : active
-              ? "bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300"
-              : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100"
+              ? "bg-accent text-primary"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
           );
           const iconClassName = cn(
             "h-4 w-4",
-            disabled
-              ? "text-slate-400 dark:text-slate-600"
-              : active
-              ? "text-orange-600 dark:text-orange-300"
-              : "text-slate-400 dark:text-slate-500"
+            disabled ? "text-muted-foreground/50" : active ? "text-primary" : "text-muted-foreground"
           );
           const content = (
             <>
@@ -215,8 +167,8 @@ export function AppShell({ children }: AppShellProps) {
               {"badge" in item ? (
                 <span
                   className={cn(
-                    "shrink-0 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200",
-                    disabled && "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400",
+                    "shrink-0 rounded-full border border-primary/20 bg-accent px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none text-primary",
+                    disabled && "border-border bg-muted text-muted-foreground",
                   )}
                 >
                   {item.badge}
@@ -318,50 +270,10 @@ export function AppShell({ children }: AppShellProps) {
     </div>
   );
 
-  const SidebarXpCard = () => {
-    if (!xpSummary) {
-      return null;
-    }
-
-    const progress = Math.max(0, Math.min(xpSummary.progress.progressPercent, 100));
-
-    return (
-      <Link
-        href="/leaderboard"
-        className="group block overflow-hidden rounded-xl border border-border/50 bg-card/70 p-3 shadow-sm transition-all hover:border-primary/30 hover:bg-card"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-sky-500" />
-              {"PrimeScore XP"}
-            </div>
-            <p className="mt-1 text-xl font-black tracking-tight text-foreground">
-              {formatCompactNumber(xpSummary.totalXp)}
-            </p>
-          </div>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
-            <Trophy className="h-5 w-5" />
-          </div>
-        </div>
-        <div className="mt-3 rounded-lg border border-border/50 bg-background/70 px-2.5 py-2 text-xs font-semibold">
-          <span className="text-muted-foreground">Level</span>
-          <span className="ml-1 text-foreground">{xpSummary.level}</span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-500 to-amber-400 transition-[width]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </Link>
-    );
-  };
-
   const SidebarContent = () => (
     <div className="flex flex-col gap-4">
       <SidebarNavigation />
-      <div className="border-t border-slate-200 pt-2 dark:border-slate-800">
+      <div className="border-t border-border pt-2">
         <ThemeToggle />
       </div>
       <div>
@@ -371,7 +283,7 @@ export function AppShell({ children }: AppShellProps) {
   );
 
   return (
-    <div className="relative flex w-full flex-1 flex-col items-start bg-[#F8FAFC] px-4 pb-6 pt-3 transition-colors sm:px-6 md:pb-8 md:pt-4 lg:flex-row lg:gap-0 lg:px-0 lg:py-0 dark:bg-slate-950">
+    <div className="relative flex w-full flex-1 flex-col items-start bg-background px-4 pb-6 pt-3 text-foreground transition-colors sm:px-6 md:pb-8 md:pt-4 lg:flex-row lg:gap-0 lg:px-0 lg:py-0">
       {/* Mobile sidebar is opened from the global header menu button (see SiteShell). */}
       {isMobileOpen && (
         <div
@@ -381,7 +293,7 @@ export function AppShell({ children }: AppShellProps) {
       )}
 
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-[17.5rem] bg-white p-5 shadow-2xl flex flex-col gap-5 lg:hidden transition-transform duration-300 ease-out dark:bg-slate-950 dark:text-slate-100",
+        "fixed inset-y-0 left-0 z-50 w-[17.5rem] border-r border-border bg-background p-5 text-foreground shadow-2xl flex flex-col gap-5 lg:hidden transition-transform duration-300 ease-out",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex items-center justify-between pb-2">
@@ -396,7 +308,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <aside className={cn(
-        "hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block w-[16.5rem] shrink-0 border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950",
+        "hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block w-[16.5rem] shrink-0 border-r border-border bg-background",
         sidebar === "collapsed" ? "lg:hidden" : "lg:block"
       )}>
         <div className="flex h-full flex-col gap-4 p-4">
