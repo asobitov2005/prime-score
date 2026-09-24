@@ -817,6 +817,7 @@ export function createApiClient(config: ApiClientConfig = {}) {
       body: JSON.stringify(body)
     }),
     listPayments: () => request<PaymentRecordResponse[]>("/me/payments", { method: "GET" }),
+    getPayment: (paymentId: string) => request<PaymentRecordResponse>(`/me/payments/${paymentId}`, { method: "GET" }),
     createPayment: (body: CreatePaymentBody) => request<CreatePaymentResponse>("/me/payments", {
       method: "POST",
       body: JSON.stringify(body)

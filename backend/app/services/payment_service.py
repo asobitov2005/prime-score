@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.enums import NotificationType
 from app.models.commerce import Payment, PaymentCard, PaymentSetting, Plan
 from app.models.user import User
@@ -128,8 +129,13 @@ async def create_plan_payment(
         active_pending.archived_at = _now()
         active_pending.status_reason = "Replaced by a new invoice for a different plan."
 
-    active_card = await get_active_payment_card(session)
-    if active_card is None:
+    config = get_settings()
+    click_ready = bool(config.click_service_id and config.click_merchant_id and config.click_secret_key)
+    if click_ready and (config.payment_paused or plan.payment_paused):
+        raise ValueError("Payments are paused for this plan.")
+    use_click = click_ready
+    active_card = None if use_click else await get_active_payment_card(session)
+    if not use_click and active_card is None:
         raise ValueError("No active payment card is configured.")
 
     settings = await get_or_create_payment_settings(session)
@@ -139,8 +145,8 @@ async def create_plan_payment(
     payment = Payment(
         user_id=user.id,
         plan_id=plan.id,
-        card_id=active_card.id,
-        provider="card_transfer",
+        card_id=active_card.id if active_card else None,
+        provider="click" if use_click else "card_transfer",
         provider_reference=None,
         invoice_code=build_invoice_code(),
         amount=plan_price,
@@ -149,14 +155,20 @@ async def create_plan_payment(
         discount_amount=Decimal("0"),
         currency="UZS",
         status="pending",
-        card_label=active_card.label,
-        card_number=normalize_card_number(active_card.card_number),
+        card_label=active_card.label if active_card else None,
+        card_number=normalize_card_number(active_card.card_number) if active_card else None,
         expires_at=_now() + timedelta(hours=INVOICE_TTL_HOURS),
-        status_reason=f"Transfer the amount to the card and send the screenshot to {support_contact} on Telegram.",
+        status_reason=(
+            "Complete payment in Click. Access activates automatically after confirmation."
+            if use_click else f"Transfer the amount to the card and send the screenshot to {support_contact} on Telegram."
+        ),
         meta={
             "plan_name": plan.name,
             "support_contact": support_contact,
-            "payment_instructions": "Transfer the amount to the card, then send a screenshot to Telegram support.",
+            "payment_instructions": (
+                "Pay securely in Click. Premium activates after payment confirmation."
+                if use_click else "Transfer the amount to the card, then send a screenshot to Telegram support."
+            ),
         },
     )
     session.add(payment)
@@ -192,7 +204,10 @@ async def complete_payment(
     payment.paid_at = now
     payment.archived_at = now
     payment.granted_until = premium_until
-    payment.status_reason = "Payment completed manually from admin panel."
+    payment.status_reason = (
+        "Payment confirmed by Click." if payment.provider == "click"
+        else "Payment completed manually from admin panel."
+    )
 
     await grant_payment_gift_entitlement(
         session,

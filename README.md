@@ -9,7 +9,7 @@ PrimeScore — IELTS Reading va Listening practice platformasi. Repo hozir uchta
 ## Hozirgi holat
 
 - User frontend hybrid ishlaydi: imkon bo'lsa backenddan o'qiydi, bo'lmasa ayrim sahifalarda mock/fallback data ishlatadi.
-- User auth flow Telegram code bilan boshlanadi, lekin user-protected backend route'lar hozir ham `X-Debug-*` headerlar orqali himoyalangan. Ya'ni user auth end-to-end hali to'liq bearer-token flow emas.
+- User auth Telegram code va bearer token bilan ishlaydi. `X-Debug-*` headerlar default holatda o'chiq; faqat `ALLOW_DEBUG_AUTH_HEADERS=True` bilan lokal testda yoqiladi.
 - Admin auth alohida va ancha realroq: `admin/` app phone/password + Telegram OTPdan keyin bearer cookie orqali `/api/admin/*` endpointlarga ulanadi.
 - Attempt flow, snapshot, scoring va test publish logikasi backendda realroq ishlaydi.
 - Celery configure qilingan, lekin tasklarning ko'pi hali stub return bilan turibdi.
@@ -128,6 +128,7 @@ Real local login uchun admin recorddagi `phone_number` va `telegram_id` bot orqa
 - `docs/context/README.md` — faqat qisqa pointer
 - `docs/server-systemd.md` — production backend service va deploy xaritasi
 - `docs/server-projects.md` — serverdagi loyiha, service va domain inventariysi
+- `docs/click-payments.md` — Click Premium checkout va xavfsiz aktivatsiya tartibi
 
 ## Production
 

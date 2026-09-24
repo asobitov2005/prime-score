@@ -28,6 +28,7 @@ function mapPaymentRecord(payload: PaymentRecordResponse): UserPaymentRecord {
     cardNumber: payload.card_number ?? null,
     supportContact: payload.support_contact ?? "@TheBugCreator",
     paymentInstructions: payload.payment_instructions ?? "Transfer the amount to the card, then send a screenshot to Telegram support.",
+    paymentUrl: payload.payment_url ?? null,
     expiresAt: payload.expires_at ?? null,
     matchedAt: payload.matched_at ?? null,
     paidAt: payload.paid_at ?? null,

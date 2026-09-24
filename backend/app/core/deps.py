@@ -8,6 +8,7 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import UserRole
+from app.core.config import get_settings
 from app.core.security import decode_token
 from app.db.session import get_async_session, get_db_session
 from app.models.user import Session as UserSession
@@ -93,10 +94,10 @@ async def get_current_user(
             created_at=user.created_at,
         )
 
-    if not x_debug_user_id:
+    if not x_debug_user_id or not get_settings().allow_debug_auth_headers:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication headers are required.",
+            detail="Bearer authentication is required.",
         )
 
     try:

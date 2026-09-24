@@ -9,6 +9,7 @@ from app.api.routes import (
     admin_writing,
     attempts,
     auth,
+    click,
     leaderboard,
     me,
     mock_schedules,
@@ -23,6 +24,7 @@ from app.api.routes import (
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(click.router, prefix="/payments/click", tags=["click-payments"])
 api_router.include_router(me.router, prefix="/me", tags=["me"])
 api_router.include_router(mock_schedules.router, prefix="/mock", tags=["mock-scheduling"])
 api_router.include_router(plans.router, prefix="/plans", tags=["plans"])

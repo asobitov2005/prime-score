@@ -434,6 +434,7 @@ export interface UserPaymentRecord {
   cardNumber: string | null;
   supportContact: string;
   paymentInstructions: string;
+  paymentUrl: string | null;
   expiresAt: string | null;
   matchedAt: string | null;
   paidAt: string | null;

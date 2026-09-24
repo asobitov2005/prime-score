@@ -213,11 +213,29 @@ async def create_my_payment(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create payment invoice.") from exc
 
     return MePaymentCreateResponse(
-        message="Invoice created. Transfer the amount to the card and send the screenshot to Telegram support.",
+        message=(
+            "Invoice created. Pay in Click to activate Premium automatically."
+            if payment.provider == "click"
+            else "Invoice created. Transfer the amount to the card and send the screenshot to Telegram support."
+        ),
         payment=_serialize_me_payment(
             payment,
             await session.get(Plan, payment.plan_id) if payment.plan_id else None,
         ),
+    )
+
+@router.get("/payments/{payment_id}", response_model=MePaymentRead)
+async def get_my_payment(
+    payment_id: UUID,
+    current_user: DebugPrincipal = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> MePaymentRead:
+    payment = await session.get(Payment, payment_id)
+    if payment is None or payment.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment invoice was not found.")
+    return _serialize_me_payment(
+        payment,
+        await session.get(Plan, payment.plan_id) if payment.plan_id else None,
     )
 
 @router.post("/payments/{payment_id}/cancel", response_model=MePaymentCancelResponse)

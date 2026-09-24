@@ -82,6 +82,8 @@ def _serialize_xp_transaction(row) -> MeXpTransactionRead:
     )
 
 def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
+    from app.services.click_payments import click_checkout_url
+
     payment_method_values = {item.value for item in PaymentMethod}
     method_value = payment.provider if payment.provider in payment_method_values else PaymentMethod.card_transfer.value
     exposes_card_details = str(payment.status or "") in PENDING_PAYMENT_STATUSES
@@ -108,6 +110,7 @@ def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
         card_number=payment.card_number if exposes_card_details else None,
         support_contact=support_contact,
         payment_instructions=payment_instructions,
+        payment_url=click_checkout_url(payment) if exposes_card_details else None,
         expires_at=payment.expires_at,
         matched_at=payment.matched_at,
         paid_at=payment.paid_at,

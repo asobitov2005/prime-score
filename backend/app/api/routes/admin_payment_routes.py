@@ -58,6 +58,11 @@ async def update_payment(
     payment = await session.get(Payment, payment_id)
     if payment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment invoice was not found.")
+    if payment.provider == "click":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Click payment status is controlled by signed provider callbacks.",
+        )
 
     next_status = payload.status.value
     now = datetime.now(UTC)

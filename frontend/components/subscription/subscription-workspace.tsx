@@ -51,6 +51,7 @@ function mapPaymentRecord(payload: PaymentRecordResponse): UserPaymentRecord {
     cardNumber: payload.card_number ?? null,
     supportContact: payload.support_contact ?? "@TheBugCreator",
     paymentInstructions: payload.payment_instructions ?? "Transfer the amount to the card, then send a screenshot to Telegram support.",
+    paymentUrl: payload.payment_url ?? null,
     expiresAt: payload.expires_at ?? null,
     matchedAt: payload.matched_at ?? null,
     paidAt: payload.paid_at ?? null,
@@ -699,6 +700,7 @@ function ActiveInvoiceModal({
   const isExpired = countdown === "Expired";
   const isActivated = payment.status === "completed";
   const isTerminal = isExpired || payment.status === "canceled" || payment.status === "failed";
+  const isClick = payment.method === "click";
   const cardValue = payment.cardNumber ?? "-";
   const supportContact = payment.supportContact || "@TheBugCreator";
   const planLabel = payment.durationDays
@@ -816,9 +818,11 @@ function ActiveInvoiceModal({
                 ? "Your Premium plan is now active."
                 : isTerminal
                   ? "This invoice has expired. Please create a new invoice."
-                  : "Transfer the amount below and send the receipt screenshot to Telegram support."}
+                  : isClick
+                    ? "Pay in Click. Premium activates automatically after confirmation."
+                    : "Transfer the amount below and send the receipt screenshot to Telegram support."}
             </p>
-            <a
+            {!isClick ? <a
               href={telegramUrl(supportContact)}
               target="_blank"
               rel="noreferrer"
@@ -826,9 +830,30 @@ function ActiveInvoiceModal({
             >
               <MessageCircle className="h-4 w-4" />
               Support: <span className="text-orange-600 dark:text-orange-300">{supportContact}</span>
-            </a>
+            </a> : null}
           </header>
 
+          {isClick ? (
+            <div className="mt-5 rounded-[18px] border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/65">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Amount due</p>
+              <p className="mt-1 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{payment.amount}</p>
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                Your invoice expires {payment.expiresAt ? new Date(payment.expiresAt).toLocaleString() : "automatically"}.
+                You do not need to send a screenshot.
+              </p>
+              {payment.paymentUrl && !isTerminal ? (
+                <Button asChild className="mt-5 h-11 w-full rounded-xl bg-orange-500 font-semibold text-white hover:bg-orange-600 sm:w-auto">
+                  <a href={payment.paymentUrl} rel="noreferrer">Pay with Click <ArrowRight className="ml-2 h-4 w-4" /></a>
+                </Button>
+              ) : (
+                <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">Checkout is unavailable. Please create a new invoice or contact support.</p>
+              )}
+              <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Access is granted only after Click confirms the transaction.</p>
+              <Button type="button" variant="outline" onClick={() => setConfirmCancelOpen(true)} className="mt-4 h-9 rounded-xl">
+                Cancel invoice
+              </Button>
+            </div>
+          ) : (
           <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.95fr)]">
             <div className="flex h-full flex-col gap-2.5 rounded-[18px] border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-950">
               <PaymentCopyCard
@@ -954,6 +979,7 @@ function ActiveInvoiceModal({
               </div>
             </aside>
           </div>
+          )}
 
           <div className="mt-4 border-t border-slate-200 pt-3 text-center dark:border-slate-800">
             <p className="inline-flex items-center justify-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -1004,6 +1030,7 @@ export function SubscriptionWorkspace({
   initialPayments: UserPaymentRecord[];
   initialGiftSummary: UserGiftCodeSummary;
 }) {
+  const router = useRouter();
   const api = useMemo(() => createApiClient(), []);
   const [payments, setPayments] = useState<UserPaymentRecord[]>(initialPayments);
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null);
@@ -1016,6 +1043,29 @@ export function SubscriptionWorkspace({
     () => payments.find((item) => item.status === "pending" || item.status === "matched") ?? null,
     [payments],
   );
+
+  useEffect(() => {
+    if (!activePayment || activePayment.method !== "click") return;
+    let alive = true;
+    const check = async () => {
+      try {
+        const updated = mapPaymentRecord(await api.getPayment(activePayment.id));
+        if (!alive) return;
+        if (updated.status !== activePayment.status) {
+          setPayments((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
+          if (updated.status === "completed") {
+            setPaymentModalOpen(false);
+            router.refresh();
+          }
+        }
+      } catch {
+        // The invoice remains visible; the next poll or page refresh can retry.
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [activePayment, api, router]);
 
   useEffect(() => {
     return () => {

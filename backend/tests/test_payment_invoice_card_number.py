@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from app.models.commerce import PaymentCard, Plan
 from app.models.user import User
 from app.services.payment_service import create_plan_payment
+from app.services import payment_service
 
 
 class _FakeScalarResult:
@@ -85,3 +87,39 @@ async def test_create_plan_payment_keeps_full_normalized_card_number() -> None:
     assert payment.amount == Decimal("59000")
     assert payment.discount_amount == Decimal("0")
     assert payment.meta["support_contact"] == "@TheBugCreator"
+
+
+@pytest.mark.asyncio
+async def test_click_invoice_needs_no_payment_card(monkeypatch) -> None:
+    monkeypatch.setattr(
+        payment_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            click_service_id=123,
+            click_merchant_id=456,
+            click_secret_key="test-only-secret",
+            payment_paused=False,
+        ),
+    )
+    user = User(id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), telegram_id=123456789, first_name="Aziz")
+    plan = Plan(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        catalog="public",
+        name="1 Month",
+        duration_days=30,
+        price_amount=Decimal("59000"),
+        perks=[],
+        is_active=True,
+        payment_paused=False,
+    )
+
+    class ClickSession(_FakeSession):
+        async def scalar(self, _statement):
+            return None
+
+    session = ClickSession(None)
+    payment = await create_plan_payment(session, user=user, plan=plan)
+    assert payment.provider == "click"
+    assert payment.card_id is None
+    assert payment.card_number is None
+    assert payment.amount == Decimal("59000")

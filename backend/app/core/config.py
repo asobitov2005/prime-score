@@ -26,6 +26,12 @@ class Settings(BaseSettings):
         default_factory=lambda: ["*"]
     )
     payment_paused: bool = True
+    allow_debug_auth_headers: bool = False
+    click_service_id: int | None = None
+    click_merchant_id: int | None = None
+    click_merchant_user_id: int | None = None
+    click_secret_key: str | None = None
+    click_return_url: str = "https://primescore.uz/subscription"
     gemini_api_key: str | None = None
     # AI Studio key used ONLY for the live speaking roast mode (gemini 3 live is
     # available on AI Studio, not on Vertex). Everything else stays on Vertex.

@@ -72,6 +72,7 @@ class MePaymentRead(BaseModel):
     card_number: str | None = None
     support_contact: str = "@TheBugCreator"
     payment_instructions: str = "Transfer the amount to the card, then send a screenshot to Telegram support."
+    payment_url: str | None = None
     expires_at: datetime | None = None
     matched_at: datetime | None = None
     paid_at: datetime | None = None

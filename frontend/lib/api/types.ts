@@ -147,6 +147,7 @@ export interface PaymentRecordResponse {
   card_number?: string | null;
   support_contact?: string | null;
   payment_instructions?: string | null;
+  payment_url?: string | null;
   expires_at?: string | null;
   matched_at?: string | null;
   paid_at?: string | null;

@@ -24,7 +24,7 @@ Quyidagilarni keraksiz context sifatida ochmang:
 ## Hozirgi real holat
 
 - Active backend routerlar `backend/app/api/routes/*` ichida. `backend/app/api/routers/*` legacy duplicate, unga yangi kod qo'shmang.
-- User-protected backend endpointlar hozir `backend/app/core/deps.py` dagi `X-Debug-*` headerlar bilan auth qiladi.
+- User-protected backend endpointlar bearer token bilan auth qiladi. `backend/app/core/deps.py` dagi `X-Debug-*` headerlar default o'chiq, lokal test uchun explicit opt-in talab qiladi.
 - Telegram login flow mavjud:
   - bot: `backend/app/bot/main.py`
   - code store: `backend/app/services/code_store.py`
