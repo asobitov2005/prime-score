@@ -29,8 +29,17 @@ test("mock sessions have a dedicated app page and sidebar destination", () => {
   assert.match(picker, /aria-pressed=\{mode === "offline"\}/);
   assert.match(picker, /if \(!hasHydrated \|\| !isAuthenticated\) return/);
   assert.match(picker, /fetch\("\/api\/mock\/bookings\/me"/);
-  assert.match(picker, /if \(!initialMode\)/);
+  assert.match(picker, /if \(!initialMode && !hasSelectedMode\.current\)/);
   assert.match(picker, /response\.status === 201/);
+});
+
+test("mock tabs retain their mode in the URL and block stale reservations during loading", () => {
+  const picker = read("components/marketing/mock-sessions.tsx");
+  assert.match(picker, /url\.searchParams\.set\("mode", nextMode\)/);
+  assert.match(picker, /router\.replace\(.+scroll: false/);
+  assert.match(picker, /selectMode\("online"\)/);
+  assert.match(picker, /selectMode\("offline"\)/);
+  assert.match(picker, /disabled=\{isLoading \|\| isBooking/);
 });
 
 test("offline reservation explains Click payment and links the receipt to support", () => {

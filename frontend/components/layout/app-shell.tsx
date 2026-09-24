@@ -10,9 +10,9 @@ import { useUIStore } from "@/store/ui-store";
 import { useAuthStore } from "@/store/auth-store";
 import { useBookmarksStore } from "@/store/bookmarks-store";
 import { useRouter } from "next/navigation";
-import { AppLoadingPlaceholder, AppRouteLoadingFrame, ExamRouteLoadingFrame } from "@/components/layout/app-loading-placeholder";
+import { AppRouteLoadingFrame } from "@/components/layout/app-loading-placeholder";
 import { trackNavigationClick } from "@/lib/analytics";
-import { consumePendingPublicRedirect, emitNavigationStart, PRIME_NAVIGATION_START_EVENT } from "@/lib/navigation-transition";
+import { consumePendingPublicRedirect, emitNavigationStart } from "@/lib/navigation-transition";
 import { SidebarPremiumCard } from "@/components/layout/sidebar-premium-card";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PremiumUpgradeModal } from "@/components/premium-upgrade-modal";
@@ -25,19 +25,17 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { sidebar } = useUIStore();
+  const sidebar = useUIStore((state) => state.sidebar);
   const isMobileOpen = useUIStore((state) => state.isMobileSidebarOpen);
   const setIsMobileOpen = useUIStore((state) => state.setMobileSidebarOpen);
-  const { isAuthenticated, hasHydrated, isPremium, userId } = useAuthStore();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const isPremium = useAuthStore((state) => state.isPremium);
+  const userId = useAuthStore((state) => state.userId);
   const ensureBookmarksHydrated = useBookmarksStore((state) => state.ensureHydrated);
-  const [pendingNavigationHref, setPendingNavigationHref] = useState<string | null>(null);
   const [showAnalyticsPremiumModal, setShowAnalyticsPremiumModal] = useState(false);
   const isPublicTestsRoute = pathname === "/tests" || pathname.startsWith("/tests/");
   const subscriptionHref = getSubscriptionPageHref(isAuthenticated);
-  const pendingNavigationPathname = pendingNavigationHref
-    ? new URL(pendingNavigationHref, "https://primescore.local").pathname
-    : null;
-  const isPendingExamPreview = Boolean(pendingNavigationPathname?.startsWith("/exam-preview/"));
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -68,39 +66,6 @@ export function AppShell({ children }: AppShellProps) {
   }, [pathname, setIsMobileOpen]);
 
   useEffect(() => {
-    setPendingNavigationHref(null);
-  }, [pathname]);
-
-  useEffect(() => {
-    const handleNavigationStart = (event: Event) => {
-      if (!(event instanceof CustomEvent) || typeof event.detail?.href !== "string") {
-        return;
-      }
-
-      const targetUrl = new URL(event.detail.href, window.location.href);
-      const targetHref = `${targetUrl.pathname}${targetUrl.search}`;
-      const currentHref = `${window.location.pathname}${window.location.search}`;
-      if (targetUrl.origin !== window.location.origin || targetHref === currentHref) {
-        return;
-      }
-
-      setPendingNavigationHref(targetHref);
-    };
-
-    window.addEventListener(PRIME_NAVIGATION_START_EVENT, handleNavigationStart);
-    return () => window.removeEventListener(PRIME_NAVIGATION_START_EVENT, handleNavigationStart);
-  }, []);
-
-  useEffect(() => {
-    if (!pendingNavigationHref) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => setPendingNavigationHref(null), 10_000);
-    return () => window.clearTimeout(timeout);
-  }, [pendingNavigationHref]);
-
-  useEffect(() => {
     if (!hasHydrated) {
       return;
     }
@@ -108,11 +73,10 @@ export function AppShell({ children }: AppShellProps) {
   }, [hasHydrated, isAuthenticated, userId, ensureBookmarksHydrated]);
 
   useEffect(() => {
-    if (isMobileOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
+    if (!isMobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
   }, [isMobileOpen]);
 
   if (!hasHydrated && !isPublicTestsRoute) {
@@ -123,7 +87,7 @@ export function AppShell({ children }: AppShellProps) {
     return <AppRouteLoadingFrame sidebar={sidebar} />;
   }
 
-  const SidebarBrand = () => (
+  const sidebarBrand = (
     <Link href="/" className="flex h-16 -translate-y-0.5 items-center gap-2 rounded-xl px-1">
       <span className="relative flex h-7 items-center">
         <img src="/logo-light.svg" alt="PrimeScore" className="h-7 w-auto object-contain dark:hidden" />
@@ -136,7 +100,7 @@ export function AppShell({ children }: AppShellProps) {
     </Link>
   );
 
-  const SidebarNavigation = () => (
+  const sidebarNavigation = (
     <div className="bg-background">
       <nav className="space-y-1">
         {navItems.map((item) => {
@@ -144,7 +108,7 @@ export function AppShell({ children }: AppShellProps) {
           const disabled = Boolean(!isExternal && "disabled" in item && item.disabled);
           const requiresPremium = !isExternal && item.href === "/analytics";
           const activePath = !isExternal && "activePath" in item ? item.activePath : item.href;
-          const activeSourcePath = pendingNavigationPathname ?? pathname;
+          const activeSourcePath = pathname;
           const active = !isExternal && !disabled && (
             activeSourcePath === activePath
             || activeSourcePath.startsWith(`${activePath}/`)
@@ -246,7 +210,9 @@ export function AppShell({ children }: AppShellProps) {
             <Link
               key={`${item.label}-${item.href}`}
               href={item.href}
+              prefetch={false}
               onClick={(event) => {
+                if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                 trackNavigationClick({
                   label: item.label,
                   href: item.href,
@@ -272,9 +238,9 @@ export function AppShell({ children }: AppShellProps) {
     </div>
   );
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <div className="flex flex-col gap-4">
-      <SidebarNavigation />
+      {sidebarNavigation}
       <div className="border-t border-border pt-2">
         <ThemeToggle />
       </div>
@@ -299,13 +265,13 @@ export function AppShell({ children }: AppShellProps) {
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex items-center justify-between pb-2">
-          <SidebarBrand />
+          {sidebarBrand}
           <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(false)} className="h-8 w-8 rounded-full hover:bg-muted/50 -mr-2">
             <X className="h-4 w-4" />
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto space-y-4 pb-6 no-scrollbar">
-          <SidebarContent />
+          {sidebarContent}
         </div>
       </div>
 
@@ -314,16 +280,16 @@ export function AppShell({ children }: AppShellProps) {
         sidebar === "collapsed" ? "lg:hidden" : "lg:block"
       )}>
         <div className="flex h-full flex-col gap-4 p-4">
-          <SidebarBrand />
+          {sidebarBrand}
           <div
             className={cn(
-              "flex-1 min-h-0 overscroll-contain scroll-smooth flex flex-col gap-4 overflow-y-auto no-scrollbar",
+              "flex-1 min-h-0 overscroll-contain flex flex-col gap-4 overflow-y-auto no-scrollbar",
             )}
             style={{
               scrollbarGutter: "stable"
             }}
           >
-            <SidebarNavigation />
+            {sidebarNavigation}
           </div>
           <div className="shrink-0">
             <SidebarPremiumCard />
@@ -333,16 +299,7 @@ export function AppShell({ children }: AppShellProps) {
 
       <main className="min-w-0 flex-1 w-full animate-in fade-in duration-500 ease-out transition-none lg:ml-[16.5rem] lg:px-5 lg:py-5 xl:px-6">
         <div className="mx-auto w-full max-w-[82rem]">
-          {isPendingExamPreview ? (
-            <ExamRouteLoadingFrame />
-          ) : pendingNavigationHref ? (
-            <AppLoadingPlaceholder
-              pathname={pendingNavigationPathname ?? undefined}
-              className="min-h-[calc(100vh-7rem)] px-0 py-0"
-            />
-          ) : (
-            children
-          )}
+          {children}
         </div>
       </main>
 

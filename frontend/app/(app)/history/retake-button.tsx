@@ -122,7 +122,7 @@ export function HistoryRetakeButton({
                     <Button
                       disabled={isStarting}
                       onClick={() => retake("practice")}
-                      className="h-10 w-full rounded-lg border-0 bg-emerald-600 text-sm font-bold text-white shadow-md shadow-emerald-500/20 transition-all hover:bg-emerald-700 dark:text-slate-950"
+                      className="h-10 w-full rounded-lg border-0 bg-primary text-sm font-semibold text-primary-foreground shadow-none transition-colors hover:bg-primary/90"
                     >
                       {isStarting ? loadingLabel : "Start Practice"}
                     </Button>

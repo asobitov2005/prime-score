@@ -103,16 +103,6 @@ function typeBadgeClass(type: AttemptRow["type"]): string {
   return "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300";
 }
 
-function historyTypeCardClass(type: AttemptRow["type"]): string {
-  if (type === "reading") {
-    return "border-sky-500/20 bg-[linear-gradient(135deg,rgba(14,165,233,0.08),rgba(14,165,233,0.02)_26%,rgba(255,255,255,0)_42%)]";
-  }
-  if (type === "listening") {
-    return "border-amber-500/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.09),rgba(245,158,11,0.025)_26%,rgba(255,255,255,0)_42%)]";
-  }
-  return "border-violet-500/20 bg-[linear-gradient(135deg,rgba(139,92,246,0.09),rgba(139,92,246,0.025)_26%,rgba(255,255,255,0)_42%)]";
-}
-
 function historyTypeAccentClass(type: AttemptRow["type"]): string {
   if (type === "reading") {
     return "bg-sky-500";
@@ -314,7 +304,7 @@ function WritingHistoryRow({ item }: { item: WritingHistoryItem }) {
   return (
     <Link
       href={`/writing/submissions/${item.submission_id}/result`}
-      className="group relative block m-2 rounded-xl border border-violet-500/20 bg-[linear-gradient(135deg,rgba(139,92,246,0.09),rgba(139,92,246,0.025)_26%,rgba(255,255,255,0)_42%)] shadow-sm"
+      className="group relative m-2 block rounded-lg border border-border bg-card"
     >
       <span className="absolute bottom-4 left-0 top-4 w-1 rounded-full bg-violet-500" />
       <div className="flex items-center gap-3 rounded-xl px-4 py-4 transition-colors hover:bg-muted/20">
@@ -387,7 +377,7 @@ function AttemptHistoryGroup({ group }: { group: HistoryGroup }) {
     <details
       className={cn(
         "group relative m-2 rounded-xl border bg-background shadow-sm",
-        historyTypeCardClass(latestAttempt.type)
+        "border-border bg-card"
       )}
     >
       <span
@@ -595,8 +585,7 @@ export function HistoryClient({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <Card className="overflow-visible bg-background border border-border/50 relative z-20 rounded-2xl shadow-sm">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+      <Card className="relative z-20 overflow-visible rounded-lg border-border bg-card shadow-none">
 
         <CardHeader className="space-y-1 relative z-10 p-5 lg:px-6 border-b border-border/40 bg-muted/5">
           <div className="flex items-start justify-between gap-4">
@@ -651,7 +640,7 @@ export function HistoryClient({
             </button>
 
             <div className={cn(
-              "absolute right-0 top-[calc(100%+8px)] z-[100] w-full min-w-[260px] origin-top-right rounded-2xl border border-border bg-card p-1.5 shadow-2xl shadow-black/10 transition-all duration-200",
+              "absolute right-0 top-[calc(100%+8px)] z-[100] w-full min-w-0 origin-top-right rounded-lg border border-border bg-card p-1.5 shadow-lg transition-[transform,opacity] duration-200",
               isFilterOpen
                 ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
                 : "pointer-events-none -translate-y-2 scale-95 opacity-0"
@@ -670,7 +659,7 @@ export function HistoryClient({
                       className={cn(
                         "group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all",
                         isSelected
-                          ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 shadow-sm"
+                          ? "bg-accent text-primary"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
                     >
@@ -691,7 +680,7 @@ export function HistoryClient({
         </CardContent>
       </Card>
 
-      <Card className="border-border/50 shadow-sm overflow-hidden">
+      <Card className="overflow-hidden rounded-lg border-border bg-card shadow-none">
         <div className="divide-y divide-border/60">
           {historyEntries.map((entry) =>
             entry.kind === "attempt" ? (

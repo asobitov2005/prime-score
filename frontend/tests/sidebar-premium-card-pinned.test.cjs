@@ -16,5 +16,5 @@ test("desktop sidebar keeps navigation scrollable and premium card outside its s
   assert.notEqual(asideEnd, -1);
   assert.match(desktopAside, /flex-1 min-h-0[^\"]*overflow-y-auto/);
   assert.ok(scrollAreaEnd > 0 && premiumCard > scrollAreaEnd);
-  assert.match(desktopAside, /<SidebarNavigation \/>/);
+  assert.match(desktopAside, /\{sidebarNavigation\}/);
 });

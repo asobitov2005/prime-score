@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -63,6 +64,8 @@ export function MockSessions({
   tests: LandingFeaturedTest[];
   initialMode?: "online" | "offline";
 }) {
+  const router = useRouter();
+  const hasSelectedMode = useRef(false);
   const [mode, setMode] = useState<"online" | "offline">(initialMode ?? "online");
   const [month, setMonth] = useState<MockMonth>(() => getTashkentMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => getTashkentDateKey(new Date()));
@@ -73,6 +76,14 @@ export function MockSessions({
   const [error, setError] = useState("");
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
+
+  function selectMode(nextMode: "online" | "offline") {
+    hasSelectedMode.current = true;
+    setMode(nextMode);
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", nextMode);
+    router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
+  }
 
   function changeMonth(offset: number) {
     const next = nextMonth(month, offset);
@@ -95,6 +106,7 @@ export function MockSessions({
     const controller = new AbortController();
     let active = true;
     setIsLoading(true);
+    setSchedules([]);
     setError("");
 
     fetch(`/api/mock/offline-schedules?${query.toString()}`, {
@@ -140,7 +152,7 @@ export function MockSessions({
       .then(({ items }) => {
         if (!active || !items[0]) return;
         setBooking(items[0]);
-        if (!initialMode) {
+        if (!initialMode && !hasSelectedMode.current) {
           setMode("offline");
           setSelectedDate(getTashkentDateKey(new Date(items[0].starts_at)));
           setMonth(getTashkentMonth(new Date(items[0].starts_at)));
@@ -265,7 +277,7 @@ export function MockSessions({
           aria-pressed={mode === "online"}
           className={styles.mockModeButton}
           data-active={mode === "online"}
-          onClick={() => setMode("online")}
+          onClick={() => selectMode("online")}
         >
           <BookOpen size={18} aria-hidden="true" />
           <span>Online</span>
@@ -276,7 +288,7 @@ export function MockSessions({
           aria-pressed={mode === "offline"}
           className={styles.mockModeButton}
           data-active={mode === "offline"}
-          onClick={() => setMode("offline")}
+          onClick={() => selectMode("offline")}
         >
           <CalendarDays size={18} aria-hidden="true" />
           <span>Offline</span>
@@ -410,7 +422,7 @@ export function MockSessions({
                     <button
                       type="button"
                       className={styles.mockReserveButton}
-                      disabled={isBooking || !hasHydrated || booking?.schedule_id === schedule.id}
+                      disabled={isLoading || isBooking || !hasHydrated || booking?.schedule_id === schedule.id}
                       onClick={() => void reserveSchedule(schedule)}
                     >
                       {booking?.schedule_id === schedule.id ? "Reserved" : isBooking ? "Reserving..." : hasHydrated && !isAuthenticated ? "Sign in to reserve" : "Reserve seat"}

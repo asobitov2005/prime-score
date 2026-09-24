@@ -554,7 +554,7 @@ export function SiteShell({ children }: SiteShellProps) {
                   className="flex items-center gap-2.5 p-1.5 pl-3 rounded-2xl border border-border bg-muted/40 hover:bg-muted transition-all active:scale-95 group outline-none"
                 >
                   <span className="text-xs font-bold text-foreground opacity-80 group-hover:opacity-100">{name}</span>
-                  <div className="w-8 h-8 overflow-hidden rounded-xl bg-primary text-black dark:text-primary-foreground flex items-center justify-center text-sm font-medium shadow-sm">
+                  <div className="w-8 h-8 overflow-hidden rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium shadow-sm">
                     {avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={avatarUrl} alt={name} draggable={false} className="h-full w-full object-cover" />
