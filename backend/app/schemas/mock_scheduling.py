@@ -13,6 +13,7 @@ class AdminOfflineMockScheduleUpsert(BaseModel):
     starts_at: datetime
     duration_minutes: int = Field(ge=30, le=360)
     location: str = Field(min_length=1, max_length=255)
+    address: str | None = Field(default=None, max_length=500)
     capacity: int = Field(ge=1, le=500)
     price_amount: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     is_published: bool = False
@@ -41,6 +42,7 @@ class OfflineMockScheduleRead(BaseModel):
     starts_at: datetime
     duration_minutes: int
     location: str
+    address: str | None = None
     capacity: int
     reserved_count: int
     available_seats: int
@@ -51,6 +53,9 @@ class OfflineMockScheduleRead(BaseModel):
 
 class OfflineMockScheduleListRead(BaseModel):
     items: list[OfflineMockScheduleRead]
+    total: int = 0
+    page: int | None = None
+    page_size: int | None = None
 
 
 class OfflineMockBookingCreate(BaseModel):
@@ -64,6 +69,7 @@ class OfflineMockBookingRead(BaseModel):
     starts_at: datetime
     duration_minutes: int
     location: str
+    address: str | None = None
     price_amount: Decimal
     currency: str = "UZS"
     payment_method: Literal["click"] = "click"

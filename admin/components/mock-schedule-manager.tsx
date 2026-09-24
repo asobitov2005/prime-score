@@ -5,6 +5,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Eye, EyeOff, MapPin, M
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import type { AdminOfflineMockSchedule, AdminOfflineMockScheduleInput } from "@/lib/types";
+import { MockSectionNav } from "@/components/mock-section-nav";
 
 const TIME_ZONE = "Asia/Tashkent";
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -17,6 +18,7 @@ type ScheduleForm = {
   timeSlots: string[];
   durationMinutes: string;
   location: string;
+  address: string;
   capacity: string;
   priceAmount: string;
   isPublished: boolean;
@@ -81,6 +83,7 @@ function emptyForm(): ScheduleForm {
     timeSlots: ["11:00"],
     durationMinutes: "180",
     location: "Tashkent",
+    address: "",
     capacity: "12",
     priceAmount: "100000",
     isPublished: true,
@@ -119,6 +122,7 @@ function scheduleForm(schedule: AdminOfflineMockSchedule): ScheduleForm {
     timeSlots: [`${part("hour")}:${part("minute")}`],
     durationMinutes: String(schedule.durationMinutes),
     location: schedule.location,
+    address: schedule.address ?? "",
     capacity: String(schedule.capacity),
     priceAmount: String(schedule.priceAmount),
     isPublished: schedule.isPublished,
@@ -137,6 +141,7 @@ function toPayload(
     startsAt: start.toISOString(),
     durationMinutes: Number(form.durationMinutes),
     location: form.location.trim(),
+    address: form.address.trim() || null,
     capacity: Number(form.capacity),
     priceAmount: Number(form.priceAmount),
     isPublished: form.isPublished,
@@ -258,6 +263,7 @@ export function MockScheduleManager() {
         startsAt: schedule.startsAt,
         durationMinutes: schedule.durationMinutes,
         location: schedule.location,
+        address: schedule.address ?? null,
         capacity: schedule.capacity,
         priceAmount: schedule.priceAmount,
         isPublished: !schedule.isPublished,
@@ -278,9 +284,12 @@ export function MockScheduleManager() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 pb-12">
+      <MockSectionNav current="offline" />
       <header className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Offline mocks</p>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Mock schedules</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Offline Mock schedules</h1>
+        <Badge tone="info">Academic</Badge>
+        <p className="text-sm font-medium text-foreground">Reading, Listening, Writing, and Speaking included.</p>
         <p className="max-w-2xl text-sm text-muted-foreground">Pick a day, set one or more session times, and choose the seat capacity and Click price for each time slot. Users send payment receipts to @TheBugcreator for manual confirmation.</p>
       </header>
 
@@ -367,12 +376,16 @@ export function MockScheduleManager() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="mock-capacity">Seats per slot</Label>
-                    <Input id="mock-capacity" type="number" min={1} max={500} value={form.capacity} required onChange={(event) => setForm({ ...form, capacity: event.target.value })} />
+                    <Input id="mock-capacity" type="number" min={1} max={500} step={1} value={form.capacity} required onChange={(event) => setForm({ ...form, capacity: event.target.value })} />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="mock-location">Location</Label>
+                  <Label htmlFor="mock-location">Location / venue</Label>
                   <Input id="mock-location" value={form.location} maxLength={255} required onChange={(event) => setForm({ ...form, location: event.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mock-address">Address (optional)</Label>
+                  <Input id="mock-address" value={form.address} maxLength={500} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Street, building, and arrival instructions" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="mock-price">Price per seat (UZS)</Label>
@@ -415,7 +428,9 @@ export function MockScheduleManager() {
                       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                         <span className="flex items-center gap-2"><Clock3 size={14} aria-hidden="true" />{schedule.durationMinutes} minutes</span>
                         <span className="flex items-center gap-2"><MapPin size={14} aria-hidden="true" />{schedule.location}</span>
-                        <span className="flex items-center gap-2"><Users size={14} aria-hidden="true" />{schedule.reservedCount}/{schedule.capacity} seats</span>
+                        {schedule.address ? <span className="sm:col-span-2">{schedule.address}</span> : null}
+                        <span className="flex items-center gap-2"><Users size={14} aria-hidden="true" />{schedule.availableSeats} available / {schedule.capacity} total seats</span>
+                        <span>{schedule.reservedCount} reserved</span>
                         <span>{formatPrice(schedule.priceAmount)} per seat</span>
                       </div>
                     </div>

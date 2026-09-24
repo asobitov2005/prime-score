@@ -197,6 +197,7 @@ def _enqueue_image_summary(task_id: UUID) -> None:
 
     generate_writing_task_image_summary_task.delay(str(task_id))
 
+@router.get("/tasks", response_model=AdminWritingTaskListResponse)
 async def list_tasks(
     status_filter: WritingTaskStatus | None = Query(default=None, alias="status"),
     task_type: WritingTaskType | None = Query(default=None),
@@ -238,6 +239,7 @@ async def list_tasks(
         total=int(total),
     )
 
+@router.get("/tasks/{task_id}", response_model=WritingTaskRead)
 async def get_task(
     task_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),

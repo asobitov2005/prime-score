@@ -6,6 +6,7 @@ from app.api.routes.admin_writing_part_01 import AdminWritingSubmissionItem, Adm
 
 router = APIRouter()
 
+@router.get("/submissions", response_model=AdminWritingSubmissionListResponse)
 async def list_submissions(
     status_filter: WritingSubmissionStatus | None = Query(default=None, alias="status"),
     task_id: UUID | None = Query(default=None),
@@ -67,6 +68,7 @@ async def list_submissions(
 
     return AdminWritingSubmissionListResponse(items=items, total=int(total))
 
+@router.get("/submissions/{submission_id}", response_model=AdminWritingSubmissionRead)
 async def get_submission(
     submission_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -96,6 +98,7 @@ async def get_submission(
         user=user,
     )
 
+@router.post("/submissions/{submission_id}/regrade", status_code=status.HTTP_202_ACCEPTED)
 async def regrade_submission(
     submission_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),

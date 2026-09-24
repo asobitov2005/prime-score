@@ -4,6 +4,7 @@ export type OfflineMockSchedule = {
   starts_at: string;
   duration_minutes: number;
   location: string;
+  address?: string | null;
   capacity: number;
   reserved_count: number;
   available_seats: number;
@@ -19,6 +20,7 @@ export type OfflineMockBooking = {
   starts_at: string;
   duration_minutes: number;
   location: string;
+  address?: string | null;
   price_amount: string | number;
   currency: "UZS";
   payment_method: "click";

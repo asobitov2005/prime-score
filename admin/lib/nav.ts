@@ -117,11 +117,23 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/promo-codes",
         description: "Premium redeem code creation and control",
         icon: Ticket
+      }
+    ]
+  },
+  {
+    label: "Mock",
+    description: "Online Full Mocks and offline sessions",
+    items: [
+      {
+        label: "Online Full Mocks",
+        href: "/online-full-mocks",
+        description: "Academic Reading, Listening, and Writing bundles",
+        icon: FileText
       },
       {
-        label: "Mock Schedules",
+        label: "Offline Schedules",
         href: "/mock-schedules",
-        description: "Manage offline IELTS mock dates, seats, and demo prices",
+        description: "In-person mocks including Speaking, dates, and exact seat counts",
         icon: CalendarDays
       }
     ]

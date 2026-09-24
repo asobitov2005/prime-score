@@ -126,6 +126,7 @@ export interface AdminOfflineMockSchedule {
   startsAt: string;
   durationMinutes: number;
   location: string;
+  address?: string | null;
   capacity: number;
   reservedCount: number;
   availableSeats: number;
@@ -139,6 +140,7 @@ export interface AdminOfflineMockScheduleInput {
   startsAt: string;
   durationMinutes: number;
   location: string;
+  address?: string | null;
   capacity: number;
   priceAmount: number;
   isPublished: boolean;

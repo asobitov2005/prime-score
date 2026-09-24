@@ -223,6 +223,43 @@ async def test_booking_requires_user_authentication(app) -> None:
     assert response.status_code == 401
 
 
+async def test_my_bookings_returns_all_future_reservations(app) -> None:
+    schedules = [_schedule(), _schedule()]
+    schedules[1].id = uuid4()
+    schedules[1].starts_at += timedelta(days=1)
+    bookings = [
+        OfflineMockBooking(id=uuid4(), user_id=_user().id, schedule_id=schedule.id)
+        for schedule in schedules
+    ]
+
+    class BookingSession(_FakeSession):
+        async def execute(self, statement):
+            from sqlalchemy.dialects import postgresql
+
+            sql = str(statement.compile(
+                dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True},
+            ))
+            assert "LIMIT" not in sql
+            assert f"offline_mock_bookings.user_id = '{_user().id}'" in sql
+            assert "offline_mock_schedules.starts_at >" in sql
+            assert "ORDER BY offline_mock_schedules.starts_at ASC, offline_mock_bookings.id" in sql
+            return await super().execute(statement)
+
+    response = await _request(
+        app, "GET", "/api/mock/bookings/me", user=True,
+        session=BookingSession(execute_rows=list(zip(bookings, schedules))),
+    )
+    assert response.status_code == 200
+    assert [item["schedule_id"] for item in response.json()["items"]] == [
+        str(schedule.id) for schedule in schedules
+    ]
+
+
+async def test_my_bookings_requires_authentication(app) -> None:
+    response = await _request(app, "GET", "/api/mock/bookings/me", session=_FakeSession())
+    assert response.status_code == 401
+
+
 async def test_authenticated_user_can_reserve_with_manual_click_payment_instructions(app) -> None:
     schedule = _schedule()
     response = await _request(
@@ -412,3 +449,39 @@ async def test_admin_can_unpublish_schedule_without_deleting_reservations(app) -
     assert response.status_code == 200
     assert response.json()["is_published"] is False
     assert any(isinstance(item, AuditLog) for item in session.added)
+
+
+async def test_future_pagination_without_range_includes_address(app):
+    schedule = _schedule()
+    schedule.address = "Building 12, room 3"
+    response = await _request(
+        app, "GET", "/api/mock/offline-schedules?page=2&page_size=1",
+        session=_FakeSession(3, scalar_rows=[schedule]),
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 3
+    assert response.json()["page"] == 2
+    assert response.json()["page_size"] == 1
+    assert response.json()["items"][0]["address"] == schedule.address
+
+
+async def test_range_requires_both_bounds(app):
+    query = urlencode({"from": datetime.now(UTC).isoformat()})
+    response = await _request(app, "GET", f"/api/mock/offline-schedules?{query}", session=_FakeSession())
+    assert response.status_code == 400
+
+
+async def test_legacy_admin_update_preserves_existing_address(app):
+    schedule = _schedule()
+    schedule.address = "Existing address"
+    response = await _request(
+        app, "PATCH", f"/api/admin/mock/offline-schedules/{schedule.id}",
+        session=_FakeSession(schedule, 0), admin=True,
+        payload={
+            "title": schedule.title, "starts_at": schedule.starts_at.isoformat(),
+            "duration_minutes": schedule.duration_minutes, "location": schedule.location,
+            "capacity": schedule.capacity, "price_amount": "100000", "is_published": True,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["address"] == "Existing address"

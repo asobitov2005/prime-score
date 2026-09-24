@@ -3,9 +3,11 @@ from __future__ import annotations
 # ruff: noqa: F401,F403,F405,E501
 from app.api.routes.admin_writing_dependencies import *
 from app.api.routes.admin_writing_part_01 import AdminWritingUploadImageResponse, _enqueue_image_summary, _serialize_task_read
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter()
 
+@router.post("/tasks", response_model=WritingTaskRead, status_code=status.HTTP_201_CREATED)
 async def create_task(
     payload: AdminWritingTaskCreateRequest,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -41,6 +43,7 @@ async def create_task(
 
     return _serialize_task_read(task)
 
+@router.patch("/tasks/{task_id}", response_model=WritingTaskRead)
 async def update_task(
     task_id: UUID,
     payload: AdminWritingTaskUpdateRequest,
@@ -97,6 +100,7 @@ async def update_task(
 
     return _serialize_task_read(task)
 
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
     task_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -118,10 +122,20 @@ async def delete_task(
             detail="Cannot delete task with existing submissions; archive instead.",
         )
 
-    await session.delete(task)
-    await session.commit()
+    try:
+        await session.delete(task)
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        if getattr(exc.orig, "sqlstate", None) != "23503":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a referenced task (bundle, draft, or submission); archive instead.",
+        ) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@router.post("/tasks/{task_id}/publish", response_model=WritingTaskRead)
 async def publish_task(
     task_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -141,6 +155,7 @@ async def publish_task(
     await session.refresh(task)
     return _serialize_task_read(task)
 
+@router.post("/tasks/{task_id}/archive", response_model=WritingTaskRead)
 async def archive_task(
     task_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -155,6 +170,7 @@ async def archive_task(
     await session.refresh(task)
     return _serialize_task_read(task)
 
+@router.post("/tasks/{task_id}/regenerate-image-summary", status_code=status.HTTP_204_NO_CONTENT)
 async def regenerate_image_summary(
     task_id: UUID,
     current_admin: AdminPrincipal = Depends(get_current_admin),
@@ -174,6 +190,7 @@ async def regenerate_image_summary(
     _enqueue_image_summary(task.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@router.post("/tasks/upload-image", response_model=AdminWritingUploadImageResponse)
 async def upload_image(
     file: UploadFile = File(...),
     current_admin: AdminPrincipal = Depends(get_current_admin),

@@ -32,6 +32,7 @@ def _schedule_read(
         starts_at=schedule.starts_at,
         duration_minutes=schedule.duration_minutes,
         location=schedule.location,
+        address=schedule.address,
         capacity=schedule.capacity,
         reserved_count=reserved_count,
         available_seats=max(0, schedule.capacity - reserved_count),
@@ -65,6 +66,7 @@ async def _audit_schedule_change(
             "starts_at": schedule.starts_at.isoformat(),
             "duration_minutes": schedule.duration_minutes,
             "location": schedule.location,
+            "address": schedule.address,
             "capacity": schedule.capacity,
             "price_amount": str(schedule.price_amount),
             "is_published": schedule.is_published,
@@ -90,6 +92,7 @@ async def list_admin_offline_mock_schedules(
         [schedule.id for schedule in schedules],
     )
     return OfflineMockScheduleListRead(
+        total=len(schedules),
         items=[
             _schedule_read(schedule, reserved_counts.get(schedule.id, 0))
             for schedule in schedules
@@ -148,6 +151,8 @@ async def update_admin_offline_mock_schedule(
         )
 
     for field, value in payload.model_dump().items():
+        if field == "address" and field not in payload.model_fields_set:
+            continue
         setattr(schedule, field, value)
     await _audit_schedule_change(session, current_admin, "mock.schedule.update", schedule)
     await session.commit()

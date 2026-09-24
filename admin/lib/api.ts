@@ -509,6 +509,7 @@ type BackendOfflineMockSchedule = {
   starts_at: string;
   duration_minutes: number;
   location: string;
+  address?: string | null;
   capacity: number;
   reserved_count: number;
   available_seats: number;
@@ -524,6 +525,7 @@ function mapOfflineMockSchedule(item: BackendOfflineMockSchedule): AdminOfflineM
     startsAt: item.starts_at,
     durationMinutes: item.duration_minutes,
     location: item.location,
+    address: item.address ?? null,
     capacity: item.capacity,
     reservedCount: item.reserved_count,
     availableSeats: item.available_seats,
@@ -1089,6 +1091,7 @@ export const adminApi = {
         starts_at: input.startsAt,
         duration_minutes: input.durationMinutes,
         location: input.location,
+        address: input.address,
         capacity: input.capacity,
         price_amount: input.priceAmount,
         is_published: input.isPublished,
@@ -1104,6 +1107,7 @@ export const adminApi = {
         starts_at: input.startsAt,
         duration_minutes: input.durationMinutes,
         location: input.location,
+        address: input.address,
         capacity: input.capacity,
         price_amount: input.priceAmount,
         is_published: input.isPublished,
