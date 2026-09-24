@@ -31,9 +31,9 @@ export function LandingFooter() {
           <Link href="/writing" prefetch={false}>
             Writing
           </Link>
-          <Link href="/speaking" prefetch={false}>
-            Speaking
-          </Link>
+          <span className={styles.footerSoon} aria-disabled="true">
+            Speaking <span>Soon</span>
+          </span>
         </div>
         <div>
           <h2>The essentials</h2>

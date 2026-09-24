@@ -400,7 +400,6 @@ export function SiteShell({ children }: SiteShellProps) {
               onOpenChange={setIsMockTestsOpen}
               variant="marketing"
             />
-            <NavLink href="/#practice" label={"Practice"} variant="marketing" />
             <NavLink href="/#pricing" label={"Pricing"} variant="marketing" />
             <NavLink href="/#faq" label={"FAQ"} variant="marketing" />
             <NavLink href="/#about" label={"About"} variant="marketing" />
@@ -680,18 +679,18 @@ export function SiteShell({ children }: SiteShellProps) {
                 onClose={() => setIsMobileNavOpen(false)}
               />
               <MobilePracticeLink
-                href="/speaking"
                 label="Speaking"
-                description={"Mock online"}
+                description="Coming soon"
                 icon={<Mic className="h-[18px] w-[18px]" />}
                 isAuthenticated={isAuthenticated}
                 onClose={() => setIsMobileNavOpen(false)}
+                soon
               />
 
               <div className="my-2 h-px bg-slate-200 dark:bg-slate-800" />
 
               <p className="px-3 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{"Explore"}</p>
-              <MobileNavLink href="/#practice" label={"Practice"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
+              <MobileNavLink href="/#practice" label={"Practice overview"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
               <MobileNavLink href="/#pricing" label={"Pricing"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
               <MobileNavLink href="/#faq" label={"FAQ"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
               <MobileNavLink href="/#about" label={"About"} isAuthenticated={isAuthenticated} onClose={() => setIsMobileNavOpen(false)} />
@@ -870,7 +869,7 @@ function PracticeTestsMenu({
         aria-expanded={isOpen}
         aria-haspopup="menu"
       >
-        {"Practice Tests"}
+        {"Practice"}
         <ChevronDown className={cn("h-3 w-3 opacity-70 transition-transform duration-200", isOpen && "rotate-180")} />
       </button>
 
@@ -920,13 +919,13 @@ function PracticeTestsMenu({
             onClose={() => onOpenChange(false)}
           />
           <PracticeDropdownLink
-            href="/speaking"
             label="Speaking"
-            description={"Mock online"}
+            description="Coming soon"
             icon={<Mic className="h-4 w-4" />}
             accentClassName="bg-orange-500/10 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300"
             isAuthenticated={isAuthenticated}
             onClose={() => onOpenChange(false)}
+            soon
           />
         </div>
       </div>
@@ -942,15 +941,37 @@ function PracticeDropdownLink({
   accentClassName,
   isAuthenticated,
   onClose,
+  soon = false,
 }: {
-  href: string;
+  href?: string;
   label: string;
   description: string;
   icon: ReactNode;
   accentClassName: string;
   isAuthenticated: boolean;
   onClose: () => void;
+  soon?: boolean;
 }) {
+  const className = "group/item flex items-center gap-3 rounded-xl border border-slate-200/75 bg-white px-3.5 py-3 transition-all dark:border-slate-800 dark:bg-slate-950/35";
+  const content = (
+    <>
+      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-inner transition-transform group-hover/item:scale-105", accentClassName)}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1 space-y-0.5 text-left">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-bold text-slate-950 dark:text-slate-50">{label}</p>
+          {soon ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Soon</span> : null}
+        </div>
+        <p className="text-[10px] font-medium leading-none text-slate-500 dark:text-slate-400">{description}</p>
+      </div>
+    </>
+  );
+
+  if (soon || !href) {
+    return <div className={cn(className, "cursor-not-allowed opacity-80")} aria-disabled="true" role="menuitem">{content}</div>;
+  }
+
   return (
     <Link
       href={href}
@@ -963,16 +984,10 @@ function PracticeDropdownLink({
         });
         onClose();
       }}
-      className="group/item flex items-center gap-3 rounded-xl border border-slate-200/75 bg-white px-3.5 py-3 transition-all hover:border-orange-200 hover:bg-orange-50/55 dark:border-slate-800 dark:bg-slate-950/35 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10"
+      className={cn(className, "hover:border-orange-200 hover:bg-orange-50/55 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10")}
       role="menuitem"
     >
-      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-inner transition-transform group-hover/item:scale-105", accentClassName)}>
-        {icon}
-      </div>
-      <div className="space-y-0.5 text-left">
-        <p className="text-sm font-bold text-slate-950 dark:text-slate-50">{label}</p>
-        <p className="text-[10px] font-medium leading-none text-slate-500 dark:text-slate-400">{description}</p>
-      </div>
+      {content}
     </Link>
   );
 }
@@ -984,14 +999,34 @@ function MobilePracticeLink({
   icon,
   isAuthenticated,
   onClose,
+  soon = false,
 }: {
-  href: string;
+  href?: string;
   label: string;
   description: string;
   icon: ReactNode;
   isAuthenticated: boolean;
   onClose: () => void;
+  soon?: boolean;
 }) {
+  const className = "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors";
+  const content = (
+    <>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold leading-5 text-slate-800 dark:text-slate-100">{label}</p>
+        <p className="text-xs font-medium leading-4 text-slate-500 dark:text-slate-400">{description}</p>
+      </div>
+      {soon ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">Soon</span> : null}
+    </>
+  );
+
+  if (soon || !href) {
+    return <div className={cn(className, "cursor-not-allowed opacity-75")} aria-disabled="true">{content}</div>;
+  }
+
   return (
     <Link
       href={href}
@@ -1004,15 +1039,9 @@ function MobilePracticeLink({
         });
         onClose();
       }}
-      className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-orange-50 dark:hover:bg-orange-500/10"
+      className={cn(className, "hover:bg-orange-50 dark:hover:bg-orange-500/10")}
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm font-bold leading-5 text-slate-800 dark:text-slate-100">{label}</p>
-        <p className="text-xs font-medium leading-4 text-slate-500 dark:text-slate-400">{description}</p>
-      </div>
+      {content}
     </Link>
   );
 }

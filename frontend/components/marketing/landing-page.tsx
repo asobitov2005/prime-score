@@ -52,9 +52,9 @@ const skills = [
     name: "Speaking",
     no: "04",
     description: "Find your words. Practise speaking aloud.",
-    href: "/speaking",
     Icon: Mic,
     tone: "gold",
+    soon: true,
   },
 ];
 
@@ -196,28 +196,46 @@ export function LandingPage({
             </p>
           </div>
           <div className={styles.skillGrid}>
-            {skills.map(({ name, no, description, href, Icon, tone }) => (
-              <Link
-                href={href}
-                prefetch={false}
-                className={styles.skillLink}
-                key={name}
-                data-landing-reveal
-                data-skill={tone}
-              >
-                <div className={styles.skillTop}>
-                  <span className={styles.skillIcon} data-tone={tone}>
-                    <Icon size={23} strokeWidth={1.6} aria-hidden="true" />
-                  </span>
-                  <span>{no}</span>
+            {skills.map(({ name, no, description, href, Icon, tone, soon }) => {
+              const content = (
+                <>
+                  <div className={styles.skillTop}>
+                    <span className={styles.skillIcon} data-tone={tone}>
+                      <Icon size={23} strokeWidth={1.6} aria-hidden="true" />
+                    </span>
+                    <span className={soon ? styles.soonBadge : undefined}>{soon ? "Soon" : no}</span>
+                  </div>
+                  <h3>
+                    {name}
+                    {soon ? null : <ArrowUpRight size={21} aria-hidden="true" />}
+                  </h3>
+                  <p>{description}</p>
+                </>
+              );
+
+              return soon ? (
+                <div
+                  className={`${styles.skillLink} ${styles.skillLinkSoon}`}
+                  key={name}
+                  data-landing-reveal
+                  data-skill={tone}
+                  aria-disabled="true"
+                >
+                  {content}
                 </div>
-                <h3>
-                  {name}
-                  <ArrowUpRight size={21} aria-hidden="true" />
-                </h3>
-                <p>{description}</p>
-              </Link>
-            ))}
+              ) : (
+                <Link
+                  href={href!}
+                  prefetch={false}
+                  className={styles.skillLink}
+                  key={name}
+                  data-landing-reveal
+                  data-skill={tone}
+                >
+                  {content}
+                </Link>
+              );
+            })}
           </div>
           <div className={styles.catalogHeading} id="featured-tests">
             <h3>A good place to begin</h3>

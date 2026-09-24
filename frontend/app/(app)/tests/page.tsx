@@ -113,18 +113,20 @@ const skillCards = [
   },
   {
     title: "Speaking",
-    subtitle: "AI Mock Interview",
-    description: "Practice speaking with AI examiner",
+    subtitle: "Coming soon",
+    description: "Speaking practice is coming soon",
     href: "/speaking",
-    button: "Open Speaking",
+    button: "Soon",
     icon: Mic,
     tileClassName: "border-orange-100 bg-orange-50 text-orange-600 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300 dark:shadow-none",
     buttonClassName: "border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-500/25 dark:text-orange-300 dark:hover:bg-orange-500/10",
+    unavailable: true,
+    unavailableLabel: "Soon",
   },
   {
     title: "Full Mock",
-    subtitle: "4 skills",
-    description: "Reading, Listening, Writing, Speaking",
+    subtitle: "3 skills",
+    description: "Reading, Listening, Writing",
     href: "/tests",
     button: "Open Full Mock",
     icon: ClipboardCheck,
@@ -310,7 +312,7 @@ function getSkillCardDescription(title: string, fallback: string) {
     case "Writing":
       return "Get AI Feedback on your Writing";
     case "Speaking":
-      return "Practice Speaking with AI Examiner";
+      return "Speaking practice is coming soon.";
     default:
       return fallback;
   }
@@ -1590,6 +1592,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
             {skillCards.map((card) => {
               const Icon = card.icon;
               const unavailable = "unavailable" in card && card.unavailable;
+              const unavailableLabel = "unavailableLabel" in card ? card.unavailableLabel : "Planned";
               return (
                 <article
                   key={card.title}
@@ -1601,7 +1604,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                 >
                   {unavailable ? (
                     <span className="absolute right-3 top-3 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold uppercase leading-none text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200">
-                      {"Planned"}
+                      {unavailableLabel}
                     </span>
                   ) : null}
                   <div className="flex items-center gap-3">
@@ -1621,7 +1624,7 @@ export default async function TestsPage({ searchParams }: TestsPageProps) {
                       disabled
                       className="mt-3 h-10 w-full cursor-not-allowed rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-400 shadow-none disabled:opacity-100 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-500"
                     >
-                      {"Planned"}
+                      {unavailableLabel}
                     </Button>
                   ) : (
                     <Button asChild variant="outline" className={cn("mt-3 h-10 w-full rounded-xl border bg-white text-sm font-semibold shadow-none dark:bg-slate-950/60", card.buttonClassName)}>

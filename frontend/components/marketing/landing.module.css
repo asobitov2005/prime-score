@@ -627,6 +627,28 @@
 .skillLink:hover {
   background: var(--accent-soft);
 }
+.skillLinkSoon {
+  cursor: not-allowed;
+}
+.skillLinkSoon:hover {
+  background: var(--surface);
+}
+.skillLinkSoon::after {
+  display: none;
+}
+.soonBadge {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--muted);
+  background: var(--paper);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
 .skillTop {
   display: flex;
   align-items: center;
@@ -1065,6 +1087,24 @@
 }
 .footerGrid a:hover {
   color: var(--accent);
+}
+.footerSoon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.footerSoon span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .footerBottom {
   display: flex;

@@ -42,7 +42,7 @@ export function AppShell({ children }: AppShellProps) {
     { href: "/mock", label: "Mock", icon: CalendarDays },
     { href: "/tests", label: "Practice Tests", icon: BookOpenText },
     { href: "/writing", label: "Writing", icon: PenTool },
-    { href: "/speaking", label: "Speaking", icon: Mic, activePath: "/speaking" },
+    { href: "/speaking", label: "Speaking", icon: Mic, activePath: "/speaking", disabled: true, badge: "Soon" },
     { href: "/history", label: "History", icon: History },
     { href: "/bookmarks", label: "Bookmarks", icon: BookMarked },
     { href: "/analytics", label: "Analytics", icon: BarChart3, badge: "Premium" },
