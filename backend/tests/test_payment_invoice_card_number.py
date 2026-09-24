@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 
-from app.models.commerce import PaymentCard, Plan
+from app.models.commerce import Payment, PaymentCard, Plan
 from app.models.user import User
 from app.services.payment_service import create_plan_payment
 from app.services import payment_service
@@ -123,3 +123,40 @@ async def test_click_invoice_needs_no_payment_card(monkeypatch) -> None:
     assert payment.card_id is None
     assert payment.card_number is None
     assert payment.amount == Decimal("59000")
+
+
+@pytest.mark.asyncio
+async def test_click_replaces_old_manual_invoice(monkeypatch) -> None:
+    monkeypatch.setattr(
+        payment_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            click_service_id=123,
+            click_merchant_id=456,
+            click_secret_key="test-only-secret",
+            payment_paused=False,
+        ),
+    )
+    user = User(id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), telegram_id=123456789, first_name="Aziz")
+    plan = Plan(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        catalog="public",
+        name="1 Month",
+        duration_days=30,
+        price_amount=Decimal("59000"),
+        perks=[],
+        is_active=True,
+        payment_paused=False,
+    )
+    old = Payment(user_id=user.id, plan_id=plan.id, provider="card_transfer", status="pending")
+
+    class ClickSession(_FakeSession):
+        async def scalar(self, _statement):
+            self.scalar_calls += 1
+            return old if self.scalar_calls == 1 else None
+
+    session = ClickSession(None)
+    payment = await create_plan_payment(session, user=user, plan=plan)
+    assert old.status == "canceled"
+    assert old.archived_at is not None
+    assert payment.provider == "click"

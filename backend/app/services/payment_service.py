@@ -109,6 +109,12 @@ async def create_plan_payment(
     plan: Plan,
 ) -> Payment:
     await expire_stale_payments(session)
+    config = get_settings()
+    click_ready = bool(config.click_service_id and config.click_merchant_id and config.click_secret_key)
+    if click_ready and (config.payment_paused or plan.payment_paused):
+        raise ValueError("Payments are paused for this plan.")
+    use_click = click_ready
+    provider = "click" if use_click else "card_transfer"
 
     active_pending = await session.scalar(
         select(Payment)
@@ -122,18 +128,13 @@ async def create_plan_payment(
         .order_by(Payment.created_at.desc())
     )
     if active_pending is not None:
-        if active_pending.plan_id == plan.id:
+        if active_pending.plan_id == plan.id and active_pending.provider == provider:
             return active_pending
-        # Cancel the old pending invoice for a different plan
+        # A stale manual invoice must not block the Click checkout.
         active_pending.status = "canceled"
         active_pending.archived_at = _now()
-        active_pending.status_reason = "Replaced by a new invoice for a different plan."
+        active_pending.status_reason = "Replaced by a new payment invoice."
 
-    config = get_settings()
-    click_ready = bool(config.click_service_id and config.click_merchant_id and config.click_secret_key)
-    if click_ready and (config.payment_paused or plan.payment_paused):
-        raise ValueError("Payments are paused for this plan.")
-    use_click = click_ready
     active_card = None if use_click else await get_active_payment_card(session)
     if not use_click and active_card is None:
         raise ValueError("No active payment card is configured.")
@@ -146,7 +147,7 @@ async def create_plan_payment(
         user_id=user.id,
         plan_id=plan.id,
         card_id=active_card.id if active_card else None,
-        provider="click" if use_click else "card_transfer",
+        provider=provider,
         provider_reference=None,
         invoice_code=build_invoice_code(),
         amount=plan_price,
