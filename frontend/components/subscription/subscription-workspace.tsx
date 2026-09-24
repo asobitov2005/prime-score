@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Crown, CreditCard, Gift, Infinity, Info, Loader2, MessageCircle, PenTool, Send, ShieldCheck, ShoppingCart, TrendingUp, X } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { GiftCodeGeneratorCard } from "@/components/subscription/gift-code-generator-card";
@@ -785,7 +786,12 @@ function ActiveInvoiceModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-modal-title"
-        className="relative my-3 max-h-[calc(100dvh-1.5rem)] w-full max-w-[880px] overflow-y-auto rounded-[20px] border border-orange-200 bg-white shadow-[0_40px_120px_-36px_rgba(15,23,42,0.7)] outline-none dark:border-orange-500/25 dark:bg-slate-950"
+        className={cn(
+          "relative my-3 max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-[20px] bg-white outline-none dark:bg-slate-950",
+          isClick
+            ? "max-w-[460px] border border-slate-200 shadow-[0_24px_72px_-32px_rgba(15,23,42,0.5)] dark:border-slate-800"
+            : "max-w-[880px] border border-orange-200 shadow-[0_40px_120px_-36px_rgba(15,23,42,0.7)] dark:border-orange-500/25",
+        )}
       >
         {confirmCancelOpen ? (
           <ConfirmCancelDialog
@@ -794,7 +800,7 @@ function ActiveInvoiceModal({
             isCancelling={isCancelling}
           />
         ) : null}
-        <div className="h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-amber-400" />
+        {!isClick ? <div className="h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-amber-400" /> : null}
         <button
           type="button"
           aria-label="Close payment modal"
@@ -804,7 +810,67 @@ function ActiveInvoiceModal({
           <X className="h-5 w-5" />
         </button>
 
-        <div className="p-4 sm:p-5 lg:p-6">
+        <div className={cn("p-4 sm:p-5 lg:p-6", isClick && "p-5 sm:p-6")}>
+          {isClick ? (
+            <>
+              <header className="pr-10">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 items-center rounded-lg bg-slate-950 px-3 dark:bg-slate-900">
+                    <Image src="/click-logo.svg" alt="Click" width={86} height={22} />
+                  </span>
+                  <PaymentStatusPill status={isTerminal ? "expired" as UserPaymentRecord["status"] : payment.status} />
+                </div>
+                <h2 id="payment-modal-title" className="mt-5 text-[1.35rem] font-semibold tracking-tight text-slate-950 dark:text-white">
+                  {isActivated ? "Premium activated" : "Complete your payment"}
+                </h2>
+                <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">
+                  {isActivated
+                    ? "Your Premium plan is now active."
+                    : isTerminal
+                      ? "This invoice has expired. Please create a new one."
+                      : "Pay securely with Click. Premium activates after confirmation."}
+                </p>
+              </header>
+
+              <div className="mt-5 border-y border-slate-200 py-4 dark:border-slate-800">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Amount due</p>
+                    <p className="mt-1 text-[1.7rem] font-semibold tracking-tight text-slate-950 dark:text-white">{payment.amount}</p>
+                  </div>
+                  <span className="pb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{planLabel}</span>
+                </div>
+                {!isActivated ? (
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <Clock3 className="h-3.5 w-3.5 shrink-0" />
+                    {isTerminal ? "Invoice expired" : `Valid for ${countdown}`}
+                  </p>
+                ) : null}
+              </div>
+
+              {isActivated ? (
+                <Button asChild className="mt-5 h-11 w-full rounded-xl bg-[#0065ff] font-semibold text-white hover:bg-[#0054d6]">
+                  <a href="/dashboard">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></a>
+                </Button>
+              ) : payment.paymentUrl && !isTerminal ? (
+                <Button asChild className="mt-5 h-11 w-full rounded-xl bg-[#0065ff] font-semibold text-white hover:bg-[#0054d6]">
+                  <a href={payment.paymentUrl} rel="noreferrer">Pay with Click <ArrowRight className="ml-2 h-4 w-4" /></a>
+                </Button>
+              ) : (
+                <p className="mt-5 text-sm text-amber-700 dark:text-amber-300">Checkout is unavailable. Please create a new invoice or contact support.</p>
+              )}
+              {!isActivated ? (
+                <Button type="button" variant="ghost" onClick={() => setConfirmCancelOpen(true)} className="mt-2 h-9 w-full text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white">
+                  Cancel invoice
+                </Button>
+              ) : null}
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-slate-500 dark:text-slate-400">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                No screenshot needed. Access starts after Click confirms payment.
+              </p>
+            </>
+          ) : (
+          <>
           <header className="max-w-3xl pr-12">
             <div className="flex flex-wrap items-center gap-2.5">
               <PaymentStatusPill status={isTerminal ? "expired" as UserPaymentRecord["status"] : payment.status} />
@@ -818,11 +884,9 @@ function ActiveInvoiceModal({
                 ? "Your Premium plan is now active."
                 : isTerminal
                   ? "This invoice has expired. Please create a new invoice."
-                  : isClick
-                    ? "Pay in Click. Premium activates automatically after confirmation."
-                    : "Transfer the amount below and send the receipt screenshot to Telegram support."}
+                  : "Transfer the amount below and send the receipt screenshot to Telegram support."}
             </p>
-            {!isClick ? <a
+            <a
               href={telegramUrl(supportContact)}
               target="_blank"
               rel="noreferrer"
@@ -830,30 +894,9 @@ function ActiveInvoiceModal({
             >
               <MessageCircle className="h-4 w-4" />
               Support: <span className="text-orange-600 dark:text-orange-300">{supportContact}</span>
-            </a> : null}
+            </a>
           </header>
 
-          {isClick ? (
-            <div className="mt-5 rounded-[18px] border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/65">
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Amount due</p>
-              <p className="mt-1 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{payment.amount}</p>
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-                Your invoice expires {payment.expiresAt ? new Date(payment.expiresAt).toLocaleString() : "automatically"}.
-                You do not need to send a screenshot.
-              </p>
-              {payment.paymentUrl && !isTerminal ? (
-                <Button asChild className="mt-5 h-11 w-full rounded-xl bg-orange-500 font-semibold text-white hover:bg-orange-600 sm:w-auto">
-                  <a href={payment.paymentUrl} rel="noreferrer">Pay with Click <ArrowRight className="ml-2 h-4 w-4" /></a>
-                </Button>
-              ) : (
-                <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">Checkout is unavailable. Please create a new invoice or contact support.</p>
-              )}
-              <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Access is granted only after Click confirms the transaction.</p>
-              <Button type="button" variant="outline" onClick={() => setConfirmCancelOpen(true)} className="mt-4 h-9 rounded-xl">
-                Cancel invoice
-              </Button>
-            </div>
-          ) : (
           <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.95fr)]">
             <div className="flex h-full flex-col gap-2.5 rounded-[18px] border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-950">
               <PaymentCopyCard
@@ -979,14 +1022,14 @@ function ActiveInvoiceModal({
               </div>
             </aside>
           </div>
-          )}
-
           <div className="mt-4 border-t border-slate-200 pt-3 text-center dark:border-slate-800">
             <p className="inline-flex items-center justify-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
               <ShieldCheck className="h-4 w-4 text-slate-400 dark:text-slate-500" />
               This invoice will expire automatically.
             </p>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
