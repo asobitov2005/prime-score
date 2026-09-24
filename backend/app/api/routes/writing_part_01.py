@@ -177,65 +177,36 @@ def _build_action_plan(
     )
 
 def _annotation_patterns(raw_items: list[dict], *, limit: int = 6) -> list[WritingErrorPattern]:
-    total = len(raw_items)
-    if total == 0:
-        return []
-    def classify(item: dict) -> tuple[str, str, str, str]:
-        category = str(item.get("category") or "style").lower()
-        text = " ".join(
-            str(item.get(key) or "")
-            for key in ("short_message", "explanation", "examiner_tip", "original")
-        ).lower()
-        rules = [
-            ("grammar", "articles", "Articles", "Check a/an/the before every noun.", ("article", " a ", " an ", " the ")),
-            ("grammar", "prepositions", "Prepositions", "Use one natural preposition per phrase, then reread the sentence.", ("preposition", " in ", " on ", " at ", " to ", " for ")),
-            ("grammar", "subject_verb_agreement", "Subject-verb agreement", "Match each verb to its real subject.", ("agreement", "subject", "verb form")),
-            ("grammar", "tense", "Tense control", "Keep the same time frame inside one sentence.", ("tense", "past", "present")),
-            ("punctuation", "commas", "Comma control", "Split long sentences or add commas around clauses.", ("comma", "punctuation")),
-            ("lexical", "collocation", "Collocation", "Replace translated phrases with natural academic collocations.", ("collocation", "word choice", "unnatural", "lexical")),
-            ("cohesion", "linking", "Linking and flow", "Use linkers only when they show a real logic relation.", ("cohesion", "linking", "transition", "flow")),
-        ]
-        for rule_category, subcategory, label, fix, needles in rules:
-            if any(needle in text for needle in needles):
-                return rule_category or category, subcategory, label, fix
-        labels = {
-            "spelling": ("spelling", "spelling", "Spelling", "Correct the spelling before improving style."),
-            "grammar": ("grammar", "general", "Grammar", "Fix sentence-level grammar before adding complex vocabulary."),
-            "lexical": ("lexical", "word_choice", "Word choice", "Use precise words from the topic, not vague substitutes."),
-            "cohesion": ("cohesion", "flow", "Cohesion", "Make each sentence connect to the previous one."),
-            "style": ("style", "tone", "Style", "Make the sentence more formal and direct."),
-            "punctuation": ("punctuation", "punctuation", "Punctuation", "Clean punctuation so the idea is easy to read."),
-        }
-        return labels.get(category, (category, "general", category.replace("_", " ").title(), "Fix this repeated pattern."))
-
-    buckets: dict[str, dict[str, object]] = {}
+    # Aggregate supplied classifications only. Text never determines a category.
+    buckets: dict[tuple[str, str], dict] = {}
+    total = 0
     for item in raw_items:
-        category, subcategory, label, fix = classify(item)
-        key = f"{category}:{subcategory}"
-        bucket = buckets.setdefault(key, {"category": category, "subcategory": subcategory, "label": label, "fix": fix, "count": 0, "examples": []})
-        bucket["count"] = int(bucket["count"]) + 1
-        examples = bucket["examples"]
-        if isinstance(examples, list) and len(examples) < 3:
-            message = " ".join(str(item.get("short_message") or item.get("original") or "").split())
-            if message and message not in examples:
-                examples.append(message)
-    patterns = [
-        WritingErrorPattern(
-            category=str(bucket["category"]),
-            subcategory=str(bucket["subcategory"]),
-            label=str(bucket["label"]),
-            count=int(bucket["count"]),
-            percentage=round((int(bucket["count"]) / total) * 100, 1),
-            examples=list(bucket["examples"]) if isinstance(bucket["examples"], list) else [],
-            fix=str(bucket["fix"]),
-        )
-        for bucket in buckets.values()
-    ]
-    return sorted(patterns, key=lambda item: item.count, reverse=True)[:limit]
-
-def _status_from_signal(has_signal: bool, has_related_issue: bool) -> str:
-    if has_signal and not has_related_issue:
-        return "met"
-    if has_signal or not has_related_issue:
-        return "partial"
-    return "missing"
+        category = item.get("category")
+        category = getattr(category, "value", category)
+        if not isinstance(category, str) or not category.strip():
+            continue
+        category = category.strip()
+        subcategory = item.get("subcategory") or ""
+        if not isinstance(subcategory, str):
+            subcategory = ""
+        key = (category, subcategory)
+        bucket = buckets.setdefault(key, {"count": 0, "examples": []})
+        bucket["count"] += 1
+        total += 1
+        original = item.get("original")
+        if isinstance(original, str) and original.strip() and original not in bucket["examples"]:
+            bucket["examples"].append(original)
+    return sorted(
+        [
+            WritingErrorPattern(
+                category=category, subcategory=subcategory,
+                label=(subcategory or category).replace("_", " ").title(),
+                count=bucket["count"],
+                percentage=round(bucket["count"] / total * 100, 1),
+                examples=bucket["examples"][:3],
+                fix="",
+            )
+            for (category, subcategory), bucket in buckets.items()
+        ],
+        key=lambda item: item.count, reverse=True,
+    )[:max(0, limit)]

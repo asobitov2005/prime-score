@@ -70,8 +70,7 @@ def test_build_payload_preserves_model_summary_and_uses_validated_annotation_voc
     )
 
     assert payload["feedback"]["overall_summary"] == grader.overall_summary
-    assert len(payload["feedback"]["next_steps"]) == 3
-    assert payload["feedback"]["next_steps"][0].startswith("Replace 'very big problem'")
+    assert payload["feedback"]["next_steps"] == grader.next_steps
     assert payload["feedback"]["vocabulary_suggestions"] == [
         {
             "current_phrase": "very big problem",

@@ -69,17 +69,10 @@ async def get_submission_result(
         grammar=grammar,
         next_steps=next_steps,
     )
-    fallback_checklist = _build_checklist(
-        task_type=submission.task_type,
-        subtype=task.question_subtype,
-        essay_text=submission.essay_text,
-        feedback=feedback,
-        annotations_raw=[item for item in annotations_raw if isinstance(item, dict)],
-    )
     fallback_error_patterns = _annotation_patterns(
         [item for item in annotations_raw if isinstance(item, dict)]
     )
-    checklist = _parse_checklist(feedback, fallback_checklist)
+    checklist = _parse_checklist(feedback, [])
     error_patterns = _parse_error_patterns(feedback, fallback_error_patterns)
     target_action_plan = _parse_target_actions(
         feedback,
@@ -101,12 +94,12 @@ async def get_submission_result(
         lexical=lexical,
         grammar=grammar,
     )
-    sentence_fixes = _parse_sentence_fixes(feedback, annotations)
+    sentence_fixes = _parse_sentence_fixes(feedback, [] if "sentence_fixes" in feedback else annotations)
     revision_diff = _build_revision_diff(
         submission.essay_text,
         evaluation.improved_version,
         sentence_fixes,
-    )
+    ) if sentence_fixes else []
     history_error_trends = await _build_history_error_trends(
         session=session,
         user_id=current_user.id,

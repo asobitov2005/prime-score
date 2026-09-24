@@ -5,6 +5,11 @@ bindings: `writing_grader`, `writing_improver`, and `writing_roast`. GPU.uz uses
 the OpenAI-compatible text endpoint; it is not an image or audio provider in this
 integration. Keep `writing_image_summary` bound to a supported vision model.
 
+The live Gemma endpoint accepted a PNG `image_url` input on 2026-09-24 and
+correctly read two labelled bar values. This confirms image input for that
+deployment, not accuracy across IELTS charts. The application adapter currently
+sends text only; its image-summary binding remains on the existing vision provider.
+
 ## Configure
 
 From `backend/`, with the intended `DATABASE_URL` and deployed application code:

@@ -14,9 +14,9 @@ from app.services.writing_prompt_grounding import build_writing_grounding_contex
 TASK = "Discuss the advantages and disadvantages of public transport."
 
 
-def verdict(essay, *, relation="on_task", kind="answer", task=TASK):
+def verdict(essay, *, relation=None, kind="answer", task=TASK):
     return {
-        "response_kind": kind, "task_relation": relation,
+        "response_kind": kind, "task_relation": relation or ("on_task" if kind == "answer" else "uncertain"),
         "explanation": "The submitted text was compared with the assigned task and its requirements.",
         "essay_evidence": [essay] if essay else [], "task_evidence": [task],
     }
@@ -50,6 +50,17 @@ def test_unknown_response_kind_never_becomes_a_rejection(monkeypatch):
     monkeypatch.setattr(fit, "generate_text_sync", lambda **_: json.dumps(verdict(TASK, kind="unknown")))
     with pytest.raises(RuntimeError, match="Invalid task-fit preflight output"):
         fit.check_task_fit(config=None, grounding_context="Full context", essay_text=TASK, task_prompt_text=TASK, seed=1)
+
+
+def test_wrong_task_cannot_be_rejected_as_no_answer(monkeypatch):
+    essay = "The table compares car and bus journeys."
+    outputs = iter([
+        verdict(essay, relation="wrong_task", kind="other_unassessable"),
+        verdict(essay, relation="wrong_task", kind="answer"),
+    ])
+    monkeypatch.setattr(fit, "generate_text_sync", lambda **_: json.dumps(next(outputs)))
+    result = fit.check_task_fit(config=None, grounding_context="Full context", essay_text=essay, task_prompt_text=TASK, seed=1)
+    assert result["assessability"] == "assessable" and result["verdict"] == "wrong_task"
 
 
 @pytest.mark.parametrize("essay, relation", [
