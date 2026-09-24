@@ -1,16 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Menu, Moon, Sun, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  BookOpen,
+  ChevronDown,
+  Headphones,
+  Menu,
+  Mic,
+  Moon,
+  PenSquare,
+  Sun,
+  X,
+} from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import styles from "./landing.module.css";
 import { landingFont } from "./landing-font";
 
 export function LandingHeader() {
   const [open, setOpen] = useState(false);
+  const [practiceOpen, setPracticeOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const practiceButton = useRef<HTMLButtonElement>(null);
   const header = useRef<HTMLElement>(null);
   const authenticated = useAuthStore(
     (state) => state.hasHydrated && state.isAuthenticated,
@@ -19,15 +32,20 @@ export function LandingHeader() {
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
   useEffect(() => {
-    if (!open) return;
+    if (!open && !practiceOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
-        menuButton.current?.focus();
+        setPracticeOpen(false);
+        if (open) menuButton.current?.focus();
+        else practiceButton.current?.focus();
       }
     };
     const closeOutside = (event: PointerEvent) => {
-      if (!header.current?.contains(event.target as Node)) setOpen(false);
+      if (!header.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setPracticeOpen(false);
+      }
     };
     document.addEventListener("keydown", closeOnEscape);
     document.addEventListener("pointerdown", closeOutside);
@@ -35,7 +53,7 @@ export function LandingHeader() {
       document.removeEventListener("keydown", closeOnEscape);
       document.removeEventListener("pointerdown", closeOutside);
     };
-  }, [open]);
+  }, [open, practiceOpen]);
   function toggleTheme() {
     const nextDark = !dark;
     setDark(nextDark);
@@ -70,9 +88,57 @@ export function LandingHeader() {
           </span>
         </Link>
         <nav className={styles.desktopNav} aria-label="Main navigation">
-          <a href="#practice" data-landing-nav>
-            Practice
-          </a>
+          <div
+            className={styles.practiceMenu}
+            data-open={practiceOpen}
+            onMouseEnter={() => setPracticeOpen(true)}
+            onMouseLeave={() => setPracticeOpen(false)}
+            onFocus={() => setPracticeOpen(true)}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setPracticeOpen(false);
+              }
+            }}
+          >
+            <button
+              ref={practiceButton}
+              type="button"
+              className={styles.practiceTrigger}
+              aria-expanded={practiceOpen}
+              aria-controls="landing-practice-menu"
+              onClick={() => setPracticeOpen(true)}
+            >
+              Practice <ChevronDown size={14} aria-hidden="true" />
+            </button>
+            <div id="landing-practice-menu" className={styles.practiceDropdown}>
+              <PracticeMenuLink
+                href="/tests?type=reading"
+                title="Reading"
+                description="Academic IELTS practice"
+                icon={<BookOpen size={18} aria-hidden="true" />}
+              />
+              <PracticeMenuLink
+                href="/tests?type=listening"
+                title="Listening"
+                description="Listen closely. Find the answer."
+                icon={<Headphones size={18} aria-hidden="true" />}
+              />
+              <PracticeMenuLink
+                href="/writing"
+                title="Writing"
+                description="Task 1 and Task 2"
+                icon={<PenSquare size={18} aria-hidden="true" />}
+              />
+              <div className={styles.practiceItemSoon} aria-label="Speaking, coming soon">
+                <span className={styles.practiceIcon}><Mic size={18} aria-hidden="true" /></span>
+                <span className={styles.practiceItemCopy}>
+                  <strong>Speaking</strong>
+                  <small>Speaking practice is in the works</small>
+                </span>
+                <span className={styles.practiceSoon}>Soon</span>
+              </div>
+            </div>
+          </div>
           <Link href="/mock" prefetch={false}>
             Mock
           </Link>
@@ -122,8 +188,22 @@ export function LandingHeader() {
         aria-label="Mobile navigation"
         hidden={!open}
       >
+        <div className={styles.mobilePracticeGroup}>
+          <p>Practice</p>
+          <Link href="/tests?type=reading" onClick={() => setOpen(false)}>
+            Reading <ArrowUpRight size={16} aria-hidden="true" />
+          </Link>
+          <Link href="/tests?type=listening" onClick={() => setOpen(false)}>
+            Listening <ArrowUpRight size={16} aria-hidden="true" />
+          </Link>
+          <Link href="/writing" onClick={() => setOpen(false)}>
+            Writing <ArrowUpRight size={16} aria-hidden="true" />
+          </Link>
+          <span className={styles.mobilePracticeSoon} aria-disabled="true">
+            Speaking <span>Soon</span>
+          </span>
+        </div>
         {[
-          ["#practice", "Practice"],
           ["/mock", "Mock"],
           ["#how-it-works", "How it works"],
           ["#pricing", "Pricing"],
@@ -141,5 +221,28 @@ export function LandingHeader() {
         ))}
       </nav>
     </header>
+  );
+}
+
+function PracticeMenuLink({
+  href,
+  title,
+  description,
+  icon,
+}: {
+  href: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
+}) {
+  return (
+    <Link href={href} className={styles.practiceItem}>
+      <span className={styles.practiceIcon}>{icon}</span>
+      <span className={styles.practiceItemCopy}>
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+      <ArrowUpRight className={styles.practiceItemArrow} size={14} aria-hidden="true" />
+    </Link>
   );
 }

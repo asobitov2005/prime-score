@@ -116,6 +116,147 @@
 .desktopNav a:hover {
   color: var(--accent);
 }
+.practiceMenu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.practiceTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+.practiceTrigger:hover,
+.practiceMenu[data-open="true"] .practiceTrigger {
+  color: var(--accent);
+}
+.practiceTrigger > svg {
+  transition: transform 180ms ease;
+}
+.practiceMenu[data-open="true"] .practiceTrigger > svg {
+  transform: rotate(180deg);
+}
+.practiceDropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 70;
+  display: grid;
+  width: min(540px, calc(100vw - 36px));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: 0 22px 52px -32px rgb(20 25 30 / 38%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 7px);
+  transition:
+    opacity 170ms ease,
+    transform 210ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 210ms;
+}
+:global(.dark) .practiceDropdown {
+  box-shadow: 0 24px 54px -30px rgb(0 0 0 / 80%);
+}
+.practiceMenu[data-open="true"] .practiceDropdown {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 170ms ease,
+    transform 210ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s;
+}
+.practiceItem,
+.practiceItemSoon {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+.practiceItem:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+.practiceIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.practiceItemCopy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+.practiceItemCopy strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.practiceItemCopy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.practiceItemArrow {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: color 150ms ease, transform 150ms ease;
+}
+.practiceItem:hover .practiceItemArrow {
+  color: var(--accent);
+  transform: translate(2px, -2px);
+}
+.practiceItemSoon {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.practiceSoon,
+.mobilePracticeSoon > span {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
 .headerActions {
   display: flex;
   gap: 18px;
@@ -1201,6 +1342,35 @@
     padding-block: 13px;
     color: var(--ink);
     font-size: 14px;
+  }
+  .mobilePracticeGroup {
+    display: grid;
+    gap: 0;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 7px;
+  }
+  .mobilePracticeGroup > p {
+    padding: 8px 0 4px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .mobilePracticeGroup > a,
+  .mobilePracticeSoon {
+    display: flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-block: 8px;
+    color: var(--ink);
+    font-size: 14px;
+  }
+  .mobilePracticeSoon {
+    color: var(--muted);
+    cursor: not-allowed;
   }
   .hero {
     padding-top: 40px;
