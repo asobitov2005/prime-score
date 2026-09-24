@@ -44,6 +44,11 @@ def test_task_fit_schema_has_one_response_classification():
     schema = fit._task_fit_schema()
     assert "response_kind" in schema.required
     assert "assessability" not in schema.properties
+    assert schema.properties["essay_evidence"].min_items == 1
+    assert schema.properties["task_evidence"].min_items == 1
+    empty = fit._task_fit_schema(essay_has_text=False, task_has_text=False)
+    assert empty.properties["essay_evidence"].min_items == 0
+    assert empty.properties["task_evidence"].min_items == 0
 
 
 def test_unknown_response_kind_never_becomes_a_rejection(monkeypatch):

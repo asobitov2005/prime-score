@@ -20,7 +20,7 @@ class _TaskFitVerdict(BaseModel):
     task_evidence: list[str]
 
 
-def _task_fit_schema() -> genai_types.Schema:
+def _task_fit_schema(*, essay_has_text: bool = True, task_has_text: bool = True) -> genai_types.Schema:
     return genai_types.Schema(
         type=genai_types.Type.OBJECT,
         required=list(_TaskFitVerdict.model_fields),
@@ -30,8 +30,11 @@ def _task_fit_schema() -> genai_types.Schema:
             "task_relation": genai_types.Schema(type=genai_types.Type.STRING, enum=["on_task", "partial", "off_topic", "wrong_task", "uncertain"],
                 description="Relation of an attempted answer to the assigned task. Use uncertain for input that is not an answer. wrong_task/off_topic/partial/on_task always require response_kind=answer."),
             "explanation": genai_types.Schema(type=genai_types.Type.STRING),
-            "essay_evidence": genai_types.Schema(type=genai_types.Type.ARRAY, items=genai_types.Schema(type=genai_types.Type.STRING)),
-            "task_evidence": genai_types.Schema(type=genai_types.Type.ARRAY, items=genai_types.Schema(type=genai_types.Type.STRING)),
+            "essay_evidence": genai_types.Schema(type=genai_types.Type.ARRAY, min_items=1 if essay_has_text else 0,
+                items=genai_types.Schema(type=genai_types.Type.STRING),
+                description="Exact quotes from the submitted text, including when it is only a copied question. These quotes do not imply an attempted answer exists."),
+            "task_evidence": genai_types.Schema(type=genai_types.Type.ARRAY, min_items=1 if task_has_text else 0,
+                items=genai_types.Schema(type=genai_types.Type.STRING)),
         },
     )
 
@@ -40,6 +43,9 @@ TASK_FIT_INSTRUCTION = """Validate whether the candidate submitted an answer, th
 to the assigned task. This is a task-fit preflight, NOT band scoring. Return JSON
 with response_kind, task_relation, explanation, essay_evidence,
 task_evidence. Evidence arrays must quote exact text from their respective sources.
+For each nonempty source include at least one exact quote. Even prompt-only input
+has submitted text to quote: quote that question/instruction in essay_evidence.
+Do not leave evidence empty merely because no original candidate answer exists.
 Choose exactly one response_kind; do not output a separate assessability decision.
 Use prompt_only only when there is no candidate answer:
 the input merely supplies or copies/paraphrases a question, rubric or instructions.
@@ -80,7 +86,8 @@ def check_task_fit(*, config, grounding_context: str, essay_text: str, task_prom
     for _ in range(2):
         raw = generate_text_sync(
             config=config, system_instruction=TASK_FIT_INSTRUCTION, prompt=prompt,
-            response_schema=_task_fit_schema(), response_mime_type="application/json",
+            response_schema=_task_fit_schema(essay_has_text=bool(essay_text.strip()), task_has_text=bool(task_prompt_text.strip())),
+            response_mime_type="application/json",
             max_output_tokens=1536, temperature=0, top_p=1, seed=seed,
             usage_collector=usage_collector, operation="writing_task_fit",
         )
