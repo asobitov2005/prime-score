@@ -106,12 +106,19 @@
 }
 .desktopNav {
   display: flex;
+  align-items: center;
   gap: 30px;
 }
 .desktopNav a {
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
+}
+.desktopNav > a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  line-height: 1;
 }
 .desktopNav a:hover {
   color: var(--accent);
@@ -123,15 +130,17 @@
 }
 .practiceTrigger {
   display: inline-flex;
+  min-height: 36px;
   align-items: center;
   gap: 5px;
-  padding: 8px 0;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
+  line-height: 1;
   cursor: pointer;
   transition: color 160ms ease;
 }
