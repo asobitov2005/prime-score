@@ -205,6 +205,7 @@ async function run() {
       await send("Input.insertText", { text });
     };
     const screenshot = async (name) => {
+      await pause(100);
       fs.writeFileSync(path.join(output, name), Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
     };
     await send("Runtime.enable");
@@ -280,7 +281,7 @@ async function run() {
       }
       await evaluate("document.querySelector('#writing-task_achievement summary').click()");
       assert.equal(await evaluate("document.querySelector('#writing-task_achievement').open"), true);
-      await evaluate("document.querySelector('#writing-task_achievement').scrollIntoView({block:'start'})");
+      await evaluate("document.querySelector('#writing-task_achievement').scrollIntoView({block:'start',behavior:'instant'})");
       await screenshot("04-criterion-disclosure.png");
       await evaluate("document.querySelectorAll('details').forEach(d=>d.open=true)");
       for (const key of ["task_achievement", "coherence", "lexical", "grammar"]) {
@@ -301,7 +302,7 @@ async function run() {
     for (const width of [1440, 390]) {
       await send("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 500 });
       for (const theme of ["light", "dark"]) {
-        await evaluate(`document.documentElement.classList.remove('light','dark'); document.documentElement.classList.add('${theme}'); window.scrollTo({top:0,behavior:'instant'})`);
+        await evaluate(`document.documentElement.classList.remove('light','dark'); document.documentElement.classList.add('${theme}'); document.querySelectorAll('*').forEach(el=>{if(el.scrollTop)el.scrollTo({top:0,behavior:'instant'})})`);
         await pause(300);
         assert.equal(await evaluate("document.documentElement.scrollWidth <= innerWidth"), true);
         await screenshot(`03-result-${width}-${theme}.png`);
