@@ -21,6 +21,11 @@ async def get_active_descriptor_bundle(
         )
     ).all()
     if rows:
+        # Resolve version/scope collisions by metadata, never by descriptor wording.
+        effective = {}
+        for row in sorted(rows, key=lambda row: (row.task_type_scope != scope, -row.version)):
+            effective.setdefault((row.criterion_key, row.band), row)
+        rows = list(effective.values())
         return WritingDescriptorBundle(
             version=max(int(row.version) for row in rows),
             task_type_scope=scope,
@@ -33,7 +38,10 @@ async def get_active_descriptor_bundle(
                 for row in rows
             ],
         )
-    return WritingDescriptorBundle(version=1, task_type_scope=scope, items=descriptor_seed_rows())
+    return WritingDescriptorBundle(
+        version=1, task_type_scope=scope,
+        items=[row for row in descriptor_seed_rows() if row["task_type_scope"] in (scope.value, "all")],
+    )
 
 async def get_active_benchmark_card_bundle(
     session: AsyncSession,
@@ -97,7 +105,7 @@ def select_benchmark_cards(
     weakness_profile: dict[str, Any],
     max_cards: int = 5,
 ) -> list[dict[str, Any]]:
-    if not cards:
+    if not cards or max_cards <= 0:
         return []
     ordered = sorted(cards, key=lambda item: (abs(float(item["band"]) - initial_score), float(item["band"])))
     lower = [card for card in cards if float(card["band"]) <= initial_score]
@@ -111,20 +119,7 @@ def select_benchmark_cards(
         if candidate and candidate not in selected:
             selected.append(candidate)
 
-    weakness = str(weakness_profile.get("weakest_criterion", "")).replace("task_achievement", "task")
-    for card in ordered:
-        text = " ".join(
-            [
-                str(card.get("use_when", "")),
-                str(card.get("benchmark_profile", "")),
-                " ".join(str(item) for item in card.get("band_limiting_signs", [])),
-            ]
-        ).lower()
-        if weakness.split("_", 1)[0] in text and card not in selected:
-            selected.append(card)
-        if len(selected) >= max_cards:
-            break
-
+    # Numeric neighbourhood only; semantic suitability belongs to the model.
     for card in ordered:
         if card not in selected:
             selected.append(card)
@@ -146,73 +141,20 @@ def build_pipeline_run_payload(
 ) -> dict[str, Any]:
     scores = _score_dict(ta, cc, lr, gra)
     weakness = _weakness_profile(scores)
-    selected = select_benchmark_cards(
-        benchmarks.items if benchmarks else [],
-        initial_score=overall_pre_penalty,
-        weakness_profile=weakness,
-    )
-    lower = [card for card in selected if float(card["band"]) <= overall_pre_penalty]
-    higher = [card for card in selected if float(card["band"]) >= overall_pre_penalty]
-    closest = min(selected, key=lambda item: abs(float(item["band"]) - overall_pre_penalty)) if selected else None
-    score_spread = weakness["spread"]
-    borderline = any(abs(overall_pre_penalty - boundary) <= 0.25 for boundary in [5.5, 6.0, 6.5, 7.0, 7.5, 8.0])
-    if word_count_penalty or score_spread >= 2 or borderline:
-        confidence = "Medium"
-    elif selected and closest and abs(float(closest["band"]) - overall_pre_penalty) <= 0.5:
-        confidence = "Medium-high"
-    else:
-        confidence = "Medium-low"
-    if score_spread >= 2.5:
-        confidence = "Medium-low"
-    possible_low = max(0.0, round_to_ielts_band(final_band - 0.5))
-    possible_high = min(9.0, round_to_ielts_band(final_band + (0.5 if confidence != "Medium-high" else 0.0)))
-    if confidence == "Medium-high":
-        possible_low = final_band
-
-    selected_public = [
-        {
-            "card_id": card["card_id"],
-            "title": card["title"],
-            "band": float(card["band"]),
-            "use_when": card["use_when"],
-            "tolerance_lesson": card["tolerance_lesson"],
-            "band_limiting_signs": card.get("band_limiting_signs", []),
-        }
-        for card in selected
-    ]
-    calibration_result = {
-        "initial_overall_band": overall_pre_penalty,
-        "calibrated_band": overall_pre_penalty,
-        "final_band": final_band,
-        "closest_benchmark": closest["card_id"] if closest else None,
-        "lower_anchor": max(lower, key=lambda item: float(item["band"]))["card_id"] if lower else None,
-        "higher_anchor": min(higher, key=lambda item: float(item["band"]))["card_id"] if higher else None,
-        "descriptor_control": "Official descriptors remain controlling; benchmark cards are calibration anchors only.",
-    }
-    audit_result = {
-        "strict_audit": "Borderline criterion scores were floored to whole IELTS criterion bands.",
-        "fairness_audit": "Selected benchmark cards were used to avoid both inflated and over-strict scoring.",
-        "criterion_isolation_audit": f"Weakest criterion is {weakness['weakest_label']}; strongest criterion is {weakness['strongest_label']}.",
-        "score_spread": score_spread,
-        "word_count_penalty": word_count_penalty,
-    }
     return {
         "pipeline_version": PIPELINE_VERSION,
-        "mode": "full_diagnostic",
+        "mode": "descriptor_grading",
         "initial_scores": {
             **scores,
             "overall_pre_penalty": calculate_overall_band(ta, cc, lr, gra),
             "weakness_profile": weakness,
-            "descriptor_version": descriptors.version if descriptors else 1,
-            "benchmark_version": benchmarks.version if benchmarks else 1,
+            "descriptor_version": descriptors.version if descriptors else None,
+            "benchmark_version": benchmarks.version if benchmarks else None,
         },
-        "selected_benchmarks": selected_public,
-        "calibration_result": calibration_result,
-        "audit_result": audit_result,
-        "confidence": confidence,
-        "possible_score_range": f"{possible_low:.1f}-{possible_high:.1f}",
-        "meta_learning_note": (
-            f"Use more benchmark coverage near Band {overall_pre_penalty:.1f} for "
-            f"{weakness['weakest_label']} if future human review disagrees."
-        ),
+        "selected_benchmarks": [],
+        "calibration_result": {"status": "not_performed"},
+        "audit_result": {"status": "not_performed"},
+        "confidence": "",
+        "possible_score_range": "",
+        "meta_learning_note": "",
     }

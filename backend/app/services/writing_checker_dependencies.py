@@ -22,6 +22,7 @@ from app.models.enums import (
 from app.models.writing import WritingEvaluation, WritingEvaluationRun, WritingSubmission, WritingTask
 from app.services.ai_config import ResolvedAiUseCaseConfig, resolve_ai_use_case_config
 from app.services.ai_generation import generate_text_sync
+from app.services.ai_usage import AiUsageEventDraft
 from app.services.writing_config import (
     WritingAnchorBundle,
     WritingPromptBundle,

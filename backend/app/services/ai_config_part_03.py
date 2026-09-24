@@ -58,6 +58,13 @@ async def ensure_provider_configs_seeded(
     settings = get_settings()
     defaults = [
         {
+            "provider": AiProvider.GPU_UZ,
+            "label": "GPU.uz",
+            "api_key": "",
+            "is_enabled": False,
+            "base_url": "https://aisha-llmv1.inference.gpu.uz/v1",
+        },
+        {
             "provider": AiProvider.GOOGLE,
             "label": "Google",
             "api_key": (google_api_key or "").strip(),
@@ -93,6 +100,7 @@ async def ensure_provider_configs_seeded(
                 label=item["label"],
                 api_key=item["api_key"],
                 is_enabled=bool(item["is_enabled"]),
+                base_url=item.get("base_url"),
             )
         )
     await session.flush()

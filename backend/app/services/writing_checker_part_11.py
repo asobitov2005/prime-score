@@ -155,7 +155,7 @@ async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> 
                 selected_benchmarks=evaluation_run_payload.get("selected_benchmarks") or [],
                 calibration_result=evaluation_run_payload.get("calibration_result") or {},
                 audit_result=evaluation_run_payload.get("audit_result") or {},
-                confidence=str(evaluation_run_payload.get("confidence") or "Medium"),
+                confidence=str(evaluation_run_payload.get("confidence") or ""),
                 possible_score_range=str(evaluation_run_payload.get("possible_score_range") or ""),
                 meta_learning_note=str(evaluation_run_payload.get("meta_learning_note") or ""),
             )
@@ -168,7 +168,7 @@ async def grade_submission(submission_id: UUID, *, mark_failed: bool = True) -> 
             evaluation_run.selected_benchmarks = evaluation_run_payload.get("selected_benchmarks") or []
             evaluation_run.calibration_result = evaluation_run_payload.get("calibration_result") or {}
             evaluation_run.audit_result = evaluation_run_payload.get("audit_result") or {}
-            evaluation_run.confidence = str(evaluation_run_payload.get("confidence") or "Medium")
+            evaluation_run.confidence = str(evaluation_run_payload.get("confidence") or "")
             evaluation_run.possible_score_range = str(evaluation_run_payload.get("possible_score_range") or "")
             evaluation_run.meta_learning_note = str(evaluation_run_payload.get("meta_learning_note") or "")
 

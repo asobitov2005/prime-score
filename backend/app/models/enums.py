@@ -25,6 +25,7 @@ class AdminAiJobStatus(StrEnum):
 
 
 class AiProvider(StrEnum):
+    GPU_UZ = "gpu_uz"
     GOOGLE = "google"
     CEREBRAS = "cerebras"
     GROQ = "groq"

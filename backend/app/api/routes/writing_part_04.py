@@ -167,6 +167,12 @@ async def retry_submission(
             detail="Only failed submissions can be retried.",
         )
 
+    if (submission.error_message or "").startswith("WRITING_INPUT_REJECTED:"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Revise your response to the selected task and submit it again. The unchanged input cannot be retried.",
+        )
+
     submission.status = WritingSubmissionStatus.QUEUED
     submission.error_message = None
     await session.commit()

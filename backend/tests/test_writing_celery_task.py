@@ -11,6 +11,30 @@ from app.tasks.tasks import evaluate_writing_submission_task
 SUBMISSION_ID = UUID("aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb")
 
 
+def test_rejected_input_is_marked_failed_without_repeated_inference(monkeypatch):
+    from app.services import writing_checker
+    from app.services.writing_input_validation import WritingInputRejected
+
+    failures = []
+
+    async def reject(*args, **kwargs):
+        raise WritingInputRejected({"verdict": "prompt_only", "explanation": "Write your response, not just the question."})
+
+    async def mark_failed(submission_id, message):
+        failures.append((submission_id, message))
+
+    def retry(**kwargs):
+        raise AssertionError("Invalid input must not be retried")
+
+    monkeypatch.setattr(writing_checker, "grade_submission", reject)
+    monkeypatch.setattr(writing_checker, "mark_submission_failed", mark_failed)
+    task = SimpleNamespace(request=SimpleNamespace(retries=0), max_retries=2, retry=retry)
+    result = _call_task_with(task, SUBMISSION_ID)
+    assert result["status"] == "rejected"
+    assert failures[0][0] == SUBMISSION_ID
+    assert failures[0][1].startswith("WRITING_INPUT_REJECTED:")
+
+
 class _RetrySignal(Exception):
     pass
 

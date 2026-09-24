@@ -17,32 +17,8 @@ def _build_precise_summary(
     lr: float,
     gra: float,
 ) -> str:
-    criteria = _criterion_records(grader, ta=ta, cc=cc, lr=lr, gra=gra)
-    strongest_name, strongest_band, strongest_payload = max(criteria, key=lambda item: item[1])
-    weakest_name, weakest_band, weakest_payload = min(criteria, key=lambda item: item[1])
-    strongest_anchor = _criterion_anchor_text(strongest_payload)
-    weakest_anchor = _criterion_anchor_text(weakest_payload)
-    priority = _clean_text(
-        weakest_payload.improvements[0] if weakest_payload.improvements else weakest_payload.summary
-    )
-
-    parts = [
-        f"Band {overall_band:.1f} overall. Your strongest area is {strongest_name} at Band {strongest_band:.1f}"
-        + (f", especially in {strongest_anchor!r}." if strongest_anchor else "."),
-        f"The main score limit is {weakest_name} at Band {weakest_band:.1f}"
-        + (f", where {weakest_anchor!r} still sounds underdeveloped or imprecise." if weakest_anchor else "."),
-    ]
-    if priority and word_count >= 120:
-        parts.append(f"The fastest improvement now is to {priority.rstrip('.')}.")
-    if penalty > 0:
-        parts.append(
-            f"Length also cost you {penalty:.1f} band because the response stayed below the {word_minimum}-word minimum."
-        )
-    if word_count < 90:
-        return " ".join(parts[:1])
-    if word_count < 180:
-        return " ".join(parts[:2])
-    return " ".join(parts[:4])
+    # Do not reinterpret a quote as a strength or weakness without model evidence.
+    return _clean_text(grader.overall_summary) or f"Band {overall_band:.1f} overall."
 
 def _annotation_action(annotation: dict[str, Any]) -> str | None:
     original = _clean_text(str(annotation.get("original", "")))
@@ -100,18 +76,7 @@ def _build_precise_next_steps(
         if len(steps) >= 3:
             break
 
-    fallback = [
-        "Write one more revision draft and fix every highlighted sentence before changing ideas.",
-        "Underline repeated nouns and verbs, then upgrade at least three of them with stronger academic collocations.",
-        "Check each paragraph for one clear main idea, one supporting explanation, and one precise example or comparison.",
-    ]
-    for item in fallback:
-        if item not in seen:
-            steps.append(item)
-        if len(steps) >= 3:
-            break
-    target_count = 2 if word_count < 180 else 3
-    return steps[:target_count]
+    return steps[:3]
 
 def _target_context_label(*, current_band: float, desired_score: float | None) -> str:
     stretch_target = min(9.0, current_band + 1.0)
@@ -206,8 +171,8 @@ def _normalize_band_boundaries(
         supplied.append(
             {
                 "criterion": criterion,
-                "current_band": round_to_ielts_band(item.current_band),
-                "next_band": round_to_ielts_band(item.next_band or min(9.0, item.current_band + 1.0)),
+                "current_band": round_criterion_band(item.current_band),
+                "next_band": round_criterion_band(item.next_band or min(9.0, item.current_band + 1.0)),
                 "why_current": _trim_sentence(item.why_current, limit=170),
                 "required_for_next": _trim_sentence(item.required_for_next, limit=170),
             }

@@ -39,7 +39,7 @@ class WritingEvaluationRead(BaseModel):
     revision_diff: list[WritingRevisionDiff] = Field(default_factory=list)
     roast: WritingRoastFeedback | None = None
     is_ai_estimate: bool = True
-    confidence: str = "Medium"
+    confidence: str = ""
     possible_score_range: str = ""
     selected_benchmarks: list[WritingSelectedBenchmark] = Field(default_factory=list)
     calibration_result: dict = Field(default_factory=dict)

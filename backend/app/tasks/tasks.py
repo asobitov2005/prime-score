@@ -87,6 +87,7 @@ def evaluate_writing_submission_task(self: Task[Any, Any], submission_id: str) -
         mark_submission_failed,
         mark_submission_retrying,
     )
+    from app.services.writing_input_validation import WritingInputRejected
 
     submission_uuid = UUID(submission_id)
 
@@ -99,6 +100,10 @@ def evaluate_writing_submission_task(self: Task[Any, Any], submission_id: str) -
 
     try:
         _run_async(grade_submission(submission_uuid, mark_failed=False))
+    except WritingInputRejected as exc:
+        # Repeating an unchanged prompt-only input cannot repair it.
+        _run_async(mark_submission_failed(submission_uuid, str(exc)))
+        return {"submission_id": submission_id, "status": "rejected"}
     except Exception as exc:  # noqa: BLE001
         if self.request.retries >= int(self.max_retries or 0):
             _run_async(mark_submission_failed(submission_uuid, str(exc)))

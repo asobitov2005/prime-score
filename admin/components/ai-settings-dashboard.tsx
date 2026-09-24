@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Notice, SectionHeader, Select, Textarea } from "@/components/ui";
 import { AdminAiSettingsLoadingSkeleton } from "@/components/loading-skeletons";
 import { adminApi } from "@/lib/api";
+import { getAiProviderLabel, getSelectableAiModels, isAiProviderEligible } from "@/lib/ai-providers";
 import type {
   AdminAiProviderConfig,
   AdminAiProviderModel,
@@ -355,7 +356,7 @@ export function AiSettingsDashboard() {
     setProviderDrafts((current) => ({
       ...current,
       [provider]: {
-        ...(current[provider] ?? { label: provider, apiKey: "", baseUrl: "", isEnabled: false }),
+        ...(current[provider] ?? { label: getAiProviderLabel(provider), apiKey: "", baseUrl: "", isEnabled: false }),
         ...patch,
       },
     }));
@@ -404,7 +405,8 @@ export function AiSettingsDashboard() {
         apiKey: draft?.apiKey.trim() || undefined,
         baseUrl: draft?.baseUrl.trim() || undefined,
       });
-      setNotice({ tone: "success", title: "Credentials look valid", description: `${provider} responded with ${result.modelsSeen ?? 0} visible model(s).` });
+      const label = getAiProviderLabel(provider, providers.find((item) => item.provider === provider)?.label);
+      setNotice({ tone: "success", title: "Credentials look valid", description: `${label} responded with ${result.modelsSeen ?? 0} visible model(s).` });
     } catch (error) {
       setNotice({ tone: "warning", title: "Validation failed", description: error instanceof Error ? error.message : "Validation failed." });
     } finally {
@@ -419,7 +421,8 @@ export function AiSettingsDashboard() {
       setModelsByProvider((current) => ({ ...current, [provider]: models }));
       const nextProviders = await adminApi.listAiProviders();
       setProviders(nextProviders);
-      setNotice({ tone: "success", title: "Models fetched", description: `${provider} returned ${models.length} model rows.` });
+      const label = getAiProviderLabel(provider, nextProviders.find((item) => item.provider === provider)?.label);
+      setNotice({ tone: "success", title: "Models fetched", description: `${label} returned ${models.length} model rows.` });
     } catch (error) {
       setNotice({ tone: "warning", title: "Sync failed", description: error instanceof Error ? error.message : "Model sync failed." });
     } finally {
@@ -433,6 +436,9 @@ export function AiSettingsDashboard() {
     providerModelId: string,
     settingsJson?: Record<string, unknown>,
   ) {
+    const provider = providers.find((item) => item.id === providerConfigId);
+    if (!provider?.isEnabled || !getSelectableAiModels(provider.provider, useCase, modelsByProvider[provider.provider] ?? [])
+      .some((model) => model.id === providerModelId)) return;
     setBusyKey(`usecase-${useCase}`);
     try {
       const nextBinding = await adminApi.updateAiUseCase(useCase, { providerConfigId, providerModelId, settingsJson });
@@ -578,11 +584,13 @@ export function AiSettingsDashboard() {
   function renderUseCaseBinding(binding: AdminAiUseCaseBinding) {
     const label = USE_CASE_LABELS[binding.useCase];
     const provider = providers.find((item) => item.id === binding.providerConfigId) ?? providers.find((item) => item.provider === binding.provider);
-    const providerId = provider?.id ?? binding.providerConfigId ?? providers[0]?.id ?? "";
-    const activeProvider = providers.find((item) => item.id === providerId) ?? providers[0];
-    const models = activeProvider ? modelsByProvider[activeProvider.provider] ?? [] : [];
-    const modelId = binding.providerModelId ?? models[0]?.id ?? "";
-    const activeModel = models.find((model) => model.id === modelId);
+    const eligibleProviders = providers.filter((item) => isAiProviderEligible(item.provider, binding.useCase));
+    const activeProvider = eligibleProviders.find((item) => item.id === provider?.id);
+    const providerId = activeProvider?.id ?? "";
+    const providerModels = provider ? modelsByProvider[provider.provider] ?? [] : [];
+    const models = activeProvider ? getSelectableAiModels(activeProvider.provider, binding.useCase, providerModels) : [];
+    const modelId = models.find((model) => model.id === binding.providerModelId)?.id ?? "";
+    const activeModel = providerModels.find((model) => model.id === binding.providerModelId);
     return (
       <div key={binding.useCase} className="rounded-xl border border-border bg-background/45 p-4 shadow-sm transition-colors hover:border-border/80">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -596,25 +604,34 @@ export function AiSettingsDashboard() {
           <div className="min-w-0 rounded-lg border border-border bg-card px-3 py-2 text-xs">
             <p className="font-medium text-muted-foreground">Current</p>
             <p className="mt-1 truncate font-semibold text-foreground">{activeModel?.displayName ?? binding.modelDisplayName ?? "No model selected"}</p>
-            <p className="mt-0.5 truncate text-muted-foreground">{activeProvider?.label ?? binding.providerLabel ?? "No provider"} · {binding.resolvedSource}</p>
+            <p className="mt-0.5 truncate text-muted-foreground">{provider?.label ?? binding.providerLabel ?? "No provider"} · {binding.resolvedSource}</p>
           </div>
         </div>
         <div className="mt-4 grid gap-3 border-t border-border pt-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Provider</Label>
-            <Select value={providerId} onChange={(event) => {
-              const nextProvider = providers.find((item) => item.id === event.target.value);
-              const nextModel = nextProvider ? (modelsByProvider[nextProvider.provider] ?? [])[0] : null;
+            <Select value={providerId} disabled={busyKey !== null} onChange={(event) => {
+              const nextProvider = eligibleProviders.find((item) => item.id === event.target.value);
+              const nextModel = nextProvider ? getSelectableAiModels(nextProvider.provider, binding.useCase, modelsByProvider[nextProvider.provider] ?? [])[0] : null;
               if (nextProvider && nextModel) {
                 void handleUseCaseChange(binding.useCase, nextProvider.id, nextModel.id, binding.settingsJson);
               }
             }}>
-              {providers.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              <option value="" disabled>Select a provider</option>
+              {eligibleProviders.map((item) => (
+                <option key={item.id} value={item.id} disabled={!item.isEnabled || getSelectableAiModels(item.provider, binding.useCase, modelsByProvider[item.provider] ?? []).length === 0}>
+                  {item.label}{!item.isEnabled ? " (enable and save first)" : ""}
+                </option>
+              ))}
             </Select>
+            {provider && !provider.isEnabled ? (
+              <p className="text-xs text-muted-foreground">Enable and save {provider.label} above before changing its model binding.</p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label>Model</Label>
-            <Select value={modelId} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value, binding.settingsJson)}>
+            <Select value={modelId} disabled={busyKey !== null || !activeProvider?.isEnabled || models.length === 0} onChange={(event) => activeProvider && void handleUseCaseChange(binding.useCase, activeProvider.id, event.target.value, binding.settingsJson)}>
+              <option value="" disabled>{models.length === 0 ? "Fetch accessible models first" : "Select a model"}</option>
               {models.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
             </Select>
           </div>
@@ -696,6 +713,16 @@ export function AiSettingsDashboard() {
                     value={draft.apiKey}
                     onChange={(event) => setProviderDraft(provider.provider, { apiKey: event.target.value })}
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id={`provider-enabled-${provider.provider}`}
+                    type="checkbox"
+                    checked={draft.isEnabled}
+                    disabled={busyKey !== null}
+                    onChange={(event) => setProviderDraft(provider.provider, { isEnabled: event.target.checked })}
+                  />
+                  <Label htmlFor={`provider-enabled-${provider.provider}`}>Enabled (save to apply)</Label>
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <Button variant="outline" onClick={() => handleSaveProvider(provider.provider)} disabled={busyKey !== null}>Save</Button>

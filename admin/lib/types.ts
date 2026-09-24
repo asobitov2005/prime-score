@@ -285,7 +285,7 @@ export interface AdminTranscriptSegment {
   needsReview?: boolean;
 }
 
-export type AiProvider = "google" | "cerebras" | "groq";
+export type AiProvider = "google" | "cerebras" | "groq" | "gpu_uz";
 export type AiUseCase =
   | "admin_chat"
   | "writing_grader"

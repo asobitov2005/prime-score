@@ -136,6 +136,8 @@ def _call_grader(
     prompt: str,
     essay_text: str,
     seed: int,
+    usage_collector: list[AiUsageEventDraft] | None = None,
+    operation: str = "writing_grader",
 ) -> _GraderPayload:
     from app.services.writing_checker_part_08 import _repair_grader_json
 
@@ -171,6 +173,8 @@ def _call_grader(
                 response_mime_type="application/json",
                 response_schema=_response_schema(),
                 seed=seed,
+                usage_collector=usage_collector,
+                operation=operation,
             )
         if not raw_text:
             last_error = RuntimeError("Empty response from grader")
@@ -188,6 +192,9 @@ def _call_grader(
                 client=client,
                 raw_text=raw_text,
                 seed=seed,
+                grounding_context=system_instruction + "\n\n" + prompt,
+                usage_collector=usage_collector,
+                operation=operation + "_repair",
             )
             if repaired_text:
                 try:
@@ -200,6 +207,7 @@ def _call_grader(
             continue
         except ValueError as exc:
             last_error = exc
+            prompt += f"\nOUTPUT VALIDATION FAILED: {exc}. Regenerate the complete response using only supported evidence."
             continue
     raise RuntimeError(f"Grader returned invalid or incomplete payload: {last_error}")
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: F401,F403,F405,E501
 from tests.test_writing_checker_dependencies import *
 
-def test_build_payload_rewrites_generic_summary_and_backfills_vocab() -> None:
+def test_build_payload_preserves_model_summary_and_uses_validated_annotation_vocab() -> None:
     grader = _GraderPayload(
         task_achievement=_CriterionPayload(
             band=6.5,
@@ -69,22 +69,22 @@ def test_build_payload_rewrites_generic_summary_and_backfills_vocab() -> None:
         latency_ms=12,
     )
 
-    assert "strongest area" in payload["feedback"]["overall_summary"].lower()
-    assert "weakest" in payload["feedback"]["overall_summary"].lower() or "score limit" in payload["feedback"]["overall_summary"].lower()
+    assert payload["feedback"]["overall_summary"] == grader.overall_summary
     assert len(payload["feedback"]["next_steps"]) == 3
     assert payload["feedback"]["next_steps"][0].startswith("Replace 'very big problem'")
     assert payload["feedback"]["vocabulary_suggestions"] == [
         {
             "current_phrase": "very big problem",
             "improved_phrase": "pressing concern",
-            "level": "C1",
+            "level": "",
             "why_it_works": "The phrase is understandable but too plain for a stronger IELTS lexical profile.",
             "example_sentence": "Traffic congestion has become a pressing concern in many large cities.",
         }
     ]
     assert payload["grammar_band"] == 5.0
-    assert payload["evaluation_run"]["confidence"]
-    assert "possible_score_range" in payload["evaluation_run"]
+    assert payload["word_count_penalty"] == 0
+    assert payload["evaluation_run"]["confidence"] == ""
+    assert payload["evaluation_run"]["possible_score_range"] == ""
 
 def test_writing_criteria_are_whole_bands_only() -> None:
     assert round_criterion_band(5.0) == 5.0

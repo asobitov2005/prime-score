@@ -26,7 +26,7 @@ def _valid_grader_json() -> str:
         "summary": "Main points are present.",
         "strengths": ["Relevant overview"],
         "improvements": ["Add one clearer comparison"],
-        "evidence_quotes": ["overall, sales increased"]
+        "evidence_quotes": ["complete essay"]
       },
       "coherence": {
         "band": 6.0,
@@ -34,7 +34,7 @@ def _valid_grader_json() -> str:
         "summary": "Flow is generally easy to follow.",
         "strengths": ["Clear grouping"],
         "improvements": ["Use transitions more precisely"],
-        "evidence_quotes": ["In contrast"]
+        "evidence_quotes": ["enough words"]
       },
       "lexical": {
         "band": 6.0,
@@ -42,7 +42,7 @@ def _valid_grader_json() -> str:
         "summary": "Word choice is serviceable.",
         "strengths": ["Some topic terms"],
         "improvements": ["Avoid repeating common verbs"],
-        "evidence_quotes": ["rose gradually"]
+        "evidence_quotes": ["real attempt"]
       },
       "grammar": {
         "band": 6.0,
@@ -50,7 +50,7 @@ def _valid_grader_json() -> str:
         "summary": "Grammar errors do not block meaning.",
         "strengths": ["Some accurate complex clauses"],
         "improvements": ["Tighten article usage"],
-        "evidence_quotes": ["the number of"]
+        "evidence_quotes": ["This is"]
       },
       "overall_summary": "A competent response with room for sharper detail.",
       "next_steps": ["Add one precise data comparison", "Vary linkers"],
@@ -183,7 +183,7 @@ def test_call_grader_caps_groq_output_tokens(monkeypatch: pytest.MonkeyPatch) ->
     assert payload.task_achievement.band == 6.0
     assert seen["max_output_tokens"] == 2048
 
-def test_groq_prompt_path_is_compact() -> None:
+def test_groq_prompt_preserves_full_references() -> None:
     config = _groq_resolved_config()
     rubric = SimpleNamespace(
         body=(
@@ -201,7 +201,7 @@ def test_groq_prompt_path_is_compact() -> None:
         ),
         version=1,
     )
-    prompts = SimpleNamespace(entries={})
+    prompts = SimpleNamespace(entries=dict(DEFAULT_PROMPT_ENTRIES))
     anchors = SimpleNamespace(
         items=[
             {
@@ -235,9 +235,9 @@ def test_groq_prompt_path_is_compact() -> None:
     )
 
     assert "strict json response schema" not in prompt.lower()
-    assert "Long anchor essay" not in prompt
-    assert "inline_annotations: return []" in prompt
-    assert "Task Response bands ->" in system
+    assert "Long anchor essay" in prompt
+    assert "inline_annotations: return []" not in prompt
+    assert rubric.body in system
 
 def test_skip_groq_aux_calls() -> None:
     assert _skip_groq_aux_call(_groq_resolved_config()) is True

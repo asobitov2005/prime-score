@@ -87,7 +87,7 @@ def supports_use_case_binding(capabilities: dict[str, Any], use_case: AiUseCase,
         AiUseCase.WRITING_IMPROVER,
         AiUseCase.WRITING_ROAST,
     }:
-        return provider in {AiProvider.GOOGLE, AiProvider.CEREBRAS, AiProvider.GROQ}
+        return provider in {AiProvider.GOOGLE, AiProvider.CEREBRAS, AiProvider.GROQ, AiProvider.GPU_UZ} and bool(capabilities.get("generate_content", True))
     if use_case == AiUseCase.ADMIN_CHAT:
         return provider in {AiProvider.GOOGLE, AiProvider.CEREBRAS}
     if use_case == AiUseCase.WRITING_IMAGE_SUMMARY:
@@ -161,6 +161,8 @@ async def resolve_ai_use_case_config(
             and provider_config.is_enabled
             and provider_model.is_selectable
             and provider_model.is_accessible
+            and provider_model.provider_config_id == provider_config.id
+            and supports_use_case_binding(dict(provider_model.capabilities or {}), use_case, provider_config.provider)
             and (has_provider_credentials or can_use_vertex)
         ):
             resolved = ResolvedAiUseCaseConfig(
@@ -178,6 +180,8 @@ async def resolve_ai_use_case_config(
             )
             _resolver_cache[cache_key] = (time.monotonic() + RESOLVER_TTL_SECONDS, resolved)
             return resolved
+        if provider_config is not None and provider_config.provider == AiProvider.GPU_UZ:
+            raise RuntimeError(f"The configured GPU.uz binding is unavailable for {use_case.value}. Enable the provider and select an accessible compatible model.")
 
     api_key = (settings.gemini_api_key or "").strip()
     if not api_key and not settings.google_genai_use_vertexai:

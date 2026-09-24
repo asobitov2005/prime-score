@@ -23,6 +23,11 @@ async def validate_provider_credentials(
     key = (api_key or "").strip()
     if not key and not (provider == AiProvider.GOOGLE and _is_vertex_google_enabled()):
         raise RuntimeError("API key is required.")
+    if provider == AiProvider.GPU_UZ:
+        from app.services.gpu_uz import list_models
+
+        models = await list_models(api_key=key, base_url=base_url)
+        return {"ok": True, "provider": provider.value, "models_seen": len(models)}
     if provider == AiProvider.GOOGLE:
         client = build_google_client(
             ResolvedAiUseCaseConfig(
@@ -88,6 +93,10 @@ async def sync_provider_models(
             models_payload = await _sync_google_models(provider_config)
         elif provider_config.provider == AiProvider.CEREBRAS:
             models_payload = await _sync_cerebras_models(provider_config)
+        elif provider_config.provider == AiProvider.GPU_UZ:
+            from app.services.gpu_uz import list_models
+
+            models_payload = await list_models(api_key=provider_config.api_key, base_url=provider_config.base_url)
         else:
             from app.services.ai_config_part_03 import _sync_groq_models
 

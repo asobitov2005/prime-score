@@ -9,6 +9,9 @@ from app.services.writing_checker_part_04 import _build_grading_prompt, _build_s
 from app.services.writing_checker_part_07 import _call_grader, _dedupe_annotations, _validate_annotations
 from app.services.writing_checker_part_08 import _call_annotation_recovery, _generate_improved_version
 from app.services.writing_checker_part_09 import _build_payload
+from app.services.writing_prompt_grounding import OFFICIAL_DESCRIPTOR_SOURCE, SOURCE_PDF_SHA256, build_writing_grounding_context
+from app.services.writing_checker_task_fit import check_task_fit
+from app.services.writing_input_validation import WritingInputRejected
 
 def grade_essay_sync(
     *,
@@ -25,9 +28,20 @@ def grade_essay_sync(
     anchors: WritingAnchorBundle,
     descriptors: WritingDescriptorBundle | None = None,
     benchmarks: WritingBenchmarkCardBundle | None = None,
+    usage_collector: list[AiUsageEventDraft] | None = None,
 ) -> dict[str, Any]:
+    usage_events = usage_collector if usage_collector is not None else []
+    usage_start = len(usage_events)
     task_type_value = (
         task.task_type.value if isinstance(task.task_type, WritingTaskType) else str(task.task_type)
+    )
+    grounding_context = build_writing_grounding_context(
+        task_type=task_type_value,
+        task_prompt_text=_strip_html(task.prompt_html or ""),
+        image_summary=task.image_summary or "",
+        essay_text=essay_text,
+        descriptors=descriptors,
+        benchmarks=benchmarks,
     )
     system_instruction = _build_system_instruction(
         prompts=prompts,
@@ -48,13 +62,20 @@ def grade_essay_sync(
     seed = _seed_from_hash(essay_hash)
 
     started = time.perf_counter()
+    task_fit = check_task_fit(
+        config=grader_config, grounding_context=grounding_context,
+        essay_text=essay_text, task_prompt_text=_strip_html(task.prompt_html or ""),
+        seed=seed, usage_collector=usage_events,
+    )
+    grading_context = grounding_context + "\nTASK-FIT PREFLIGHT (model finding, not a band):\n" + json.dumps(task_fit)
     grader = _call_grader(
         resolved_config=grader_config,
         prompts=prompts,
         system_instruction=system_instruction,
-        prompt=prompt,
+        prompt=prompt + "\n\n" + grading_context,
         essay_text=essay_text,
         seed=seed,
+        usage_collector=usage_events,
     )
     grader_annotations = _validate_annotations(grader.inline_annotations, essay_text)
     annotation_hints = [
@@ -70,12 +91,13 @@ def grade_essay_sync(
         ),
     ]
     annotations = grader_annotations
-    if _skip_groq_aux_call(grader_config):
-        annotations = _dedupe_annotations(grader_annotations)
-        logger.info(
-            "Skipping annotation recovery for Groq writing grader to stay within provider TPM limits."
-        )
-    else:
+    annotations_valid = (
+        "inline_annotations" in grader.model_fields_set
+        and len(grader_annotations) == len(grader.inline_annotations)
+        and all(item["original"].strip() and item["explanation"].strip() for item in grader_annotations)
+    )
+    # A valid empty list is a legitimate finding, not a reason to invent errors.
+    if not annotations_valid:
         try:
             recovered_annotations = _call_annotation_recovery(
                 resolved_config=grader_config,
@@ -83,6 +105,8 @@ def grade_essay_sync(
                 essay_text=essay_text,
                 hints=[hint for hint in annotation_hints if hint],
                 seed=seed + 17,
+                grounding_context=grounding_context,
+                usage_collector=usage_events,
             )
             annotations = _dedupe_annotations(
                 _validate_annotations(recovered_annotations, essay_text) + grader_annotations
@@ -110,98 +134,134 @@ def grade_essay_sync(
         descriptors=descriptors,
         benchmarks=benchmarks,
     )
+    payload["evaluation_run"]["audit_result"]["evidence_validation"] = {
+        "status": "passed",
+        "checks": ["integer_criteria", "required_justifications", "verbatim_criterion_quotes"],
+        "semantic_agreement": "not_measured",
+    }
+    payload["feedback"]["task_fit"] = task_fit
+    payload["evaluation_run"]["initial_scores"]["task_fit"] = task_fit
+    payload["evaluation_run"]["audit_result"]["task_fit"] = task_fit
+    payload["evaluation_run"]["initial_scores"]["reference_context"] = {
+        "official_descriptors": {
+            "source_url": OFFICIAL_DESCRIPTOR_SOURCE,
+            "revision": "May 2023",
+            "source_pdf_sha256": SOURCE_PDF_SHA256,
+            "text": "verbatim_extraction_checksum_verified",
+        },
+        "descriptor_origin": "configured" if descriptors is not None else "legacy_local_reference",
+        "benchmark_card_ids": [
+            card["card_id"] for card in (benchmarks.items if benchmarks else [])
+            if card.get("task_type_scope", task_type_value) in (task_type_value, "all")
+        ],
+        "benchmark_usage": "provided_as_references_not_calibrated",
+    }
 
     improved_text: str | None = None
     potential_band: float | None = None
-    if _skip_groq_aux_call(improver_config):
-        logger.info(
-            "Skipping improved-version generation for Groq writing improver to stay within provider TPM limits."
+    regrade_enabled = (improver_config.settings_json or {}).get("regrade_improved_version") is True
+    try:
+        improved_text = _generate_improved_version(
+            resolved_config=improver_config,
+            prompts=prompts,
+            essay_text=essay_text,
+            annotations=annotations,
+            task_prompt_text=_strip_html(task.prompt_html or ""),
+            overall_band=payload["overall_band"],
+            desired_score=desired_score,
+            word_count=word_count,
+            word_minimum=word_minimum,
+            grounding_context=grading_context,
+            feedback=payload["feedback"],
+            usage_collector=usage_events,
         )
-    else:
-        try:
-            improved_text = _generate_improved_version(
-                resolved_config=improver_config,
-                prompts=prompts,
-                essay_text=essay_text,
-                annotations=annotations,
+        if regrade_enabled and improved_text and improved_text.strip() != essay_text.strip():
+            regrade_context = build_writing_grounding_context(
+                task_type=task_type_value,
                 task_prompt_text=_strip_html(task.prompt_html or ""),
-                overall_band=payload["overall_band"],
-                desired_score=desired_score,
-                word_count=word_count,
-                word_minimum=word_minimum,
+                image_summary=task.image_summary or "",
+                essay_text=improved_text,
+                descriptors=descriptors,
+                benchmarks=benchmarks,
             )
-            if improved_text and improved_text != essay_text:
-                if _skip_groq_aux_call(grader_config):
-                    logger.info(
-                        "Skipping Groq improved-version regrade to stay within provider TPM limits."
-                    )
-                    potential_band = None
-                else:
-                    regrade_prompt = _build_grading_prompt(
-                        prompts=prompts,
-                        anchors=anchors,
-                        task_type=task_type_value,
-                        task_prompt_text=_strip_html(task.prompt_html or ""),
-                        image_summary=task.image_summary or "",
-                        essay_text=improved_text,
-                        desired_score=desired_score,
-                    )
-                    improved_seed = _seed_from_hash(
-                        hashlib.sha256(improved_text.encode("utf-8")).hexdigest()
-                    )
-                    regrade = _call_grader(
-                        resolved_config=grader_config,
-                        prompts=prompts,
-                        system_instruction=system_instruction,
-                        prompt=regrade_prompt,
-                        essay_text=improved_text,
-                        seed=improved_seed,
-                    )
-                    potential_band = calculate_overall_band(
-                        round_to_ielts_band(regrade.task_achievement.band),
-                        round_to_ielts_band(regrade.coherence.band),
-                        round_to_ielts_band(regrade.lexical.band),
-                        round_to_ielts_band(regrade.grammar.band),
-                    )
-                    potential_band = round_to_ielts_band(
-                        min(potential_band, payload["overall_band"] + 1.0)
-                    )
-            else:
-                potential_band = payload["overall_band"]
-        except Exception:  # noqa: BLE001
-            logger.exception("Improved version generation failed")
-            improved_text = None
-            potential_band = None
-
+            regrade_prompt = _build_grading_prompt(
+                prompts=prompts,
+                anchors=anchors,
+                resolved_config=grader_config,
+                task_type=task_type_value,
+                task_prompt_text=_strip_html(task.prompt_html or ""),
+                image_summary=task.image_summary or "",
+                essay_text=improved_text,
+            )
+            try:
+                regrade = _call_grader(
+                    resolved_config=grader_config,
+                    prompts=prompts,
+                    system_instruction=system_instruction,
+                    prompt=regrade_prompt + "\n\n" + regrade_context,
+                    essay_text=improved_text,
+                    seed=_seed_from_hash(hashlib.sha256(improved_text.encode("utf-8")).hexdigest()),
+                    usage_collector=usage_events,
+                    operation="writing_rewrite_regrade",
+                )
+                potential_band = calculate_overall_band(
+                    round_criterion_band(regrade.task_achievement.band),
+                    round_criterion_band(regrade.coherence.band),
+                    round_criterion_band(regrade.lexical.band),
+                    round_criterion_band(regrade.grammar.band),
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("Improved version regrade failed; keeping original bands and rewrite")
+    except Exception:  # noqa: BLE001
+        logger.exception("Improved version generation failed")
     payload["improved_version"] = improved_text
     payload["potential_band"] = potential_band
+    payload["evaluation_run"]["audit_result"]["rewrite_regrade"] = (
+        "completed" if potential_band is not None else "not_performed_or_unavailable"
+    )
 
     # Roast feedback: completely independent call, must NOT affect bands.
-    if _skip_groq_aux_call(roast_config):
+    try:
+        roast = generate_roast(
+            resolved_config=roast_config,
+            prompts=prompts,
+            essay_text=essay_text,
+            bands={
+                "task_achievement": payload["task_achievement_band"],
+                "coherence": payload["coherence_band"],
+                "lexical": payload["lexical_band"],
+                "grammar": payload["grammar_band"],
+                "overall": payload["overall_band"],
+            },
+            word_count=word_count,
+            word_minimum=word_minimum,
+            annotation_count=len(annotations),
+            overall_summary=payload["feedback"].get("overall_summary", ""),
+            task_type=task_type_value,
+            task_prompt_text=_strip_html(task.prompt_html or ""),
+            image_summary=task.image_summary or "",
+            usage_collector=usage_events,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Roast generation crashed; ignoring.")
         roast = {}
-        logger.info("Skipping Groq roast generation to stay within provider TPM limits.")
-    else:
-        try:
-            roast = generate_roast(
-                resolved_config=roast_config,
-                prompts=prompts,
-                essay_text=essay_text,
-                bands={
-                    "task_achievement": payload["task_achievement_band"],
-                    "coherence": payload["coherence_band"],
-                    "lexical": payload["lexical_band"],
-                    "grammar": payload["grammar_band"],
-                    "overall": payload["overall_band"],
-                },
-                word_count=word_count,
-                word_minimum=word_minimum,
-                annotation_count=len(annotations),
-                overall_summary=payload["feedback"].get("overall_summary", ""),
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("Roast generation crashed; ignoring.")
-            roast = {}
     payload["roast_feedback"] = roast or {}
+    payload["latency_ms"] = int((time.perf_counter() - started) * 1000)
+    # Persist in the existing evaluation-run JSON, without requiring a usage table.
+    payload["evaluation_run"]["audit_result"]["stage_metrics"] = [
+        {
+            "operation": event.operation, "status": event.status,
+            "provider": event.provider.value, "model_id": event.model_id,
+            "latency_ms": event.latency_ms,
+            "prompt_tokens": event.prompt_tokens,
+            "completion_tokens": event.completion_tokens,
+            "total_tokens": event.total_tokens,
+            "estimated_input_tokens": event.estimated_input_tokens,
+            "requested_output_tokens": event.requested_output_tokens,
+            "effective_output_tokens": event.effective_output_tokens,
+        }
+        for event in usage_events[usage_start:]
+    ]
 
     return payload
 

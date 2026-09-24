@@ -24,6 +24,7 @@ import { fetchAdminApi } from "@/lib/auth";
 import { ADMIN_PUBLIC_API_BASE_URL } from "@/lib/public-api";
 import { normalizeAdminTestSourceDetail } from "@/lib/test-source";
 import { sanitizeAdminQuestionGroupOptionFields } from "@/lib/question-group-options";
+import { getAiProviderLabel } from "@/lib/ai-providers";
 
 const baseUrl = ADMIN_PUBLIC_API_BASE_URL;
 
@@ -258,7 +259,7 @@ type BackendAdminDraft = {
 
 type BackendAdminAiProviderConfig = {
   id: string;
-  provider: "google" | "cerebras" | "groq";
+  provider: AdminAiProviderConfig["provider"];
   label: string;
   api_key_masked?: string | null;
   has_api_key: boolean;
@@ -919,7 +920,7 @@ function mapAdminAiProviderConfig(config: BackendAdminAiProviderConfig): AdminAi
   return {
     id: config.id,
     provider: config.provider,
-    label: config.label,
+    label: getAiProviderLabel(config.provider, config.label),
     apiKeyMasked: config.api_key_masked ?? null,
     hasApiKey: config.has_api_key,
     baseUrl: config.base_url ?? null,

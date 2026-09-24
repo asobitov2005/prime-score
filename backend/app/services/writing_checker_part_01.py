@@ -132,18 +132,3 @@ class _GraderPayload(BaseModel):
 _ANNOTATION_LIST_ADAPTER = TypeAdapter(list[_AnnotationPayload])
 
 _VOCAB_MAX_COUNT = 8
-
-_GENERIC_PATTERNS = (
-    "improve grammar",
-    "improve your grammar",
-    "use better vocabulary",
-    "improve vocabulary",
-    "develop your ideas",
-    "be more specific",
-    "give more details",
-    "add more examples",
-    "work on coherence",
-    "more practice",
-    "practice more",
-    "clear response with room for improvement",
-)

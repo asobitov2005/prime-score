@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: F401,F403,F405,E501
 from app.services.writing_blueprint_dependencies import *
 
-PIPELINE_VERSION = "blueprint_v1"
+PIPELINE_VERSION = "grounded_v2"
 
 CRITERION_KEYS = ("task_achievement", "coherence", "lexical", "grammar")
 
@@ -14,11 +14,13 @@ CRITERION_LABELS = {
     "grammar": "Grammatical Range & Accuracy",
 }
 
+@dataclass
 class WritingDescriptorBundle:
     version: int
     task_type_scope: WritingTaskTypeScope
     items: list[dict[str, Any]]
 
+@dataclass
 class WritingBenchmarkCardBundle:
     version: int
     task_type_scope: WritingTaskTypeScope

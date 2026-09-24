@@ -30,11 +30,7 @@ def _build_payload(
     overall_pre_penalty = calculate_overall_band(ta, cc, lr, gra)
 
     penalty = 0.0
-    if word_minimum > 0:
-        if word_count < word_minimum * 0.6:
-            penalty = 1.0
-        elif word_count < word_minimum:
-            penalty = 0.5
+    # Underlength limitations are assessed once through the descriptors.
 
     overall_after_penalty = max(0.0, min(9.0, overall_pre_penalty - penalty))
     overall_after_penalty = round_to_ielts_band(overall_after_penalty)

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from uuid import UUID
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from app.api.routes import writing as writing_routes
 from app.models.enums import WritingSubmissionStatus, WritingTaskType
@@ -23,6 +25,23 @@ class _FakeSession:
 
     async def commit(self) -> None:
         self.commits += 1
+
+
+@pytest.mark.asyncio
+async def test_rejected_input_cannot_retry_unchanged(monkeypatch):
+    user_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    submission = SimpleNamespace(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), user_id=user_id,
+        status=WritingSubmissionStatus.FAILED,
+        error_message="WRITING_INPUT_REJECTED: Only the task question was supplied.",
+    )
+    session = _FakeSession(submission)
+    with pytest.raises(HTTPException) as error:
+        await writing_routes.retry_submission(submission_id=submission.id,
+                                             current_user=SimpleNamespace(id=user_id), session=session)
+    assert error.value.status_code == 422
+    assert session.commits == 0
+    assert submission.status == WritingSubmissionStatus.FAILED
 
 
 @pytest.mark.asyncio

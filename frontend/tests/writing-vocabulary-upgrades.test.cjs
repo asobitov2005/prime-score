@@ -3,15 +3,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-test("writing result UI exposes natural C1/C2 upgrade panel", () => {
+test("writing result UI exposes all vocabulary suggestions with rationale", () => {
   const filename = path.join(
     __dirname,
-    "../app/(app)/writing/submissions/[submissionId]/result/result-client.tsx",
+    "../components/writing/writing-result-report.tsx",
   );
   const source = fs.readFileSync(filename, "utf8");
 
-  assert.match(source, /Natural C1\/C2 upgrades \(/);
-  assert.match(source, /Compact upgrades with one example sentence each\./);
+  assert.match(source, /Vocabulary suggestions/);
+  assert.match(source, /suggestion\.why_it_works/);
+  assert.doesNotMatch(source, /vocabulary_suggestions\.slice/);
   assert.match(source, /Strongest area/);
   assert.match(source, /Main score limiter/);
 });

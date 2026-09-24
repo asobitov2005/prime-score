@@ -160,7 +160,7 @@ async def get_submission_result(
         revision_diff=revision_diff,
         roast=roast,
         is_ai_estimate=True,
-        confidence=evaluation_run.confidence if evaluation_run else "Medium",
+        confidence=evaluation_run.confidence if evaluation_run else "",
         possible_score_range=evaluation_run.possible_score_range if evaluation_run else "",
         selected_benchmarks=evaluation_run.selected_benchmarks if evaluation_run else [],
         calibration_result=evaluation_run.calibration_result if evaluation_run else {},

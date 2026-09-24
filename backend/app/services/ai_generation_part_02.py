@@ -63,6 +63,8 @@ def generate_text_sync(
 
         if config.provider == AiProvider.CEREBRAS:
             client = build_cerebras_client(config)
+        elif config.provider == AiProvider.GPU_UZ:
+            client = None
         else:
             client = build_groq_client(config)
         messages = []
@@ -89,16 +91,20 @@ def generate_text_sync(
             kwargs["response_format"] = {"type": "json_object"}
         if seed is not None:
             kwargs["seed"] = seed
-        try:
-            completion = client.chat.completions.create(
-                max_completion_tokens=effective_max_output_tokens,
-                **kwargs,
+        if config.provider == AiProvider.GPU_UZ:
+            from app.services.gpu_uz import generate_completion
+
+            if config.context_window and estimated_input_tokens + 256 >= config.context_window:
+                raise RuntimeError("Writing context exceeds the model limit; the essay was not truncated.")
+            completion = generate_completion(
+                api_key=config.api_key, base_url=config.base_url, model=config.model_id,
+                messages=messages, max_tokens=effective_max_output_tokens,
+                temperature=temperature, top_p=top_p, response_schema=response_schema,
+                json_mode=response_mime_type == "application/json", seed=seed,
+                timeout_seconds=float((config.settings_json or {}).get("http_timeout_ms", 120000)) / 1000,
             )
-        except TypeError:
-            completion = client.chat.completions.create(
-                max_tokens=effective_max_output_tokens,
-                **kwargs,
-            )
+        else:
+            completion = _create_compatible_completion(client, effective_max_output_tokens, kwargs)
         message = completion.choices[0].message
         text = str(getattr(message, "content", "") or "").strip()
         _append_usage_event(
@@ -132,6 +138,19 @@ def generate_text_sync(
             autofit_applied=autofit_applied,
         )
         raise
+
+
+def _create_compatible_completion(client: Any, effective_max_output_tokens: int, kwargs: dict[str, Any]) -> Any:
+    try:
+        return client.chat.completions.create(
+            max_completion_tokens=effective_max_output_tokens,
+            **kwargs,
+        )
+    except TypeError:
+        return client.chat.completions.create(
+            max_tokens=effective_max_output_tokens,
+            **kwargs,
+        )
 
 def generate_image_text_sync(
     *,

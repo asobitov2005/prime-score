@@ -4,18 +4,21 @@ from __future__ import annotations
 from app.services.writing_config_dependencies import *
 from app.services.writing_config_part_01 import DEFAULT_PROMPT_ENTRIES, DEFAULT_RUBRIC_VERSION, _format_anchors_block, _replace_tokens, _scope_for_task_type
 
+@dataclass
 class WritingPromptBundle:
     profile_id: UUID | None
     profile_version: int
     task_type_scope: WritingTaskTypeScope
     entries: dict[WritingPromptKey, str]
 
+@dataclass
 class WritingRubricBundle:
     rubric_id: UUID | None
     version: int
     task_type_scope: WritingTaskTypeScope
     body: str
 
+@dataclass
 class WritingAnchorBundle:
     anchor_set_id: UUID | None
     version: int
