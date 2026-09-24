@@ -36,9 +36,9 @@ def install_gpu(monkeypatch, responder):
 
     def completion(**kwargs):
         calls.append(kwargs)
-        if "assessability" in (getattr(kwargs.get("response_schema"), "properties", None) or {}):
+        if "response_kind" in (getattr(kwargs.get("response_schema"), "properties", None) or {}):
             value = json.dumps({
-                "assessability": "assessable", "response_kind": "answer", "task_relation": "on_task",
+                "response_kind": "answer", "task_relation": "on_task",
                 "explanation": "The answer compares the assigned journeys.",
                 "essay_evidence": [SYNTHETIC_ESSAY.split(".")[0]], "task_evidence": [SYNTHETIC_TASK],
             })

@@ -16,7 +16,6 @@ TASK = "Discuss the advantages and disadvantages of public transport."
 
 def verdict(essay, *, relation="on_task", kind="answer", task=TASK):
     return {
-        "assessability": "assessable" if kind == "answer" else "no_assessable_answer",
         "response_kind": kind, "task_relation": relation,
         "explanation": "The submitted text was compared with the assigned task and its requirements.",
         "essay_evidence": [essay] if essay else [], "task_evidence": [task],
@@ -37,7 +36,20 @@ def test_prompt_only_rejected_without_numeric_band(monkeypatch, essay):
         fit.check_task_fit(config=None, grounding_context="Full context", essay_text=essay, task_prompt_text=TASK, seed=1)
     assert str(error.value).startswith("WRITING_INPUT_REJECTED: ")
     assert error.value.retryable is False and len(calls) == 1
+    assert error.value.task_fit["assessability"] == "no_assessable_answer"
     assert "band" not in error.value.task_fit
+
+
+def test_task_fit_schema_has_one_response_classification():
+    schema = fit._task_fit_schema()
+    assert "response_kind" in schema.required
+    assert "assessability" not in schema.properties
+
+
+def test_unknown_response_kind_never_becomes_a_rejection(monkeypatch):
+    monkeypatch.setattr(fit, "generate_text_sync", lambda **_: json.dumps(verdict(TASK, kind="unknown")))
+    with pytest.raises(RuntimeError, match="Invalid task-fit preflight output"):
+        fit.check_task_fit(config=None, grounding_context="Full context", essay_text=TASK, task_prompt_text=TASK, seed=1)
 
 
 @pytest.mark.parametrize("essay, relation", [

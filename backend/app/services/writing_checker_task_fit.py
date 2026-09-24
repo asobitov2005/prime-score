@@ -14,7 +14,6 @@ from app.services.writing_prompt_grounding import GROUNDING_POLICY
 
 class _TaskFitVerdict(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    assessability: Literal["assessable", "no_assessable_answer"]
     response_kind: Literal["answer", "prompt_only", "other_unassessable"]
     task_relation: Literal["on_task", "partial", "off_topic", "wrong_task", "uncertain"]
     explanation: str = Field(min_length=1)
@@ -27,7 +26,6 @@ def _task_fit_schema() -> genai_types.Schema:
         type=genai_types.Type.OBJECT,
         required=list(_TaskFitVerdict.model_fields),
         properties={
-            "assessability": genai_types.Schema(type=genai_types.Type.STRING, enum=["assessable", "no_assessable_answer"]),
             "response_kind": genai_types.Schema(type=genai_types.Type.STRING, enum=["answer", "prompt_only", "other_unassessable"]),
             "task_relation": genai_types.Schema(type=genai_types.Type.STRING, enum=["on_task", "partial", "off_topic", "wrong_task", "uncertain"]),
             "explanation": genai_types.Schema(type=genai_types.Type.STRING),
@@ -39,9 +37,10 @@ def _task_fit_schema() -> genai_types.Schema:
 
 TASK_FIT_INSTRUCTION = """Validate whether the candidate submitted an answer, then assess its relationship
 to the assigned task. This is a task-fit preflight, NOT band scoring. Return JSON
-with assessability, response_kind, task_relation, explanation, essay_evidence,
+with response_kind, task_relation, explanation, essay_evidence,
 task_evidence. Evidence arrays must quote exact text from their respective sources.
-Use no_assessable_answer/prompt_only only when there is no candidate answer:
+Choose exactly one response_kind; do not output a separate assessability decision.
+Use prompt_only only when there is no candidate answer:
 the input merely supplies or copies/paraphrases a question, rubric or instructions.
 Other input with no assessable response may use other_unassessable; explain why.
 An attempted answer is assessable even if very short, weak, incomplete, irrelevant,
@@ -88,12 +87,13 @@ def check_task_fit(*, config, grounding_context: str, essay_text: str, task_prom
                     raise ValueError(f"Missing {name} evidence")
                 if any(not quote.strip() or quote not in source for quote in quotes):
                     raise ValueError(f"Non-verbatim {name} evidence")
-            if (verdict.assessability == "assessable") != (verdict.response_kind == "answer"):
-                raise ValueError("Inconsistent assessability and response kind")
-            result = {**verdict.model_dump(), "source": "model_task_fit_preflight", "evidence_validation": "verbatim_spans",
-                      "verdict": verdict.task_relation if verdict.assessability == "assessable" else verdict.response_kind,
+            # Assessability is redundant protocol metadata, not another model decision.
+            assessable = verdict.response_kind == "answer"
+            result = {**verdict.model_dump(), "assessability": "assessable" if assessable else "no_assessable_answer",
+                      "source": "model_task_fit_preflight", "evidence_validation": "verbatim_spans",
+                      "verdict": verdict.task_relation if assessable else verdict.response_kind,
                       "evidence_quotes": verdict.essay_evidence}
-            if verdict.assessability == "no_assessable_answer":
+            if not assessable:
                 raise WritingInputRejected(result)
             return result
         except WritingInputRejected:
