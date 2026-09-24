@@ -74,7 +74,7 @@ function mapBackendPlan(payload: BackendPublicPlan): MarketingPlan {
   };
 }
 
-export async function getPublicPlans(options?: { revalidate: number }): Promise<MarketingPlan[]> {
+export async function getPublicPlans(): Promise<MarketingPlan[]> {
   try {
     const baseUrl = getFrontendServerApiBaseUrl();
     const controller = new AbortController();
@@ -82,7 +82,7 @@ export async function getPublicPlans(options?: { revalidate: number }): Promise<
     let response: Response;
     try {
       response = await fetch(`${baseUrl}/plans`, {
-        ...(options ? { next: { revalidate: options.revalidate, tags: ["public-plans"] } } : { cache: "no-store" as const }),
+        cache: "no-store",
         signal: controller.signal,
       });
     } finally {

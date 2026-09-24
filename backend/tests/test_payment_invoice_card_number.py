@@ -160,3 +160,127 @@ async def test_click_replaces_old_manual_invoice(monkeypatch) -> None:
     assert old.status == "canceled"
     assert old.archived_at is not None
     assert payment.provider == "click"
+
+
+@pytest.mark.asyncio
+async def test_click_replaces_pending_invoice_after_plan_price_change(monkeypatch) -> None:
+    monkeypatch.setattr(
+        payment_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            click_service_id=123,
+            click_merchant_id=456,
+            click_secret_key="test-only-secret",
+            payment_paused=False,
+        ),
+    )
+    user = User(id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), telegram_id=123456789, first_name="Aziz")
+    plan = Plan(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        catalog="public",
+        name="1 Month",
+        duration_days=30,
+        price_amount=Decimal("5000"),
+        perks=[],
+        is_active=True,
+        payment_paused=False,
+    )
+    old = Payment(
+        user_id=user.id,
+        plan_id=plan.id,
+        provider="click",
+        amount=Decimal("69000"),
+        status="pending",
+    )
+
+    class ClickSession(_FakeSession):
+        async def scalar(self, _statement):
+            self.scalar_calls += 1
+            return old if self.scalar_calls == 1 else None
+
+    session = ClickSession(None)
+    payment = await create_plan_payment(session, user=user, plan=plan)
+    assert old.status == "canceled"
+    assert old.archived_at is not None
+    assert payment is not old
+    assert payment.amount == Decimal("5000")
+    assert payment.base_amount == Decimal("5000")
+
+
+@pytest.mark.asyncio
+async def test_click_keeps_pending_invoice_when_price_is_unchanged(monkeypatch) -> None:
+    monkeypatch.setattr(
+        payment_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            click_service_id=123,
+            click_merchant_id=456,
+            click_secret_key="test-only-secret",
+            payment_paused=False,
+        ),
+    )
+    user = User(id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), telegram_id=123456789, first_name="Aziz")
+    plan = Plan(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        catalog="public",
+        name="1 Month",
+        duration_days=30,
+        price_amount=Decimal("5000"),
+        perks=[],
+        is_active=True,
+        payment_paused=False,
+    )
+    old = Payment(user_id=user.id, plan_id=plan.id, provider="click", amount=Decimal("5000"), status="pending")
+
+    class ClickSession(_FakeSession):
+        async def scalar(self, _statement):
+            return old
+
+    session = ClickSession(None)
+    payment = await create_plan_payment(session, user=user, plan=plan)
+    assert payment is old
+    assert old.status == "pending"
+    assert session.added == []
+
+
+@pytest.mark.asyncio
+async def test_click_does_not_replace_prepared_invoice_after_price_change(monkeypatch) -> None:
+    monkeypatch.setattr(
+        payment_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            click_service_id=123,
+            click_merchant_id=456,
+            click_secret_key="test-only-secret",
+            payment_paused=False,
+        ),
+    )
+    user = User(id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), telegram_id=123456789, first_name="Aziz")
+    plan = Plan(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        catalog="public",
+        name="1 Month",
+        duration_days=30,
+        price_amount=Decimal("5000"),
+        perks=[],
+        is_active=True,
+        payment_paused=False,
+    )
+    old = Payment(
+        user_id=user.id,
+        plan_id=plan.id,
+        provider="click",
+        provider_reference="123456789",
+        amount=Decimal("69000"),
+        status="pending",
+    )
+
+    class ClickSession(_FakeSession):
+        async def scalar(self, _statement):
+            return old
+
+    session = ClickSession(None)
+    with pytest.raises(ValueError, match="already being processed"):
+        await create_plan_payment(session, user=user, plan=plan)
+    assert old.status == "pending"
+    assert session.added == []

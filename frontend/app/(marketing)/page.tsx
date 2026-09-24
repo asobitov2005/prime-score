@@ -13,7 +13,8 @@ import {
   landingKeywords,
 } from "@/lib/seo";
 
-export const revalidate = 900;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title:
@@ -50,7 +51,7 @@ export const metadata: Metadata = {
 
 export default async function LandingPage() {
   const [plans, allTests] = await Promise.all([
-    getPublicPlans({ revalidate: 300 }),
+    getPublicPlans(),
     getLandingFeaturedTests(),
   ]);
 

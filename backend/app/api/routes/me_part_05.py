@@ -249,6 +249,8 @@ async def cancel_my_payment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment invoice was not found.")
     if str(payment.status) not in PENDING_PAYMENT_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only active invoices can be canceled.")
+    if payment.provider == "click" and payment.provider_reference:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This Click payment is already being processed. Wait for confirmation.")
 
     payment.status = "canceled"
     payment.archived_at = datetime.now(UTC)

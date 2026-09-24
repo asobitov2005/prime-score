@@ -654,10 +654,12 @@ function ConfirmCancelDialog({
   onKeep,
   onConfirm,
   isCancelling,
+  error,
 }: {
   onKeep: () => void;
   onConfirm: () => void;
   isCancelling: boolean;
+  error: string | null;
 }) {
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/30 p-4 backdrop-blur-sm">
@@ -666,6 +668,7 @@ function ConfirmCancelDialog({
         <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
           You can create a new invoice anytime by choosing a plan again.
         </p>
+        {error ? <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-300">{error}</p> : null}
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={onKeep} disabled={isCancelling}>
             Keep invoice
@@ -682,15 +685,23 @@ function ConfirmCancelDialog({
 
 function ActiveInvoiceModal({
   payment,
+  updatedPlan,
+  refreshingInvoice,
+  invoiceError,
+  onRefreshInvoice,
   copiedField,
   onCopy,
   onCancel,
   onClose,
 }: {
   payment: UserPaymentRecord;
+  updatedPlan: MarketingPlan | null;
+  refreshingInvoice: boolean;
+  invoiceError: string | null;
+  onRefreshInvoice: () => void;
   copiedField: string | null;
   onCopy: (paymentId: string, field: "card" | "amount", value: string) => Promise<boolean>;
-  onCancel: () => Promise<void>;
+  onCancel: () => Promise<boolean>;
   onClose: () => void;
 }) {
   const countdown = useCountdown(payment.expiresAt);
@@ -762,9 +773,10 @@ function ActiveInvoiceModal({
   async function confirmCancel() {
     setIsCancelling(true);
     try {
-      await onCancel();
-      setConfirmCancelOpen(false);
-      onClose();
+      if (await onCancel()) {
+        setConfirmCancelOpen(false);
+        onClose();
+      }
     } finally {
       setIsCancelling(false);
     }
@@ -798,6 +810,7 @@ function ActiveInvoiceModal({
             onKeep={() => setConfirmCancelOpen(false)}
             onConfirm={() => void confirmCancel()}
             isCancelling={isCancelling}
+            error={invoiceError}
           />
         ) : null}
         {!isClick ? <div className="h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-amber-400" /> : null}
@@ -848,9 +861,19 @@ function ActiveInvoiceModal({
                 ) : null}
               </div>
 
+              {updatedPlan && !isTerminal && !isActivated ? (
+                <p className="mt-4 text-sm leading-5 text-slate-600 dark:text-slate-300">
+                  This plan now costs <span className="font-semibold text-slate-950 dark:text-white">{updatedPlan.priceLabel}</span>. Update your invoice to pay the current price.
+                </p>
+              ) : null}
               {isActivated ? (
                 <Button asChild className="mt-5 h-11 w-full rounded-xl bg-[#0065ff] font-semibold text-white hover:bg-[#0054d6]">
                   <a href="/dashboard">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></a>
+                </Button>
+              ) : updatedPlan && !isTerminal ? (
+                <Button type="button" onClick={onRefreshInvoice} disabled={refreshingInvoice} className="mt-5 h-11 w-full rounded-xl bg-[#0065ff] font-semibold text-white hover:bg-[#0054d6]">
+                  {refreshingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Update invoice <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               ) : payment.paymentUrl && !isTerminal ? (
                 <Button asChild className="mt-5 h-11 w-full rounded-xl bg-[#0065ff] font-semibold text-white hover:bg-[#0054d6]">
@@ -859,6 +882,7 @@ function ActiveInvoiceModal({
               ) : (
                 <p className="mt-5 text-sm text-amber-700 dark:text-amber-300">Checkout is unavailable. Please create a new invoice or contact support.</p>
               )}
+              {invoiceError ? <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-300">{invoiceError}</p> : null}
               {!isActivated ? (
                 <Button type="button" variant="ghost" onClick={() => setConfirmCancelOpen(true)} className="mt-2 h-9 w-full text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white">
                   Cancel invoice
@@ -1086,6 +1110,9 @@ export function SubscriptionWorkspace({
     () => payments.find((item) => item.status === "pending" || item.status === "matched") ?? null,
     [payments],
   );
+  const updatedPlan = activePayment?.method === "click"
+    ? plans.find((plan) => plan.id === activePayment.planId && parseAnalyticsAmount(activePayment.amount) !== plan.numericPrice) ?? null
+    : null;
 
   useEffect(() => {
     if (!activePayment || activePayment.method !== "click") return;
@@ -1145,6 +1172,7 @@ export function SubscriptionWorkspace({
       });
       setPayments((current) => [payment, ...current.filter((item) => item.id !== payment.id)]);
       setPaymentModalOpen(true);
+      router.refresh();
     } catch (createError) {
       setError(normalizePaymentErrorMessage(createError, "Failed to create the invoice. Please try again."));
     } finally {
@@ -1152,7 +1180,7 @@ export function SubscriptionWorkspace({
     }
   }
 
-  async function handleCancelPayment(paymentId: string) {
+  async function handleCancelPayment(paymentId: string): Promise<boolean> {
     setError(null);
     try {
       const payload = await api.cancelPayment(paymentId);
@@ -1166,8 +1194,10 @@ export function SubscriptionWorkspace({
         currency: canceled.currency,
       });
       setPayments((current) => [canceled, ...current.filter((item) => item.id !== canceled.id)]);
+      return true;
     } catch (cancelError) {
       setError(normalizePaymentErrorMessage(cancelError, "Failed to cancel the invoice. Please try again in a moment."));
+      return false;
     }
   }
 
@@ -1221,6 +1251,10 @@ export function SubscriptionWorkspace({
       {activePayment && paymentModalOpen ? (
         <ActiveInvoiceModal
           payment={activePayment}
+          updatedPlan={updatedPlan}
+          refreshingInvoice={busyPlanId === updatedPlan?.id}
+          invoiceError={error}
+          onRefreshInvoice={() => { if (updatedPlan) void handleChoosePlan(updatedPlan); }}
           copiedField={copiedField}
           onCopy={handleCopyField}
           onCancel={() => handleCancelPayment(activePayment.id)}

@@ -115,6 +115,7 @@ async def create_plan_payment(
         raise ValueError("Payments are paused for this plan.")
     use_click = click_ready
     provider = "click" if use_click else "card_transfer"
+    plan_price = _decimal(plan.price_amount)
 
     active_pending = await session.scalar(
         select(Payment)
@@ -128,9 +129,15 @@ async def create_plan_payment(
         .order_by(Payment.created_at.desc())
     )
     if active_pending is not None:
-        if active_pending.plan_id == plan.id and active_pending.provider == provider:
+        if (
+            active_pending.plan_id == plan.id
+            and active_pending.provider == provider
+            and _decimal(active_pending.amount) == plan_price
+        ):
             return active_pending
-        # A stale manual invoice must not block the Click checkout.
+        if active_pending.provider == "click" and active_pending.provider_reference:
+            raise ValueError("This Click payment is already being processed. Wait for its confirmation before creating another invoice.")
+        # Never change an issued invoice amount: invalidate it and create a new quote.
         active_pending.status = "canceled"
         active_pending.archived_at = _now()
         active_pending.status_reason = "Replaced by a new payment invoice."
@@ -141,7 +148,6 @@ async def create_plan_payment(
 
     settings = await get_or_create_payment_settings(session)
     support_contact = normalize_support_contact(settings.support_contact)
-    plan_price = _decimal(plan.price_amount)
 
     payment = Payment(
         user_id=user.id,
