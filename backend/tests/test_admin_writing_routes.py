@@ -65,8 +65,12 @@ def _task():
 
 def test_facade_and_app_register_actual_existing_handlers_with_admin_auth(app):
     assert len(admin_writing.router.routes) == len(ROUTES)
+    paths = app.openapi()["paths"]
     for method, path, endpoint in ROUTES:
-        matches = [route for route in app.routes if getattr(route, "path", None) == "/api/admin/writing" + path and method in route.methods]
+        # FastAPI can retain included routers lazily instead of flattening app.routes.
+        # Check the published contract and the owning router, not its internal layout.
+        assert method.lower() in paths["/api/admin/writing" + path]
+        matches = [route for route in admin_writing.router.routes if route.path == path and method in route.methods]
         assert len(matches) == 1
         assert matches[0].endpoint is endpoint
         assert get_current_admin in [dependency.call for dependency in matches[0].dependant.dependencies]
