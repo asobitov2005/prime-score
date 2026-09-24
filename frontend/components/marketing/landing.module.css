@@ -98,6 +98,9 @@
   width: 31px;
   height: 31px;
 }
+.brand > span {
+  transform: translateY(2px);
+}
 .brand > span > span:not(.brandPeriod) {
   font-weight: 400;
 }
