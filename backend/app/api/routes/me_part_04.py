@@ -83,16 +83,15 @@ def _serialize_xp_transaction(row) -> MeXpTransactionRead:
 
 def _serialize_me_payment(payment: Payment, plan: Plan | None) -> MePaymentRead:
     from app.services.click_payments import click_checkout_url
+    from app.services.payment_service import CLICK_PAYMENT_INSTRUCTIONS, LEGACY_PAYMENT_INSTRUCTIONS
 
     payment_method_values = {item.value for item in PaymentMethod}
     method_value = payment.provider if payment.provider in payment_method_values else PaymentMethod.card_transfer.value
     exposes_card_details = str(payment.status or "") in PENDING_PAYMENT_STATUSES
     metadata = payment.meta if isinstance(payment.meta, dict) else {}
     support_contact = str(metadata.get("support_contact") or DEFAULT_PAYMENT_SUPPORT_CONTACT)
-    payment_instructions = str(
-        metadata.get("payment_instructions")
-        or "Transfer the amount to the card, then send a screenshot to Telegram support."
-    )
+    # Historical metadata must not override the current checkout instructions.
+    payment_instructions = CLICK_PAYMENT_INSTRUCTIONS if payment.provider == "click" else LEGACY_PAYMENT_INSTRUCTIONS
     return MePaymentRead(
         id=payment.id,
         invoice_code=payment.invoice_code,

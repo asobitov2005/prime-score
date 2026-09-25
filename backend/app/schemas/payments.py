@@ -71,7 +71,7 @@ class MePaymentRead(BaseModel):
     card_label: str | None = None
     card_number: str | None = None
     support_contact: str = "@TheBugCreator"
-    payment_instructions: str = "Transfer the amount to the card, then send a screenshot to Telegram support."
+    payment_instructions: str = "Pay with Click. Premium activates automatically after payment confirmation. Contact Telegram support only if payment or activation fails."
     payment_url: str | None = None
     expires_at: datetime | None = None
     matched_at: datetime | None = None

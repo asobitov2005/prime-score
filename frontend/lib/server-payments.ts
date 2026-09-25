@@ -27,7 +27,7 @@ function mapPaymentRecord(payload: PaymentRecordResponse): UserPaymentRecord {
     cardLabel: payload.card_label ?? null,
     cardNumber: payload.card_number ?? null,
     supportContact: payload.support_contact ?? "@TheBugCreator",
-    paymentInstructions: payload.payment_instructions ?? "Transfer the amount to the card, then send a screenshot to Telegram support.",
+    paymentInstructions: payload.payment_instructions ?? "Choose a plan and pay with Click. Premium activates automatically after payment confirmation. Contact support only if you have a problem.",
     paymentUrl: payload.payment_url ?? null,
     expiresAt: payload.expires_at ?? null,
     matchedAt: payload.matched_at ?? null,

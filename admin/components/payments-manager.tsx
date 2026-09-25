@@ -189,7 +189,7 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
       setNotice({
         tone: "success",
         title: "Settings saved",
-        description: "Manual payment support contact was updated.",
+        description: "Payment support contact was updated.",
       });
     } catch (error) {
       setNotice({
@@ -312,7 +312,7 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
       <SectionHeader
         eyebrow="Revenue ops"
         title="Payments"
-        description="Manual card-transfer invoices, support screenshot flow, and premium activation controls."
+        description="Click invoices, automatic Premium activation, and payment troubleshooting."
         actions={
           <Button type="button" variant="outline" size="sm" onClick={() => void refreshAll()} disabled={refreshing}>
             {refreshing ? "Refreshing..." : "Refresh"}
@@ -324,8 +324,8 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
 
       <Notice
         tone="success"
-        title="Manual payment flow"
-        description={`Users transfer the exact plan amount to the active card, then send a screenshot to ${settings?.supportContact ?? "@TheBugCreator"} on Telegram.`}
+        title="Automatic Click payments"
+        description={`Users choose a plan and pay with Click. Premium activates automatically after Click confirms payment. No screenshot is required. Contact ${settings?.supportContact ?? "@TheBugCreator"} only for payment or activation problems.`}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -353,7 +353,7 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
         <Card>
           <CardHeader>
             <CardTitle>Support settings</CardTitle>
-            <CardDescription>This contact is shown to users after they create a manual card-transfer invoice.</CardDescription>
+            <CardDescription>Help for payment or activation problems, not a required checkout step.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSaveSettings}>
@@ -366,7 +366,7 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
                   placeholder="@TheBugCreator"
                 />
                 <p className="text-xs text-muted-foreground">
-                  User instruction: transfer the required amount, then send the receipt screenshot to this Telegram contact.
+                  Users contact this account only if they have a payment or activation problem.
                 </p>
               </div>
 
@@ -379,8 +379,8 @@ export function PaymentsManager({ initialPayments, totalPayments, currentPage, i
 
         <Card>
           <CardHeader>
-            <CardTitle>Payment cards</CardTitle>
-            <CardDescription>Invoices always use one active card. Switch it here before traffic changes.</CardDescription>
+            <CardTitle>Legacy payment cards</CardTitle>
+            <CardDescription>Retained for historical records. New plan invoices use Click and do not use these cards.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">

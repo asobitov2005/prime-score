@@ -213,11 +213,7 @@ async def create_my_payment(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create payment invoice.") from exc
 
     return MePaymentCreateResponse(
-        message=(
-            "Invoice created. Pay in Click to activate Premium automatically."
-            if payment.provider == "click"
-            else "Invoice created. Transfer the amount to the card and send the screenshot to Telegram support."
-        ),
+        message="Invoice created. Pay in Click to activate Premium automatically after payment confirmation.",
         payment=_serialize_me_payment(
             payment,
             await session.get(Plan, payment.plan_id) if payment.plan_id else None,

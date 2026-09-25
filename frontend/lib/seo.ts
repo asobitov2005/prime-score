@@ -98,11 +98,16 @@ export const landingFaqs = [
   {
     question: "How does a Premium payment work?",
     answer:
-      "Choose a plan in your account, follow the card-payment instructions and send your payment screenshot to @TheBugCreator on Telegram for verification. Plans are one-time purchases and do not renew automatically.",
+      "Choose a plan in your account and pay securely with Click. Premium activates automatically after Click confirms your payment. No screenshot is needed. Contact @TheBugCreator on Telegram only if you have a payment or activation problem. Plans are one-time purchases and do not renew automatically.",
   },
 ];
 
 export const pricingFaqs = [
+  {
+    question: "How do I pay for a plan?",
+    answer:
+      "Choose your plan and pay with Click. Premium activates automatically after payment confirmation, with no screenshot or manual verification needed. If payment or activation fails, contact @TheBugCreator on Telegram.",
+  },
   {
     question: "What is included in PrimeScore Premium?",
     answer:

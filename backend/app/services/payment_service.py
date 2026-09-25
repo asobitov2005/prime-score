@@ -17,6 +17,8 @@ from app.services.gift_entitlements import grant_payment_gift_entitlement
 from app.services.notification_sender import create_and_send_notification
 
 DEFAULT_PAYMENT_SUPPORT_CONTACT = "@TheBugCreator"
+CLICK_PAYMENT_INSTRUCTIONS = "Pay securely with Click. Premium activates automatically after Click confirms payment. No screenshot is needed. Contact Telegram support only if payment or activation fails."
+LEGACY_PAYMENT_INSTRUCTIONS = "This is an older invoice. For a new payment, choose a plan and pay with Click. If you already paid and access is missing, contact Telegram support before paying again."
 PENDING_PAYMENT_STATUSES = {"pending"}
 VISIBLE_PAYMENT_STATUSES = {"pending", "matched", "completed", "expired", "canceled", "review", "failed"}
 INVOICE_TTL_HOURS = 24
@@ -111,10 +113,11 @@ async def create_plan_payment(
     await expire_stale_payments(session)
     config = get_settings()
     click_ready = bool(config.click_service_id and config.click_merchant_id and config.click_secret_key)
-    if click_ready and (config.payment_paused or plan.payment_paused):
+    if not click_ready:
+        raise ValueError("Click checkout is temporarily unavailable. Please try again later or contact Telegram support if the problem persists.")
+    if config.payment_paused or plan.payment_paused:
         raise ValueError("Payments are paused for this plan.")
-    use_click = click_ready
-    provider = "click" if use_click else "card_transfer"
+    provider = "click"
     plan_price = _decimal(plan.price_amount)
 
     active_pending = await session.scalar(
@@ -142,17 +145,13 @@ async def create_plan_payment(
         active_pending.archived_at = _now()
         active_pending.status_reason = "Replaced by a new payment invoice."
 
-    active_card = None if use_click else await get_active_payment_card(session)
-    if not use_click and active_card is None:
-        raise ValueError("No active payment card is configured.")
-
     settings = await get_or_create_payment_settings(session)
     support_contact = normalize_support_contact(settings.support_contact)
 
     payment = Payment(
         user_id=user.id,
         plan_id=plan.id,
-        card_id=active_card.id if active_card else None,
+        card_id=None,
         provider=provider,
         provider_reference=None,
         invoice_code=build_invoice_code(),
@@ -162,20 +161,14 @@ async def create_plan_payment(
         discount_amount=Decimal("0"),
         currency="UZS",
         status="pending",
-        card_label=active_card.label if active_card else None,
-        card_number=normalize_card_number(active_card.card_number) if active_card else None,
+        card_label=None,
+        card_number=None,
         expires_at=_now() + timedelta(hours=INVOICE_TTL_HOURS),
-        status_reason=(
-            "Complete payment in Click. Access activates automatically after confirmation."
-            if use_click else f"Transfer the amount to the card and send the screenshot to {support_contact} on Telegram."
-        ),
+        status_reason="Complete payment in Click. Access activates automatically after confirmation.",
         meta={
             "plan_name": plan.name,
             "support_contact": support_contact,
-            "payment_instructions": (
-                "Pay securely in Click. Premium activates after payment confirmation."
-                if use_click else "Transfer the amount to the card, then send a screenshot to Telegram support."
-            ),
+            "payment_instructions": CLICK_PAYMENT_INSTRUCTIONS,
         },
     )
     session.add(payment)

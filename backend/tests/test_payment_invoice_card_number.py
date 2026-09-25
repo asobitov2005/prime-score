@@ -55,7 +55,14 @@ class _FakeSession:
 
 
 @pytest.mark.asyncio
-async def test_create_plan_payment_keeps_full_normalized_card_number() -> None:
+@pytest.mark.parametrize("missing", ["click_service_id", "click_merchant_id", "click_secret_key"])
+async def test_missing_click_config_never_falls_back_to_card_transfer(monkeypatch, missing) -> None:
+    config = dict(click_service_id=123, click_merchant_id=456,
+                  click_secret_key="test-only-secret", payment_paused=False)
+    config[missing] = None
+    monkeypatch.setattr(payment_service, "get_settings", lambda: SimpleNamespace(
+        **config,
+    ))
     user = User(
         id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
         telegram_id=123456789,
@@ -81,12 +88,10 @@ async def test_create_plan_payment_keeps_full_normalized_card_number() -> None:
     )
     session = _FakeSession(active_card)
 
-    payment = await create_plan_payment(session, user=user, plan=plan)
-
-    assert payment.card_number == "8600123412345678"
-    assert payment.amount == Decimal("59000")
-    assert payment.discount_amount == Decimal("0")
-    assert payment.meta["support_contact"] == "@TheBugCreator"
+    with pytest.raises(ValueError, match="Click checkout is temporarily unavailable"):
+        await create_plan_payment(session, user=user, plan=plan)
+    assert session.added == []
+    assert session.scalar_calls == 0
 
 
 @pytest.mark.asyncio
@@ -123,6 +128,21 @@ async def test_click_invoice_needs_no_payment_card(monkeypatch) -> None:
     assert payment.card_id is None
     assert payment.card_number is None
     assert payment.amount == Decimal("59000")
+    assert payment.meta["payment_instructions"] == payment_service.CLICK_PAYMENT_INSTRUCTIONS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("global_pause,plan_pause", [(True, False), (False, True)])
+async def test_paused_click_never_creates_manual_invoice(monkeypatch, global_pause, plan_pause):
+    monkeypatch.setattr(payment_service, "get_settings", lambda: SimpleNamespace(
+        click_service_id=123, click_merchant_id=456,
+        click_secret_key="test-only-secret", payment_paused=global_pause,
+    ))
+    session = _FakeSession(None)
+    with pytest.raises(ValueError, match="Payments are paused"):
+        await create_plan_payment(session, user=User(), plan=Plan(payment_paused=plan_pause))
+    assert session.added == []
+    assert session.scalar_calls == 0
 
 
 @pytest.mark.asyncio

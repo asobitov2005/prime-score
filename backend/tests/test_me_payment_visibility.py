@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app.api.routes.me import _serialize_me_payment
 from app.models.commerce import Payment, Plan
+from app.services.payment_service import CLICK_PAYMENT_INSTRUCTIONS, LEGACY_PAYMENT_INSTRUCTIONS
 
 
 def _build_plan() -> Plan:
@@ -60,3 +61,18 @@ def test_serialize_me_payment_handles_legacy_null_metadata() -> None:
     assert payload.plan_name == "Unknown plan"
     assert payload.support_contact == "@TheBugCreator"
     assert payload.payment_instructions
+
+
+def test_click_instructions_override_stale_manual_metadata() -> None:
+    payment = _build_payment(status="pending")
+    payment.provider = "click"
+    payment.meta = {"payment_instructions": "Old manual payment instructions"}
+    payload = _serialize_me_payment(payment, _build_plan())
+    assert payload.payment_instructions == CLICK_PAYMENT_INSTRUCTIONS
+
+
+def test_legacy_invoice_does_not_request_another_transfer() -> None:
+    payment = _build_payment(status="pending")
+    payment.meta = {"payment_instructions": "Old manual payment instructions"}
+    payload = _serialize_me_payment(payment, _build_plan())
+    assert payload.payment_instructions == LEGACY_PAYMENT_INSTRUCTIONS

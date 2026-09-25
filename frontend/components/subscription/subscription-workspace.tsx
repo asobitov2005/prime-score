@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Crown, CreditCard, Gift, Infinity, Info, Loader2, MessageCircle, PenTool, Send, ShieldCheck, ShoppingCart, TrendingUp, X } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Crown, CreditCard, Gift, Infinity, Info, Loader2, MessageCircle, PenTool, ShieldCheck, ShoppingCart, TrendingUp, X } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -15,12 +15,9 @@ import {
   parseAnalyticsAmount,
   trackBeginCheckout,
   trackPaymentCanceled,
-  trackPaymentCopy,
-  trackPaymentProofClick,
   trackPlanSelect,
 } from "@/lib/analytics";
 import type { PaymentRecordResponse } from "@/lib/api/types";
-import { copyTextToClipboard } from "@/lib/clipboard";
 import type { MarketingPlan } from "@/lib/server-plans";
 import type { UserGiftCodeSummary, UserPaymentRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -51,7 +48,7 @@ function mapPaymentRecord(payload: PaymentRecordResponse): UserPaymentRecord {
     cardLabel: payload.card_label ?? null,
     cardNumber: payload.card_number ?? null,
     supportContact: payload.support_contact ?? "@TheBugCreator",
-    paymentInstructions: payload.payment_instructions ?? "Transfer the amount to the card, then send a screenshot to Telegram support.",
+    paymentInstructions: payload.payment_instructions ?? "Choose a plan and pay with Click. Premium activates automatically after payment confirmation. Contact support only if you have a problem.",
     paymentUrl: payload.payment_url ?? null,
     expiresAt: payload.expires_at ?? null,
     matchedAt: payload.matched_at ?? null,
@@ -77,19 +74,6 @@ function computeTimeLeft(expiresAt: string | null): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m left`;
 }
-
-function formatCardPreview(value: string | null): string {
-  const normalized = value?.replace(/\D+/g, "") ?? "";
-  if (!normalized) {
-    return "-";
-  }
-  return normalized.replace(/(.{4})/g, "$1 ").trim();
-}
-
-function copyFieldKey(paymentId: string, field: "card" | "amount"): string {
-  return `${paymentId}:${field}`;
-}
-
 function normalizePaymentErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) {
     return fallback;
@@ -402,20 +386,20 @@ function ActivationStepsSection() {
     },
     {
       Icon: CreditCard,
-      title: "Make a payment",
-      text: "Send the payment to our official details.",
+      title: "Pay with Click",
+      text: "Complete your payment securely in Click.",
       tone: "blue",
     },
     {
-      Icon: Send,
-      title: "Send receipt",
-      text: "Send screenshot to Telegram support.",
+      Icon: ShieldCheck,
+      title: "Automatic confirmation",
+      text: "Click confirms your payment. No screenshot is needed.",
       tone: "blue",
     },
     {
       Icon: Crown,
       title: "Get activated",
-      text: "We activate your premium as soon as possible.",
+      text: "Premium activates automatically after Click confirms payment.",
       tone: "green",
     },
   ];
@@ -458,7 +442,7 @@ function ActivationStepsSection() {
 
       <div className="mt-5 border-t border-slate-100 pt-4 text-center dark:border-slate-800">
         <a
-          href="https://t.me/PrimeScoreSupport"
+          href="https://t.me/TheBugCreator"
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center justify-center gap-2.5 text-sm font-semibold text-sky-700 underline-offset-4 hover:underline dark:text-sky-300"
@@ -466,7 +450,7 @@ function ActivationStepsSection() {
           <svg className="h-5 w-5" viewBox="0 0 240 240" aria-hidden="true" fill="currentColor">
             <path d="M120 0C53.7 0 0 53.7 0 120s53.7 120 120 120 120-53.7 120-120S186.3 0 120 0Zm55.7 82.3-19.7 92.8c-1.5 6.6-5.4 8.2-10.9 5.1l-30.2-22.3-14.6 14c-1.6 1.6-3 3-6.1 3l2.2-30.8 56.1-50.7c2.4-2.2-.5-3.4-3.8-1.2l-69.3 43.6-29.8-9.3c-6.5-2-6.6-6.5 1.4-9.6l116.5-44.9c5.4-2 10.1 1.3 8.2 10.3Z" />
           </svg>
-          Telegram support: @PrimeScoreSupport
+          Payment or activation problem? Contact @TheBugCreator
         </a>
       </div>
     </section>
@@ -567,67 +551,6 @@ function PremiumCodeSection() {
     </section>
   );
 }
-
-function CopyActionButton({
-  label,
-  copied,
-  onClick,
-}: {
-  label: string;
-  copied: boolean;
-  onClick: () => void | Promise<void>;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      className="h-9 rounded-xl border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-      onClick={onClick}
-    >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? "Copied" : label}
-    </Button>
-  );
-}
-
-function PaymentCopyCard({
-  label,
-  value,
-  helperText,
-  accent,
-  action,
-}: {
-  label: string;
-  value: string;
-  helperText?: string;
-  accent?: boolean;
-  action: React.ReactNode;
-}) {
-  return (
-    <div className={cn(
-      "min-h-[4.85rem] rounded-2xl border p-3.5",
-      accent
-        ? "border-orange-200 bg-orange-50/80 dark:border-orange-500/25 dark:bg-orange-500/10"
-        : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/65",
-    )}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{label}</p>
-          <p className="mt-1.5 break-all font-mono text-[1.35rem] font-bold tracking-[-0.02em] text-slate-950 dark:text-white sm:text-[1.45rem]">
-            {value}
-          </p>
-          {helperText ? (
-            <p className="mt-1 text-sm font-semibold tracking-wide text-slate-600 dark:text-slate-300">
-              {helperText}
-            </p>
-          ) : null}
-        </div>
-        <div className="shrink-0">{action}</div>
-      </div>
-    </div>
-  );
-}
-
 function PaymentStatusPill({ status }: { status: UserPaymentRecord["status"] }) {
   if (status === "completed") {
     return (
@@ -689,8 +612,6 @@ function ActiveInvoiceModal({
   refreshingInvoice,
   invoiceError,
   onRefreshInvoice,
-  copiedField,
-  onCopy,
   onCancel,
   onClose,
 }: {
@@ -699,8 +620,6 @@ function ActiveInvoiceModal({
   refreshingInvoice: boolean;
   invoiceError: string | null;
   onRefreshInvoice: () => void;
-  copiedField: string | null;
-  onCopy: (paymentId: string, field: "card" | "amount", value: string) => Promise<boolean>;
   onCancel: () => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -708,12 +627,10 @@ function ActiveInvoiceModal({
   const modalRef = useRef<HTMLDivElement>(null);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [copyError, setCopyError] = useState<string | null>(null);
   const isExpired = countdown === "Expired";
   const isActivated = payment.status === "completed";
   const isTerminal = isExpired || payment.status === "canceled" || payment.status === "failed";
   const isClick = payment.method === "click";
-  const cardValue = payment.cardNumber ?? "-";
   const supportContact = payment.supportContact || "@TheBugCreator";
   const planLabel = payment.durationDays
     ? `${Math.round(payment.durationDays / 30)} MONTH${Math.round(payment.durationDays / 30) === 1 ? "" : "S"}`
@@ -782,13 +699,6 @@ function ActiveInvoiceModal({
     }
   }
 
-  async function copyPaymentField(field: "card" | "amount", value: string) {
-    setCopyError(null);
-    const copied = await onCopy(payment.id, field, value);
-    if (!copied) {
-      setCopyError("Could not copy. Please copy manually.");
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/55 p-3 backdrop-blur-[4px]">
@@ -800,9 +710,7 @@ function ActiveInvoiceModal({
         aria-labelledby="payment-modal-title"
         className={cn(
           "relative my-3 max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-[20px] bg-white outline-none dark:bg-slate-950",
-          isClick
-            ? "max-w-[460px] border border-slate-200 shadow-[0_24px_72px_-32px_rgba(15,23,42,0.5)] dark:border-slate-800"
-            : "max-w-[880px] border border-orange-200 shadow-[0_40px_120px_-36px_rgba(15,23,42,0.7)] dark:border-orange-500/25",
+          "max-w-[460px] border border-slate-200 shadow-[0_24px_72px_-32px_rgba(15,23,42,0.5)] dark:border-slate-800",
         )}
       >
         {confirmCancelOpen ? (
@@ -813,7 +721,6 @@ function ActiveInvoiceModal({
             error={invoiceError}
           />
         ) : null}
-        {!isClick ? <div className="h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-amber-400" /> : null}
         <button
           type="button"
           aria-label="Close payment modal"
@@ -841,7 +748,7 @@ function ActiveInvoiceModal({
                     ? "Your Premium plan is now active."
                     : isTerminal
                       ? "This invoice has expired. Please create a new one."
-                      : "Pay securely with Click. Premium activates after confirmation."}
+                      : "Pay securely with Click. Premium activates automatically after Click confirms payment."}
                 </p>
               </header>
 
@@ -892,167 +799,32 @@ function ActiveInvoiceModal({
                 <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                 No screenshot needed. Access starts after Click confirms payment.
               </p>
+              {!isActivated ? (
+                <a href={telegramUrl(supportContact)} target="_blank" rel="noreferrer" className="mt-3 block text-center text-xs text-muted-foreground underline underline-offset-4">
+                  Payment or activation problem? Contact {supportContact}
+                </a>
+              ) : null}
             </>
           ) : (
-          <>
-          <header className="max-w-3xl pr-12">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <PaymentStatusPill status={isTerminal ? "expired" as UserPaymentRecord["status"] : payment.status} />
-              <span className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">{planLabel}</span>
-            </div>
-            <h2 id="payment-modal-title" className="mt-3 text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-[1.65rem]">
-              {isActivated ? "Premium activated" : "Complete your payment"}
+          <div className="space-y-4 pr-8">
+            <h2 id="payment-modal-title" className="text-xl font-semibold">
+              {isActivated ? "Premium activated" : "Older payment invoice"}
             </h2>
-            <p className="mt-1.5 text-sm leading-5 text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-muted-foreground">
               {isActivated
-                ? "Your Premium plan is now active."
-                : isTerminal
-                  ? "This invoice has expired. Please create a new invoice."
-                  : "Transfer the amount below and send the receipt screenshot to Telegram support."}
+                ? "Your Premium plan is active."
+                : "New plan payments use Click. If you already paid this invoice and Premium is not active, contact support before paying again."}
             </p>
-            <a
-              href={telegramUrl(supportContact)}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Support: <span className="text-orange-600 dark:text-orange-300">{supportContact}</span>
-            </a>
-          </header>
-
-          <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.95fr)]">
-            <div className="flex h-full flex-col gap-2.5 rounded-[18px] border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-950">
-              <PaymentCopyCard
-                label="AMOUNT TO TRANSFER"
-                value={payment.amount}
-                accent
-                action={
-                  <CopyActionButton
-                    label="Copy amount"
-                    copied={copiedField === copyFieldKey(payment.id, "amount")}
-                    onClick={() => copyPaymentField("amount", payment.amount.replace(/[^\d]/g, ""))}
-                  />
-                }
-              />
-              <PaymentCopyCard
-                label={payment.cardLabel ?? "HUMO"}
-                value={formatCardPreview(payment.cardNumber ?? "-")}
-                helperText="Azizbek Sobitov"
-                action={
-                  <CopyActionButton
-                    label="Copy card"
-                    copied={copiedField === copyFieldKey(payment.id, "card")}
-                    onClick={() => copyPaymentField("card", cardValue.replace(/\D/g, ""))}
-                  />
-                }
-              />
-
-              <div className="flex min-h-[4.8rem] gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-sm font-medium leading-5 text-amber-900 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-100">
-                <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" />
-                <p>
-                  Transfer the shown amount to the card, then send the receipt screenshot to{" "}
-                  <a href={telegramUrl(supportContact)} target="_blank" rel="noreferrer" className="font-bold text-orange-700 underline-offset-4 hover:underline dark:text-orange-300">
-                    {supportContact}
-                  </a>{" "}
-                  on Telegram.
-                </p>
-              </div>
-              {copyError ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200">
-                  {copyError}
-                </div>
-              ) : null}
-            </div>
-
-            <aside className="flex h-full flex-col rounded-[18px] border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-900/65">
-              <div>
-                <div className="flex items-start gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20">
-                    <Clock3 className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-950 dark:text-white">
-                      {isTerminal ? "Invoice expired" : isActivated ? "Premium activated" : `Valid for ${countdown}`}
-                    </h3>
-                    {isTerminal ? (
-                      <p className="mt-1 text-sm text-red-600 dark:text-red-300">This invoice has expired. Please create a new invoice.</p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-2.5 space-y-2 text-sm leading-5 text-slate-600 dark:text-slate-300">
-                  <div className="flex gap-2">
-                    <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
-                    <span>Transfer the amount to the card, then send a screenshot to Telegram support.</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                    <span>Premium is activated after support checks the screenshot.</span>
-                  </div>
-                </div>
-
-                <div className="my-2.5 h-px bg-slate-200 dark:bg-slate-800" />
-
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">1</span>
-                    <span className="text-sm font-bold text-slate-950 dark:text-white">Pay the amount</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">2</span>
-                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Send screenshot</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-3">
-                {isActivated ? (
-                  <Button type="button" asChild className="h-9 w-full rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700">
-                    <a href="/dashboard">Go to Dashboard</a>
-                  </Button>
-                ) : isTerminal ? (
-                  <Button type="button" onClick={onClose} className="h-9 w-full rounded-xl bg-orange-500 text-sm font-semibold text-white hover:bg-orange-600">
-                    Create new invoice
-                  </Button>
-                ) : (
-                  <>
-                    <Button type="button" asChild className="h-9 w-full rounded-xl bg-orange-500 text-sm font-semibold text-white shadow-[0_18px_36px_-20px_rgba(249,115,22,0.9)] hover:bg-orange-600">
-                      <a
-                        href={telegramUrl(supportContact)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={() => {
-                          trackPaymentProofClick({
-                            paymentId: payment.id,
-                            supportContact,
-                          });
-                        }}
-                      >
-                        <Send className="h-4 w-4" />
-                        Send screenshot
-                      </a>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 w-full rounded-xl border-slate-200 bg-white text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900"
-                      onClick={() => setConfirmCancelOpen(true)}
-                    >
-                      Cancel invoice
-                    </Button>
-                  </>
-                )}
-              </div>
-            </aside>
+            {!isActivated ? (
+              <a href={telegramUrl(supportContact)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm underline">
+                <MessageCircle className="h-4 w-4" /> Payment problem? Contact {supportContact}
+              </a>
+            ) : null}
+            {!isActivated && !isTerminal ? (
+              <Button type="button" variant="outline" onClick={() => setConfirmCancelOpen(true)}>Cancel old invoice</Button>
+            ) : null}
+            <Button type="button" onClick={onClose}>Back to plans</Button>
           </div>
-          <div className="mt-4 border-t border-slate-200 pt-3 text-center dark:border-slate-800">
-            <p className="inline-flex items-center justify-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-              <ShieldCheck className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-              This invoice will expire automatically.
-            </p>
-          </div>
-          </>
           )}
         </div>
       </div>
@@ -1102,9 +874,7 @@ export function SubscriptionWorkspace({
   const [payments, setPayments] = useState<UserPaymentRecord[]>(initialPayments);
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const copyResetTimeoutRef = useRef<number | null>(null);
 
   const activePayment = useMemo(
     () => payments.find((item) => item.status === "pending" || item.status === "matched") ?? null,
@@ -1136,14 +906,6 @@ export function SubscriptionWorkspace({
     const timer = window.setInterval(() => void check(), 5000);
     return () => { alive = false; window.clearInterval(timer); };
   }, [activePayment, api, router]);
-
-  useEffect(() => {
-    return () => {
-      if (copyResetTimeoutRef.current !== null) {
-        window.clearTimeout(copyResetTimeoutRef.current);
-      }
-    };
-  }, []);
 
   async function handleChoosePlan(plan: MarketingPlan) {
     setBusyPlanId(plan.id);
@@ -1201,30 +963,6 @@ export function SubscriptionWorkspace({
     }
   }
 
-  async function handleCopyField(paymentId: string, field: "card" | "amount", value: string): Promise<boolean> {
-    if (!value || value === "-") {
-      return false;
-    }
-    try {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        await copyTextToClipboard(value);
-      }
-      const key = copyFieldKey(paymentId, field);
-      trackPaymentCopy({ paymentId, field });
-      setCopiedField(key);
-      if (copyResetTimeoutRef.current !== null) {
-        window.clearTimeout(copyResetTimeoutRef.current);
-      }
-      copyResetTimeoutRef.current = window.setTimeout(() => {
-        setCopiedField((current) => (current === key ? null : current));
-      }, 1800);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -1255,8 +993,6 @@ export function SubscriptionWorkspace({
           refreshingInvoice={busyPlanId === updatedPlan?.id}
           invoiceError={error}
           onRefreshInvoice={() => { if (updatedPlan) void handleChoosePlan(updatedPlan); }}
-          copiedField={copiedField}
-          onCopy={handleCopyField}
           onCancel={() => handleCancelPayment(activePayment.id)}
           onClose={() => setPaymentModalOpen(false)}
         />
