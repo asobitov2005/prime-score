@@ -8,6 +8,8 @@ test("subscription uses Click and support is only for payment problems", () => {
   const source = fs.readFileSync(filename, "utf8") + fs.readFileSync(path.join(__dirname, "../components/subscription/subscription-overview.tsx"), "utf8");
 
   assert.match(source, /Pay with Click/);
+  const clickPaymentLink = source.match(/<a href=\{payment\.paymentUrl\}[^>]*>/)?.[0];
+  assert.equal(clickPaymentLink, '<a href={payment.paymentUrl} target="_blank" rel="noopener noreferrer">');
   assert.match(source, /Premium activates automatically after Click confirms payment/);
   assert.match(source, /Payment or activation problem\? Contact/);
   assert.doesNotMatch(source, /Send screenshot|Send receipt|Copy card|PrimeScoreSupport|trackPaymentProofClick/);

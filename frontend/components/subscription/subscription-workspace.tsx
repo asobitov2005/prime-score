@@ -434,7 +434,7 @@ function ActiveInvoiceModal({
                 </Button>
               ) : payment.paymentUrl && !isTerminal ? (
                 <Button asChild className="mt-5 h-11 w-full rounded-xl bg-primary font-semibold text-primary-foreground hover:bg-primary/90">
-                  <a href={payment.paymentUrl} rel="noreferrer">Pay with Click <ArrowRight className="ml-2 h-4 w-4" /></a>
+                  <a href={payment.paymentUrl} target="_blank" rel="noopener noreferrer">Pay with Click <ArrowRight className="ml-2 h-4 w-4" /></a>
                 </Button>
               ) : (
                 <p className="mt-5 text-sm text-muted-foreground">Checkout is unavailable. Please create a new invoice or contact support.</p>
