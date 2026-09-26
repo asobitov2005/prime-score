@@ -5,7 +5,7 @@ const test = require("node:test");
 
 test("subscription uses Click and support is only for payment problems", () => {
   const filename = path.join(__dirname, "../components/subscription/subscription-workspace.tsx");
-  const source = fs.readFileSync(filename, "utf8");
+  const source = fs.readFileSync(filename, "utf8") + fs.readFileSync(path.join(__dirname, "../components/subscription/subscription-overview.tsx"), "utf8");
 
   assert.match(source, /Pay with Click/);
   assert.match(source, /Premium activates automatically after Click confirms payment/);
